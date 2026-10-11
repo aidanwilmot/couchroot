@@ -1,0 +1,293 @@
+{
+  "date": "2026-09-22",
+  "target": {
+    "model": "QN85QN90AAFXZA",
+    "firmware": "T-NKM2AKUC-2301.1",
+    "hub": "0.4.7",
+    "final_relay": "0.2.2"
+  },
+  "method": {
+    "reboot": "native DeviceD full reboot",
+    "postboot_app_or_key_assistance_before_observation": false,
+    "measurement": "TV kernel uptime at native foreground confirmation"
+  },
+  "trials": [
+    {
+      "label": "baseline",
+      "relay_version": "0.2.1",
+      "excluded_families": [],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "entered": 18.37,
+      "ready_since": 19.71,
+      "foreground_uptime_seconds": 41.88,
+      "launch_attempts": 1,
+      "launch_history": [
+        {
+          "attempt": 1,
+          "finished": 30.86,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": 0,
+          "stage": "send",
+          "started": 25.71
+        }
+      ],
+      "first_hub_process_log_uptime_seconds": 29.56764,
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "advertising",
+      "relay_version": "0.2.1",
+      "excluded_families": [
+        "advertising"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "entered": 18.26,
+      "ready_since": 19.64,
+      "foreground_uptime_seconds": 44.75,
+      "launch_attempts": 1,
+      "launch_history": [
+        {
+          "attempt": 1,
+          "finished": 30.71,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": 0,
+          "stage": "send",
+          "started": 25.64
+        }
+      ],
+      "first_hub_process_log_uptime_seconds": 29.582975,
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "advertising-repeat",
+      "relay_version": "0.2.1",
+      "excluded_families": [
+        "advertising"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "entered": 19.52,
+      "ready_since": 20.75,
+      "foreground_uptime_seconds": 37.54,
+      "launch_attempts": 3,
+      "launch_history": [
+        {
+          "attempt": 1,
+          "finished": 32.19,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": -17825757,
+          "stage": "send",
+          "started": 26.76
+        },
+        {
+          "attempt": 2,
+          "finished": 33.31,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": -17825757,
+          "stage": "send",
+          "started": 32.28
+        },
+        {
+          "attempt": 3,
+          "finished": 36.08,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": 0,
+          "stage": "send",
+          "started": 35.34
+        }
+      ],
+      "first_hub_process_log_uptime_seconds": 30.95267,
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "fixed-advertising-boot",
+      "relay_version": "0.2.2",
+      "excluded_families": [
+        "advertising"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "entered": 18.44,
+      "ready_since": 19.64,
+      "foreground_uptime_seconds": 43,
+      "launch_attempts": 1,
+      "launch_history": [
+        {
+          "attempt": 1,
+          "finished": 30.68,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": 0,
+          "stage": "send",
+          "started": 25.64
+        }
+      ],
+      "first_hub_process_log_uptime_seconds": 31.211564,
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "fixed-advertising-repeat",
+      "relay_version": "0.2.2",
+      "excluded_families": [
+        "advertising"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "entered": 20.13,
+      "ready_since": 21.53,
+      "foreground_uptime_seconds": 45.58,
+      "launch_attempts": 1,
+      "launch_history": [
+        {
+          "attempt": 1,
+          "finished": 32.67,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": 0,
+          "stage": "send",
+          "started": 27.53
+        }
+      ],
+      "first_hub_process_log_uptime_seconds": 31.895839,
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "restored",
+      "relay_version": "0.2.2",
+      "excluded_families": [],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "entered": 19.66,
+      "ready_since": 21.09,
+      "foreground_uptime_seconds": 45.85,
+      "launch_attempts": 1,
+      "launch_history": [
+        {
+          "attempt": 1,
+          "finished": 32.66,
+          "foregroundAfter": "org.tizen.tv-viewer",
+          "foregroundBefore": "org.tizen.tv-viewer",
+          "readyAfter": true,
+          "result": 0,
+          "stage": "send",
+          "started": 27.09
+        }
+      ],
+      "first_hub_process_log_uptime_seconds": 31.551071,
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    }
+  ],
+  "preflight_stops_without_reboot": 1,
+  "diagnosis": {
+    "native_error": -17825757,
+    "native_error_name": "LaunchRejected",
+    "error_stage": "send",
+    "observed_post_return_retry_gap_seconds": 0.09,
+    "hub_process_observed_before_first_error_return": true,
+    "vendor_rejection_reason": "unresolved",
+    "fix": "Measure minimum retry delay from completion of the native call."
+  },
+  "host_validation": {
+    "production_timer_scenarios": 18,
+    "qn90a_regression_tests": 37
+  },
+  "hardware_validation": {
+    "fixed_relay_full_reboots": 3,
+    "all_fixed_relay_boots_accepted_first_request": true,
+    "changed_rejection_delay_exercised_on_tv": false,
+    "native_plex_and_home_navigation": true,
+    "samsung_home_overlay_and_return": true
+  },
+  "final_checks": {
+    "hub_foreground": true,
+    "markers_and_staging_absent": true,
+    "non_relay_installed_hashes_unchanged": true,
+    "non_relay_packages_unchanged": true,
+    "partial_empty": true,
+    "persistent_settings_unchanged": true,
+    "relay_0_2_2_installed": true,
+    "relay_bytes_match_signed_apply": true,
+    "restored_autonomous_hub": true,
+    "routing_unchanged": true,
+    "services_restored": true,
+    "telemetry_preferences_unchanged": true,
+    "saved_setup_choices_restored": true
+  },
+  "limitations": [
+    "Six sequential full-reboot observations; no AC unplug test.",
+    "All three fixed-relay boots accepted the first request; rejection-delay behavior is verified by host simulation, not exercised on these device boots.",
+    "No reliable boot-speed improvement demonstrated; advertising-exclusion timings overlap normal startup.",
+    "Exact lower-level reason for Samsung LaunchRejected remains unresolved.",
+    "No media playback or actual casting test."
+  ],
+  "private_evidence": "qn90a/startup-launch-diagnostics/20260922T154816Z",
+  "report": "docs/samsung-qn90a-startup-launch-diagnostics.md"
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>Samsung · TV metrics</title><link rel="icon" href="data:,"><link rel="stylesheet" href="dashboard.css"><script src="inspector.js" defer></script><script src="dashboard.js" defer></script></head>
+<body>
+<header class="topbar"><a class="brand" href="/" aria-label="TV metrics home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 29 9 26 25 12 30 3 18Z"/><path d="m16 2 3 13 10-6M19 15l7 10M19 15 3 18m16-3-7 15"/></svg>HOME OBSERVATORY <span>/</span> TELEVISION</a><a class="netdata-link" href="http://netdata.example.invalid:19999/" target="_blank" rel="noopener">Open Netdata ↗</a></header>
+<main>
+<section class="intro"><div><p class="eyebrow">SAMSUNG · HOME TELEMETRY</p><h1><span id="device-name">Televisions</span> at a glance.</h1><p class="subtitle">A quiet view of what’s happening behind the screen.</p></div><div class="connection"><span id="connection" class="badge loading">Connecting</span><p id="freshness">Waiting for the first reading</p></div></section>
+<section class="devices"><label for="device">Device</label> <select id="device"></select><div id="overview" class="overview" aria-label="Television comparison"></div></section>
+<div id="notice" role="status" hidden></div>
+<section class="summary" aria-label="Latest TV readings">
+<article><div class="kpi-label">CPU activity <span>ALL CORES</span></div><p class="kpi" id="cpu-value">—</p><p class="kpi-note" id="cpu-note">Latest collected reading</p><div class="meter"><i id="cpu-meter"></i></div></article>
+<article><div class="kpi-label">Memory in use <span>RAM</span></div><p class="kpi" id="memory-value">—</p><p class="kpi-note" id="memory-note">Waiting for memory counters</p><div class="meter"><i id="memory-meter"></i></div></article>
+<article><div class="kpi-label">Network traffic <span>RECEIVE / SEND</span></div><p class="kpi traffic" id="network-value">—</p><p class="kpi-note">Combined network interfaces · KiB/s</p><div class="mini-label">↓ Received <span>↑ Sent</span></div></article>
+<article><div class="kpi-label">TV uptime <span>SINCE BOOT</span></div><p class="kpi" id="uptime-value">—</p><p class="kpi-note" id="boot-note">Waiting for boot identity</p><div class="mini-label">Sample interval <span>10 seconds</span></div></article>
+</section>
+<section class="inspector" aria-labelledby="inspector-title">
+<div class="section-heading"><div><p class="eyebrow">READ-ONLY INSPECTOR</p><h2 id="inspector-title">Behind the screen</h2></div><span id="inspector-age" class="badge loading">Waiting for inventory</span></div>
+<p class="inspector-note">Snapshots every minute. App registration, running processes and startup flags describe different states.</p>
+<div class="inspector-tools"><div class="ranges" role="group" aria-label="Inspector view"><button data-inspector="apps" aria-pressed="true">Apps</button><button data-inspector="processes" aria-pressed="false">Processes</button><button data-inspector="startup" aria-pressed="false">Startup</button></div><label>Search <input id="inspector-search" type="search" placeholder="Name, app ID or package" autocomplete="off"></label><label>Sort <select id="inspector-sort"><option value="name">Name</option><option value="rss">Memory</option><option value="cpu">CPU</option></select></label></div>
+<p id="inspector-description" class="inspector-note"></p><p id="inspector-status" role="status"></p>
+<div class="inspector-table" tabindex="0" role="region" aria-label="Inspector results"><table><caption id="inspector-caption">Registered apps</caption><thead id="inspector-head"></thead><tbody id="inspector-body"></tbody></table></div>
+<div class="inspector-pages"><button id="inspector-prev" class="pause">Previous</button><span id="inspector-page"></span><button id="inspector-next" class="pause">Next</button></div>
+</section>
+<section class="history" aria-labelledby="history-title"><div class="section-heading"><div><p class="eyebrow">PERFORMANCE HISTORY</p><h2 id="history-title">The bigger picture</h2></div><div class="controls"><div class="ranges" role="group" aria-label="History range"><button data-range="900" aria-pressed="true">15m</button><button data-range="3600" aria-pressed="false">1h</button><button data-range="21600" aria-pressed="false">6h</button><button data-range="86400" aria-pressed="false">24h</button></div><button id="pause" class="pause" aria-pressed="false">Pause updates</button></div></div>
+<div id="charts" class="charts"></div></section>
+<section class="collector"><div class="collector-heading"><span class="tiny-orbit" aria-hidden="true">◇</span><div><h2>Small collector. Full picture.</h2><p>The TV sends counters. TrueNAS keeps the history.</p></div></div><dl><div><dt>Collector CPU</dt><dd id="collector-cpu">—</dd><small>Percent of one core</small></div><div><dt>Collector memory</dt><dd id="collector-memory">—</dd><small>Resident memory</small></div><div><dt>Last sample</dt><dd id="sample-age">—</dd><small>Time since receipt</small></div></dl></section>
+<footer><p><span class="footer-dot"></span> Samsung TVs → TrueNAS → Netdata</p><p>History uses your browser’s local time. Gaps mean no measurement.</p></footer>
+</main></body></html>

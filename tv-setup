@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+"""Unofficial bounded Samsung setup entry point (Python 3.12+)."""
+from tvsetup.cli import main
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -1,0 +1,19 @@
+# Research fixture matching the tested transient unit. Do not enable at boot.
+# Stage a reviewed probe at the exact path through the guarded operations transport.
+[Unit]
+Description=Bounded native telemetry lifecycle probe
+StartLimitIntervalSec=600
+StartLimitBurst=2
+
+[Service]
+Type=simple
+User=5001
+Group=100
+SmackProcessLabel=User
+ExecStart=/opt/minimal-native-lifecycle-20260921/probe
+BindReadOnlyPaths=/opt/minimal-native-lifecycle-20260921
+Nice=10
+Restart=on-failure
+RestartSec=1s
+RuntimeMaxSec=60s
+TimeoutStopSec=2s

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UseAppHost>false</UseAppHost>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <DefineConstants>$(DefineConstants);QN90A</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="../namespace-root-probe/Program.cs" Link="Program.cs" /></ItemGroup>
+</Project>

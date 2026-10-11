@@ -1,0 +1,18 @@
+{
+  "devices": {
+    "qn90a": {
+      "host": "192.0.2.11",
+      "device_id": "uuid:00000000-0000-4000-8000-000000000001"
+    },
+    "s90d": {
+      "host": "192.0.2.12",
+      "device_id": "uuid:00000000-0000-4000-8000-000000000002"
+    }
+  },
+  "nas": {
+    "ssh_target": "tv-nas",
+    "base": "/mnt/.ix-apps/app_mounts/netdata/config",
+    "receiver_url": "https://nas.example.invalid:20490",
+    "dashboard_url": "http://nas.example.invalid:20491"
+  }
+}

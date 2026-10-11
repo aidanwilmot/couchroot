@@ -1,0 +1,60 @@
+# Changelog
+
+## 0.1.0.dev1 — unreleased
+
+- Defer initial app discovery and monitoring I/O until Hub has focus, keeping
+  saved shortcuts available first. Avoid inspecting the native sound fallback
+  when Web Audio is available. QN90A startup profiling did not establish a
+  consistent total boot-time reduction; the tested three-second relay settle
+  was reverted to five seconds in relay 0.2.4. See the startup profiling report.
+- Avoid a false launch-failure dialog when Samsung Home opens as an overlay
+  while Hub stays visible, as verified on QN90A. Missing callbacks and reported
+  failures still offer recovery.
+- Move shortcuts directly in the Home grid, undo the latest removal, and offer
+  optional hold-OK editing (off by default). Keep launch progress visible until
+  Hub leaves the screen; let Back dismiss it. Reuse unchanged Home tiles on
+  return, defer catalog refresh, and improve secondary-text contrast/readability.
+  Both TVs received the UI update; see the hardware validation record for the
+  exercised behaviors. Hardware wake latency and HDMI handoff still need
+  model-specific verification.
+- Add remote-operated launch recovery with Retry and Samsung Home, remember
+  Home selection across restarts with a First favorite option, and replace dimmed
+  scroll-edge rows with directional cues. Existing shortcut order is preserved.
+- Cache the static Home backdrop separately from interactive content and isolate
+  footer painting; use solid utility-page backgrounds and batch scroll-edge
+  updates. Preserve artwork, focus rings and settings, with a browser regression
+  that checks actual paint reuse during remote navigation.
+- Polish the Hub UI: 16:9 tiles with em-scaled artwork, one rounded focus ring,
+  shared rows/preview/hint layout for Edit apps, Add apps and Settings, unified
+  dialogs, an actionable empty Home, in-list loading/failure notes, dimmed
+  unavailable tiles and error-toned status lines. Storage keys are unchanged.
+- Fix the TV monitoring dialog on Chromium 76 (`inset` and px sizing), focus
+  rings clipped after scrolling, and a late app list erasing "added to Home".
+- Keep applied runs recoverable until saved choices and ownership ledgers are
+  durable. Schema 2 records local rollback state and preserves subsequent edits;
+  recover older journals with their original checkout.
+- Reconcile interrupted inverse operations and verified staging files, preserve
+  unknown staging content, and prevent new apply inspection while a run is pending.
+- Bound nested reboot observations with one remaining deadline, without launching
+  Hub or retrying the reboot request. Report uncertain diagnostic cleanup.
+- Add crash/storage-failure tests and source-only Linux/container validation,
+  plus a cross-path QN90A saver reproducibility check in CI. Physical hardware
+  acceptance and owner disclosure/licensing decisions remain release blockers.
+
+## 0.1.0.dev0 — unreleased
+
+- Separate portable firmware profiles, private site settings, preferences and
+  independently enrolled signing trust; remove personal defaults from current files.
+- Replace the CLI's private dump-collector dependency with a source-built, bounded
+  model-specific root runner. Hardware validation remains outstanding.
+- Bind recovery journals to destination/trust, check source before reconciliation,
+  reject apply after rollback starts, and continue reversible rollback when
+  managed application reinstall requires manual recovery.
+- Add dependency checks, deterministic native builds, offline platform CI,
+  privacy scan, installation/security documentation and release acceptance gates.
+
+The CLI version follows semantic versioning once released; `devN` marks an
+unreleased development tree. Package versions on a TV remain separate and must
+increase for in-place installs. Journal schema changes require explicit migration
+review; never upgrade an unfinished run in place. A supported firmware change is
+not implied by a CLI patch version.

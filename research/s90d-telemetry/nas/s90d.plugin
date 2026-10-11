@@ -1,0 +1,58 @@
+#!/usr/bin/python3
+"""Netdata external plugin. No samples are fabricated while the TV is offline."""
+import json
+from pathlib import Path
+import sys
+import time
+sys.path.insert(0,str(Path(__file__).resolve().parent/'s90d-code'))
+from metrics import calculate
+
+CHARTS={
+ 'availability': ('S90D telemetry availability','boolean','health','line',['online']),
+ 'age': ('S90D last received sample age','seconds','health','line',['age']),
+ 'cpu': ('S90D CPU utilization','percent','cpu','stacked',['user','nice','system','idle','iowait','irq','softirq','steal']),
+ 'memory': ('S90D memory','MiB','memory','stacked',['used','available']),
+ 'network': ('S90D network traffic','KiB/s','network','line',['read','write']),
+ 'disk': ('S90D eMMC activity','KiB/s','storage','line',['read','write']),
+ 'collector_cpu': ('S90D collector CPU (one core)','percent','collector','line',['cpu']),
+ 'collector_memory': ('S90D collector resident memory','MiB','collector','line',['rss']),
+ 'uptime': ('S90D uptime','seconds','system','line',['uptime']),
+}
+
+def emit(prefix, name, values):
+    print('BEGIN '+prefix+'.'+name)
+    for key,value in values.items():
+        print('SET '+key+' = '+str(round(value*1000)))
+    print('END')
+
+def main():
+    folder=Path(__file__).resolve().parent/'s90d-data'
+    devices=json.loads((folder/'devices.json').read_text()) if (folder/'devices.json').exists() else {'s90d':{'name':'S90D','chart_prefix':'s90d','snapshot':'latest.json'}}
+    for index,(identity,device) in enumerate(devices.items()):
+        prefix=device['chart_prefix']
+        for i,(name,(title,units,family,kind,dimensions)) in enumerate(CHARTS.items()):
+            title=title.replace('S90D',device['name']).replace("'",'')
+            print(f"CHART {prefix}.{name} '' '{title}' '{units}' '{family}' '{prefix}.{name}' {kind} {90000+index*100+i} 10")
+            for dimension in dimensions: print(f"DIMENSION {dimension} '' absolute 1 1000")
+    previous={}; last={}
+    while True:
+        start=time.monotonic()
+        for identity,device in devices.items():
+            prefix=device['chart_prefix']
+            try:
+                data=json.loads((folder/device['snapshot']).read_text())
+                age=time.time()-data['received_at']
+                online=0<=age<=35
+                emit(prefix,'age',{'age':max(0,age)})
+                emit(prefix,'availability',{'online':int(online)})
+                key=(data['boot'],data.get('session'),data['seq'],data['uptime'])
+                if online and key!=last.get(identity):
+                    for name,values in calculate(data,previous.get(identity)).items(): emit(prefix,name,values)
+                    previous[identity]=data;last[identity]=key
+                if not online: previous[identity]=None
+            except (OSError,ValueError,KeyError,StopIteration,TypeError):
+                emit(prefix,'availability',{'online':0});previous[identity]=None
+        sys.stdout.flush()
+        time.sleep(max(0.1,10-(time.monotonic()-start)))
+
+if __name__=='__main__': main()

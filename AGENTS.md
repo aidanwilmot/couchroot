@@ -1,0 +1,26 @@
+# Minimal Hub project guidance
+
+Use the current repository checkout. Keep UI development, UI deployment, and full
+device setup distinct; the user's requested scope determines which workflow runs.
+
+| Task | Entry point |
+| --- | --- |
+| Design or change the UI | [UI skill](.agents/skills/samsung-tv-ui/SKILL.md) |
+| Deploy, inspect, or recover a TV | [Operations skill](.agents/skills/samsung-tv-ops/SKILL.md) |
+| Local preview and browser checks | [UI development](docs/ui-development.md) |
+| Update just the Hub package | [UI deployment](docs/ui-deployment.md), `./deploy-ui` |
+| Full device setup/recovery | [Setup guide](docs/tv-setup.md), `./tv-setup` |
+
+`web/` is the shipped interface; `preview/` serves that same source with simulated
+APIs. Keep browser tooling out of signed packages. Preserve remote navigation,
+saved preference keys, the Samsung Home fallback, and QN90A's older browser support.
+
+Use the shared setup engine for signing, identity checks, backups and journals.
+Device targets and signing trust live in private site configuration. Keep signed
+packages, credentials, raw logs and device identities outside Git. Source changes
+alone do not authorize device deployment.
+
+Validate changes at the affected boundary: `npm test` for UI/preview,
+`python3 -m unittest discover -s tests -p '*_test.py'` for setup/deployment,
+and skill validation when editing skills. Report local tests separately from
+actual device verification. See [CONTRIBUTING.md](CONTRIBUTING.md) for release work.

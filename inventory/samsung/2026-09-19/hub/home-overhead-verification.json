@@ -1,0 +1,291 @@
+{
+  "date": "2026-09-19",
+  "target": "192.0.2.12",
+  "scope": "Temporary Home process termination; no persistent TV configuration changes",
+  "initial_samples": [
+    {
+      "sample": "before",
+      "evidence": "dumps/20260920T001520Z/home-overhead-media.txt",
+      "MemAvailable_kib": 241912,
+      "MemFree_kib": 24964,
+      "SwapFree_kib": 65844,
+      "processes": [
+        {
+          "pid": 3611,
+          "comm": "DN_home.sidebar",
+          "Pss_kib": 8965,
+          "Rss_kib": 24924,
+          "SwapPss_kib": 25764
+        },
+        {
+          "pid": 6806,
+          "comm": "DN_sung.tv.csfs",
+          "Pss_kib": 49920,
+          "Rss_kib": 70272,
+          "SwapPss_kib": 28752
+        },
+        {
+          "pid": 7627,
+          "comm": "DN_v.home.media",
+          "Pss_kib": 43043,
+          "Rss_kib": 59800,
+          "SwapPss_kib": 34996
+        },
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 49960,
+          "Rss_kib": 80548,
+          "SwapPss_kib": 8488
+        }
+      ]
+    },
+    {
+      "sample": "baseline",
+      "evidence": "dumps/20260920T001520Z/home-overhead-media.txt",
+      "MemAvailable_kib": 233668,
+      "MemFree_kib": 22600,
+      "SwapFree_kib": 57252,
+      "processes": [
+        {
+          "pid": 3611,
+          "comm": "DN_home.sidebar",
+          "Pss_kib": 8921,
+          "Rss_kib": 24904,
+          "SwapPss_kib": 25764
+        },
+        {
+          "pid": 6806,
+          "comm": "DN_sung.tv.csfs",
+          "Pss_kib": 48989,
+          "Rss_kib": 69484,
+          "SwapPss_kib": 29340
+        },
+        {
+          "pid": 7627,
+          "comm": "DN_v.home.media",
+          "Pss_kib": 42373,
+          "Rss_kib": 59192,
+          "SwapPss_kib": 35480
+        },
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 47966,
+          "Rss_kib": 77988,
+          "SwapPss_kib": 8488
+        }
+      ]
+    },
+    {
+      "sample": "media_stopped_5s",
+      "evidence": "dumps/20260920T001520Z/home-overhead-media.txt",
+      "MemAvailable_kib": 275396,
+      "MemFree_kib": 63948,
+      "SwapFree_kib": 97360,
+      "processes": [
+        {
+          "pid": 3611,
+          "comm": "DN_home.sidebar",
+          "Pss_kib": 9202,
+          "Rss_kib": 24960,
+          "SwapPss_kib": 25692
+        },
+        {
+          "pid": 6806,
+          "comm": "DN_sung.tv.csfs",
+          "Pss_kib": 49376,
+          "Rss_kib": 69744,
+          "SwapPss_kib": 29140
+        },
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 44877,
+          "Rss_kib": 74232,
+          "SwapPss_kib": 8488
+        }
+      ]
+    },
+    {
+      "sample": "media_stopped_20s",
+      "evidence": "dumps/20260920T001520Z/home-overhead-media.txt",
+      "MemAvailable_kib": 290048,
+      "MemFree_kib": 71676,
+      "SwapFree_kib": 89836,
+      "processes": [
+        {
+          "pid": 3611,
+          "comm": "DN_home.sidebar",
+          "Pss_kib": 9196,
+          "Rss_kib": 24960,
+          "SwapPss_kib": 25692
+        },
+        {
+          "pid": 6806,
+          "comm": "DN_sung.tv.csfs",
+          "Pss_kib": 49362,
+          "Rss_kib": 69744,
+          "SwapPss_kib": 29140
+        },
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 43351,
+          "Rss_kib": 72744,
+          "SwapPss_kib": 8484
+        }
+      ]
+    },
+    {
+      "sample": "before_sidebar",
+      "evidence": "dumps/20260920T001618Z/home-overhead-stop.txt",
+      "MemAvailable_kib": 290496,
+      "MemFree_kib": 59996,
+      "SwapFree_kib": 87256,
+      "processes": [
+        {
+          "pid": 3611,
+          "comm": "DN_home.sidebar",
+          "Pss_kib": 9220,
+          "Rss_kib": 24984,
+          "SwapPss_kib": 25672
+        },
+        {
+          "pid": 6806,
+          "comm": "DN_sung.tv.csfs",
+          "Pss_kib": 49362,
+          "Rss_kib": 69744,
+          "SwapPss_kib": 29140
+        },
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 43223,
+          "Rss_kib": 72616,
+          "SwapPss_kib": 8484
+        }
+      ]
+    },
+    {
+      "sample": "sidebar_stopped_5s",
+      "evidence": "dumps/20260920T001618Z/home-overhead-stop.txt",
+      "MemAvailable_kib": 305356,
+      "MemFree_kib": 71000,
+      "SwapFree_kib": 109108,
+      "processes": [
+        {
+          "pid": 6806,
+          "comm": "DN_sung.tv.csfs",
+          "Pss_kib": 49524,
+          "Rss_kib": 69748,
+          "SwapPss_kib": 29136
+        },
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 42676,
+          "Rss_kib": 72064,
+          "SwapPss_kib": 8456
+        }
+      ]
+    },
+    {
+      "sample": "all_stopped_5s",
+      "evidence": "dumps/20260920T001618Z/home-overhead-stop.txt",
+      "MemAvailable_kib": 376404,
+      "MemFree_kib": 131908,
+      "SwapFree_kib": 135616,
+      "processes": [
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 42696,
+          "Rss_kib": 72064,
+          "SwapPss_kib": 8456
+        }
+      ]
+    },
+    {
+      "sample": "all_stopped_20s",
+      "evidence": "dumps/20260920T001618Z/home-overhead-stop.txt",
+      "MemAvailable_kib": 384612,
+      "MemFree_kib": 133024,
+      "SwapFree_kib": 125292,
+      "processes": [
+        {
+          "pid": 8627,
+          "comm": "MiniHub001.Hub",
+          "Pss_kib": 45004,
+          "Rss_kib": 75916,
+          "SwapPss_kib": 8456
+        }
+      ]
+    }
+  ],
+  "aggressive_test": {
+    "terminated": [
+      "com.samsung.tv.home.media",
+      "com.samsung.tv.home.sidebar",
+      "com.samsung.tv.csfs"
+    ],
+    "navigation_exit": 1,
+    "navigation_evidence": "dumps/20260920T001706Z/",
+    "unexpected_later_foreground": "com.samsung.tv.cobalt-yt",
+    "cause": "Not established; remote-use interference was not confirmed; restoration succeeded. Not selected for routine use."
+  },
+  "selected_method": {
+    "terminated": [
+      "com.samsung.tv.home.media",
+      "com.samsung.tv.home.sidebar"
+    ],
+    "retained": "com.samsung.tv.csfs",
+    "persistent": false,
+    "root_required": false,
+    "normal_app_termination": true,
+    "helper_navigation_evidence": "dumps/20260920T001940Z/",
+    "navigation_exit": 0,
+    "memory_before_kib": 231256,
+    "memory_after_5s_kib": 312828,
+    "memory_after_streaming_navigation_kib": 324728,
+    "navigation": [
+      "MiniHub001.Hub",
+      "kIciSQlYEM.plex",
+      "MiniHub001.Hub",
+      "com.samsung.tv.cobalt-yt",
+      "MiniHub001.Hub",
+      "com.samsung.tv.csfs",
+      "MiniHub001.Hub"
+    ],
+    "samsung_home_recreated_helpers": true,
+    "sdk_trim_evidence": "sessions/20260920T002118.676664Z-run/",
+    "sdk_trim_before_kib": 290124,
+    "sdk_trim_after_kib": 365220,
+    "sdk_restore_evidence": "sessions/20260920T002132.202979Z-run/",
+    "sdk_restore_exit": 0,
+    "final_trim_evidence": "sessions/20260920T002147.357187Z-run/",
+    "final_trim_before_kib": 271868,
+    "final_trim_after_kib": 364620
+  },
+  "manifest_hashes": {
+    "com.samsung.tv.csfs.xml": "48fed0e7e95f3d84045a8a380334a174d7bf8a21bf2f16bfc1d8b128592b856d",
+    "com.samsung.tv.home.media.xml": "59e14905abbfde1d730b755ebf1c866fbf9277447d9b4f3a83bc5c40b29f178f",
+    "com.samsung.tv.home.sidebar.xml": "2edd719beeb74a1e8945eeccef27c1ad37f0b0cf610e19ea649af3539a50879a"
+  },
+  "playback_tested": false,
+  "reboot_tested_for_this_temporary_operation": false,
+  "final_state": {
+    "evidence": "sessions/20260920T002314.694395Z-run/",
+    "exit": 0,
+    "foreground": "MiniHub001.Hub",
+    "main_home_running": true,
+    "media_helper_running": false,
+    "sidebar_helper_running": false,
+    "mem_available_kib": 299480,
+    "home_appid": "MiniHub001.Hub",
+    "auto_start": 1,
+    "manifest_hashes_unchanged": true,
+    "passwd_and_public_key_hashes_unchanged": true,
+    "root_staging_absent": true
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "components": ["hub", "screensaver", "splash", "home", "airplay", "startup"],
+  "keep": [],
+  "remove": [],
+  "telemetry_enabled": null,
+  "endpoint": null,
+  "artifacts": {}
+}

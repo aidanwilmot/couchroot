@@ -1,0 +1,50 @@
+# Bounded S90D benchmark. @RAM@ and @CODE@ are substituted by the trial runner.
+[global]
+    hostname = s90d-native-trial
+    update every = 10
+    run as user = owner
+    libuv worker threads = 8
+[directories]
+    config = @CODE@
+    stock config = @CODE@
+    stock data = @RAM@/empty
+    plugins = @RAM@/empty
+    web = @RAM@/empty
+    cache = @RAM@/cache
+    lib = @RAM@/lib
+    log = @RAM@/log
+[db]
+    mode = ram
+    retention = 120
+[ml]
+    enabled = no
+[health]
+    enabled = no
+[web]
+    mode = static-threaded
+    bind to = 127.0.0.1:21999
+    web server threads = 1
+    allow connections from = localhost
+    allow connections by dns = no
+    enable gzip compression = no
+[registry]
+    enabled = no
+[statsd]
+    enabled = no
+[plugins]
+    proc = yes
+    tc = no
+    diskspace = no
+    cgroups = no
+    timex = no
+    idlejitter = no
+    netdata pulse = no
+    profile = no
+    enable running new plugins = no
+[netdata pulse]
+    extended = no
+[logs]
+    daemon = @RAM@/log/daemon.log
+    collector = @RAM@/log/collector.log
+    access = off
+    health = off

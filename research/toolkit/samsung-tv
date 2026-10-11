@@ -1,0 +1,5 @@
+#!/bin/sh
+# Local installation lives outside this worktree so it survives task cleanup.
+set -eu
+toolkit="${SAMSUNG_TV_TOOLKIT:-$HOME/.local/share/samsung-tv-research}"
+exec "$toolkit/.venv/bin/python" "$toolkit/samsung_tv.py" "$@"

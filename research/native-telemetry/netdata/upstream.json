@@ -1,0 +1,9 @@
+{
+  "version": "v2.11.1",
+  "url": "https://github.com/netdata/netdata/releases/download/v2.11.1/netdata-armv7l-v2.11.1.gz.run",
+  "archive_sha256": "b5e5fafa16c5b8f485598af262dd20c10857472c02b2517098edb0e1169e1c7d",
+  "stripped_elf_sha256": "28cd7161c636f99d0ef8632c6cfffe82dd441d42ad0a1e8e7d9873644ba65c0e",
+  "stripped_elf_bytes": 22836556,
+  "source": "https://github.com/netdata/netdata/tree/v2.11.1",
+  "license": "GPL-3.0-or-later; upstream archive contains third-party components"
+}

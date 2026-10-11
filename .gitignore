@@ -1,0 +1,56 @@
+dist/
+.buildResult/
+*.p12
+*.pem
+*.key
+*.signature
+*.wgt
+*.dll
+profiles.xml
+author-signature.xml
+signature*.xml
+.manifest.tmp
+native/bin/
+native/obj/
+research/**/bin/
+research/**/obj/
+research/config.json
+research/upstream/
+sessions/
+dumps/
+__pycache__/
+.DS_Store
+
+node_modules/
+test-results/
+
+# Rebuilt from the shared native screensaver sources.
+research/qn90a-screensaver/web/core.js
+research/qn90a-screensaver/web/shaders.js
+
+# Setup native helper build output; private journals/packages stay outside Git.
+tvsetup/native/bin/
+tvsetup/native/obj/
+
+# Private installation choices, diagnostics and signing containers.
+.venv/
+site.json
+trust.json
+*.pfx
+*.tpk
+*.pcap
+*.sqlite
+*.db
+.env
+.env.*
+.release-audit/
+*.crt
+*.cer
+*.der
+*.so
+*.so.*
+*.dylib
+*.tar.gz
+*.zip
+# The reserved-address public template is intentionally redistributable source.
+!examples/site.json

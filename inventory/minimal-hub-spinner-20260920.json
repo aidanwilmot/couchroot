@@ -1,0 +1,56 @@
+{
+  "version": "0.3.8",
+  "verified_utc": "2026-09-20",
+  "model": "QN55S90DAFXZA",
+  "firmware": "2130.0",
+  "tizen": "9",
+  "launch_hint": {
+    "key": "__NO_LOADING_LAUNCH",
+    "value": "enable",
+    "mode": "SINGLE",
+    "public_api_guarantee": false
+  },
+  "automated_tests": {
+    "passed": 36,
+    "failed": 0
+  },
+  "tv": {
+    "normal_crunchyroll_and_pandora_launchscreen_captured": true,
+    "spotify_and_tubi_quiet_launchscreen_window_absent_in_samples": true,
+    "tubi_shortcut_added_launched_removed": true,
+    "plex_launch": true,
+    "youtube_launch_native_cobalt": true,
+    "crunchyroll_launch": true,
+    "samsung_home_and_home_key_return": true,
+    "double_back_retains_hub": true,
+    "missing_app_error": "NotFoundError",
+    "exact_preferences_preserved_through_runtime_reload": true,
+    "final_launch_debug": 0,
+    "installed_source_hashes_verified": 9,
+    "diagnostic_ports_closed": true,
+    "home_assignment": "MiniHub001.Hub",
+    "auto_start": 1,
+    "physical_remote_confirmation": "Owner confirmed: Samsung spinner is gone",
+    "new_reboot_test_performed": false
+  },
+  "artifact": {
+    "package": "MinimalHub.wgt",
+    "signed": true,
+    "sha256": "573a26cc299dad155e159be9ccb5b19957914eaa0d8f1821cb176d4353eb54d2",
+    "bytes": 31486
+  },
+  "rollback": {
+    "source_version": "0.3.7",
+    "rollback_version": "0.3.96",
+    "source_commit": "6cf75e3",
+    "sha256": "d150f516cc1b0e18f09ab9422258956a3357bdff07635d278862c5cd8dba3212"
+  },
+  "limitations": [
+    "Undocumented firmware-specific hint; future firmware can ignore it.",
+    "Destination apps can show their own splash/loading UI.",
+    "Screenshots and native window lists are sampled, not a frame-by-frame cold-boot benchmark."
+  ],
+  "runtime_requires_root": false,
+  "system_assets_modified": false,
+  "automatic_process_killing_added": false
+}

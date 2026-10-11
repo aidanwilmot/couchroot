@@ -1,0 +1,14 @@
+[
+  {
+    "name": "splash-postboot.txt",
+    "kind": "command",
+    "timeout": 15,
+    "command": "set -eu\ndate -u\ncat /proc/sys/kernel/random/boot_id /proc/uptime /opt/minimal-saver/last-boot.log /opt/minimal-splash/last-boot.log\nvconftool get memory/appfw/current_fullscreen_appid\nsha256sum /usr/apps/com.samsung.tv.csfs/shared/res/homeloading.edj /usr/bin/app_resume /usr/bin/boot_splashscreen /opt/minimal-saver/Boot.dll /usr/apps/com.samsung.tv.spotlight-ss/lib/arm/libgl-demo-app.so\nfor p in /tmp/boot_splash_resumed /tmp/boot_splash_finished /tmp/.boot_splashscreen_run; do if test -e \"$p\"; then ls -l \"$p\"; else echo \"ABSENT $p\"; fi; done\nsystemctl show AT-HUB.service app-boot-manager.service -p Id -p Result -p ExecMainStartTimestampMonotonic -p ExecMainExitTimestampMonotonic\n"
+  },
+  {
+    "name": "boot-kernel.log.gz",
+    "kind": "command",
+    "timeout": 10,
+    "command": "gzip -c /tmp/hsm_boot_klog"
+  }
+]

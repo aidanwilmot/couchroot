@@ -1,0 +1,92 @@
+{
+  "date": "2026-09-20",
+  "model": "QN85QN90AAFXZA",
+  "host": "192.0.2.11",
+  "firmware": "T-NKM2AKUC-2301.1",
+  "result": "removed",
+  "removed_apps": [
+    {
+      "package": "9FhM0cODbY",
+      "app_id": "9FhM0cODbY.TikTokTV",
+      "name": "TikTok"
+    },
+    {
+      "package": "zigzSWa1hy",
+      "app_id": "zigzSWa1hy.InstagramAirwave",
+      "name": "Instagram"
+    },
+    {
+      "package": "LImG0QPABV",
+      "app_id": "LImG0QPABV.QXHMarketplace",
+      "name": "QVC+ and HSN+"
+    },
+    {
+      "package": "jAfAs7yVDX",
+      "app_id": "jAfAs7yVDX.TheSix",
+      "name": "Samsung GameBreaks"
+    },
+    {
+      "package": "yL49PNFmjW",
+      "app_id": "yL49PNFmjW.PromotionApp",
+      "name": "Samsung Promotion"
+    },
+    {
+      "package": "HupEmjIB4I",
+      "app_id": "HupEmjIB4I.Glance",
+      "name": "Glance"
+    },
+    {
+      "package": "GHI3a0zMSx",
+      "app_id": "GHI3a0zMSx.XboxGamePass",
+      "name": "Xbox"
+    },
+    {
+      "package": "IewQEY143t",
+      "app_id": "IewQEY143t.GoogleDuoWeb",
+      "name": "Google Meet"
+    },
+    {
+      "package": "AkhP5nCr24",
+      "app_id": "AkhP5nCr24.GoogleAssistant",
+      "name": "Explore Google Assistant"
+    },
+    {
+      "package": "AQKO41xyKP",
+      "app_id": "AQKO41xyKP.AmazonAlexa",
+      "name": "Amazon Alexa"
+    }
+  ],
+  "package_count_before": 368,
+  "package_count_after": 358,
+  "original_app_directory_size_kib": 10916,
+  "verification": {
+    "package_and_app_rows": "Only target rows removed; all other rows unchanged",
+    "samsung_catalog": "Only target identities removed; integrity ok",
+    "package_database": "integrity ok",
+    "target_directories_and_manifests": "absent",
+    "plex_launch": "foreground verified, debug 0",
+    "native_home_key": "returned to Minimal Hub",
+    "samsung_home_fallback": "partial app verified; hub restored afterward",
+    "airplay": "receiver ready; existing Home and two return rules intact",
+    "temporary_root": "helpers removed; original passwd/public key hashes unchanged; SDK identity restored",
+    "local_qn90a_tests": 24,
+    "physical_remote_or_playback": "not re-tested",
+    "post_removal_reboot": "not tested",
+    "performance_improvement": "not measured"
+  },
+  "limitations": [
+    "Firmware-protected apps and core services remain.",
+    "Private installed-file/database backups are not validated reinstall packages.",
+    "No background app-reinstallation blocker was added."
+  ],
+  "private_backup_relative_path": "qn90a/app-cleanup-backup",
+  "private_evidence_sessions": [
+    "20260920T163512.391799Z-qn90a-root-home-cleanup-0",
+    "20260920T163628.238225Z-qn90a-root-home-cleanup-1",
+    "20260920T163810.997281Z-qn90a-cleanup-after-AQKO41xyKP",
+    "20260920T163905.167910Z-qn90a-cleanup-health",
+    "20260920T163916.942267Z-qn90a-root-home-key",
+    "20260920T163938.826072Z-qn90a-cleanup-fallback",
+    "20260920T164031.630305Z-qn90a-cleanup-scratch"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "date_utc": "2026-09-20",
+  "model": "QN55S90DAFXZA",
+  "firmware": "2130.0",
+  "tizen": "9",
+  "app_id": "MiniHub001.Hub",
+  "version": "0.3.5",
+  "signed_package_sha256": "d85ac0909acd32ae5a3fe7630bec77c1e575ac1375034d2f08946de48f6e5f36",
+  "signed_package_bytes": 26510,
+  "privileges": [
+    "http://tizen.org/privilege/application.launch"
+  ],
+  "automated_local_tests": {
+    "passed": 26,
+    "failed": 0
+  },
+  "discovery": {
+    "registry_entries": 573,
+    "visible_entries": 262,
+    "filtered_consumer_choices": 29,
+    "tested_in_signed_runtime": true,
+    "all_picker_apps_launch_tested": false
+  },
+  "tv_verified": [
+    "Netflix add, reorder, launch, shortcut removal without uninstall",
+    "Plex and YouTube launch",
+    "saved order through hard reboot, app reload, signed update and standby/wake",
+    "settings sound/layout persistence through reload and final signed install",
+    "reset cancellation",
+    "rapid double Back retains same hub process",
+    "Samsung Home fallback and physical Home key event routing",
+    "all nine installed source files match signed package and workspace",
+    "normal final launch with debug 0; diagnostic port absent",
+    "temporary root tooling cleanup and original system hashes"
+  ],
+  "physical_user_feedback": "Feels better; sound is good",
+  "not_physically_confirmed": [
+    "new Settings layout and double-Back gesture by owner"
+  ],
+  "limitations": [
+    "conservative consumer package filter excludes some nonstandard sideloads/system apps",
+    "firmware force-exit gestures are outside app control",
+    "no actual app uninstall performed; missing-app failure uses mocks",
+    "reset confirmation action tested in browser; TV reset cancellation verified"
+  ],
+  "final_preferences": {
+    "sound": "on",
+    "layout": "comfortable",
+    "shortcuts": [
+      "kIciSQlYEM.plex",
+      "9Ur5IzDKqV.TizenYouTube"
+    ]
+  },
+  "rollback": {
+    "version": "0.3.99",
+    "original_ui": "0.2.2",
+    "prepared_before_deploy": true,
+    "rollback_package_installed": false
+  },
+  "notes": [
+    "One debug-session Home-return fixed-delay assertion saw Samsung AI Companion; final normal-run bounded check passed",
+    "Two exploratory debug restarts stalled SDK earlier; avoid stop/reopen debug workflow"
+  ],
+  "evidence": "See docs/edit-apps.md; raw evidence and signing material are private outside Git."
+}

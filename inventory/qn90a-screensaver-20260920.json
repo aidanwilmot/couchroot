@@ -1,0 +1,59 @@
+{
+  "date": "2026-09-20",
+  "target": {
+    "model": "QN85QN90AAFXZA",
+    "ip": "192.0.2.11",
+    "firmware": "T-NKM2AKUC-2301.1"
+  },
+  "installed": {
+    "hub": "0.4.0",
+    "saver": "1.0.1",
+    "signing_profile": "MinimalHubQN90A"
+  },
+  "policy": {
+    "dashboard_idle_seconds": 300,
+    "implementation": "visible-only dashboard timer, ordinary app launch",
+    "other_apps": "native timeout and disable policy preserved",
+    "global_timeout_normalization": false,
+    "native_timeout_seconds_at_finish": 7200,
+    "native_selector": "MiniSave01.Saver",
+    "native_selector_survives_full_reboot": false
+  },
+  "acceptance": {
+    "final_trial_last_input_uptime": 1162.78,
+    "last_hub_sample_uptime": 1463.05,
+    "first_saver_foreground_uptime": 1464.4,
+    "elapsed_to_foreground_seconds": 301.62,
+    "native_screensaver_flag_during_activation": false,
+    "physical_confirmation": "Visible; Right returned to dashboard",
+    "saver_process_exited": true,
+    "plex_native_state": "Disabled / 7200",
+    "home_routing": "verified",
+    "samsung_home_fallback": "partial overlay opened; native Home returned to Hub",
+    "airplay_routes": "unchanged; integrity ok; ready",
+    "final_foreground": "MiniHub001.Hub",
+    "final_partial": ""
+  },
+  "limits": [
+    "Final dashboard standby/cold-boot acceptance not completed; packaged timer requires no memory patch by design",
+    "Optional native system-wide selector remains memory-only; no supported persistent boot hook found",
+    "Native module was disabled after observed restart; recovered stock module and removed empty rejected-override directories; boot cause not conclusive",
+    "Actual playback and physical AirPlay return not retested"
+  ],
+  "verification": {
+    "hub_tests": 41,
+    "qn90a_existing_tests": 24,
+    "wasm_webgl_renderer": "pass",
+    "historical_timeout_thunk_emulation_cases": 1016,
+    "temporary_artifacts": "removed after hashes verified",
+    "global_system_file_hashes": "unchanged",
+    "s90d": "untouched"
+  },
+  "private_evidence": [
+    "qn90a/dashboard-five-minute-trial.json",
+    "qn90a/dashboard-policy-plex-inspect.log",
+    "qn90a/final-dashboard-inspect.log",
+    "sessions/20260920T185902.495672Z-qn90a-final-screensaver-cleanup-and-routes"
+  ],
+  "rollback": "research/qn90a-screensaver/ROLLBACK.md"
+}

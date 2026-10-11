@@ -1,0 +1,17 @@
+{
+  "firmware": "T-NKM2AKUC-2301.1",
+  "libraries": {
+    "libcurl.so": {
+      "source": "/usr/lib/libcurl.so.4.6.0",
+      "sha256": "a9a3e16db11a3afb70f73f412beaa91c4c920f0075e465990358c70c51530778"
+    },
+    "libssl.so": {
+      "source": "/usr/lib/libssl.so.1.1",
+      "sha256": "89f4bf2b3413cff8174a2b7e0a30abcca37ec54ed17c24b6885635d628d3b453"
+    },
+    "libcrypto.so": {
+      "source": "/usr/lib/libcrypto.so.1.1",
+      "sha256": "efee55a62818cb9068565a5c16eb8ab7949ec7efc1fba39ef4adc1ea299d2ba1"
+    }
+  }
+}

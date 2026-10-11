@@ -1,0 +1,20 @@
+[
+  {
+    "name": "trial-state.txt",
+    "kind": "command",
+    "timeout": 15,
+    "command": "date -u; cat /proc/sys/kernel/random/boot_id /proc/uptime /opt/boot-inventory/helper.log /opt/minimal-saver/last-boot.log; systemctl show AT-HUB.service app-boot-manager.service display-manager.service sdbd.service -p Id -p Type -p ExecMainStartTimestampMonotonic -p ExecMainExitTimestampMonotonic -p ActiveEnterTimestampMonotonic -p Result; vconftool get memory/appfw/current_fullscreen_appid; ps -eo pid,comm | grep -E 'Boot|Recorder|MiniHub|DN_spotlight'; true"
+  },
+  {
+    "name": "boot-trial.tar.gz",
+    "kind": "command",
+    "timeout": 35,
+    "command": "tar -C / -cf - opt/boot-inventory 'opt/usr/home/owner/apps_rw/MiniHub001/data/Local Storage' tmp/hsm_boot_klog | gzip -1"
+  },
+  {
+    "name": "resume-paths.txt",
+    "kind": "command",
+    "timeout": 15,
+    "command": "ls -l /usr/bin/*resume* /usr/bin/*splash* 2>/dev/null; for p in /proc/[0-9]*; do test -r \"$p/comm\" || continue; read c < \"$p/comm\"; case \"$c\" in app_resume) readlink \"$p/exe\"; tr '\\000' ' ' < \"$p/cmdline\"; echo;; esac; done; true"
+  }
+]

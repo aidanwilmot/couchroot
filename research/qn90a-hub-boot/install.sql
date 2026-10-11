@@ -1,0 +1,15 @@
+BEGIN IMMEDIATE;
+CREATE TEMP TABLE boot_guard(ok INTEGER CHECK(ok=1));
+INSERT INTO boot_guard SELECT count(*)=1 FROM key_filter WHERE appid='com.samsung.tv.csfs' AND key='XF86Home';
+INSERT INTO boot_guard SELECT count(*)=1 FROM key_filter WHERE rowid=82 AND appid='com.samsung.tv.csfs' AND key='XF86Home' AND longpress IS NULL AND override IS NULL AND on_selector='' AND request='launch' AND target_selector='package:MiniHub001.Hub' AND args IS NULL;
+INSERT INTO boot_guard SELECT count(*)=1 FROM managed_app WHERE appid='MiniHub001.Hub';
+INSERT INTO boot_guard SELECT count(*)=1 FROM managed_app WHERE appid='MiniHub001.Hub' AND ui_type IS NULL AND source IS NULL;
+INSERT INTO boot_guard SELECT count(*)=2 FROM task_filter WHERE appid='MiniHub001.Hub';
+INSERT INTO boot_guard SELECT count(*)=1 FROM task_filter WHERE appid='MiniHub001.Hub' AND source_selector='package:NRi6kdBYJ0.AirPlayWebApp,~context:standby,vconf:(ready=memory/menu/network/airplay_status)' AND source_event='pause' AND request='launch' AND target_selector='package:MiniHub001.Hub' AND target IS NULL AND args IS NULL;
+INSERT INTO boot_guard SELECT count(*)=1 FROM task_filter WHERE appid='MiniHub001.Hub' AND source_selector='package:com.samsung.tv.airplay-app,~context:standby,vconf:(ready=memory/menu/network/airplay_status)' AND source_event='deactivate' AND request='launch' AND target_selector='package:MiniHub001.Hub' AND target IS NULL AND args IS NULL;
+INSERT INTO boot_guard SELECT count(*)=0 FROM managed_app WHERE appid='MiniHubBoot.Start';
+INSERT INTO boot_guard SELECT count(*)=0 FROM task_filter WHERE appid='MiniHubBoot.Start';
+INSERT INTO managed_app(appid,ui_type,source) VALUES('MiniHubBoot.Start',NULL,NULL);
+INSERT INTO task_filter(appid,source_selector,source_event,request,target_selector,target,args) VALUES('MiniHubBoot.Start','package:org.tizen.welcome-mode','start','launch','package:MiniHubBoot.Start',NULL,NULL);
+DROP TABLE boot_guard;
+COMMIT;

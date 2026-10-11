@@ -1,0 +1,58 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),https=require('https'),crypto=require('crypto'),{execFileSync}=require('child_process');
+const {Journal,config,validateRequest,hash,sdkRuntimeGuard}=require('../research/autonomous-root/service/policy');
+const {createApi}=require('../research/autonomous-root/service/api');
+const {createAgent,launchRequest}=require('../research/autonomous-root/service/agent');
+const tmp=()=>fs.mkdtempSync(path.join(os.tmpdir(),'tv-agent-test-'));
+const command=id=>({id:id||crypto.randomUUID(),command:'id',timeout_ms:2000});
+test('SDK launch uses a staged script within the transport limit',()=>{
+ const pkg='archive-root-0123456789abcdef',stage='/home/owner/share/tmp/sdk_tools/'+pkg;
+ const request=launchRequest(stage,'/tmp/'+pkg+'-launch-once');
+ assert.ok(Buffer.byteLength(request)<=510);
+ const encoded=request.match(/printf\$\{IFS\}%s\$\{IFS\}([^|]+)/)[1];
+ assert.ok(Buffer.from(encoded,'base64').toString().includes(". '"+stage+"/launch-sdk.sh'"));
+ assert.throws(()=>launchRequest('/'+ 'x'.repeat(1000),'/tmp/gate'),/transport limit/);
+});
+test('SDK runtime guard blocks payload execution on mismatch or unreadable bytes',()=>{
+ const c={schema:1,device:'s90d',enabled:false,port:28443,firmware:'test',client_sha256:'a'.repeat(64),hashes:{'/usr/bin/dotnet':'b'.repeat(64),'/usr/sbin/sdbd-tarlauncher':'b'.repeat(64)}};
+ const guard=sdkRuntimeGuard(c),run=body=>require('child_process').spawnSync('/bin/sh',['-c',body+'\n'+guard+'printf PAYLOAD_REACHED'],{encoding:'utf8'});
+ assert.equal(run("sha256sum(){ printf '%s file\\n' '"+'b'.repeat(64)+"'; }").stdout,'PAYLOAD_REACHED');
+ for(const body of ["sha256sum(){ printf '%s file\\n' '"+'c'.repeat(64)+"'; }",'sha256sum(){ return 1; }']){
+  const result=run(body);assert.equal(result.status,74);assert.equal(result.stdout.includes('PAYLOAD_REACHED'),false);
+ }
+ assert.throws(()=>sdkRuntimeGuard({...c,hashes:{'/tmp/untrusted':'b'.repeat(64)}}));
+});
+test('journal rejects replay across restart, including uncertain outcomes',()=>{
+ const dir=tmp();try{const file=dir+'/requests.json',v=command(),j=new Journal(file);j.begin(v);assert.throws(()=>j.begin(v),/already submitted/);const restarted=new Journal(file);assert.equal(restarted.rows[0].state,'submitted');assert.throws(()=>restarted.begin(v));restarted.finish(v.id,{exit_code:0,timed_out:false});assert.equal(new Journal(file).rows[0].state,'completed');assert.equal(fs.readFileSync(file,'utf8').includes('"command"'),false);}finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('request and configuration bounds fail closed',()=>{
+ for(const v of [{},command('short'),{...command(),timeout_ms:25001},{...command(),command:'x'.repeat(16385)},{...command(),command:'id\0'},{...command(),extra:true}])assert.throws(()=>validateRequest(v));
+ const c={schema:1,device:'qn90a',enabled:false,port:28443,firmware:'test',client_sha256:'a'.repeat(64),hashes:{'/usr/bin/dotnet':'b'.repeat(64),'/usr/sbin/sdbd-tarlauncher':'c'.repeat(64)}};assert.equal(config(c),c);assert.throws(()=>config({...c,hashes:{'/tmp/bad':'d'.repeat(64)}}));assert.throws(()=>config({...c,enabled:'yes'}));
+});
+test('firmware failure never reaches SDK; explicit stop cancels retry',async()=>{
+ const a=createAgent({device:'qn90a'},{verifyFirmware:()=>{throw Error('firmware drift');}});assert.equal(a.status().enabled,false);a.start();await new Promise(r=>setImmediate(r));assert.equal(a.status().connected,false);assert.equal(a.status().attempts,1);assert.match(a.status().last_error,/firmware drift/);a.stop();assert.equal(a.status().enabled,false);
+});
+test('permission failures retain the acquisition step and file path',async()=>{
+ const a=createAgent({device:'s90d'},{verifyFirmware:()=>{throw Object.assign(new Error("EACCES: permission denied, open '/usr/bin/dotnet'"),{code:'EACCES'});}});
+ try {a.start();await new Promise(r=>setImmediate(r));assert.match(a.status().last_error,/^firmware verification: EACCES:.*\/usr\/bin\/dotnet/);}
+ finally {a.stop();}
+});
+test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',async()=>{
+ const dir=tmp();let server;
+ try{
+  function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
+  const serverCert=cert('server'),clientCert=cert('client'),foreign=cert('foreign');
+  const pin=hash(new crypto.X509Certificate(clientCert.cert).raw);
+  let calls=0,enabled=true,uncertain=false;
+  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:0,timed_out:false,stdout:'uid=0',stderr:''};}};
+  const journal=new Journal(dir+'/requests.json');
+  server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
+  function request(route,body,credentials=clientCert,extra={}){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:false,headers:{'Content-Type':'application/json',...extra}},res=>{let data='';res.on('data',d=>data+=d);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(data)}));});r.on('error',reject);r.end(body===undefined?undefined:JSON.stringify(body));});}
+  await assert.rejects(request('/v1/status',undefined,{}));await assert.rejects(request('/v1/status',undefined,foreign));
+  assert.equal((await request('/v1/status')).status,200);
+  assert.equal((await request('/v1/status',undefined,clientCert,{Origin:'https://example.invalid'})).status,403);
+  const v=command();assert.equal((await request('/v1/exec',v)).body.stdout,'uid=0');assert.equal(calls,1);assert.equal((await request('/v1/exec',v)).status,409);assert.equal(calls,1);
+  uncertain=true;const lost=command();assert.equal((await request('/v1/exec',lost)).status,409);assert.equal((await request('/v1/exec',lost)).status,409);assert.equal(calls,2);assert.equal(journal.rows.find(r=>r.id===lost.id).state,'submitted');
+  assert.equal((await request('/v1/disable',{})).status,200);assert.equal((await request('/v1/exec',command())).status,503);assert.equal((await request('/v1/enable',{})).status,200);assert.equal((await request('/unknown')).status,404);
+ }finally{if(server)await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
+});

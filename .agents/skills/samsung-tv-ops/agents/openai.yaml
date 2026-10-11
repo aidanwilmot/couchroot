@@ -1,0 +1,4 @@
+interface:
+  display_name: "Samsung TV Hub Operations"
+  short_description: "Deploy and recover Samsung TV Hub updates"
+  default_prompt: "Use $samsung-tv-ops to prepare a UI-only Hub update for the selected TV."

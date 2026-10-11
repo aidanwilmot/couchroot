@@ -1,0 +1,50 @@
+[
+  {
+    "name": "boot-identity.txt",
+    "kind": "command",
+    "timeout": 15,
+    "command": "date -u; cat /proc/sys/kernel/random/boot_id /proc/uptime /etc/prd_info.ini; getconf CLK_TCK; systemctl --version; for x in systemd-analyze journalctl dlogutil dmesg; do command -v \"$x\"; done; systemctl show -p FirmwareTimestampMonotonic -p LoaderTimestampMonotonic -p KernelTimestamp -p UserspaceTimestampMonotonic -p FinishTimestampMonotonic; true"
+  },
+  {
+    "name": "unit-timestamps.txt",
+    "kind": "command",
+    "timeout": 25,
+    "command": "set -eu\nset -f\nunits=$(systemctl list-units --all --no-legend --plain | awk '{print $1}'); systemctl show -p Id -p Type -p LoadState -p ActiveState -p SubState -p Result -p After -p Before -p Requires -p Wants -p ExecMainStartTimestampMonotonic -p ExecMainExitTimestampMonotonic -p InactiveExitTimestampMonotonic -p ActiveEnterTimestampMonotonic -p InactiveEnterTimestampMonotonic -p NRestarts -- $units"
+  },
+  {
+    "name": "boot-dependencies.txt",
+    "kind": "command",
+    "timeout": 20,
+    "command": "systemctl --no-pager list-units --all; systemctl show AT-HUB.service app-boot-manager.service webappservice.service wrt-service.service display-manager.service sdbd.service -p Id -p Type -p After -p Before -p Wants -p Requires -p ExecStart -p ExecMainStartTimestampMonotonic -p ExecMainExitTimestampMonotonic -p ActiveEnterTimestampMonotonic -p Result; systemctl cat AT-HUB.service app-boot-manager.service; command -v systemd-analyze >/dev/null && systemd-analyze critical-chain; true"
+  },
+  {
+    "name": "boot-journal.txt",
+    "kind": "command",
+    "timeout": 25,
+    "command": "journalctl -b 0 -o short-monotonic --no-pager | head -n 8000; true"
+  },
+  {
+    "name": "kernel-boot.txt",
+    "kind": "command",
+    "timeout": 15,
+    "command": "dmesg | head -n 3500; true"
+  },
+  {
+    "name": "startup-state.txt",
+    "kind": "command",
+    "timeout": 20,
+    "command": "for k in db/appfw/home_appid db/appfw/startup_appid db/appfw/booting_appid_backup db/menu/smart_hub/ontvsetting/auto_start memory/appfw/current_fullscreen_appid; do vconftool get \"$k\"; done; cat /opt/minimal-saver/last-boot.log; ps -eo pid,ppid,uid,comm; ls -ld /run/log/journal /var/log/journal /opt/var/log /opt/etc/*boot* /opt/etc/parseinfo.sh 2>/dev/null; dlogutil --help 2>&1 | head -n 65; true"
+  },
+  {
+    "name": "vendor-boot-logs.txt",
+    "kind": "command",
+    "timeout": 25,
+    "command": "ls -la /opt/var/log /run/log /tmp/*boot* /run/*boot* 2>/dev/null; dlogutil -d -v threadtime | head -n 6000; true"
+  },
+  {
+    "name": "preserved-boot.txt",
+    "kind": "command",
+    "timeout": 20,
+    "command": "cat /tmp/hsm_boot_klog; ls -l /tmp/vconf_ready /tmp/avoc_ready /tmp/deviced-ready /tmp/dbus_launch /tmp/app_ready /tmp/tvs_ready /tmp/firstscreen_ready /tmp/wm_start /run/.wm_ready /run/ps_agent.pid 2>/dev/null; cat /opt/etc/parseinfo.sh; true"
+  }
+]

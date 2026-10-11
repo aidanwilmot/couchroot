@@ -1,0 +1,14 @@
+[
+  {
+    "name": "splash-code.tar.gz",
+    "kind": "command",
+    "timeout": 30,
+    "command": "tar -C / -cf - usr/bin/app_resume usr/bin/boot_splashscreen usr/bin/launch_splash.sh usr/bin/app-boot-manager | gzip -1"
+  },
+  {
+    "name": "splash-state.txt",
+    "kind": "command",
+    "timeout": 20,
+    "command": "date -u\ncat /proc/sys/kernel/random/boot_id /proc/uptime\nsystemctl list-units --all --no-pager | grep -Ei 'splash|resume|app-boot'\ngrep -R -n -E 'boot_splash|app_resume|launch_splash' /usr/lib/systemd/system /etc/systemd /opt/etc/systemd/oneservice 2>/dev/null\nps -eo pid,ppid,comm,args | grep -E 'splash|resume|MiniHub'\ntrue"
+  }
+]

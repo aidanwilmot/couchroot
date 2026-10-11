@@ -1,0 +1,687 @@
+{
+  "date": "2026-09-22",
+  "target": {
+    "model": "QN85QN90AAFXZA",
+    "firmware": "T-NKM2AKUC-2301.1",
+    "hub": "0.4.7",
+    "startup_relay": "0.2.0"
+  },
+  "method": {
+    "reboot": "native DeviceD full reboot",
+    "measurement": "TV kernel uptime at relay native foreground confirmation",
+    "postboot_launch_or_key_assistance": false,
+    "treatments_combined": false,
+    "initial_baseline_foreground": "screensaver",
+    "subsequent_trial_initial_foreground": "Hub"
+  },
+  "trials": [
+    {
+      "label": "baseline",
+      "excluded_families": [],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "relay_entered_uptime_seconds": 20.89,
+      "ready_since_uptime_seconds": 22.12,
+      "final_accepted_request_uptime_seconds": 28.13,
+      "hub_foreground_uptime_seconds": 45.87,
+      "launch_attempts": 1,
+      "first_http_visible_uptime_seconds": 50.93,
+      "unit_states": {
+        "adagent-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "app-boot-manager.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-context-manager.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "canalysis-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "com.samsung.tv.airplay-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "connman.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "contents-recognition-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "org.tizen.webappservice.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "pisa-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-delayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-predelayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        }
+      },
+      "failed_units": null
+    },
+    {
+      "label": "advertising",
+      "excluded_families": [
+        "advertising"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "relay_entered_uptime_seconds": 18.61,
+      "ready_since_uptime_seconds": 20.1,
+      "final_accepted_request_uptime_seconds": 35.43,
+      "hub_foreground_uptime_seconds": 38.47,
+      "launch_attempts": 3,
+      "first_http_visible_uptime_seconds": 47.83,
+      "unit_states": {
+        "adagent-service.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "no",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-boot-manager.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-context-manager.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "canalysis-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "com.samsung.tv.airplay-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "connman.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "contents-recognition-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "org.tizen.webappservice.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "pisa-service.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "no",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "vdtizen-bootseq-delayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-predelayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        }
+      },
+      "failed_units": null
+    },
+    {
+      "label": "control-after-advertising",
+      "excluded_families": [],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "relay_entered_uptime_seconds": 19.43,
+      "ready_since_uptime_seconds": 20.81,
+      "final_accepted_request_uptime_seconds": 26.81,
+      "hub_foreground_uptime_seconds": 41.73,
+      "launch_attempts": 1,
+      "first_http_visible_uptime_seconds": 44.82,
+      "unit_states": {
+        "adagent-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "app-boot-manager.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-context-manager.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "canalysis-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "com.samsung.tv.airplay-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "connman.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "contents-recognition-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "org.tizen.webappservice.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "pisa-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-delayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-predelayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        }
+      },
+      "failed_units": null
+    },
+    {
+      "label": "advertising-repeat",
+      "excluded_families": [
+        "advertising"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "relay_entered_uptime_seconds": 18.68,
+      "ready_since_uptime_seconds": 19.94,
+      "final_accepted_request_uptime_seconds": 34.56,
+      "hub_foreground_uptime_seconds": 39.17,
+      "launch_attempts": 3,
+      "first_http_visible_uptime_seconds": 45.11,
+      "unit_states": {
+        "adagent-service.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "no",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-boot-manager.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-context-manager.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "canalysis-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "com.samsung.tv.airplay-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "connman.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "contents-recognition-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "org.tizen.webappservice.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "pisa-service.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "no",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "vdtizen-bootseq-delayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-predelayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        }
+      },
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "canalysis",
+      "excluded_families": [
+        "canalysis"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "relay_entered_uptime_seconds": 17.89,
+      "ready_since_uptime_seconds": 19.18,
+      "final_accepted_request_uptime_seconds": 34.17,
+      "hub_foreground_uptime_seconds": 36.99,
+      "launch_attempts": 3,
+      "first_http_visible_uptime_seconds": 44.43,
+      "unit_states": {
+        "adagent-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "app-boot-manager.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-context-manager.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "canalysis-service.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "no",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "com.samsung.tv.airplay-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "connman.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "contents-recognition-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "org.tizen.webappservice.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "pisa-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-delayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-predelayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        }
+      },
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "com.samsung.tv.notification-serviceapp.service",
+        "motion-sensor-service.service",
+        "org.tizen.voice-app.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "canalysis-repeat",
+      "excluded_families": [
+        "canalysis"
+      ],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "relay_entered_uptime_seconds": 19.07,
+      "ready_since_uptime_seconds": 20.34,
+      "final_accepted_request_uptime_seconds": 34.6,
+      "hub_foreground_uptime_seconds": 37.39,
+      "launch_attempts": 3,
+      "first_http_visible_uptime_seconds": 43.33,
+      "unit_states": {
+        "adagent-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "app-boot-manager.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-context-manager.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "canalysis-service.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "no",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "com.samsung.tv.airplay-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "connman.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "contents-recognition-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "org.tizen.webappservice.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "pisa-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-delayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-predelayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        }
+      },
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    },
+    {
+      "label": "restored",
+      "excluded_families": [],
+      "new_boot_verified": true,
+      "autonomous_hub_foreground": true,
+      "relay_entered_uptime_seconds": 19.7,
+      "ready_since_uptime_seconds": 20.95,
+      "final_accepted_request_uptime_seconds": 26.96,
+      "hub_foreground_uptime_seconds": 43.19,
+      "launch_attempts": 1,
+      "first_http_visible_uptime_seconds": 52.01,
+      "unit_states": {
+        "adagent-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "app-boot-manager.service": {
+          "ActiveState": "inactive",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "dead"
+        },
+        "app-context-manager.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "canalysis-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "com.samsung.tv.airplay-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "connman.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "contents-recognition-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "org.tizen.webappservice.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "pisa-service.service": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-delayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        },
+        "vdtizen-bootseq-predelayed.timer": {
+          "ActiveState": "active",
+          "ConditionResult": "yes",
+          "Result": "success",
+          "SubState": "running"
+        }
+      },
+      "failed_units": [
+        "com.samsung.tv.airplay-service-2.service",
+        "com.samsung.tv.aov-service.service",
+        "com.samsung.tv.knox-browser.service",
+        "motion-sensor-service.service",
+        "sys-kernel-debug-tracing.mount",
+        "system-default-target-done.service",
+        "system-delayed-target-done.service",
+        "vdca-update.service"
+      ]
+    }
+  ],
+  "native_navigation_checks": {
+    "advertising": {
+      "native_plex_launch": true,
+      "native_home_return": true,
+      "samsung_home_overlay": true,
+      "final_hub_foreground_partial_empty": true
+    },
+    "canalysis": {
+      "native_plex_launch": true,
+      "native_home_return": true,
+      "samsung_home_overlay": true,
+      "final_hub_foreground_partial_empty": true
+    },
+    "restored": {
+      "native_plex_launch": true,
+      "native_home_return": true,
+      "samsung_home_overlay": true,
+      "final_hub_foreground_partial_empty": true
+    }
+  },
+  "pre_test_failed_units": [
+    "com.samsung.tv.airplay-service-2.service",
+    "com.samsung.tv.aov-service.service",
+    "com.samsung.tv.knox-browser.service",
+    "motion-sensor-service.service",
+    "samsunghealth-service-tv-dbus-activation.service",
+    "samsunghealth.service.tv.busname",
+    "sys-kernel-debug-tracing.mount",
+    "system-default-target-done.service",
+    "system-delayed-target-done.service",
+    "vdca-update.service"
+  ],
+  "restoration": {
+    "installed_file_hashes_unchanged": true,
+    "package_records_unchanged": true,
+    "persistent_settings_unchanged": true,
+    "restored_autonomous_hub": true,
+    "routing_unchanged": true,
+    "services_restored": true,
+    "telemetry_preferences_unchanged": true,
+    "owned_markers_absent_privileged_readback": true,
+    "temporary_root_staging_absent": true,
+    "journal_complete": true
+  },
+  "limitations": [
+    "Seven sequential observations; two per exclusion, three controls; no randomized order.",
+    "First baseline began with screensaver visible; compare exclusions especially with subsequent controls.",
+    "All exclusion runs consumed three launch attempts versus one for all controls; early nonzero result codes and stages were not retained.",
+    "Notification and voice app units failed on the first canalysis trial but not its repeat or final restored control; cause unresolved.",
+    "No actual media playback, casting, physical remote, standby wake or AC unplug test.",
+    "No combined exclusion tested; gains are not additive."
+  ],
+  "recommendation": "Original startup policy restored. Diagnose early launch results and readiness before permanent exclusions.",
+  "private_evidence": "qn90a/startup-disable-tests/20260922T150320Z",
+  "report": "docs/samsung-qn90a-startup-disable-tests.md"
+}

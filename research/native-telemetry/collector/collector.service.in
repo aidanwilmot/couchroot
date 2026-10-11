@@ -1,0 +1,21 @@
+# Candidate configuration only. Bootstrap and Hub control are not deployed yet.
+# Replace @VERSION@ and @DEVICE@ with reviewed installation values.
+[Unit]
+Description=Minimal Hub native telemetry
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=5001
+Group=100
+SmackProcessLabel=User::Pkg::MiniTelemetry
+ExecStart=/opt/minimal-native-collector/@VERSION@/collector --root /opt/usr/home/owner/apps_rw/MiniTelemetry/data --runtime /tmp/minimal-telemetry-@DEVICE@
+BindReadOnlyPaths=/opt/minimal-native-collector/@VERSION@
+Nice=10
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=4s
+UMask=0077
+StandardOutput=null
+StandardError=journal

@@ -1,0 +1,28 @@
+{
+  "model": "QN85QN90AAFXZA",
+  "host": "192.0.2.11",
+  "firmware": "T-NKM2AKUC-2301.1",
+  "platform": "21_NIKEM2_QTV",
+  "architecture": "armv7l",
+  "runtime": "netcoreapp3.1",
+  "boot_id": "00000000-0000-4000-8000-000000000005",
+  "baseline": {"uid": [5001, 5001, 5001, 5001], "gid": [100, 100, 100, 100]},
+  "root": {
+    "uid": [0, 0, 0, 0],
+    "gid": [0, 0, 0, 0],
+    "smack": "User",
+    "cap_permitted": "0000003fffffffff",
+    "cap_effective": "0000003fffffffff",
+    "cap_bounding": "0000003fffffffff",
+    "seccomp": 0,
+    "read_only_zero_byte_open": {"/dev/mmcblk0p19": true, "/proc/1/ns/mnt": true}
+  },
+  "original_hashes_unchanged": {
+    "/etc/passwd": "610fe3305c96f9101c0ca5f65ae8eaa7111a9c8b8ced673f01d9e2553ba2ffad",
+    "/usr/share/sdbd/public.pem": "c83cab64331f092ba99f666b8bb20a49dd1fff04030336c2ea34f6b55ca09d09"
+  },
+  "cleanup": {"unmount_results": [0, 0], "probe_processes_absent": true, "staging_absent": true, "sdk_uid": 901, "sdk_effective_capabilities": "0000000000000000"},
+  "persistent_root_service": false,
+  "root_repeat_after_subsequent_reboot_tested": false,
+  "evidence": ["20260920T142053.596711Z-qn90a-root-identity", "20260920T142054.595016Z-qn90a-root-cleanup-verify"]
+}

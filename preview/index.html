@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minimal Hub · UI workbench</title>
+  <link rel="stylesheet" href="/preview/workbench.css">
+  <script src="/preview/scenarios.js" defer></script>
+  <script src="/preview/workbench.js" defer></script>
+</head>
+<body>
+  <header>
+    <div><h1>Minimal Hub</h1><p>UI workbench · local simulated TV</p></div>
+    <label>Scenario <select id="scenario"></select></label>
+    <button id="reset">Reset scenario</button>
+    <a id="fullscreen" target="_blank" rel="noopener">Open full viewport ↗</a>
+  </header>
+  <main><div id="stage"><iframe id="hub" title="Minimal Hub preview"></iframe></div></main>
+  <footer><span>Click the preview, then use ← ↑ ↓ → · Enter = OK · Escape = Back. Saves reload automatically.</span><output id="activity" aria-live="polite">No app launches yet.</output></footer>
+</body>
+</html>

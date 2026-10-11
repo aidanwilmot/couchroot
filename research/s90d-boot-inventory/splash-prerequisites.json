@@ -1,0 +1,14 @@
+[
+  {
+    "name": "splash-prerequisites.txt",
+    "kind": "command",
+    "timeout": 20,
+    "command": "date -u\nfor k in db/appfw/home_appid memory/appfw/is_root_app_init_mode_fg db/menu/smart_hub/ontvsetting/auto_start; do vconftool get \"$k\"; done\nfor p in /opt/usr/apps/MiniHub001.Hub/shared/res/homeloading.edj /opt/usr/apps/MiniHub001/shared/res/homeloading.edj /usr/apps/MiniHub001.Hub/shared/res/homeloading.edj /opt/usr/apps/com.samsung.tv.csfs/shared/res/homeloading.edj /usr/apps/com.samsung.tv.csfs/shared/res/homeloading.edj /etc/app-boot-manager/res/edj/empty_loading.edj /opt/usr/apps/bstr_csfs_mode /tmp/boot_splash_resumed /tmp/.boot_splashscreen_run /tmp/boot_splash_finished; do if test -e \"$p\"; then ls -ldZ \"$p\"; else echo \"ABSENT $p\"; fi; done\nls -ld /opt/usr/apps/MiniHub001* /usr/apps/MiniHub001* 2>/dev/null\nfind /opt/usr/share/crash /opt/var/log /var/log -maxdepth 2 -iname '*splash*' -print 2>/dev/null\ntrue"
+  },
+  {
+    "name": "splash-resources.tar.gz",
+    "kind": "command",
+    "timeout": 20,
+    "command": "tar -C / -cf - etc/app-boot-manager etc/tizen-platform.conf opt/usr/apps/com.samsung.tv.csfs/shared/res/homeloading.edj | gzip -1"
+  }
+]

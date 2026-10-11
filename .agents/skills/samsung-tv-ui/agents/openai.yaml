@@ -1,0 +1,4 @@
+interface:
+  display_name: "Samsung TV Hub UI"
+  short_description: "Design and test the Minimal Hub interface"
+  default_prompt: "Use $samsung-tv-ui to improve the Minimal Hub interface in the browser workbench."

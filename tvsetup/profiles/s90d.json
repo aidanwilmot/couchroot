@@ -1,0 +1,98 @@
+{
+  "name": "S90D",
+  "model": "QN55S90DAFXZA",
+  "platform": "24_PTM_QD_T09",
+  "firmware": "T-PTMDAKUC-0090-2130.0",
+  "architecture": "armv7l",
+  "framework": "net6.0",
+  "runtime": "6.0.9",
+  "host_sha256": "e5840c05c567183295f0bb37e3b28613618cec5e0c8c08a44a400672a1c73310",
+  "startup": "launcher-service",
+  "chart_prefix": "s90d",
+  "snapshot": "latest.json",
+  "id": "s90d",
+  "cleanup": {
+    "LImG0QPABV": {
+      "name": "QVC+ and HSN+",
+      "app": "LImG0QPABV.QXHMarketplace",
+      "type": "wgt",
+      "reviewed_version": "2.2.17"
+    },
+    "zigzSWa1hy": {
+      "name": "Instagram",
+      "app": "zigzSWa1hy.InstagramAirwave",
+      "type": "wgt",
+      "reviewed_version": "5.10.10"
+    },
+    "HupEmjIB4I": {
+      "name": "Glance",
+      "app": "HupEmjIB4I.Glance",
+      "type": "wgt",
+      "reviewed_version": "0.8.8"
+    },
+    "yL49PNFmjW": {
+      "name": "Samsung Promotion",
+      "app": "yL49PNFmjW.PromotionApp",
+      "type": "wgt",
+      "reviewed_version": "3.2.96"
+    },
+    "jAfAs7yVDX": {
+      "name": "Samsung GameBreaks",
+      "app": "jAfAs7yVDX.TheSix",
+      "type": "wgt",
+      "reviewed_version": "1.7.3"
+    },
+    "CmeyUlnhYY": {
+      "name": "Amazon Luna",
+      "app": "CmeyUlnhYY.LunaWebApp",
+      "type": "wgt",
+      "reviewed_version": "1.11.65"
+    },
+    "KMZlIHL7Pp": {
+      "name": "Blacknut Cloud Gaming",
+      "app": "KMZlIHL7Pp.Blacknut1wO",
+      "type": "wgt",
+      "reviewed_version": "4.3.20"
+    },
+    "GHI3a0zMSx": {
+      "name": "Xbox",
+      "app": "GHI3a0zMSx.XboxGamePass",
+      "type": "wgt",
+      "reviewed_version": "4.70.698"
+    },
+    "com.microsoft.copilot": {
+      "name": "Copilot",
+      "app": "com.microsoft.copilot",
+      "type": "tpk",
+      "reviewed_version": "1.0.24"
+    }
+  },
+  "reasons": {
+    "hub": "In-place signed update preserves favorites and launcher preferences.",
+    "cleanup": "Only the previously reviewed optional apps; keep overrides are supported.",
+    "telemetry": "Hub starts the signed telemetry service; the legacy helper collector stays disabled.",
+    "dashboard": "Inspect shared NAS by default; changing both-TV code requires --shared-nas.",
+    "home": "Use the verified native Home integration; retain Samsung Home fallback.",
+    "airplay": "Preserve native S90D routing.",
+    "startup": "Native S90D Home/autostart and AT-HUB helper.",
+    "splash": "Native splash compatibility in the composite AT-HUB helper.",
+    "screensaver": "Asteroids native renderer through AT-HUB."
+  },
+  "helper_sha256": "93dec0d4ce234dbdae288f0747134447771a6680f36e11483b62c90f4820579f",
+  "collector_sha256": "8925e093cec4379aa4f1915ebc882ca8d02fa65557ec10ebd20c877ef016db14",
+  "source_hashes": {
+    "helper": "554f6537534e4805210239c81b20ab1e7e814bb5a1764568f7f75d194537c3a0",
+    "service": "ee1092f78c9a854d9a25f910201f82adfd243393f72b01f2f96adba1c9c05816"
+  },
+  "dashboard_config_path": "/opt/usr/home/owner/apps_rw/MiniTelemetry/data/preferences.json",
+  "launcher_sha256": "3186666daae073ec8528ff277b71ea071f71e8a30fa58126b4db6494104e55cf",
+  "service_artifacts": {
+    "Service.dll": "1c08d7146a10eb9aa0981f4c50fa69e7c5e7269d018ef6891add9189876b2533",
+    "Bootstrap.dll": "25ce981afa14f0eb73a55ec656c62dd94c83282fbaa3fad414d7f9068868fc59",
+    "Telemetry.dll": "4d76863202e9d196ad20bb9ee6ae0865cb79f58ae23d41747ad279861ce05409",
+    "Service.deps.json": "91f86c136fa02f7340db4d283372c66d2d92214ee4b7376dcf7c8c4be8d0782e",
+    "Service.runtimeconfig.json": "aeb46a15366e38511c192ccf65312442c64e8753b3c16fd2ca0b4cb34a5c59f3",
+    "Bootstrap.deps.json": "d4a6bdbdba30dd70c947fc2513a761c69fc6a263fcc31af38d870ed37b6fc132",
+    "Bootstrap.runtimeconfig.json": "aeb46a15366e38511c192ccf65312442c64e8753b3c16fd2ca0b4cb34a5c59f3"
+  }
+}

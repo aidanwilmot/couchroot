@@ -1,0 +1,333 @@
+{
+  "date": "2026-09-20",
+  "baseline_commit": "4c65125",
+  "target": {
+    "ip": "192.0.2.11",
+    "model": "QN85QN90AAFXZA",
+    "platform": "21_NIKEM2_QTV",
+    "firmware": "T-NKM2AKUC-2301.1",
+    "architecture": "armv7l",
+    "runtime": ".NET Core 3.1.3",
+    "hub": "MiniHub001.Hub 0.4.1"
+  },
+  "deployment": {
+    "package_sha256": "9389fbd9fafe8c271612d2b5f5e302e2c98e1a9c33a3a874b16605adcc4f0a77",
+    "relay_sha256": "8805dfafe290ca87222cc7a11584556a1038ca481c5a8121429320acd032fee9",
+    "artifacts": {
+      "Boot.dll": "8805dfafe290ca87222cc7a11584556a1038ca481c5a8121429320acd032fee9",
+      "Boot.deps.json": "71541834bd4f6db3293b805424fa091ac07fbd30d830408959e708db8a51fbbd",
+      "Boot.runtimeconfig.json": "818abac6065c8b3de67cdb136773c1e584705913877ab1f9961d8def7fdbc16d"
+    },
+    "phase": "installed",
+    "backup": "/opt/minimal-hub-boot/context-20260920T202140.506981Z.db",
+    "backup_sha256": "b4fe8794623e08d1a6870fea61aabf92a9d3772a4efba050a6c31f35605680c6"
+  },
+  "mechanism": {
+    "app": "MiniHubBoot.Start",
+    "version": "0.2.0",
+    "managed_app_rows_added": 1,
+    "task_filter_rows_added": 1,
+    "source": "package:org.tizen.welcome-mode",
+    "source_event": "start",
+    "target": "package:MiniHubBoot.Start",
+    "claim": "/tmp/minimal-hub-boot/claimed",
+    "status": "/tmp/minimal-hub-boot/status.json",
+    "persistent_logs_per_boot": false,
+    "resident_helper_after_startup": false,
+    "uptime_deadline_seconds": 120,
+    "max_rejected_requests": 3,
+    "accepted_requests_per_boot_max": 1
+  },
+  "full_reboots": [
+    {
+      "trial": 1,
+      "kind": "native DeviceD full reboot",
+      "boot_id": "00000000-0000-4000-8000-000000000022",
+      "evidence": [
+        "qn90a/hub-boot/reboot1.log",
+        "qn90a/hub-boot/postboot1.log",
+        "qn90a/hub-boot/reboot1-observation.jsonl"
+      ],
+      "no_postboot_hub_or_collector_launch_before_proof": true,
+      "result": "failed: event missed; rule persisted; helper and telemetry absent",
+      "source_event": "tv-viewer launch with boot_done=0 gate",
+      "native_observation_uptime": 88.78,
+      "foreground": "org.tizen.tv-viewer"
+    },
+    {
+      "trial": 2,
+      "kind": "native DeviceD full reboot",
+      "boot_id": "00000000-0000-4000-8000-000000000023",
+      "evidence": [
+        "qn90a/hub-boot/reboot2.log",
+        "qn90a/hub-boot/postboot2.log",
+        "qn90a/hub-boot/reboot2-observation.jsonl"
+      ],
+      "no_postboot_hub_or_collector_launch_before_proof": true,
+      "result": "failed: event missed; rule persisted; helper and telemetry absent",
+      "source_event": "tv-viewer start without gate",
+      "native_observation_uptime": 79.37,
+      "foreground": "org.tizen.tv-viewer"
+    },
+    {
+      "trial": 3,
+      "kind": "native DeviceD full reboot",
+      "boot_id": "00000000-0000-4000-8000-000000000024",
+      "evidence": [
+        "qn90a/hub-boot/reboot3.log",
+        "qn90a/hub-boot/postboot3.log",
+        "qn90a/hub-boot/reboot3-observation.jsonl"
+      ],
+      "no_postboot_hub_or_collector_launch_before_proof": true,
+      "result": "autonomous Hub foreground and telemetry",
+      "helper_version": "0.1.3",
+      "helper_status": {
+        "schema": 1,
+        "boot": "00000000-0000-4000-8000-000000000024",
+        "entered": 15.47,
+        "uptime": 38.45,
+        "outcome": "foreground-timeout",
+        "foreground": "org.tizen.tv-viewer",
+        "attempts": 1,
+        "result": 0,
+        "accepted": true,
+        "power": 0,
+        "readySince": 16.68,
+        "requested": 22.69,
+        "ticks": 18,
+        "stable": 2,
+        "wm": false,
+        "app": false,
+        "bootDoneRc": 0,
+        "bootDone": 1,
+        "ready": true
+      },
+      "telemetry_status": {
+        "boot": "00000000-0000-4000-8000-000000000024",
+        "session": "00000000-0000-4000-8000-000000000025",
+        "device": "qn90a",
+        "pid": 3622,
+        "sequence": 1,
+        "sent": 0,
+        "failures": 1,
+        "last_error": "TaskCanceledException::TaskCanceledException",
+        "monitoring": true,
+        "retry_seconds": 20,
+        "uptime": 68.1
+      },
+      "sdb_disconnected_until_passive_foreground_proof": true,
+      "first_rest_visible_unix": 1789935032.5566971,
+      "diagnostic_limitation": "15-second confirmation expired before Hub rendered; native foreground was Hub by uptime77.48. Extended observation only to60seconds in final relay, without retrying an accepted request."
+    },
+    {
+      "trial": 4,
+      "kind": "native DeviceD full reboot",
+      "boot_id": "00000000-0000-4000-8000-000000000026",
+      "evidence": [
+        "qn90a/hub-boot/reboot4.log",
+        "qn90a/hub-boot/postboot4.log",
+        "qn90a/hub-boot/reboot4-observation.jsonl"
+      ],
+      "no_postboot_hub_or_collector_launch_before_proof": true,
+      "result": "autonomous Hub foreground and telemetry",
+      "helper_version": "0.2.0",
+      "helper_status": {
+        "schema": 1,
+        "boot": "00000000-0000-4000-8000-000000000026",
+        "entered": 18.38,
+        "uptime": 44.99,
+        "outcome": "foreground-confirmed",
+        "foreground": "MiniHub001.Hub",
+        "attempts": 1,
+        "result": 0,
+        "accepted": true,
+        "power": 0,
+        "readySince": 19.68,
+        "requested": 25.69,
+        "ticks": 21,
+        "stable": 2,
+        "wm": false,
+        "app": false,
+        "bootDoneRc": 0,
+        "bootDone": 1,
+        "ready": true
+      },
+      "telemetry_status": {
+        "boot": "00000000-0000-4000-8000-000000000026",
+        "session": "00000000-0000-4000-8000-000000000027",
+        "device": "qn90a",
+        "pid": 3308,
+        "sequence": 7,
+        "sent": 7,
+        "failures": 0,
+        "last_error": "",
+        "monitoring": true,
+        "retry_seconds": 10,
+        "uptime": 120.5
+      },
+      "sdb_disconnected_until_passive_foreground_proof": true,
+      "first_rest_visible_unix": 1789935388.351115,
+      "first_passive_new_boot_telemetry": {
+        "seq": 4,
+        "uptime": 90.52,
+        "received_at": 1789935379.0752296,
+        "observed_unix": 1789935388.351115
+      }
+    },
+    {
+      "trial": 5,
+      "kind": "native DeviceD full reboot",
+      "boot_id": "00000000-0000-4000-8000-000000000028",
+      "evidence": [
+        "qn90a/hub-boot/reboot5.log",
+        "qn90a/hub-boot/postboot5.log",
+        "qn90a/hub-boot/reboot5-observation.jsonl"
+      ],
+      "no_postboot_hub_or_collector_launch_before_proof": true,
+      "result": "autonomous Hub foreground and telemetry",
+      "helper_version": "0.2.0",
+      "helper_status": {
+        "schema": 1,
+        "boot": "00000000-0000-4000-8000-000000000028",
+        "entered": 18.32,
+        "uptime": 43.67,
+        "outcome": "foreground-confirmed",
+        "foreground": "MiniHub001.Hub",
+        "attempts": 1,
+        "result": 0,
+        "accepted": true,
+        "power": 0,
+        "readySince": 19.48,
+        "requested": 25.48,
+        "ticks": 21,
+        "stable": 2,
+        "wm": false,
+        "app": false,
+        "bootDoneRc": 0,
+        "bootDone": 1,
+        "ready": true
+      },
+      "telemetry_status": {
+        "boot": "00000000-0000-4000-8000-000000000028",
+        "session": "00000000-0000-4000-8000-000000000029",
+        "device": "qn90a",
+        "pid": 3436,
+        "sequence": 12,
+        "sent": 11,
+        "failures": 1,
+        "last_error": "",
+        "monitoring": true,
+        "retry_seconds": 10,
+        "uptime": 184.72
+      },
+      "sdb_disconnected_until_passive_foreground_proof": true,
+      "first_rest_visible_unix": 1789935912.4687161,
+      "first_passive_new_boot_telemetry": {
+        "seq": 2,
+        "uptime": 84.73,
+        "received_at": 1789935945.6429398,
+        "observed_unix": 1789935950.200795
+      },
+      "mac_sdb_daemon_stopped_until_after_passive_hub_and_telemetry_proof": true,
+      "collector_process": {
+        "pid": 3436,
+        "uid": 5001,
+        "start_ticks": 12585,
+        "clock_ticks_per_second": 250,
+        "start_uptime_seconds": 50.34,
+        "executable": "/usr/bin/dotnet-launcher",
+        "entry_assembly": "/opt/usr/apps/MiniTelemetry/bin/Service.dll",
+        "count_after_route_tests": 1
+      }
+    }
+  ],
+  "rollback": {
+    "routing_tables_compared_with_rowids_and_all_columns": true,
+    "managed_app_differences": 0,
+    "key_filter_differences": 0,
+    "task_filter_differences": 0,
+    "quick_check": "ok",
+    "native_package_removed_and_absence_verified": true,
+    "partial_rollback_retry_tested": true,
+    "reinstalled_then_full_reboot_validated": true,
+    "evidence": [
+      "qn90a/hub-boot/native-uninstall.log",
+      "qn90a/hub-boot/rollback-completed.log",
+      "qn90a/hub-boot/verify-rollback-final.log",
+      "qn90a/hub-boot/reinstall-final.log"
+    ]
+  },
+  "preservation": {
+    "preferences": {
+      "db/appfw/home_appid": "org.tizen.tv-viewer",
+      "db/appfw/overlay_home_appid": "com.samsung.tv.csfs",
+      "db/first_screen/type": "com.samsung.tv.csfs",
+      "db/menu/smart_hub/ontvsetting/auto_start": 0
+    },
+    "home_key": "native XF86Home from Plex -> Hub; partial empty",
+    "airplay_receiver_pause": "idle receiver foreground -> native pause -> Plex briefly -> Hub within0.8seconds",
+    "airplay_deactivate_rule": "exact unchanged guarded row; no actual iPad stream retested",
+    "duplicate_helper": "Plex remained foreground; RAM status/claim hashes unchanged",
+    "screensaver": {
+      "policy": "unchanged dashboard-owned 300-second timer",
+      "last_input_uptime": 438.07,
+      "last_hub_native_sample_uptime": 734.15,
+      "first_saver_native_sample_uptime": 744.04,
+      "native_transition_elapsed_bounds_seconds": [
+        296.08,
+        305.97
+      ],
+      "native_screensaver_flag": false,
+      "saver_screenshot_verified": true,
+      "native_right_return_hub_uptime": 796.1,
+      "partial_after_return": "",
+      "telemetry_pid_after_return": 3436,
+      "telemetry_sequence_after_return": 72,
+      "telemetry_sent_after_return": 71,
+      "boot_helper_status_unchanged": true,
+      "saver_process_exited_after_return": true
+    },
+    "evidence": [
+      "qn90a/hub-boot/home-idle-start-correct-retry.log",
+      "qn90a/hub-boot/airplay-final.log",
+      "qn90a/hub-boot/duplicate-check.log",
+      "qn90a/hub-boot/process-integrity.log",
+      "qn90a/hub-boot/idle-transition.log",
+      "qn90a/hub-boot/idle-transition-last.log",
+      "qn90a/hub-boot/idle-rest-final.jsonl",
+      "qn90a/hub-boot/asteroids-after-reboot5.png",
+      "qn90a/hub-boot/hub-after-reboot5.png",
+      "qn90a/hub-boot/saver-return.log"
+    ],
+    "dashboard_idle_script_sha256": "5fe904149b4ade5fbf2bc9ce490a535eff59ece9ad6cd4179120a21a6b6ae6e5",
+    "dashboard_idle_script_matches_repository": true
+  },
+  "tests": {
+    "python_qn90a": 37,
+    "production_timer_scenarios": 12,
+    "javascript_telemetry_and_idle": 9
+  },
+  "untested": [
+    "physical AC cold power-on",
+    "ordinary standby and physical-remote wake",
+    "background maintenance boot",
+    "real iPad AirPlay session",
+    "actual media playback"
+  ],
+  "limitations": [
+    "Exact-firmware private Samsung routing integration; firmware updates or database regeneration can invalidate it.",
+    "Welcome process must emit start; helper fails closed after boot deadline.",
+    "Same TV-viewer Live TV or HDMI selection during startup is indistinguishable from initial TV-viewer foreground.",
+    "An accepted asynchronous framework launch cannot be revoked; accepted requests are never retried.",
+    "Helper has no network dependency; telemetry delivery retains existing network dependency and may initially retry."
+  ],
+  "final_status": {
+    "foreground": "MiniHub001.Hub",
+    "partial": "",
+    "telemetry_service_processes": 1,
+    "boot_helper_processes": 0,
+    "routing_quick_check": "ok",
+    "original_passwd_and_verification_key_hashes_unchanged": true,
+    "evidence": "qn90a/hub-boot/final-status.log"
+  }
+}

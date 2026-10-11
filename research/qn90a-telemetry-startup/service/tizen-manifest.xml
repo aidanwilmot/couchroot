@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tizen.org/ns/packages" package="MiniTelemetry" version="0.4.0" api-version="6.0">
+ <profile name="tv-samsung"/>
+ <service-application appid="MiniTelemetry.Service" exec="Service.dll" type="dotnet" multiple="false" nodisplay="true" taskmanage="false" on-boot="false" auto-restart="false">
+  <label>Minimal TV Telemetry</label>
+  <background-category value="background-network"/>
+ </service-application>
+ <ui-application appid="MiniTelemetry.Start" exec="Bootstrap.dll" type="dotnet" multiple="false" nodisplay="true" taskmanage="false"><label>Minimal Telemetry Start</label></ui-application>
+ <privileges><privilege>http://tizen.org/privilege/systemmonitor</privilege><privilege>http://tizen.org/privilege/appmanager.launch</privilege><privilege>http://tizen.org/privilege/internet</privilege></privileges>
+</manifest>

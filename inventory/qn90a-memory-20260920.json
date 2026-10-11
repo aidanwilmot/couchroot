@@ -1,0 +1,26 @@
+{
+  "model": "QN85QN90AAFXZA",
+  "firmware": "T-NKM2AKUC-2301.1",
+  "boot_id": "00000000-0000-4000-8000-000000000005",
+  "one_time_targets": ["org.tizen.primevideo", "com.samsung.tv.cobalt-yt", "com.samsung.tv.csfs"],
+  "root_required": false,
+  "automatic_process_killer": false,
+  "settings_changed": false,
+  "final_paired_sample_kib": {
+    "before": {"mem_available": 661504, "swap_free": 134364},
+    "after": {"mem_available": 904496, "swap_free": 179848},
+    "follow_up": {"mem_available": 906364, "swap_free": 180360}
+  },
+  "available_memory_gain_mib": 237.296875,
+  "cold_samsung_home_recovery_seconds": 6.79,
+  "restore_command_passed": true,
+  "trim_command_passed": true,
+  "targets_absent_at_follow_up": true,
+  "hub_foreground_at_follow_up": true,
+  "physical_remote_latency_confirmed": false,
+  "owner_responsiveness_feedback": "About the same",
+  "post_profiling_normal_run": {"mem_available_kib": 868612, "swap_free_kib": 223452, "debug_ports_closed": [42194, 60082], "targets_absent": true, "hub_foreground": true},
+  "browser_restarted_after_termination": true,
+  "netflix_remained_after_termination": true,
+  "evidence": ["20260920T143004.396277Z-qn90a-memory-restore", "20260920T143037.300522Z-qn90a-memory-trim", "20260920T143122.940764Z-qn90a-memory-final"]
+}

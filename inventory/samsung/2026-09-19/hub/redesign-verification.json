@@ -1,0 +1,28 @@
+{
+  "version": "0.2.2",
+  "package_sha256": "9c23d2cf5e2a7685b0844a29fd57be363821030d8e97708cf7c993142167778a",
+  "package_bytes": 15032,
+  "source_matches_signed_and_installed": true,
+  "navigation": [
+    "MiniHub001.Hub",
+    "com.samsung.tv.cobalt-yt",
+    "MiniHub001.Hub",
+    "kIciSQlYEM.plex",
+    "MiniHub001.Hub",
+    "com.samsung.tv.csfs",
+    "MiniHub001.Hub"
+  ],
+  "navigation_exit": 0,
+  "private_evidence": "dumps/20260920T000843Z/",
+  "source_verification": "sessions/20260920T001224.916106Z-run/",
+  "home_appid": "MiniHub001.Hub",
+  "auto_start": 1,
+  "root_staging_cleaned": true,
+  "installer_upload_cleaned": true,
+  "bridge_tests_passed": 6,
+  "headline_rotation_seconds": 30,
+  "visual_rollback_version": "0.2.3",
+  "visual_rollback_install_tested": false,
+  "reboot_repeated_for_visual_update": false,
+  "card_numbers_removed": true
+}

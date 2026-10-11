@@ -1,0 +1,49 @@
+{
+  "device_id": "qn90a",
+  "model": "QN85QN90AAFXZA",
+  "firmware": "T-NKM2AKUC-2301.1",
+  "architecture": "armv7l",
+  "dotnet_runtime": "3.1.3",
+  "startup": "launcher-service",
+  "launcher_version": "0.4.1",
+  "service_version": "0.4.3",
+  "package_sha256": "ce616b0494e77f2a4af319cfe77ca722489f3369ec8dfe12abb1088fd08254a4",
+  "collector_sha256": "c665d6028ae66777ab66d46df1508f94f7da0be6b13d65edace31f6a01afd8fe",
+  "service_sha256": "687230b72fdd3eb891c32067783e7a39963bb0df85e8342a0712d2f169e00de8",
+  "bootstrap_sha256": "5ecff47344ebf48fd3e6a89543b2ad5eb9b63bfbec81157a3508c2b39c99ae04",
+  "signed_runtime_host": "/usr/bin/dotnet-launcher",
+  "signed_runtime_sha256": "5f33f4d63bc7eb5a09cdedf377398d6c2f4142e629a1f73921f31f08cb7791f3",
+  "reboot_verified": true,
+  "post_reboot_boot_id": "00000000-0000-4000-8000-000000000021",
+  "startup_scope": "Automatically starts collector after Minimal Hub opens; existing TV boot does not launch Hub",
+  "post_reboot_sequence": 13,
+  "post_reboot_sent": 13,
+  "post_reboot_failures": 0,
+  "post_reboot_uptime_seconds": 338.61,
+  "simultaneous_collector_processes": 1,
+  "credential_web_read": "SecurityError",
+  "pairing_mode": "0600",
+  "pairing_uid": 5001,
+  "pairing_smack": "User::Pkg::MiniTelemetry",
+  "relay_startup": {
+    "managed_elapsed_ms": 33,
+    "process_cpu_seconds": 0.356,
+    "rss_bytes": 24973312
+  },
+  "verification": [
+    "monitoring UI off/on and receiver URL applied without reboot",
+    "receiver timeout backoff 40 seconds then paired endpoint recovered",
+    "guarded update and forward-version rollback",
+    "normal post-reboot Hub launch automatically starts shared collector",
+    "Home row82 and both AirPlay return routes unchanged",
+    "original passwd and verification key unchanged",
+    "existing dashboard idle script unchanged"
+  ],
+  "unverified": [
+    "ordinary standby",
+    "physical remote wake",
+    "active playback",
+    "complete TV network-link outage",
+    "repeated five-minute physical saver trial"
+  ]
+}

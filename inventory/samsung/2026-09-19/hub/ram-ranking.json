@@ -1,0 +1,170 @@
+{
+  "timestamp": "Sun Sep 20 01:25:17 UTC 2026",
+  "private_evidence": "dumps/20260920T012514Z",
+  "foreground": "com.samsung.tv.cobalt-yt",
+  "metric": "PSS: proportionally attributed resident memory, KiB; shared pages apportioned; excludes logical swapped pages",
+  "mem_total_kib": 1816840,
+  "mem_available_kib": 342036,
+  "zram_physical_kib": 356916,
+  "zram_logical_kib": 1040520,
+  "kernel_slab_kib": 110564,
+  "kernel_stacks_kib": 22696,
+  "page_tables_kib": 54380,
+  "cache_kib": 330792,
+  "total_process_pss_kib_excluding_diagnostics": 508765,
+  "diagnostic_pss_kib": 18101,
+  "home_media_present": false,
+  "home_sidebar_present": false,
+  "top_processes": [
+    {
+      "pid": 5227,
+      "pss_kib": 77569,
+      "rss_kib": 88564,
+      "swap_pss_kib": 32736,
+      "private_kib": 76952,
+      "name": "cobalt_launcher",
+      "executable": "/usr/apps/com.samsung.tv.cobalt/bin/cobalt_launcher",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 13288,
+      "pss_kib": 50474,
+      "rss_kib": 70868,
+      "swap_pss_kib": 30288,
+      "private_kib": 48088,
+      "name": "DN_sung.tv.csfs",
+      "executable": "/opt/usr/apps/com.samsung.tv.csfs/bin/csfs.dll",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 779,
+      "pss_kib": 43210,
+      "rss_kib": 51496,
+      "swap_pss_kib": 11660,
+      "private_kib": 43080,
+      "name": "slive-provider-",
+      "executable": "/opt/usr/apps/com.samsung.tv.slive-daemon/bin/slive-provider-daemon",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 541,
+      "pss_kib": 39054,
+      "rss_kib": 54072,
+      "swap_pss_kib": 26808,
+      "private_kib": 36108,
+      "name": "kIciSQlYEM.plex",
+      "executable": "/opt/usr/apps/kIciSQlYEM/bin/kIciSQlYEM.plex",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 8627,
+      "pss_kib": 34597,
+      "rss_kib": 50140,
+      "swap_pss_kib": 24160,
+      "private_kib": 31304,
+      "name": "MiniHub001.Hub",
+      "executable": "/opt/usr/apps/MiniHub001/bin/MiniHub001.Hub",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 3504,
+      "pss_kib": 23156,
+      "rss_kib": 36716,
+      "swap_pss_kib": 26192,
+      "private_kib": 21876,
+      "name": "HEPsqFNie0.tvpl",
+      "executable": "/opt/usr/apps/HEPsqFNie0/bin/HEPsqFNie0.tvplusstandalone",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 4102,
+      "pss_kib": 16740,
+      "rss_kib": 25900,
+      "swap_pss_kib": 49228,
+      "private_kib": 16596,
+      "name": "primevideo",
+      "executable": "/usr/bin/aria-engine",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 235,
+      "pss_kib": 13779,
+      "rss_kib": 23208,
+      "swap_pss_kib": 5728,
+      "private_kib": 13380,
+      "name": "enlightenment",
+      "executable": "/usr/bin/enlightenment",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 3139,
+      "pss_kib": 10276,
+      "rss_kib": 24200,
+      "swap_pss_kib": 18652,
+      "private_kib": 9696,
+      "name": "DN_.quicklaunch",
+      "executable": "/opt/usr/apps/com.samsung.tv.quicklaunch/bin/QuickLaunch.dll",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 3002,
+      "pss_kib": 9548,
+      "rss_kib": 24020,
+      "swap_pss_kib": 22484,
+      "private_kib": 8968,
+      "name": "DN_.multiscreen",
+      "executable": "/usr/apps/com.samsung.tv.multiscreen/bin/MultiScreen.dll",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 4749,
+      "pss_kib": 8301,
+      "rss_kib": 22660,
+      "swap_pss_kib": 23700,
+      "private_kib": 7764,
+      "name": "DN_g.tizen.menu",
+      "executable": "/usr/apps/org.tizen.menu/bin/org.tizen.menu.dll",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 1962,
+      "pss_kib": 6434,
+      "rss_kib": 20980,
+      "swap_pss_kib": 22308,
+      "private_kib": 5752,
+      "name": "DN_izen.art-app",
+      "executable": "/opt/usr/apps/org.tizen.art-app/bin/ArtApp.dll",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 5091,
+      "pss_kib": 5516,
+      "rss_kib": 12112,
+      "swap_pss_kib": 5728,
+      "private_kib": 5436,
+      "name": "cast_core_servi",
+      "executable": "/opt/usr/apps/com.samsung.tv.googlecast-app/bin/cast_core_service",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 13981,
+      "pss_kib": 5389,
+      "rss_kib": 20868,
+      "swap_pss_kib": 10544,
+      "private_kib": 2780,
+      "name": "dotnet-loader",
+      "executable": "/usr/bin/dotnet-loader",
+      "diagnostic_process": false
+    },
+    {
+      "pid": 3278,
+      "pss_kib": 5267,
+      "rss_kib": 10356,
+      "swap_pss_kib": 10496,
+      "private_kib": 5252,
+      "name": "tztv-tagpro-dae",
+      "executable": "/usr/bin/tagproDir/tztv-tagpro-daemon",
+      "diagnostic_process": false
+    }
+  ]
+}

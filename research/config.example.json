@@ -1,0 +1,6 @@
+{
+  "tv_host": "192.0.2.12",
+  "expected_model": "QN55S90DAFXZA",
+  "expected_platform": "24_PTM_QD_T09",
+  "upstream_commit": "380dcc23a2f4b1a21b22380e98e6559036acebf7"
+}

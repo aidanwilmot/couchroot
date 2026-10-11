@@ -1,0 +1,561 @@
+{
+  "schema": 1,
+  "date": "2026-09-22",
+  "device": "qn90a",
+  "model": "QN85QN90AAFXZA",
+  "firmware": "T-NKM2AKUC-2301.1",
+  "method": "Seven instrumented native full reboots. All vendor service exclusions absent. Relative JS performance timings; approximate boot alignment via late wall/uptime pairs, assuming no clock step between trace-end and collection. Rendering/focus is a software proxy, not physical visibility or an AC-unplug test.",
+  "decision": "Keep deferred initial catalog/monitoring work. Restore five-second relay settle: shorter delay did not establish a dependable total startup improvement.",
+  "trials": [
+    {
+      "label": "control-one",
+      "initial_settle_s": 5,
+      "native_foreground_s": 44.2,
+      "attempts": 1,
+      "launches": [
+        {
+          "attempt": 1,
+          "finished": 30.47,
+          "result": 0,
+          "stage": "send",
+          "started": 25.26
+        }
+      ],
+      "script_start_estimated_s": 35.656,
+      "rendered_focused_estimated_s": 44.361,
+      "clock_uncertainty_s": 0.49,
+      "clock_anchor_gap_s": 27.12,
+      "trace_wall_offset_range_ms": 0.925,
+      "js_milestones_ms": {
+        "script-entry": 0.89,
+        "animation-frame-1": 105.11,
+        "animation-frame-2": 337.49,
+        "hub-entry": 2727.14,
+        "layout-probe-done": 2764.92,
+        "model-loaded": 4066.49,
+        "handlers-attached": 4256.72,
+        "initial-dom-render": 4484.22,
+        "discovery-start": 4484.69,
+        "discovery-call-returned": 4581.04,
+        "render-frame-1": 4596.12,
+        "telemetry-service-entry": 4678.38,
+        "telemetry-load": 4685.54,
+        "render-frame-2": 6572.29,
+        "dom-content-loaded": 6578.56,
+        "telemetry-dispatch": 8492.09,
+        "window-focus": 8705.41,
+        "discovery-error": 12486.38,
+        "discovery-render-done": 12496.09,
+        "trace-end": 60006.08
+      },
+      "navigation": {
+        "startTime": 0,
+        "duration": 7475.13,
+        "fetchStart": 129.6299999999988,
+        "responseStart": 129.6299999999988,
+        "responseEnd": 556.3649999999996,
+        "domInteractive": 948.8100000000018,
+        "domContentLoadedEventStart": 7473.995000000003,
+        "domContentLoadedEventEnd": 7474.784999999997,
+        "domComplete": 7475.054999999998,
+        "loadEventStart": 7475.124999999998,
+        "loadEventEnd": 7475.13
+      },
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 3640.095000000002
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 3640.104999999998
+        }
+      ],
+      "discovery": "timed-out"
+    },
+    {
+      "label": "control-two",
+      "initial_settle_s": 5,
+      "native_foreground_s": 43.27,
+      "attempts": 1,
+      "launches": [
+        {
+          "attempt": 1,
+          "finished": 30.16,
+          "result": 0,
+          "stage": "send",
+          "started": 25.04
+        }
+      ],
+      "script_start_estimated_s": 36.479,
+      "rendered_focused_estimated_s": 42.643,
+      "clock_uncertainty_s": 0.49,
+      "clock_anchor_gap_s": 15.63,
+      "trace_wall_offset_range_ms": 0.875,
+      "js_milestones_ms": {
+        "script-entry": 1.0,
+        "animation-frame-1": 63.9,
+        "animation-frame-2": 299.79,
+        "hub-entry": 2898.92,
+        "layout-probe-done": 2904.97,
+        "model-loaded": 4022.72,
+        "handlers-attached": 4065.01,
+        "initial-dom-render": 4364.59,
+        "discovery-start": 4364.93,
+        "discovery-call-returned": 4427.17,
+        "render-frame-1": 4428.48,
+        "telemetry-service-entry": 4444.35,
+        "telemetry-load": 4444.85,
+        "render-frame-2": 5319.08,
+        "dom-content-loaded": 5324.15,
+        "window-focus": 6163.95,
+        "telemetry-dispatch": 7151.94,
+        "discovery-error": 12367.42,
+        "discovery-render-done": 12375.0,
+        "trace-end": 60003.32
+      },
+      "navigation": {
+        "startTime": 0,
+        "duration": 6089.5149999999985,
+        "fetchStart": 194.12499999999966,
+        "responseStart": 194.12499999999966,
+        "responseEnd": 657.4799999999996,
+        "domInteractive": 796.5449999999947,
+        "domContentLoadedEventStart": 6088.5899999999965,
+        "domContentLoadedEventEnd": 6089.2249999999985,
+        "domComplete": 6089.444999999998,
+        "loadEventStart": 6089.5149999999985,
+        "loadEventEnd": 6089.5149999999985
+      },
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 3674.5049999999965
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 3674.5149999999994
+        }
+      ],
+      "discovery": "timed-out"
+    },
+    {
+      "label": "deferred-one",
+      "initial_settle_s": 5,
+      "native_foreground_s": 45.79,
+      "attempts": 1,
+      "launches": [
+        {
+          "attempt": 1,
+          "finished": 32.27,
+          "result": 0,
+          "stage": "send",
+          "started": 27.25
+        }
+      ],
+      "script_start_estimated_s": 38.429,
+      "rendered_focused_estimated_s": 45.584,
+      "clock_uncertainty_s": 0.485,
+      "clock_anchor_gap_s": 34.22,
+      "trace_wall_offset_range_ms": 0.92,
+      "js_milestones_ms": {
+        "script-entry": 5.1,
+        "animation-frame-1": 83.12,
+        "animation-frame-2": 443.25,
+        "hub-entry": 2939.46,
+        "layout-probe-done": 2998.12,
+        "bridge-created": 2998.6,
+        "storage-opened": 3021.16,
+        "feedback-created": 3665.54,
+        "model-loaded": 3668.44,
+        "handlers-attached": 3676.12,
+        "initial-dom-render": 3852.03,
+        "discovery-start": 3852.36,
+        "discovery-call-returned": 3931.83,
+        "render-frame-1": 3936.99,
+        "telemetry-service-entry": 3959.11,
+        "render-frame-2": 3967.78,
+        "dom-content-loaded": 4452.47,
+        "telemetry-load": 5961.66,
+        "telemetry-load-returned": 7153.89,
+        "window-focus": 7155.46,
+        "telemetry-loaded": 7310.72,
+        "telemetry-dispatch": 8811.7,
+        "discovery-error": 11854.15,
+        "discovery-render-done": 11861.51,
+        "trace-end": 60007.28
+      },
+      "navigation": {
+        "startTime": 0,
+        "duration": 5750.354999999999,
+        "fetchStart": 149.1749999999996,
+        "responseStart": 149.1749999999996,
+        "responseEnd": 783.529999999999,
+        "domInteractive": 1369.1549999999993,
+        "domContentLoadedEventStart": 5746.839999999999,
+        "domContentLoadedEventEnd": 5749.630000000004,
+        "domComplete": 5750.285000000005,
+        "loadEventStart": 5750.354999999999,
+        "loadEventEnd": 5750.354999999999
+      },
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 4342.735000000004
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 4342.745000000001
+        }
+      ],
+      "discovery": "timed-out"
+    },
+    {
+      "label": "focus-one",
+      "initial_settle_s": 5,
+      "native_foreground_s": 38.62,
+      "attempts": 2,
+      "launches": [
+        {
+          "attempt": 1,
+          "finished": 29.72,
+          "result": -17825757,
+          "stage": "send",
+          "started": 24.5
+        },
+        {
+          "attempt": 2,
+          "finished": 37.4,
+          "result": 0,
+          "stage": "send",
+          "started": 33.25
+        }
+      ],
+      "script_start_estimated_s": 38.516,
+      "rendered_focused_estimated_s": 42.312,
+      "clock_uncertainty_s": 0.49,
+      "clock_anchor_gap_s": 33.19,
+      "trace_wall_offset_range_ms": 0.8,
+      "js_milestones_ms": {
+        "script-entry": 1.18,
+        "animation-frame-1": 50.49,
+        "animation-frame-2": 956.04,
+        "hub-entry": 3230.17,
+        "layout-probe-done": 3234.14,
+        "bridge-created": 3234.5,
+        "storage-opened": 3253.73,
+        "feedback-created": 3614.08,
+        "model-loaded": 3615.84,
+        "handlers-attached": 3621.1,
+        "initial-dom-render": 3718.47,
+        "render-frame-1": 3719.61,
+        "telemetry-service-entry": 3732.17,
+        "discovery-start": 3733.61,
+        "discovery-call-returned": 3795.0,
+        "render-frame-2": 3795.58,
+        "dom-content-loaded": 4079.08,
+        "telemetry-load": 5233.6,
+        "telemetry-load-returned": 5507.65,
+        "telemetry-loaded": 5550.52,
+        "telemetry-dispatch": 7051.27,
+        "discovery-result": 10552.23,
+        "discovery-render-done": 10585.84,
+        "trace-end": 60005.05
+      },
+      "navigation": {
+        "startTime": 0,
+        "duration": 5164.735000000001,
+        "fetchStart": 88.4450000000001,
+        "responseStart": 88.4450000000001,
+        "responseEnd": 1005.9949999999986,
+        "domInteractive": 1102.3800000000037,
+        "domContentLoadedEventStart": 5164.320000000003,
+        "domContentLoadedEventEnd": 5164.549999999998,
+        "domComplete": 5164.6900000000005,
+        "loadEventStart": 5164.729999999999,
+        "loadEventEnd": 5164.735000000001
+      },
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 4305.3250000000035
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 4305.345000000003
+        }
+      ],
+      "discovery": "completed"
+    },
+    {
+      "label": "focus-two",
+      "initial_settle_s": 5,
+      "native_foreground_s": 46.53,
+      "attempts": 1,
+      "launches": [
+        {
+          "attempt": 1,
+          "finished": 29.58,
+          "result": 0,
+          "stage": "send",
+          "started": 24.31
+        }
+      ],
+      "script_start_estimated_s": 37.847,
+      "rendered_focused_estimated_s": 47.351,
+      "clock_uncertainty_s": 0.49,
+      "clock_anchor_gap_s": 32.66,
+      "trace_wall_offset_range_ms": 0.915,
+      "js_milestones_ms": {
+        "script-entry": 7.44,
+        "animation-frame-1": 42.82,
+        "animation-frame-2": 343.76,
+        "hub-entry": 2745.15,
+        "layout-probe-done": 2793.05,
+        "bridge-created": 2793.53,
+        "storage-opened": 2799.92,
+        "feedback-created": 5088.91,
+        "model-loaded": 5091.04,
+        "handlers-attached": 5127.11,
+        "initial-dom-render": 5316.88,
+        "render-frame-1": 5325.6,
+        "telemetry-service-entry": 5347.88,
+        "render-frame-2": 5352.9,
+        "dom-content-loaded": 6038.18,
+        "window-focus": 9503.37,
+        "discovery-start": 9519.96,
+        "discovery-call-returned": 9532.85,
+        "telemetry-load": 11004.55,
+        "telemetry-load-returned": 11373.31,
+        "telemetry-loaded": 11533.38,
+        "telemetry-dispatch": 13034.94,
+        "discovery-result": 16984.76,
+        "discovery-render-done": 17003.24,
+        "trace-end": 60013.66
+      },
+      "navigation": {
+        "startTime": 0,
+        "duration": 7304.7900000000045,
+        "fetchStart": 172.11500000000513,
+        "responseStart": 172.11500000000513,
+        "responseEnd": 356.1949999999996,
+        "domInteractive": 1300.139999999999,
+        "domContentLoadedEventStart": 7301.995000000005,
+        "domContentLoadedEventEnd": 7303.840000000001,
+        "domComplete": 7304.670000000002,
+        "loadEventStart": 7304.785000000003,
+        "loadEventEnd": 7304.7900000000045
+      },
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 3976.9000000000005
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 3976.9100000000035
+        }
+      ],
+      "discovery": "completed"
+    },
+    {
+      "label": "short-one",
+      "initial_settle_s": 3,
+      "native_foreground_s": 47.06,
+      "attempts": 1,
+      "launches": [
+        {
+          "attempt": 1,
+          "finished": 31.25,
+          "result": 0,
+          "stage": "send",
+          "started": 26.11
+        }
+      ],
+      "script_start_estimated_s": 38.739,
+      "rendered_focused_estimated_s": 46.409,
+      "clock_uncertainty_s": 0.49,
+      "clock_anchor_gap_s": 16.16,
+      "trace_wall_offset_range_ms": 1.46,
+      "js_milestones_ms": {
+        "script-entry": 1.58,
+        "animation-frame-1": 28.33,
+        "animation-frame-2": 570.64,
+        "hub-entry": 3856.16,
+        "layout-probe-done": 3943.8,
+        "bridge-created": 3944.38,
+        "storage-opened": 3986.64,
+        "feedback-created": 5570.01,
+        "model-loaded": 5571.88,
+        "handlers-attached": 5619.75,
+        "initial-dom-render": 5713.19,
+        "render-frame-1": 5715.42,
+        "telemetry-service-entry": 5730.57,
+        "dom-content-loaded": 5821.95,
+        "render-frame-2": 5833.35,
+        "window-focus": 7670.35,
+        "discovery-start": 7707.36,
+        "discovery-call-returned": 7730.0,
+        "telemetry-load": 9175.24,
+        "telemetry-load-returned": 9403.28,
+        "telemetry-loaded": 9441.89,
+        "telemetry-dispatch": 10942.64,
+        "discovery-result": 14326.5,
+        "discovery-render-done": 14367.92,
+        "trace-end": 60004.5
+      },
+      "navigation": {
+        "startTime": 0,
+        "duration": 7819.179999999996,
+        "fetchStart": 161.38999999999726,
+        "responseStart": 161.38999999999726,
+        "responseEnd": 1513.23,
+        "domInteractive": 2004.570000000001,
+        "domContentLoadedEventStart": 7818.5,
+        "domContentLoadedEventEnd": 7818.950000000001,
+        "domComplete": 7819.130000000001,
+        "loadEventStart": 7819.175000000001,
+        "loadEventEnd": 7819.179999999996
+      },
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 5760.494999999999
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 5760.5
+        }
+      ],
+      "discovery": "completed"
+    },
+    {
+      "label": "short-two",
+      "initial_settle_s": 3,
+      "native_foreground_s": 39.61,
+      "attempts": 2,
+      "launches": [
+        {
+          "attempt": 1,
+          "finished": 29.02,
+          "result": -17825757,
+          "stage": "send",
+          "started": 23.81
+        },
+        {
+          "attempt": 2,
+          "finished": 37.2,
+          "result": 0,
+          "stage": "send",
+          "started": 32.55
+        }
+      ],
+      "script_start_estimated_s": 37.234,
+      "rendered_focused_estimated_s": 41.568,
+      "clock_uncertainty_s": 0.485,
+      "clock_anchor_gap_s": 19.26,
+      "trace_wall_offset_range_ms": 0.865,
+      "js_milestones_ms": {
+        "script-entry": 11.5,
+        "animation-frame-1": 95.75,
+        "animation-frame-2": 343.83,
+        "window-focus": 3388.8,
+        "hub-entry": 3411.62,
+        "layout-probe-done": 3417.99,
+        "bridge-created": 3451.34,
+        "storage-opened": 3452.2,
+        "feedback-created": 4184.18,
+        "model-loaded": 4186.04,
+        "handlers-attached": 4193.87,
+        "initial-dom-render": 4286.14,
+        "render-frame-1": 4287.53,
+        "telemetry-service-entry": 4332.48,
+        "render-frame-2": 4333.55,
+        "discovery-start": 4617.71,
+        "discovery-call-returned": 5494.66,
+        "dom-content-loaded": 5521.79,
+        "telemetry-load": 5833.81,
+        "telemetry-load-returned": 6166.76,
+        "telemetry-loaded": 6228.32,
+        "telemetry-dispatch": 7729.55,
+        "discovery-error": 12621.13,
+        "discovery-render-done": 12626.52,
+        "trace-end": 60014.67
+      },
+      "navigation": {
+        "startTime": 0,
+        "duration": 6314.980000000006,
+        "fetchStart": 263.220000000004,
+        "responseStart": 263.220000000004,
+        "responseEnd": 317.08500000000583,
+        "domInteractive": 785.5600000000038,
+        "domContentLoadedEventStart": 6286.395000000006,
+        "domContentLoadedEventEnd": 6286.7550000000065,
+        "domComplete": 6297.980000000002,
+        "loadEventStart": 6314.9500000000035,
+        "loadEventEnd": 6314.980000000006
+      },
+      "paint": [
+        {
+          "name": "first-paint",
+          "startTime": 4169.7800000000025
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 4169.790000000006
+        }
+      ],
+      "discovery": "timed-out"
+    }
+  ],
+  "final_production_reboot": {
+    "entered": 16.45,
+    "requested": 33.2,
+    "completed": 35.28,
+    "uptime": 37.08,
+    "attempts": 2,
+    "outcome": "foreground-confirmed",
+    "versions": {
+      "hub": "0.4.11",
+      "relay": "0.2.4"
+    }
+  },
+  "failed_units_unchanged": false,
+  "failed_unit_count": 8,
+  "final_checks": {
+    "autonomous_final_boot": true,
+    "diagnostic_storage_keys_absent": true,
+    "favorites_and_selection_unchanged": true,
+    "hub_0_4_11_installed": true,
+    "hub_foreground": true,
+    "hub_matches_normal_source": true,
+    "markers_staging_capture_asset_absent": true,
+    "original_setup_choices_restored": true,
+    "other_installed_hashes_unchanged": true,
+    "other_packages_unchanged": true,
+    "partial_empty": true,
+    "persistent_settings_unchanged": true,
+    "relay_0_2_4_installed": true,
+    "relay_matches_signed_apply": true,
+    "routing_unchanged": true,
+    "services_normal": true,
+    "shared_runs_complete": true,
+    "telemetry_preferences_unchanged": true,
+    "telemetry_sending": true,
+    "final_failed_units_match_baseline": true
+  },
+  "runs": {
+    "deferred_ui_run": "20260922T165336Z-f48e124f",
+    "diagnostic_ui_run": "20260922T164546Z-68dc8c2f",
+    "final_ui_run": "20260922T171838Z-b5b7166b",
+    "focus_ui_run": "20260922T170002Z-f489c735",
+    "restored_relay_run": "20260922T171422Z-79790869",
+    "short_relay_run": "20260922T170748Z-2565f51d",
+    "restored_choices_run": "20260922T172302Z-696a3ea5"
+  },
+  "transient_failed_units": {
+    "focus-one": [
+      "com.samsung.tv.notification-serviceapp.service"
+    ]
+  }
+}

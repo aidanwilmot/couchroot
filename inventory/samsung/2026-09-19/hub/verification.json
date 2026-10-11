@@ -1,0 +1,71 @@
+{
+  "date": "2026-09-19",
+  "target": "192.0.2.12",
+  "model": "QN55S90DAFXZA",
+  "firmware": "2130.0",
+  "build": "T-PTMDAKUC-0090-REL-202605141701",
+  "app": {
+    "id": "MiniHub001.Hub",
+    "package": "MiniHub001",
+    "version": "0.1.0",
+    "signed_package_sha256": "a668a69e742ca04bd4df1bc4f3f40168272f27e8cb169c228b5b0aac5edc121d",
+    "bytes": 12688,
+    "privileges": [
+      "http://tizen.org/privilege/application.launch"
+    ],
+    "source_matches_installed_package": true
+  },
+  "configuration": {
+    "main_operation_app": "MiniHub001.Hub",
+    "db/appfw/home_appid": "MiniHub001.Hub",
+    "db/menu/smart_hub/ontvsetting/auto_start": 1,
+    "db/first_screen/type": "com.samsung.tv.csfs"
+  },
+  "verification": {
+    "user_confirmed_display_and_plex": true,
+    "uninstall_and_reinstall": true,
+    "youtube_tile_via_window_manager_keys": true,
+    "home_from_plex_and_youtube": true,
+    "samsung_home_fallback_focused_visible": true,
+    "standby_wake_power_api_sequence": [
+      "on",
+      "standby",
+      "on"
+    ],
+    "standby_boot_id_unchanged": true,
+    "playback_tested": false,
+    "root_daemon_installed": false,
+    "root_after_reboot": true,
+    "final_reboot_boot_id": "00000000-0000-4000-8000-000000000014",
+    "final_reboot_hub_foreground": true,
+    "home_read_write_privileges_preserved": true,
+    "root_full_available_capability_mask": "0000003fffffffff",
+    "temporary_helpers_and_install_packages_removed": true,
+    "original_system_file_hashes_unchanged": true,
+    "final_hub_focused_visible": true,
+    "new_failed_systemd_units": [],
+    "desktop_preview_server_stopped": true
+  },
+  "rollback": "python3 restore.py",
+  "enable": "python3 enable.py",
+  "private_evidence_root": "~/.local/share/samsung-tv-research/",
+  "evidence": {
+    "original_settings": "dumps/20260919T231736Z",
+    "original_owner_assignment": "dumps/20260919T232141Z",
+    "startup": "sessions/20260919T233159.178671Z-run",
+    "navigation": "dumps/20260919T233603Z",
+    "standby": "dumps/20260919T234043Z",
+    "native_restore": "sessions/20260919T234723.029135Z-run",
+    "native_enable": "sessions/20260919T234851.892182Z-run",
+    "final_startup": "sessions/20260919T235056.672532Z-run",
+    "final_privileges": "sessions/20260919T235113.005439Z-run",
+    "final_root_check": [
+      "sessions/20260919T235113.549790Z-root-check-stage",
+      "sessions/20260919T235114.932457Z-root-check",
+      "sessions/20260919T235116.314662Z-root-check-cleanup",
+      "sessions/20260919T235117.722734Z-root-check-verify"
+    ],
+    "final_presentation": "dumps/20260919T235204Z",
+    "final_cleanup": "sessions/20260919T235255.338656Z-run"
+  }
+}

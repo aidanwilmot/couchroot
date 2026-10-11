@@ -1,0 +1,176 @@
+"""Bounded diagnostics for the owner’s S90D; no automatic root/flash operations."""
+import argparse
+import hashlib
+import importlib.metadata
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import socket
+import subprocess
+import sys
+from datetime import datetime, timezone
+from urllib.request import urlopen
+
+ROOT = Path(os.environ.get("SAMSUNG_TV_TOOLKIT", Path.home() / ".local/share/samsung-tv-research")).expanduser().resolve()
+sys.path.insert(0, str(ROOT / "upstream/src"))
+from samsung_tv_root.sdb import SdbClient as _UpstreamSdbClient, route_callback_host  # noqa: E402
+import samsung_tv_root.sdb as _sdb_transport  # noqa: E402
+from sdb_connection import connect_if_needed  # noqa: E402
+# This firmware rejected a 495-byte inline request; stage before that boundary.
+_sdb_transport.SDB_APPINSTALL_MAX_SAFE_BYTES = 400
+
+
+class SdbClient(_UpstreamSdbClient):
+    """Pinned transport client with serialized, ready-device reuse."""
+
+    def connect(self) -> None:
+        connect_if_needed(self, ROOT / "locks", super().connect)
+
+SNAPSHOT = """id
+uname -a
+cat /etc/tizen-release
+uptime
+cat /proc/meminfo
+df -h /opt
+cat /sys/block/zram0/mm_stat
+cat /sys/class/misc/mali0/device/gpuinfo
+"""
+
+def run_local(args):
+    return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT, timeout=15).strip()
+
+def doctor(config):
+    print("Toolkit:", ROOT)
+    actual = run_local(["git", "-C", str(ROOT / "upstream"), "rev-parse", "HEAD"])
+    if actual != config["upstream_commit"]:
+        raise RuntimeError("Upstream checkout no longer matches the reviewed commit")
+    print("Reviewed source:", actual)
+    print(run_local([str(ROOT / "bin/sdb"), "version"]))
+    for name in ("capstone", "pyelftools"):
+        try:
+            print(f"{name}: {importlib.metadata.version(name)}")
+        except importlib.metadata.PackageNotFoundError:
+            print(f"{name}: not installed (optional for root-check)")
+    if sys.platform == "darwin":
+        print("Disassembler:", run_local(["xcrun", "--find", "llvm-objdump"]))
+    print(".NET SDKs:\n" + run_local(["dotnet", "--list-sdks"]))
+    ilspy = ROOT / "dotnet-tools/ilspycmd"
+    if ilspy.exists():
+        print(run_local([str(ilspy), "--version"]))
+    if (ROOT / "bin/ghidra-headless").exists():
+        print("Ghidra launcher:", ROOT / "bin/ghidra")
+        print("Ghidra project: ~/Research/samsung-tv/ghidra/S90D_20260919.gpr")
+    manifest_path = ROOT / "sha256.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        for relative, expected in manifest.items():
+            if hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() != expected:
+                raise RuntimeError(f"Checksum changed: {relative}")
+        print(f"Verified {len(manifest)} saved binary checksums")
+    else:
+        print("No private binary manifest installed; source-only toolkit")
+
+def device(config):
+    host = config["tv_host"]
+    with urlopen(f"http://{host}:8001/api/v2/", timeout=5) as response:
+        data = json.load(response)["device"]
+    for field, expected in (("modelName", config["expected_model"]), ("model", config["expected_platform"])):
+        if data.get(field) != expected:
+            raise RuntimeError(f"Target mismatch: {field}={data.get(field)!r}, expected {expected!r}")
+    if config.get('expected_device_id') is not None and data.get('id') != config['expected_device_id']:
+        raise RuntimeError('Physical TV identity differs from site configuration; no SDK command was sent')
+    callback = route_callback_host(host)
+    selected = {k: data.get(k) for k in ("modelName", "model", "name", "developerMode", "developerIP")}
+    selected.update(tv_host=host, callback_host=callback)
+    print(json.dumps(selected, indent=2))
+    if str(data.get("developerMode")) != "1":
+        raise RuntimeError("Enable Developer Mode on the TV before shell diagnostics")
+    if data.get("developerIP") != callback:
+        raise RuntimeError(f"Developer Mode host must match this Mac's TV route: {callback}")
+    with socket.create_connection((host, 26101), timeout=5):
+        pass
+    return callback
+
+def capture(config, callback, command, timeout, label):
+    client = SdbClient(ROOT / "bin/sdb", config["tv_host"])
+    client.connect()
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    session = ROOT / "sessions" / f"{stamp}-{label}"
+    session.mkdir(parents=True, mode=0o700)
+    (session / "command.sh").write_text(command + "\n")
+    print("Evidence:", session, flush=True)
+    try:
+        # The upstream helper appends a semicolon. A trailing newline/comment in
+        # a file can otherwise break its wrapper before the callback opens.
+        # A subshell also lets an explicit script `exit` reach the exit marker.
+        wrapped_command = f"(\n{command}\n)"
+        result = client.capture(wrapped_command, callback_host=callback, bind_host=callback, timeout=timeout)
+        (session / "output.txt").write_text(result.output)
+        match = re.search(r"\n\[exit:(\d+)\]\s*\Z", result.output)
+        (session / "result.json").write_text(json.dumps({
+            "transport_returncode": result.transport_returncode,
+            "remote_exit": int(match[1]) if match else None,
+            "tv_host": config["tv_host"], "callback_host": callback,
+        }, indent=2) + "\n")
+        if len(result.output) <= 8000:
+            print(result.output)
+        else:
+            print(result.output[:4000])
+            print(f"[Console preview shortened; full {len(result.output)} characters saved to output.txt]")
+            print(result.output[-1500:])
+        if not match:
+            raise RuntimeError("No final exit marker: completion is unconfirmed; command was not retried")
+        if result.transport_returncode not in (0, 1) or int(match[1]):
+            raise RuntimeError("Remote command or transport reported failure; see saved result")
+    except Exception as error:
+        (session / "error.txt").write_text(str(error) + "\n")
+        raise
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="action", required=True)
+    sub.add_parser("doctor", help="Verify local tools, pinned source, and binary checksums")
+    sub.add_parser("status", help="Verify the TV model, developer settings, route, and SDB port")
+    sub.add_parser("reconnect", help="Refresh this TV's SDB connection without repeating a command")
+    sub.add_parser("snapshot", help="Collect SDK identity, OS, memory, storage, and GPU details")
+    sub.add_parser("root-check", help="Run the temporary S90D root identity probe and remove its files")
+    sample = sub.add_parser("sample", help="Record vmstat and process snapshots while navigating menus")
+    sample.add_argument("--seconds", type=int, default=30, choices=range(5, 61), metavar="5..60")
+    script = sub.add_parser("run", help="Execute an explicitly supplied shell file once as SDK; can change the TV")
+    script.add_argument("file", type=Path)
+    script.add_argument("--timeout", type=int, default=30, choices=range(5, 121), metavar="5..120")
+    args = parser.parse_args()
+    config = json.loads((ROOT / "config.json").read_text())
+    if args.action == "doctor":
+        doctor(config)
+        return
+    callback = device(config)
+    if args.action == "status":
+        return
+    if args.action == "root-check":
+        from samsung_tv_root_check import run
+        run(config, callback)
+        return
+    if args.action == "reconnect":
+        client = SdbClient(ROOT / "bin/sdb", config["tv_host"])
+        client.connect()
+        print("SDB connection is ready")
+        return
+    if args.action == "snapshot":
+        capture(config, callback, SNAPSHOT, 25, "snapshot")
+    elif args.action == "sample":
+        command = ("date -u; uptime; top -b -n 1; "
+                   f"vmstat 1 {args.seconds + 1}; sample_rc=$?; "
+                   "top -b -n 1; cat /proc/pressure/cpu /proc/pressure/memory /proc/pressure/io 2>/dev/null; "
+                   "cat /sys/block/zram0/mm_stat; date -u; (exit $sample_rc)")
+        capture(config, callback, command, args.seconds + 15, "sample")
+    else:
+        capture(config, callback, args.file.read_text(), args.timeout, "run")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (Exception, KeyboardInterrupt) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)

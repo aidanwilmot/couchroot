@@ -1,0 +1,112 @@
+{
+  "name": "QN90A",
+  "model": "QN85QN90AAFXZA",
+  "platform": "21_NIKEM2_QTV",
+  "firmware": "T-NKM2AKUC-2301.1",
+  "architecture": "armv7l",
+  "framework": "netcoreapp3.1",
+  "runtime": "3.1.3",
+  "host_sha256": "d2a35114d788c22d22d329acdb2f379c17b75b7099997fb8252cbd6dd940702e",
+  "startup": "launcher-service",
+  "chart_prefix": "qn90a",
+  "snapshot": "qn90a.json",
+  "dashboard_config_path": "/opt/usr/home/owner/apps_rw/MiniTelemetry/data/preferences.json",
+  "launcher_sha256": "5f33f4d63bc7eb5a09cdedf377398d6c2f4142e629a1f73921f31f08cb7791f3",
+  "id": "qn90a",
+  "cleanup": {
+    "9FhM0cODbY": {
+      "name": "TikTok",
+      "app": "9FhM0cODbY.TikTokTV",
+      "type": "wgt",
+      "reviewed_version": "1.1.8"
+    },
+    "zigzSWa1hy": {
+      "name": "Instagram",
+      "app": "zigzSWa1hy.InstagramAirwave",
+      "type": "wgt",
+      "reviewed_version": "5.10.10"
+    },
+    "LImG0QPABV": {
+      "name": "QVC+ and HSN+",
+      "app": "LImG0QPABV.QXHMarketplace",
+      "type": "wgt",
+      "reviewed_version": "2.2.17"
+    },
+    "jAfAs7yVDX": {
+      "name": "Samsung GameBreaks",
+      "app": "jAfAs7yVDX.TheSix",
+      "type": "wgt",
+      "reviewed_version": "1.7.3"
+    },
+    "yL49PNFmjW": {
+      "name": "Samsung Promotion",
+      "app": "yL49PNFmjW.PromotionApp",
+      "type": "wgt",
+      "reviewed_version": "3.2.96"
+    },
+    "HupEmjIB4I": {
+      "name": "Glance",
+      "app": "HupEmjIB4I.Glance",
+      "type": "wgt",
+      "reviewed_version": "0.8.8"
+    },
+    "GHI3a0zMSx": {
+      "name": "Xbox",
+      "app": "GHI3a0zMSx.XboxGamePass",
+      "type": "wgt",
+      "reviewed_version": "4.55.698"
+    },
+    "IewQEY143t": {
+      "name": "Google Meet",
+      "app": "IewQEY143t.GoogleDuoWeb",
+      "type": "wgt",
+      "reviewed_version": "1.9.21"
+    },
+    "AkhP5nCr24": {
+      "name": "Explore Google Assistant",
+      "app": "AkhP5nCr24.GoogleAssistant",
+      "type": "wgt",
+      "reviewed_version": "0.21.11110"
+    },
+    "AQKO41xyKP": {
+      "name": "Amazon Alexa",
+      "app": "AQKO41xyKP.AmazonAlexa",
+      "type": "wgt",
+      "reviewed_version": "0.21.10220"
+    }
+  },
+  "reasons": {
+    "hub": "In-place signed update preserves favorites and launcher preferences.",
+    "cleanup": "Only the previously reviewed optional apps; keep overrides are supported.",
+    "telemetry": "Preserve existing choices; default missing settings to enabled on the shared pinned receiver.",
+    "dashboard": "Inspect shared NAS by default; changing both-TV code requires --shared-nas.",
+    "home": "Use the verified native Home integration; retain Samsung Home fallback.",
+    "airplay": "Use both reviewed idle AirPlay return rules.",
+    "startup": "Signed welcome-process relay \u2192 Hub \u2192 telemetry relay \u2192 service.",
+    "splash": "Keep Samsung\u2019s splash; no S90D splash patch.",
+    "screensaver": "Hub-owned five-minute Asteroids timer; no global timeout or memory patch."
+  },
+  "saver_generated": {
+    "core.js": "71792139740993be74a4f7a6c124fc9916f47bde6dbdfa4bb7e1bfdfac55b56a",
+    "shaders.js": "3a4c2617965b8504cf9f668c618a470130ea722c021f5df5e8fc11cff4815a3a"
+  },
+  "boot_artifacts": {
+    "Boot.dll": "8805dfafe290ca87222cc7a11584556a1038ca481c5a8121429320acd032fee9",
+    "Boot.deps.json": "71541834bd4f6db3293b805424fa091ac07fbd30d830408959e708db8a51fbbd",
+    "Boot.runtimeconfig.json": "818abac6065c8b3de67cdb136773c1e584705913877ab1f9961d8def7fdbc16d"
+  },
+  "service_artifacts": {
+    "Service.dll": "af8ef80e987bfdce6b374b7c91d13fd7ede33816d63b78cc32fa050161c7b1f5",
+    "Bootstrap.dll": "4aa9efa7f6035370270d333c6622f916a36e902b861083082101956ff7f9c101",
+    "Telemetry.dll": "c33cdbe2bf20ada03fdf49c9ea160cf9868ecf172f2ff3e991b3b519664c65c7",
+    "Service.deps.json": "039a6073848fad585015c907db64c7da830359a2fe9875d74c1f5d12188d6575",
+    "Service.runtimeconfig.json": "818abac6065c8b3de67cdb136773c1e584705913877ab1f9961d8def7fdbc16d",
+    "Bootstrap.deps.json": "bb364131b5cc831ec9267bfd621a7731079ee12b5c9e1cc22b267888fd05c2fd",
+    "Bootstrap.runtimeconfig.json": "818abac6065c8b3de67cdb136773c1e584705913877ab1f9961d8def7fdbc16d"
+  },
+  "source_hashes": {
+    "boot": "4567115a7fb4ea47d733e3563fe7a06aa434e05059ef9cc15a3551e04feb8100",
+    "service": "ee1092f78c9a854d9a25f910201f82adfd243393f72b01f2f96adba1c9c05816",
+    "saver": "1a978ab85dfc8f2d61b1f382498c7472436d7dea678c858e52dadc41106baee3"
+  }
+}

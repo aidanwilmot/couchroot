@@ -1,0 +1,121 @@
+{
+  "date_utc": "2026-09-20",
+  "model": "QN55S90DAFXZA",
+  "firmware": "2130.0",
+  "launcher_version": "0.3.8",
+  "selected_mode": "explicit --include-home",
+  "owner_accepted_cold_home_delay": true,
+  "cold_home_foreground_seconds": 9.400384567,
+  "tested": {
+    "plex": true,
+    "youtube_native_cobalt": true,
+    "crunchyroll": true,
+    "home_key_returns_to_hub": true,
+    "main_home_stayed_absent_through_streaming_navigation": true,
+    "samsung_home_cold_recovery": true,
+    "helpers_recreated_by_home": true,
+    "double_back_retains_hub": true,
+    "cold_quick_settings_overlay": true,
+    "cold_source_overlay": true,
+    "reusable_deep_trim": true,
+    "corrected_cold_restore": true,
+    "foreground_guard": true,
+    "trimmed_standby_wake": true,
+    "all_home_components_absent_after_wake": true
+  },
+  "measurements_kib": [
+    {
+      "operation": "close_test_apps",
+      "before": 291576,
+      "after": 357796
+    },
+    {
+      "operation": "helpers_only",
+      "before": 355596,
+      "after": 402404
+    },
+    {
+      "operation": "main_home_only_5s",
+      "before": 421728,
+      "after": 497516
+    },
+    {
+      "operation": "main_home_only_15s",
+      "before": 421728,
+      "after": 503728
+    },
+    {
+      "operation": "full_family_reusable",
+      "before": 367620,
+      "after": 494512
+    },
+    {
+      "operation": "full_family_repeat",
+      "before": 330540,
+      "after": 500056
+    },
+    {
+      "operation": "postboot_remaining_sidebar",
+      "before": 479484,
+      "after": 502972
+    }
+  ],
+  "closed_test_apps": [
+    "6ReMD8pcTY.Pandora",
+    "3KA0pm7a7V.TubiTV"
+  ],
+  "spotify_already_absent": true,
+  "runtime_root_required": false,
+  "resident_or_scheduled_process_killer": false,
+  "installed_launcher_changed": false,
+  "playback_tested": false,
+  "physical_remote_confirmation": "Owner selected deeper mode; recovery verified using native injected keys and screenshots.",
+  "boot_investigation": {
+    "boot_settings_changed": false,
+    "home_appid": "MiniHub001.Hub",
+    "overlay_home_appid": "",
+    "auto_start": 1,
+    "postboot_uptime_seconds": [
+      255,
+      343
+    ],
+    "main_home_running": false,
+    "media_running": false,
+    "sidebar_running": true,
+    "sidebar_manifest_on_boot": false,
+    "sidebar_manifest_auto_restart": false,
+    "sidebar_startup_disable_verified": false,
+    "never_launched_during_boot_proven": false,
+    "screen_optimization_between_reboot_and_observation": true,
+    "usable_startup_logs_available": false,
+    "postboot_evidence": [
+      "sessions/20260920T044321.790652Z-run",
+      "sessions/20260920T044449.483207Z-run"
+    ]
+  },
+  "final_state": {
+    "foreground": "MiniHub001.Hub",
+    "main_home_running": false,
+    "media_running": false,
+    "sidebar_running": false,
+    "power_sequence": [
+      "on",
+      "standby",
+      "on"
+    ],
+    "boot_id_unchanged_through_standby": true,
+    "evidence": "dumps/20260920T044559Z",
+    "root_cleanup_verified": true,
+    "rollback": "python3 trim-home.py --restore",
+    "wake_mem_available_kib": 527140,
+    "settled_mem_available_kib": 596148,
+    "settled_evidence": "sessions/20260920T044741.775782Z-run",
+    "home_manifest_hashes_unchanged": true
+  },
+  "limitations": [
+    "No permanent block on Samsung-initiated Home/helper launches.",
+    "Samsung Home, Quick Settings and source selection can reload Home.",
+    "Sidebar appeared after reboot; its caller was not identified.",
+    "Available memory varies with paging, GC and other TV activity."
+  ]
+}

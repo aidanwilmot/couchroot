@@ -1,0 +1,48 @@
+{
+  "target": {
+    "model": "QN85QN90AAFXZA",
+    "host": "192.0.2.11",
+    "firmware": "T-NKM2AKUC-2301.1"
+  },
+  "status": "pause return and earlier handoff installed; owner accepted result and requested merge",
+  "launcher_version": "0.3.9",
+  "rule": {
+    "source": "NRi6kdBYJ0.AirPlayWebApp",
+    "event": "pause",
+    "airplay_status": "ready",
+    "exclude": "standby",
+    "request": "launch",
+    "target": "MiniHub001.Hub"
+  },
+  "automated": {
+    "sqlite_tests": 12,
+    "private_backup_round_trip": "all rows and rowids identical",
+    "live_rollback": "all rows and rowids identical; integrity ok",
+    "native_pause": "Plex baseline; hub with rule",
+    "samsung_home_fallback": "stock partial app opened, then hub returned with empty partial",
+    "home_key_row": 82,
+    "context_manager_pid": 814
+  },
+  "limitations": [
+    "Complete elimination of the Samsung overlay flash not specifically confirmed",
+    "Warm idle receiver launch not consistently reproducible",
+    "Reboot and standby persistence not physically verified"
+  ],
+  "rollback": "python3 qn90a-cast.py early-restore, then python3 qn90a-cast.py restore",
+  "previous_trials": {
+    "native_airplay_stop_rule": "failed owner mirroring test; removed",
+    "overlay_home_preference": "failed owner mirroring test; restored to com.samsung.tv.csfs"
+  },
+  "no_resident_helper": true,
+  "owner_confirmation": "Pause-only return was confirmed; after the earlier handoff the owner said the result was good enough and requested merging",
+  "early_trial": {
+    "source": "com.samsung.tv.airplay-app",
+    "event": "deactivate",
+    "airplay_status": "ready",
+    "exclude": "standby",
+    "target": "MiniHub001.Hub",
+    "rollback": "python3 qn90a-cast.py early-restore",
+    "live_rollback": "all original rows and rowids preserved including working pause rule",
+    "visual_confirmation": "Owner accepted result as good enough; complete flash elimination not specifically confirmed"
+  }
+}

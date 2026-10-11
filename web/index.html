@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: file:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>Minimal Hub</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="bridge.js" defer></script>
+  <script src="presentation.js" defer></script>
+  <script src="model.js" defer></script>
+  <script src="feedback.js" defer></script>
+  <script src="telemetry.js" defer></script>
+  <script src="hub.js" defer></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"><div class="orbital orbital-one"></div><div class="orbital orbital-two"></div><div class="orbital orbital-three"></div></div>
+  <main>
+    <time id="home-clock" hidden aria-label="Current time"></time>
+    <div id="move-banner" hidden><h2 id="move-title"></h2><p id="move-position" role="status" aria-live="polite"></p></div>
+    <div class="app-stage">
+    <nav id="favorites" class="apps" aria-label="Your apps" data-scroll-cue="home-scroll">
+      <button class="tile plex" data-app="plex" aria-label="Open Plex">
+        <span class="card-art" aria-hidden="true"><span class="plex-beam beam-one"></span><span class="plex-beam beam-two"></span></span>
+        <span class="app-logo plex-word" aria-hidden="true">ple<span>x</span></span>
+      </button>
+      <button class="tile youtube" data-app="youtube" aria-label="Open YouTube">
+        <span class="card-art" aria-hidden="true"><span class="youtube-orbit orbit-one"></span><span class="youtube-orbit orbit-two"></span><span class="youtube-orbit orbit-three"></span></span>
+        <span class="app-logo youtube-logo" aria-hidden="true"><svg class="play" viewBox="0 0 88 62"><rect x="1" y="1" width="86" height="60" rx="17" fill="#ff343e"/><path d="M36 18 L58 31 L36 44 Z" fill="#fff"/></svg><span>YouTube</span></span>
+      </button>
+    </nav>
+    <div id="empty-home" hidden>
+      <button id="empty-add" class="tile empty-tile" aria-label="Add apps"><span aria-hidden="true">+</span></button>
+      <h2>Nothing on Home yet</h2>
+      <p>Add the apps you open most. Samsung Home stays one press away.</p>
+    </div>
+    </div>
+    <div id="home-scroll" class="scroll-cues" aria-hidden="true" hidden><span class="scroll-up">↑</span><span class="scroll-down">↓</span></div>
+    <div id="move-controls" hidden><button id="move-cancel" class="system">Cancel</button><button id="move-save" class="system">Save position</button><p id="move-status" class="status-line" role="status" aria-live="polite"></p><div class="hint"><span><kbd>↑ ↓ ← →</kbd>Move</span><span><kbd>OK</kbd>Save</span><span><kbd>Back</kbd>Cancel</span></div></div>
+    <div class="bottom-menu">
+    <footer>
+      <button id="edit-apps" class="system">Edit apps</button>
+      <button class="system" data-app="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5M5.5 9v11h5v-6h3v6h5V9"/></svg><span>Samsung Home</span></button>
+      <button id="settings" class="system settings-button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.4 3-.6 2.3-2 .9L4.7 5.5 2.5 9.3 4.2 11v2l-1.7 1.7 2.2 3.8 2.1-.7 2 .9.6 2.3h5.2l.6-2.3 2-.9 2.1.7 2.2-3.8-1.7-1.7v-2l1.7-1.7-2.2-3.8-2.1.7-2-.9-.6-2.3Z"/><circle cx="12" cy="12" r="3.2"/></svg></button>
+      <button id="undo-remove" class="system" hidden>Undo remove</button>
+      <p id="status" class="status-line" role="status" aria-live="polite"></p>
+      <div id="home-hint" class="hint"><span><kbd>← → ↑ ↓</kbd>Move</span><span><kbd>OK</kbd>Open</span></div>
+    </footer>
+    </div>
+    <span id="preview" hidden>DESKTOP PREVIEW</span>
+  </main>
+  <section id="editor" role="dialog" aria-modal="true" aria-labelledby="editor-title" hidden>
+    <div class="editor-panel">
+      <div class="page-heading"><h2 id="editor-title">Edit apps</h2><span id="editor-count" class="page-count"></span></div>
+      <div class="editor-body"><div class="editor-controls"><div id="editor-actions" class="editor-actions"></div><div id="editor-list" class="editor-list" data-scroll-cue="editor-scroll"></div><div id="editor-scroll" class="scroll-cues" aria-hidden="true" hidden><span class="scroll-up">↑</span><span class="scroll-down">↓</span></div></div>
+        <aside id="app-preview" class="app-preview" aria-hidden="true"><div id="preview-art"></div><p id="preview-name"></p><p id="preview-detail"></p></aside>
+      </div>
+      <div class="page-bottom"><p id="editor-status" class="status-line" role="status" aria-live="polite"></p><div id="editor-hint" class="hint"></div></div>
+    </div>
+  </section>
+  <section id="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <div class="settings-panel">
+      <div class="page-heading"><h2 id="settings-title">Settings</h2><button id="settings-done" class="system">Done</button></div>
+      <div class="settings-columns">
+        <div class="settings-controls"><div id="settings-options" class="settings-options" data-scroll-cue="settings-scroll">
+          <h3>Sound &amp; appearance</h3>
+          <button id="setting-sound" class="setting-row"><span class="setting-label">Navigation sound</span><span id="sound-value" class="setting-value"></span><span class="setting-description">Quiet feedback for your remote.</span></button>
+          <button id="setting-layout" class="setting-row"><span class="setting-label">Tile layout</span><span id="layout-value" class="setting-value"></span><span class="setting-description">Choose the space between your apps.</span></button>
+          <button id="setting-fade" class="setting-row"><span class="setting-label">Bottom menu</span><span id="fade-value" class="setting-value"></span><span class="setting-description">Let the controls recede when you settle in.</span></button>
+          <button id="setting-clock" class="setting-row"><span class="setting-label">Clock</span><span id="clock-value" class="setting-value"></span><span class="setting-description">A small time display on Home.</span></button>
+          <button id="setting-start" class="setting-row"><span class="setting-label">Start on</span><span id="start-value" class="setting-value"></span><span class="setting-description">Choose the selected app when Hub starts.</span></button>
+          <h3>Advanced</h3>
+          <button id="setting-telemetry" class="setting-row"><span class="setting-label">TV monitoring</span><span class="setting-value setting-open" aria-hidden="true">›</span><span class="setting-description">Send performance metrics to Netdata.</span></button>
+          <button id="setting-reset" class="setting-row"><span class="setting-label">Reset shortcuts</span><span class="setting-value setting-open" aria-hidden="true">›</span><span class="setting-description">Start again with Plex and YouTube.</span></button>
+          <button id="setting-hold" class="setting-row" aria-pressed="false"><span class="setting-label">Hold OK to edit</span><span id="hold-value" class="setting-value"></span><span class="setting-description">A shortcut to move or remove an app.</span></button>
+        </div><div id="settings-scroll" class="scroll-cues" aria-hidden="true" hidden><span class="scroll-up">↑</span><span class="scroll-down">↓</span></div></div>
+        <aside class="settings-preview" aria-hidden="true">
+          <div id="setting-visual"></div><h3 id="setting-preview-title"></h3><p id="setting-preview-detail"></p>
+        </aside>
+      </div>
+      <div class="page-bottom"><p id="settings-status" class="status-line" role="status" aria-live="polite"></p><div class="hint"><span><kbd>↑ ↓</kbd>Choose</span><span><kbd>OK</kbd>Change</span><span><kbd>Back</kbd>Home</span></div></div>
+    </div>
+  </section>
+  <section id="telemetry-dialog" role="dialog" aria-modal="true" aria-labelledby="telemetry-title" hidden>
+    <div class="dialog-panel telemetry-panel">
+      <h2 id="telemetry-title">TV monitoring</h2>
+      <p class="dialog-description">Send a performance snapshot every 10 seconds to your paired Netdata receiver.</p>
+      <button id="telemetry-enabled" class="setting-row" aria-pressed="false"><span class="setting-label">Monitoring</span><span id="telemetry-value" class="setting-value">Off</span></button>
+      <label for="telemetry-endpoint">Receiver URL</label>
+      <input id="telemetry-endpoint" type="url" maxlength="512" autocomplete="off" spellcheck="false" aria-describedby="telemetry-detail">
+      <p id="telemetry-detail">Use the paired receiver’s HTTPS address, ending in /v1/s90d. A different server needs pairing first.</p>
+      <p id="telemetry-status" class="status-line" role="status" aria-live="polite"></p>
+      <div class="dialog-actions"><button id="telemetry-cancel">Cancel</button><button id="telemetry-save">Save</button></div>
+      <div class="hint"><span><kbd>Back</kbd>Close without saving</span></div>
+    </div>
+  </section>
+  <section id="launch-error-dialog" role="dialog" aria-modal="true" aria-labelledby="launch-error-title" aria-describedby="launch-error-detail" hidden>
+    <div class="dialog-panel"><h2 id="launch-error-title"></h2><p id="launch-error-detail" class="dialog-description"></p><div class="dialog-actions"><button id="launch-cancel">Back to apps</button><button id="launch-retry">Retry</button><button id="launch-home">Samsung Home</button></div><div class="hint"><span><kbd>Back</kbd>Return to your selected app</span></div></div>
+  </section>
+  <section id="reset-dialog" role="dialog" aria-modal="true" aria-labelledby="reset-title" hidden>
+    <div class="dialog-panel"><h2 id="reset-title">Reset your Home shortcuts?</h2><p class="dialog-description">Your current selection and order will be replaced with Plex and YouTube. No apps will be uninstalled. Your other settings stay as they are.</p><div class="dialog-actions"><button id="reset-cancel">Keep my shortcuts</button><button id="reset-confirm">Reset to defaults</button></div><div class="hint"><span><kbd>Back</kbd>Keep my shortcuts</span></div></div>
+  </section>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "target": {
+    "model": "QN55S90DAFXZA",
+    "ip": "192.0.2.12",
+    "firmware": "2130.0",
+    "build": "T-PTMDAKUC-0090-REL-202605141701"
+  },
+  "decision": "Use existing persistent Developer Mode; no new TV persistence installed.",
+  "boot_before": "00000000-0000-4000-8000-000000000015",
+  "boot_after": "00000000-0000-4000-8000-000000000011",
+  "root": {
+    "uid": 0,
+    "gid": 0,
+    "CapPrm": "0000003fffffffff",
+    "CapEff": "0000003fffffffff",
+    "smack": "User"
+  },
+  "checked_original_hashes": 13,
+  "cleanup": "Passed against reboot leftovers and again idempotently.",
+  "developer_mode": 1,
+  "developer_ip": "198.51.100.32",
+  "apps": {
+    "youtube": {
+      "id": "111299001912",
+      "name": "YouTube",
+      "running": true,
+      "version": "2.1.527",
+      "visible": true
+    },
+    "plex": {
+      "id": "3201512006963",
+      "name": "Plex - Free Movies \uff06 TV",
+      "running": true,
+      "version": "5.64.1",
+      "visible": true
+    }
+  },
+  "private_evidence": {
+    "backup": "/path/to/.local/share/samsung-tv-research/dumps/20260919T222450Z",
+    "preflight_session": "20260919T222351.075201Z-run",
+    "reboot_collection": "20260919T222837Z",
+    "post_reboot_root": "20260919T223047.649175Z-root-check",
+    "original_hash_checks": "20260919T223044.366878Z-run",
+    "cleanup": "20260919T223144.558919Z-run",
+    "final_check": "20260919T223220.602412Z-run"
+  },
+  "private_artifact_hashes": {
+    "persistence-originals.tar.gz": "204dd037454a302c7dfa2fc030612b28d0fe50c6a36faec3159bd02cc6baa749",
+    "persistence-xattrs.jsonl": "7fdc0dbac72eb85cd0f1bf97f32ca521c1ef1cb86c6f7cd9dd565940bf657186",
+    "persistence-stat.txt": "68683be02defdecc387f52d58fd4a8431345b4273524a1bfb5023653fe5f4229",
+    "persistence-policy.txt": "5f90472542f10797ce9bd68480746abeec143b33c16ef6e27855bc9dd08be83f",
+    "host-passwd.original": "154b98168c7c6e7d2ab358fa69c6ac6fca6a13b3931fbbb8fb106655f3547a0d",
+    "host-public.pem.original": "c83cab64331f092ba99f666b8bb20a49dd1fff04030336c2ea34f6b55ca09d09"
+  },
+  "limitations": [
+    "Normal reboot on this firmware only; no update or factory-reset test.",
+    "App launch and visibility checked; playback not exercised."
+  ]
+}
