@@ -13,8 +13,8 @@ jobs:
         python: ['3.12', '3.14']
     runs-on: ${{ matrix.os }}
     env:
-      SAMSUNG_TV_TOOLKIT: ${{ runner.temp }}/empty-tv-toolkit
-      TV_SETUP_STATE: ${{ runner.temp }}/tv-state
+      SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
+      TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
       PYTHONWARNINGS: default
     steps:
       - uses: actions/checkout@v4
