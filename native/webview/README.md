@@ -84,6 +84,8 @@ npm test
 
 The build uses Docker with networking disabled, produces ARMv7 softfp code and
 rejects GLIBC requirements above 2.17. Output stays outside the repository.
+It also produces `minimal-hub-procsample`, a measurement tool that is never
+installed with the launcher (see [startup measurement](#startup-measurement)).
 The bundle comes from the working tree, including uncommitted web edits.
 The C tests use fake EFL/EWK/app-manager libraries; they do not simulate firmware,
 security policy, rendering performance or physical panel behavior. Browser tests
@@ -295,6 +297,27 @@ comes from the QN90A 2301.1 captured binaries.
     76.0.3809.146 and 120.0.6099.5.
 - **Runtime confirmation.** On the TV, mapped libraries and child argv
   confirmed the upgrade selection.
+
+## Startup measurement
+
+Each `webview event=` line records child-relative wall time, cumulative process
+CPU time (`cpu_ms`, all threads of this process only), its kernel part
+(`sys_ms`) and, on Linux, major page faults (`majflt`). The startup sequence is:
+`main`, `engine-files-ready`, `efl-loaded`, `elm-init-done`, `window-created`,
+`ewk-init-start`, `ewk-wrapper-loaded`, `engine-policy-set` (upgrade only; the
+wrapper loads the implementation here), `ewk-init-done` (after the
+loaded-engine check), `view-created`,
+`navigation-start`, `load-finished`, `hub-ui-ready`, `page-frame`,
+`page-present`, `native-first-render`. Only compositor frames prove that Hub
+content was visible; `page-present` is a show request.
+
+`minimal-hub-procsample OUT_DIR EXE_PREFIX SECONDS INTERVAL_MS [SNAPSHOTS]`
+runs as root during a private test boot. It follows processes whose executable
+lies under the install prefix and their descendants, which includes Chromium's
+`efl_webprocess` children but not other web apps' processes. It records
+per-thread CPU, state and faults. Snapshots split PSS, private and shared memory
+into the engine library, other files, anonymous memory and device mappings.
+Keep its output private.
 
 ## Boot frame capture
 
