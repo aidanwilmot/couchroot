@@ -41,45 +41,39 @@ editable from the TV. The Samsung Home shortcut remains available.
 
 ![Compact launcher with clock](docs/images/compact.png)
 
-## Web Hub or native Hub?
+## Choose a launcher
 
-Couchroot ships two launchers with the same job: a quiet, remote-first home screen
-that opens your apps. They are separate implementations because one TV's firmware
-starts web apps too late for a web launcher to feel like Home.
+Couchroot now has three launcher options. The signed web Hub remains the default
+supported installation. Both native options are experimental and QN90A-only.
 
-| | Web Hub (`web/`) | Native Hub (`native-hub/`) |
-| --- | --- | --- |
-| Built with | HTML/JS in Samsung's Tizen web runtime | C on the TV's EFL (Ecore/Evas) libraries; no web or .NET host |
-| TVs | S90D and QN90A | QN90A (firmware 2301.1) only |
-| Install | Signed Tizen app via `./tv-setup` | Experimental boot hook + root agent |
-| Becomes Home by | Samsung's Home/startup assignment (S90D) or the ISP source role (QN90A) | Boot hook dispatch and an overridable Home key grab |
-| Hub after reboot | S90D: Samsung starts it at ~2 s. QN90A: ~37–47 s | QN90A: ~9–10 s |
-| Preferences | Web app storage | Separate native file; one-time import from the web Hub, independent afterwards |
-| Features | Complete | Core launcher; sound, hold-OK, fade, telemetry and saver stay in the web Hub |
-| Maturity | Supported source release | Experimental research launcher |
+| | Signed web Hub (`web/`) | Pure-native Hub (`native-hub/`) | Native WebView Hub (`native/webview/`) |
+| --- | --- | --- | --- |
+| Rendering | Samsung's web-app runtime | C/Ecore/Evas, no web engine | Existing web UI in an EFL/EWK host |
+| TVs | S90D and QN90A | QN90A firmware 2301.1 | QN90A firmware 2301.1 |
+| Install | Signed app via `./tv-setup` | Private journaled boot hook + root agent | Private journaled boot hook + root agent |
+| QN90A reboot milestone | ~37–47 s to observed foreground | ~9–10 s to native frame | ~16.3 s to first visible, rendered Hub (deferred presentation) |
+| Preferences | Signed app storage | Separate native file | WebView storage; one-time native import |
+| Features | Full platform integration | Core launcher UI | Shared web UI; native discovery/launch bridge, partial platform integration |
+| Maturity | Supported source release | Experimental | Experimental |
 
-### Why two implementations
+These timings are different software milestones, not equivalent panel-latency
+measurements. The WebView numbers are from background-mode boot; remote cold
+restart loaded around 37.3 seconds in a later test while the signed Hub retired
+the TV viewer. Deferred presentation now keeps the native window hidden until
+its page has rendered, preserving the signed Hub during that handoff.
+On S90D the signed Hub starts early through Samsung's own path;
+neither native implementation has been ported or verified there.
 
-- **The web Hub is the default.** It is a normally signed app that uses only Samsung's
-  app APIs, runs on both TVs, and carries the full feature set. On the S90D, Samsung
-  starts it early by itself, so there is nothing to speed up.
-- **The QN90A can't start it early.** A web app cannot launch before the firmware's web
-  application service is ready, 17–40 seconds into boot, so the best web path reaches
-  the screen at 37–47 s. Optimizing the web code can't remove that delay.
-- **The native Hub avoids the web runtime.** It is started from the earliest writable
-  boot hook and draws with the same EFL and graphics libraries that Live TV already
-  loads, which gets the Hub on screen in about 9–10 s. It needs root, runs as an unregistered window
-  from a read-only view (this firmware rejects execution from writable paths), and
-  depends on one firmware's boot sequence. That is why it stays experimental and
-  QN90A-only rather than replacing the web Hub.
-- **The two are designed to run together.** On a native-Hub TV, keep the web Hub installed: it is the
-  manual fallback, holds the ISP source role the QN90A's quiet boot depends on, and
-  keeps the web-only features.
+The QN90A's normal web-app launch waits for firmware services. The pure-native
+launcher avoids Chromium entirely. The WebView launcher instead starts the web
+interface from the native boot path, using the TV's upgrade engine (Chromium 120
+on the tested firmware), with Home routing and bounded crash supervision.
+It does not provide all Tizen APIs just because it shares the interface.
 
-Most people should use the **web Hub**. Choose the native Hub only for a QN90A where
-boot-to-Hub time matters and you accept an experimental, root-dependent boot path.
-The [launcher guide](docs/guides/choosing-a-launcher.md) covers the trade-offs, the
-QN90A Live TV safeguards, and [how the boot time was cut](docs/devices/qn90a/boot-performance.md).
+Keep the signed web Hub installed with either native launcher: it holds the ISP
+source role and remains a recovery path. See [choosing a launcher](docs/guides/choosing-a-launcher.md),
+[WebView behavior and recovery](native/webview/README.md), and the
+[QN90A boot measurements](docs/devices/qn90a/boot-performance.md).
 
 ## Try the launcher on your computer
 
@@ -156,7 +150,8 @@ remote: restore Host PC IP to your management computer and restart. Read the
 | Path | Purpose |
 | --- | --- |
 | `web/` | Web Hub: the shipped launcher UI and platform adapters |
-| `native-hub/` | Native Hub (experimental, QN90A): C/EFL launcher, card styles, profiler |
+| `native-hub/` | Pure-native Hub (experimental, QN90A): C/EFL launcher, card styles, profiler |
+| `native/webview/` | Native WebView Hub (experimental, QN90A): EWK host, native bridge, supervisor and recovery command renderer |
 | `preview/` | Local browser workbench, fixtures and screenshot capture |
 | `tv-setup`, `deploy-ui`, `tvsetup/` | Setup, signing integration, deployment and recovery |
 | `tools/qn90a/`, `tools/s90d/` | One-shot, model-guarded device tools (Home routing, cleanup, casting, splash) |

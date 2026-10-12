@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Minimal Hub WebView diagnostic</title>
+<link rel="stylesheet" href="style.css">
+<script src="probe.js" defer></script>
+<main>
+  <h1>Native WebView</h1>
+  <p>Rendering and remote-input check. No TV apps are launched.</p>
+  <pre id="features">Waiting for JavaScript…</pre>
+  <nav aria-label="Input test"><button>One</button><button>Two</button><button>Three</button></nav>
+  <p id="input" role="status">Use arrows, OK and Back.</p>
+  <p>Feature support and user agent do not prove which engine library loaded.</p>
+</main>
+</html>
