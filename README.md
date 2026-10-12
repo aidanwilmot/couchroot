@@ -43,17 +43,43 @@ editable from the TV. The Samsung Home shortcut remains available.
 
 ## Web Hub or native Hub?
 
-| | Web Hub | Native Hub |
+Couchroot ships two launchers with the same job: a quiet, remote-first home screen
+that opens your apps. They are separate implementations because one TV's firmware
+starts web apps too late for a web launcher to feel like Home.
+
+| | Web Hub (`web/`) | Native Hub (`native-hub/`) |
 | --- | --- | --- |
+| Built with | HTML/JS in Samsung's Tizen web runtime | C on the TV's EFL (Ecore/Evas) libraries; no web or .NET host |
 | TVs | S90D and QN90A | QN90A (firmware 2301.1) only |
 | Install | Signed Tizen app via `./tv-setup` | Experimental boot hook + root agent |
+| Becomes Home by | Samsung's Home/startup assignment (S90D) or the ISP source role (QN90A) | Boot hook dispatch and an overridable Home key grab |
 | Hub after reboot | S90D: Samsung starts it at ~2 s. QN90A: ~37–47 s | QN90A: ~9–10 s |
-| Features | Complete | Core launcher; web-only extras stay in the web Hub |
+| Preferences | Web app storage | Separate native file; one-time import from the web Hub, independent afterwards |
+| Features | Complete | Core launcher; sound, hold-OK, fade, telemetry and saver stay in the web Hub |
+| Maturity | Supported source release | Experimental research launcher |
+
+### Why two implementations
+
+- **The web Hub is the default.** It is a normally signed app that uses only Samsung's
+  app APIs, runs on both TVs, and carries the full feature set. On the S90D, Samsung
+  starts it early by itself, so there is nothing to speed up.
+- **The QN90A can't start it early.** A web app cannot launch before the firmware's web
+  application service is ready, 17–40 seconds into boot, so the best web path reaches
+  the screen at 37–47 s. Optimizing the web code can't remove that delay.
+- **The native Hub avoids the web runtime.** It is started from the earliest writable
+  boot hook and draws with the same EFL and graphics libraries that Live TV already
+  loads, which gets the Hub on screen in about 9–10 s. It needs root, runs as an unregistered window
+  from a read-only view (this firmware rejects execution from writable paths), and
+  depends on one firmware's boot sequence. That is why it stays experimental and
+  QN90A-only rather than replacing the web Hub.
+- **The two are designed to run together.** On a native-Hub TV, keep the web Hub installed: it is the
+  manual fallback, holds the ISP source role the QN90A's quiet boot depends on, and
+  keeps the web-only features.
 
 Most people should use the **web Hub**. Choose the native Hub only for a QN90A where
 boot-to-Hub time matters and you accept an experimental, root-dependent boot path.
-The [launcher guide](docs/guides/choosing-a-launcher.md) explains the trade-offs and
-the QN90A Live TV safeguards.
+The [launcher guide](docs/guides/choosing-a-launcher.md) covers the trade-offs, the
+QN90A Live TV safeguards, and [how the boot time was cut](docs/devices/qn90a/boot-performance.md).
 
 ## Try the launcher on your computer
 
