@@ -20,6 +20,7 @@ class HostTests(unittest.TestCase):
         cls.out = Path(cls.temp.name)
         cls.host = cls.out / "host"
         cls.maps = cls.out / "maps"
+        cls.base_file, cls.upgrade_file = cls.out / "base-engine", cls.out / "upgrade-engine"
         flags = ["-std=c99", "-Wall", "-Wextra", "-Werror"]
         shared = ["-dynamiclib"] if sys.platform == "darwin" else ["-shared", "-fPIC"]
         appmanager = cls.out / "libfake-appmanager.so"
@@ -44,7 +45,8 @@ class HostTests(unittest.TestCase):
         (cls.out / "libsystemd.so.0").symlink_to(platform)
         (cls.out / "hub").mkdir()
         (cls.out / "hub/index.html").write_text("<!doctype html><title>Hub</title>")
-        subprocess.run(["cc", *flags, f'-DMAPS_PATH="{cls.maps}"', f'-DSELF_EXE="{cls.host}"',
+        subprocess.run(["cc", *flags, f'-DMAPS_PATH="{cls.maps}"', f'-DENGINE_BASE_FILE="{cls.base_file}"',
+                        f'-DENGINE_UPGRADE_FILE="{cls.upgrade_file}"', "-DENGINE_READY_TIMEOUT=0.5", f'-DSELF_EXE="{cls.host}"',
                         f'-DAPP_MANAGER_LIBRARY="{appmanager}"', f'-DAPP_LAUNCHER="{launcher}"',
                         f'-DUPTIME_PATH="{cls.uptime}"', f'-DMARKER_PATH="{cls.marker}"',
                         f'-DWM_READY_PATH="{cls.ready}"', f'-DWAYLAND_SOCKET_PATH="{cls.socket_path}"',
@@ -63,6 +65,45 @@ class HostTests(unittest.TestCase):
         (cls.legacy / "libelementary.so.1").symlink_to(cls.legacy / "libecore_evas.so.1")
         cls.page = cls.out / "page #?%.html"
         cls.page.write_text("<!doctype html><title>Test</title>")
+
+    def setUp(self):
+        self.base_file.write_text("base")
+        self.upgrade_file.write_text("upgrade")
+
+    def test_upgrade_waits_for_mount_before_engine_initialization(self):
+        self.upgrade_file.unlink()
+        self.maps.write_text(f"b6000000-b6100000 r-xp 00000000 b3:15 42 {self.UPGRADE}\n")
+        env = dict(os.environ, FAKE_MODE="success")
+        env["DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"] = str(self.out)
+        with subprocess.Popen([str(self.host), "--engine=upgrade", str(self.page)],
+                              env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as child:
+            prefix = ""
+            for line in child.stdout:
+                prefix += line
+                if "engine-files-wait" in line:
+                    self.upgrade_file.write_text("upgrade")
+                    break
+            output, errors = child.communicate(timeout=5)
+        output = prefix + output
+        self.assertEqual(child.returncode, 0, output + errors)
+        self.assertLess(output.index("engine-files-wait"), output.index("engine-files-ready"))
+        self.assertLess(output.index("engine-files-ready"), output.index("ewk-init-start"))
+
+    def test_missing_or_empty_engine_fails_before_loading_wrapper(self):
+        for file in [self.base_file, self.upgrade_file]:
+            with self.subTest(file=file.name):
+                file.write_text("")
+                result = self.run_host(args=["--engine=upgrade", str(self.page)], mapped=self.UPGRADE)
+                self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+                self.assertIn("engine-files-timeout", result.stderr)
+                self.assertNotIn("ewk-init-start", result.stdout)
+                file.write_text("engine")
+
+    def test_default_engine_does_not_require_upgrade_mount(self):
+        self.upgrade_file.unlink()
+        result = self.run_host()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("engine-files-wait", result.stdout)
 
     @classmethod
     def tearDownClass(cls):

@@ -21,7 +21,11 @@ journals or compiled TV binaries are included. S90D has not been tested.
 - **Engine:** `--engine=default|upgrade` chooses the EWK implementation before
   initialization, then verifies the loaded library in `/proc/self/maps`.
   QN90A's tested engines are Chromium 76.0.3809.146 and 120.0.6099.5.
-  Requesting upgrade fails visibly if only the default engine loads.
+  Before loading EFL/EWK, the host waits up to 20 seconds for readable, nonempty
+  base and requested upgrade libraries. QN90A mounts these filesystems during
+  boot; calling the wrapper too early permanently caches the default engine.
+  Missing files fail with `engine-files-timeout`. Loaded mappings are still
+  verified; an unexpected fallback is never presented as Chromium 120.
 - **Rendering:** an Ecore/Evas `wayland_egl` window first draws a native loading
   screen in diagnostic mode. With `COUCHROOT_WEBVIEW_DEFER_SHOW=1`, the launcher
   instead lays out the hidden view at 1920×1080 and keeps its window unmapped
@@ -226,9 +230,28 @@ Both boots also exposed early engine failures before any native window mapped:
 one aborted inside EWK view creation with allocator corruption; the other loaded
 the default engine despite requesting upgrade. The existing supervisor recovered
 with Chromium 120. Hub content appeared at 43.36 and 28.78 seconds respectively.
-These failures remain unexplained; the visual handoff result is not evidence of
-reliable first-attempt Chromium startup. Neither captured cycle reproduced the
+These trials alone did not establish reliable first-attempt Chromium startup;
+the later mount-readiness investigation below supersedes that status. Neither captured cycle reproduced the
 handheld remote's normal-mode boot, and neither was a physical-panel recording.
+
+The next investigation found a concrete engine-selection race: EWK initialization
+started around 9.35 seconds, before the upgrade mount became active at 9.69
+seconds (base mount: 9.38 seconds). The wrapper permanently caches its first
+selection, so a later filesystem mount cannot repair that process. The host now
+checks readable, nonempty engine files before loading EFL/EWK, polling every
+50 ms with a 20-second deadline and honoring termination. Tests cover a delayed
+upgrade file, unavailable/empty files and default mode without an upgrade mount.
+
+Two full background software reboots of the mount-readiness build then loaded
+Chromium 120 on the first attempt: one child each, no failure or supervisor
+restart. Hub content appeared at 17.319 and 17.290 seconds. Both frame sequences
+showed a single Hub appearance with no white frame or blackout afterward; Home
+retained native focus. The engine mounts were already active around 7.6 seconds
+on these two cycles, so they validate clean startup, while the delayed-file test
+exercises the waiting branch. The earlier allocator abort was not reproduced;
+its exact internal cause has not been established. This is two-cycle evidence,
+not a long-term stability claim. Installed hashes were checked and the journal
+accepted; the guarded rollback remains available for future candidates.
 
 Standby/resume and the WebView Live-TV detour remain unverified. The owner's
 "power cycle" was not independently classified as mains removal versus a remote
@@ -237,7 +260,8 @@ restart. Pure-native Home/source behavior has separate evidence in its README.
 Earlier warm trials verified arrows/OK/Back on both engines, local diagnostics,
 visibility notification and bounded exit. Two of twelve default-engine Hub runs
 crashed during page loading (SIGSEGV / allocator abort); root cause remains
-unknown. No such crash was observed in the recorded upgrade trials. Supervision
+unknown. The later early-boot upgrade trial also aborted during view creation,
+as recorded above. Supervision
 bounds recovery attempts but does not prove long-term stability.
 
 ## ABI and evidence
@@ -262,8 +286,8 @@ comes from the QN90A 2301.1 captured binaries.
   - Flag set and `/usr/share/chromium-efl/upgrade/lib/libchromium-impl.so`
     exists: it loads the upgrade engine.
   - Otherwise it loads the default engine, without reporting the fallback.
-  - So the call must precede `ewk_init`, and the loaded library must be
-    verified.
+  - So filesystem readiness must precede wrapper loading, the policy call
+    must precede `ewk_init`, and the loaded library must be verified.
 - **Engine binaries.**
   - Default `libchromium-impl.so`: sha256 `23bee1f3…e192`.
   - Upgrade `libchromium-impl.so`: sha256 `de041301…cda8`.

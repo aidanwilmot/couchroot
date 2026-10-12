@@ -70,6 +70,17 @@ FN(Bool, ewk_view_focus_get, (const Obj *));
 
 #define DEFAULT_ENGINE "/usr/share/chromium-efl/lib/libchromium-impl.so"
 #define UPGRADE_ENGINE "/usr/share/chromium-efl/upgrade/lib/libchromium-impl.so"
+/* Mounts arrive asynchronously during early boot. Do not load the wrapper (or
+ * any engine resources) until both base and requested upgrade files exist. */
+#ifndef ENGINE_BASE_FILE
+#define ENGINE_BASE_FILE DEFAULT_ENGINE
+#endif
+#ifndef ENGINE_UPGRADE_FILE
+#define ENGINE_UPGRADE_FILE UPGRADE_ENGINE
+#endif
+#ifndef ENGINE_READY_TIMEOUT
+#define ENGINE_READY_TIMEOUT 20
+#endif
 #ifndef MAPS_PATH
 #define MAPS_PATH "/proc/self/maps"
 #endif
@@ -103,6 +114,30 @@ static double now(void) {
 }
 static void stamp(const char *event) {
     printf("webview event=%s elapsed_ms=%.3f\n", event, (now() - start) * 1000);
+}
+static int readable_engine(const char *path) {
+    struct stat info;
+    return !stat(path, &info) && S_ISREG(info.st_mode) && info.st_size > 0 && !access(path, R_OK);
+}
+/* Before EFL/EWK initialization: the wrapper's first symbol lookup permanently
+ * caches default when the upgrade mount is absent. Waiting in this still
+ * single-threaded process also prevents loading across the mount transition. */
+static int wait_engine_files(void) {
+    int waiting = 0;
+    double deadline = now() + ENGINE_READY_TIMEOUT;
+    while (!stopping) {
+        if (readable_engine(ENGINE_BASE_FILE) &&
+            (engine_request != ENGINE_UPGRADE || readable_engine(ENGINE_UPGRADE_FILE))) {
+            stamp("engine-files-ready"); return 1;
+        }
+        if (!waiting) { stamp("engine-files-wait"); waiting = 1; }
+        if (now() >= deadline) {
+            fputs("webview failure=engine-files-timeout\n", stderr); return 0;
+        }
+        struct timespec pause = { 0, 50000000 };
+        nanosleep(&pause, NULL);
+    }
+    return 0;
 }
 /* Chromium 120 routes keys through Elementary's focus manager; Chromium 76
  * accepted plain Evas focus. Set both, as the firmware's reference WebView
@@ -423,6 +458,7 @@ int main(int argc, char **argv) {
     if (!launcher_mode) url = file_url(argv[first], bridge_enabled ? "?host=native-webview" : "");
     if (!url) { fprintf(stderr, "Input must be a readable local file\n"); return 2; }
     stamp("main");
+    if (!wait_engine_files()) { free(url); return stopping ? 0 : 3; }
     if (!efl_api()) { free(url); return 3; }
     if (elm_init(argc, argv) <= 0) { free(url); return 3; } /* Also initializes Ecore_Evas. */
     window = ecore_evas_new("wayland_egl", 0, 0, 1920, 1080, NULL);

@@ -34,9 +34,10 @@ The first deferred-presentation profile mapped a canvas at about 16.35 seconds,
 but later frame capture showed that an early paint could contain only the page
 background. The host now waits for Hub DOM/font readiness and a subsequent paint.
 Two captured background software boots showed one Hub appearance with no white
-frame or blackout afterward. Both needed an automatic early engine retry, reaching
-Hub content at 43.36 and 28.78 seconds; first-attempt Chromium startup remains an
-open reliability issue. Pure native has reached roughly 9–10 seconds.
+frame or blackout afterward. Those initial trials needed early engine retries. A subsequent fix waits for
+the base/upgrade filesystem contents before loading EWK; two further full boots
+loaded Chromium 120 without retry and showed Hub content at about 17.3 seconds.
+Pure native has reached roughly 9–10 seconds.
 
 Normal-mode handoff loaded the page around 37.3 seconds in an earlier owner test.
 It waits for the signed Hub to retire the viewer and leaves that Hub visible while
