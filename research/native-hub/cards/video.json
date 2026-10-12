@@ -1,0 +1,129 @@
+[
+ {
+  "id": "kIciSQlYEM.plex",
+  "name": "Plex",
+  "word": "plex",
+  "weight": "bold",
+  "split": 1,
+  "accent": "#e7b341",
+  "base": "#211f1b",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[0.80,0.0],[0.90,0.0],[0.76,0.6],[0.74,0.6]], "color": "#6e5620"},
+   {"points": [[0.92,0.0],[0.94,0.0],[0.82,0.46],[0.76,0.46]], "color": "#4a3b19"}
+  ],
+  "notes": "Warm charcoal with two gold beams leaning off the top-right edge, echoing the existing Plex treatment. Gold x is the only bright colour in the card."
+ },
+ {
+  "id": "9Ur5IzDKqV.TizenYouTube",
+  "name": "YouTube",
+  "word": "YouTube",
+  "weight": "bold",
+  "glyph": "play",
+  "accent": "#ff3e3e",
+  "base": "#1b1516",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[0.1,0.9],[0.9,0.9],[0.9,0.94],[0.1,0.94]], "color": "#33262a"},
+   {"points": [[0.1,0.9],[0.62,0.9],[0.62,0.94],[0.1,0.94]], "color": "#a3252e"}
+  ],
+  "notes": "Red-black base with a playback progress bar along the bottom edge: track and filled red. The play badge carries the red accent in the centre."
+ },
+ {
+  "id": "PvWgqxV3Xa.YouTubeTV",
+  "name": "YouTube TV",
+  "word": "YouTube TV",
+  "weight": "regular",
+  "split": 2,
+  "accent": "#ff8270",
+  "base": "#141a27",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[0.0,0.1],[0.1,0.0],[0.26,0.0],[0.0,0.36]], "color": "#2c3f62"},
+   {"points": [[0.30,0.0],[0.34,0.0],[0.12,0.42],[0.08,0.42]], "color": "#3b527c"}
+  ],
+  "notes": "Cool slate-navy with diagonal slashes off the top-left corner, so it reads as a different family from red YouTube. Regular weight, no play badge, coral TV."
+ },
+ {
+  "id": "org.tizen.netflix-app",
+  "name": "Netflix",
+  "word": "NETFLIX",
+  "weight": "bold",
+  "base": "#120708",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[1.0,0.42],[1.0,0.9],[0.9,1.0],[0.42,1.0]], "color": "#8f1019"},
+   {"points": [[1.0,0.22],[1.0,0.34],[0.66,1.0],[0.56,1.0]], "color": "#c01f2a"}
+  ],
+  "notes": "Near-black with a red corner wedge and a single diagonal ribbon at the bottom-right. Abstract sweep, no N shape."
+ },
+ {
+  "id": "org.tizen.primevideo",
+  "name": "Prime Video",
+  "word": "prime video",
+  "weight": "regular",
+  "base": "#0b1822",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[0.42,1.0],[0.2,0.84],[0.0,0.7],[0.0,0.8],[0.14,0.9],[0.26,1.0]], "color": "#2a7aa6"},
+   {"points": [[0.62,0.0],[0.94,0.0],[0.94,0.12]], "color": "#163a52"}
+  ],
+  "notes": "Deep navy with a blue crescent sweeping up from the bottom-left corner. Lighter regular-weight lowercase wordmark. The arc is generic, not the smile."
+ },
+ {
+  "id": "MCmYXNxgcu.DisneyPlus",
+  "name": "Disney+",
+  "word": "Disney+",
+  "weight": "regular",
+  "base": "#0d1a33",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[0.22,0.0],[0.78,0.0],[0.74,0.07],[0.5,0.16],[0.26,0.07]], "color": "#2f6fa0"},
+   {"points": [[0.32,0.0],[0.68,0.0],[0.64,0.05],[0.5,0.1],[0.36,0.05]], "color": "#1d4f7a"},
+   {"points": [[0.9,0.78],[0.93,0.86],[0.9,0.94],[0.87,0.86]], "color": "#5fb8e0"}
+  ],
+  "notes": "Deep midnight navy with nested arches hanging from the top edge, like a spotlight dome, and a small bright star-diamond at bottom-right. Regular weight."
+ },
+ {
+  "id": "LBUAQX1exg.Hulu",
+  "name": "Hulu",
+  "word": "hulu",
+  "weight": "bold",
+  "base": "#0b1a12",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[0.0,0.14],[0.05,0.14],[0.05,0.86],[0.0,0.86]], "color": "#1f7a4d"},
+   {"points": [[0.08,0.2],[0.11,0.2],[0.11,0.8],[0.08,0.8]], "color": "#145236"}
+  ],
+  "notes": "Very dark green base with two vertical stripes at the left edge, a clean nod to the lowercase bold wordmark in the brand green family."
+ },
+ {
+  "id": "cj37Ni3qXM.HBONow",
+  "name": "HBO Max",
+  "word": "HBO Max",
+  "weight": "bold",
+  "split": 3,
+  "accent": "#a79cff",
+  "base": "#120e22",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[1.0,0.14],[1.0,0.86],[0.84,0.5]], "color": "#4b3f9a"},
+   {"points": [[1.0,0.3],[1.0,0.7],[0.92,0.5]], "color": "#6d5fc0"}
+  ],
+  "notes": "Deep indigo base with a two-tone violet prism wedge pointing in from the right edge. The Max accent in lilac carries the Max gradient idea."
+ },
+ {
+  "id": "gzcc4LRFBF.Peacock",
+  "name": "Peacock TV",
+  "word": "Peacock",
+  "weight": "bold",
+  "base": "#0a1a1e",
+  "ink": "#f4f1ea",
+  "shapes": [
+   {"points": [[0.5,1.0],[0.06,0.74],[0.2,0.7]], "color": "#1e6b66"},
+   {"points": [[0.5,1.0],[0.36,0.74],[0.41,0.7]], "color": "#2a5d9c"},
+   {"points": [[0.5,1.0],[0.94,0.74],[0.8,0.7]], "color": "#8f6f22"}
+  ],
+  "notes": "Deep teal-black with three tapered feather rays fanning from the bottom-centre in teal, blue and muted gold. Suggests the feather fan without the logo."
+ }
+]

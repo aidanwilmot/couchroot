@@ -53,6 +53,13 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   assert.equal((await request('/v1/status',undefined,clientCert,{Origin:'https://example.invalid'})).status,403);
   const v=command();assert.equal((await request('/v1/exec',v)).body.stdout,'uid=0');assert.equal(calls,1);assert.equal((await request('/v1/exec',v)).status,409);assert.equal(calls,1);
   uncertain=true;const lost=command();assert.equal((await request('/v1/exec',lost)).status,409);assert.equal((await request('/v1/exec',lost)).status,409);assert.equal(calls,2);assert.equal(journal.rows.find(r=>r.id===lost.id).state,'submitted');
-  assert.equal((await request('/v1/disable',{})).status,200);assert.equal((await request('/v1/exec',command())).status,503);assert.equal((await request('/v1/enable',{})).status,200);assert.equal((await request('/unknown')).status,404);
+  assert.equal((await request('/v1/disable',{})).status,200);assert.equal((await request('/v1/exec',command())).status,503);
+  const snapshot=await request('/v1/requests');assert.equal(snapshot.body.sha256,journal.digest());
+  assert.equal((await request('/v1/journal/archive',{})).status,409);
+  assert.equal((await request('/v1/journal/archive',{expected_sha256:'0'.repeat(64)})).status,409);
+  await assert.rejects(request('/v1/journal/archive',{expected_sha256:journal.digest()},foreign));
+  assert.equal((await request('/v1/journal/archive',{expected_sha256:journal.digest()},clientCert,{Origin:'https://example.invalid'})).status,403);
+  assert.equal((await request('/v1/journal/archive',{expected_sha256:journal.digest()})).status,200);assert.equal(calls,2);
+  assert.equal((await request('/v1/enable',{})).status,200);assert.equal((await request('/unknown')).status,404);
  }finally{if(server)await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
 });

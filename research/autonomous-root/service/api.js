@@ -10,8 +10,8 @@ function createApi(options){
   if(!req.socket.authorized||!cert.raw||!crypto.timingSafeEqual(Buffer.from(hash(cert.raw),'hex'),Buffer.from(clientPin,'hex'))){reply(403,{error:'Client not enrolled'});return;}
   if(req.headers.origin){reply(403,{error:'Browser access is disabled'});return;}
   if(req.method==='GET'&&req.url==='/v1/status'){reply(200,agent.status());return;}
-  if(req.method==='GET'&&req.url==='/v1/requests'){reply(200,{requests:journal.rows});return;}
-  if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
+  if(req.method==='GET'&&req.url==='/v1/requests'){reply(200,{requests:journal.rows,sha256:journal.digest()});return;}
+  if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable','/v1/journal/archive'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
   if(busy){reply(409,{error:'Another administrative operation is in progress'});return;}
   busy=true;
   try{
@@ -20,6 +20,10 @@ function createApi(options){
    if(req.url==='/v1/disable'||req.url==='/v1/enable'){
     if(Object.keys(value).length)throw Error('This operation takes no arguments');
     const enabled=req.url==='/v1/enable';setEnabled(enabled);if(enabled)agent.start();else agent.stop();reply(200,{enabled});return;
+   }
+   if(req.url==='/v1/journal/archive'){
+    if(!value||Object.keys(value).length!==1||!/^[a-f0-9]{64}$/.test(value.expected_sha256))throw Error('Expected journal digest required');
+    reply(200,journal.archive(value.expected_sha256));return;
    }
    validateRequest(value);
    if(!agent.status().connected){reply(503,{error:'Root agent unavailable'});return;}

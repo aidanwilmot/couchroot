@@ -32,7 +32,7 @@ def request(config, method, route, body=None):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config',required=True,type=Path)
-    parser.add_argument('operation',choices=['status','requests','enable','disable','exec'])
+    parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal'])
     parser.add_argument('--command-file',type=Path)
     parser.add_argument('--timeout-ms',type=int,default=20000)
     parser.add_argument('--request-id',default=None)
@@ -42,6 +42,10 @@ def main():
         value=dict(id=args.request_id or str(uuid.uuid4()),command=args.command_file.read_text(),timeout_ms=args.timeout_ms)
         print('Request ID: '+value['id'],file=__import__('sys').stderr)
         result=request(config,'POST','/v1/exec',value)
+    elif args.operation=='archive-journal':
+        snapshot=request(config,'GET','/v1/requests')
+        if 'sha256' not in snapshot:raise RuntimeError('Installed agent does not support journal archiving')
+        result=request(config,'POST','/v1/journal/archive',{'expected_sha256':snapshot['sha256']})
     elif args.operation in ('enable','disable'):result=request(config,'POST','/v1/'+args.operation,{})
     else:result=request(config,'GET','/v1/'+args.operation)
     print(json.dumps(result,indent=2))

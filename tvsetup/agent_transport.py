@@ -1,0 +1,70 @@
+"""Explicit certificate-pinned root-agent transport for scoped setup trials.
+
+Unlike SDB Transport, all commands run in the enrolled root worker. Package
+installation is deliberately unsupported: Driver's ordinary signer/installer
+path must still be used with a reachable SDK connection. No automatic retries.
+"""
+import base64
+import importlib.util
+import json
+from pathlib import Path
+import uuid
+from .common import REPO, Refused, atomic_json, sha
+from .transport import Transport, guard, Q
+
+class AgentTransport(Transport):
+    def __init__(self, profile, evidence, credentials):
+        self.profile, self.evidence = profile, Path(evidence)
+        self.evidence.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.credentials = json.loads(Path(credentials).read_text())
+        if self.credentials.get('device') != profile['id'] or self.credentials.get('host') != profile['host']:
+            raise Refused('Agent enrollment differs from selected device')
+        spec = importlib.util.spec_from_file_location('enrolled_agent_client', REPO/'research/autonomous-root/client.py')
+        self.api = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.api)
+        status = self.api.request(self.credentials, 'GET', '/v1/status')
+        if status.get('device') != profile['id'] or not status.get('connected') or status.get('identity', {}).get('uid') != 0:
+            raise Refused('Enrolled root worker is not ready')
+        self._execute(guard(profile), 20)
+
+    def _execute(self, script, timeout=20):
+        encoded=base64.b64encode(script.encode()).decode()
+        command='printf %s '+encoded+' | base64 -d | /bin/sh'
+        if len(command.encode()) > 16384:
+            raise Refused('Agent command exceeds bounded request size')
+        request = dict(id=str(uuid.uuid4()), command=command, timeout_ms=min(25000, int(timeout*1000)))
+        path = self.evidence/('agent-'+request['id']+'.json')
+        atomic_json(path, dict(state='submitted', request=request))
+        result = self.api.request(self.credentials, 'POST', '/v1/exec', request)
+        atomic_json(path, dict(state='completed', request=request, result=result))
+        if result.get('id') != request['id'] or result.get('exit_code') != 0 or result.get('timed_out'):
+            raise Refused('Agent command failed or uncertain; inspect private evidence: '+str(path))
+        return result.get('stdout', '')
+
+    def sdk(self, script, timeout=30):
+        # Inherited snapshot parsing is reused, but this is explicitly root,
+        # not evidence of SDK UID permissions. Never attach an SDB client.
+        if len(script.encode()) <= 12000:
+            return self._execute(script, timeout)
+        stage='/tmp/couchroot-inspect-'+uuid.uuid4().hex
+        self._execute('umask 077\nmkdir '+Q(stage)+'\n')
+        self._upload(script.encode(), stage+'/command.sh')
+        return self._execute('sh -c "$(cat '+Q(stage+'/command.sh')+')"; result=$?; rm -f '+Q(stage+'/command.sh')+'; rmdir '+Q(stage)+'; exit "$result"\n', timeout)
+
+    def root(self, script, namespace=False, cleanup_index=None):
+        if namespace or cleanup_index is not None:
+            raise Refused('Namespace and cleanup operations are not supported by this trial transport')
+        return self.sdk(guard(self.profile)+script, 25)
+
+    def _upload(self, data, target):
+        # Exclusive staging file. Uncertain submissions are never replayed.
+        temporary=target+'.agent-'+uuid.uuid4().hex
+        self._execute('set -eu\numask 077\nset -C\n: > '+Q(temporary)+'\n')
+        for offset in range(0,len(data),6000):
+            encoded=base64.b64encode(data[offset:offset+6000]).decode()
+            self._execute('set -eu\nprintf %s '+Q(encoded)+' | base64 -d >> '+Q(temporary)+'\n')
+        self._execute('set -eu\ntest ! -L '+Q(target)+'\ntest ! -e '+Q(target)+'\ntest "$(sha256sum '+Q(temporary)+' | cut -d " " -f 1)" = '+Q(sha(data))+'\nmv '+Q(temporary)+' '+Q(target)+'\n')
+
+    def push(self, source, target):
+        if not str(target).startswith('/home/owner/share/tmp/sdk_tools/tv-setup-') or not str(target).endswith('-control.dll'):
+            raise Refused('Only a run-specific setup control helper may be staged')
+        self._upload(Path(source).read_bytes(), str(target))

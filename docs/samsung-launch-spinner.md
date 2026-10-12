@@ -114,3 +114,13 @@ The script installs that package in place and starts the hub normally, preservin
 local configuration and startup/Home assignment. Prepared and signed; not itself
 installed as part of this test. Full integration rollback remains
 `python3 restore.py` as documented in owner operations.
+
+## QN90A boot-only verification — 2026-10-11
+
+The guarded QN90A early boot launcher now passes the same hint as a native launch
+bundle key/value pair. The owner confirmed no spinner and no Live TV on the first
+trial. Two further boots confirmed successful Hub startup in software; they are
+not additional physical spinner observations. Diagnostics were removed from the
+retained configuration and exact prior-hook rollback is preserved. This does not
+establish all-app support or an overall boot speedup on QN90A. See the
+[boot profiling results](samsung-qn90a-direct-boot.md#quiet-boot-launch-and-post-request-profiling--2026-10-11).

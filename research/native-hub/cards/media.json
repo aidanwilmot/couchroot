@@ -1,0 +1,120 @@
+[
+ {
+  "id": "OGLLvqej7u.CrunchyrollWebApp",
+  "name": "Crunchyroll",
+  "base": "#2b1a11",
+  "ink": "#ffdcbb",
+  "weight": "bold",
+  "shapes": [
+   {"points": [[0.90,0.0],[0.94,0.0],[0.94,0.5],[0.89,1.0],[0.88,1.0]], "color": "#f07a33"},
+   {"points": [[0.0,0.74],[0.26,1.0],[0.07,1.0],[0.0,0.90]], "color": "#b9511f"}
+  ],
+  "notes": "Burnt-orange base with a single speed bar on the right edge and a corner wedge bottom-left, suggesting motion without any play glyph."
+ },
+ {
+  "id": "S9nU6P0m8Q.APM",
+  "name": "Amazon Music",
+  "base": "#0d2531",
+  "ink": "#d8f5ff",
+  "word": "Amazon Music",
+  "weight": "regular",
+  "shapes": [
+   {"points": [[0.64,1.0],[0.64,0.86],[0.68,0.86],[0.68,1.0]], "color": "#1b8fbf"},
+   {"points": [[0.72,1.0],[0.72,0.74],[0.76,0.74],[0.76,1.0]], "color": "#2bb3e0"},
+   {"points": [[0.80,1.0],[0.80,0.80],[0.84,0.80],[0.84,1.0]], "color": "#1b8fbf"},
+   {"points": [[0.88,1.0],[0.88,0.90],[0.92,0.90],[0.92,1.0]], "color": "#2bb3e0"}
+  ],
+  "notes": "Deep teal-navy with two mirrored equaliser silhouettes on opposite corners; the sound-wave bars carry the music idea and stay off the centre band."
+ },
+ {
+  "id": "rJeHak5zRg.Spotify",
+  "name": "Spotify - Music and Podcasts",
+  "word": "Spotify",
+  "base": "#0b2316",
+  "ink": "#d6ffe3",
+  "weight": "bold",
+  "shapes": [
+   {"points": [[0.62,0.0],[0.68,0.0],[0.98,0.20],[0.94,0.27]], "color": "#1ed760"},
+   {"points": [[0.72,0.0],[0.75,0.0],[0.96,0.11],[0.93,0.13]], "color": "#13a049"}
+  ],
+  "notes": "Near-black forest base with two thin rays fanning from the top-right corner in a vivid green that is brighter than the muted Hulu and Xbox greens."
+ },
+ {
+  "id": "3KA0pm7a7V.TubiTV",
+  "name": "Tubi",
+  "word": "tubi",
+  "base": "#121016",
+  "ink": "#fff1b0",
+  "weight": "bold",
+  "shapes": [
+   {"points": [[0.0,0.78],[0.42,0.78],[0.32,0.88],[0.0,0.88]], "color": "#f5d74a"},
+   {"points": [[0.06,0.93],[0.48,0.93],[0.42,1.0],[0.10,1.0]], "color": "#d9b83a"}
+  ],
+  "notes": "Near-black base with a faint warm cast and two longer lemon slabs at the bottom-left, so the yellow reads as the only colour on the card."
+ },
+ {
+  "id": "OK2Rdkjmsi.IMDbTV",
+  "name": "Freevee",
+  "base": "#2a1424",
+  "ink": "#ffd0ea",
+  "weight": "bold",
+  "shapes": [
+   {"points": [[0.64,0.0],[0.745,0.184],[1.0,0.26],[1.0,0.12],[0.816,0.085],[0.74,0.0]], "color": "#e2468f"},
+   {"points": [[0.36,1.0],[0.255,0.816],[0.0,0.74],[0.0,0.88],[0.184,0.915],[0.26,1.0]], "color": "#a8286a"}
+  ],
+  "notes": "Plum base with two quarter-ring arcs in opposite corners, a free-to-air ripple idea in magenta that is unlike any other card's hue."
+ },
+ {
+  "id": "Ob3XhAVMu6.amcplus",
+  "name": "AMC+",
+  "base": "#1c1f24",
+  "ink": "#eef1f4",
+  "weight": "bold",
+  "shapes": [
+   {"points": [[0.60,0.0],[0.66,0.0],[0.52,0.24],[0.46,0.24]], "color": "#c9d1da"},
+   {"points": [[0.72,0.0],[0.78,0.0],[0.64,0.24],[0.58,0.24]], "color": "#5b6674"},
+   {"points": [[0.84,0.0],[0.90,0.0],[0.76,0.24],[0.70,0.24]], "color": "#c9d1da"}
+  ],
+  "notes": "Graphite base with three slanted silver stripes along the top edge, a clapperboard cue in a neutral, cinematic palette that stays out of the hue families."
+ },
+ {
+  "id": "4j8Nf2XKwh.basic",
+  "name": "Angel Studios",
+  "word": "Angel Studios",
+  "base": "#2a1a22",
+  "ink": "#f7e6cf",
+  "weight": "regular",
+  "shapes": [
+   {"points": [[0.46,0.0],[0.54,0.0],[0.66,0.28],[0.34,0.28]], "color": "#4d3442"},
+   {"points": [[0.80,1.0],[0.90,1.0],[1.0,0.80],[1.0,0.72]], "color": "#c9a27a"}
+  ],
+  "notes": "Wine-plum base with a soft beam of light falling from top centre and a champagne ray in the bottom-right corner; the light motif suggests a warm, uplifting tone."
+ },
+ {
+  "id": "XtU8fQk2gN.ESPN",
+  "name": "ESPN",
+  "base": "#1f1416",
+  "ink": "#ff9d96",
+  "weight": "bold",
+  "shapes": [
+   {"points": [[0.62,1.0],[0.90,1.0],[0.80,0.86],[0.52,0.86]], "color": "#d7262f"},
+   {"points": [[0.06,0.0],[0.24,0.0],[0.12,0.18],[0.0,0.18]], "color": "#8f1b22"}
+  ],
+  "notes": "Charcoal base with a scarlet slab on the bottom-right and a darker one top-left; the coral-tinted wordmark keeps it apart from the pure-red Netflix and YouTube cards."
+ },
+ {
+  "id": "ZmmGjO6VKO.slingtv",
+  "name": "Sling TV",
+  "word": "Sling TV",
+  "split": 2,
+  "accent": "#f08a24",
+  "base": "#0f1e3a",
+  "ink": "#d7e4ff",
+  "weight": "bold",
+  "shapes": [
+   {"points": [[0.0,0.12],[0.06,0.12],[0.06,0.88],[0.0,0.88]], "color": "#f08a24"},
+   {"points": [[0.70,0.0],[0.94,0.0],[1.0,0.16],[1.0,0.22],[0.82,0.22]], "color": "#2f6fd0"}
+  ],
+  "notes": "Midnight-cobalt base with an orange pillar on the left edge and a blue wedge top-right; the orange TV accent echoes the brand's warm colour without copying its mark."
+ }
+]

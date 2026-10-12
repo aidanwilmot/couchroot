@@ -159,3 +159,76 @@ python3 research/autonomous-root/client.py --config PRIVATE_RUN/client.json disa
 `enable` persists enabled state and permits boot-time attempts; `disable` persists
 disabled state. Neither command changes the Developer Mode host. Closing the root
 channel does not roll back settings made through administrative commands.
+
+
+## Optional QN90A Hub boot handoff — 2026-10-11
+
+QN90A administration service 0.1.6 adds opt-in `boot_launcher: true` in private
+configuration. It is disabled by default and rejected for S90D. After root is
+ready, a bounded once-per-boot action requests the existing signed Hub relay;
+it respects other apps, records intent before submission, and never replays an
+uncertain launch. A claim under `/tmp` survives service restarts within that boot.
+Commands are encoded to preserve shell bytes through the older root worker.
+
+This action alone does not select a startup source or suppress Live TV. Combined
+with the signed ISP-bound Hub trial, one supervised QN90A reboot reached Hub at
+about 118 seconds without Live TV picture/audio or user intervention. The long
+blank wait remains a limitation. See the [direct-boot results](../../docs/samsung-qn90a-direct-boot.md#supervised-isp-source--autonomous-agent-trial--2026-10-11)
+for exact boundaries, status-window limitations and recovery.
+
+`tvsetup.agent_transport.AgentTransport` is an explicit certificate-pinned
+transport for scoped administration trials. Its SDK-shaped inspection methods
+run as the enrolled root worker, so they are not proof of SDK-user permissions.
+It journals commands before submission, never retries uncertain writes, and
+verifies staged file hashes. Package installation still requires the normal
+SDK installer and shared setup engine.
+
+
+QN90A follow-up: a separately journaled metadata override gives only
+`MiniRoot01.Service` on-boot priority 99. Two software reboots reached Hub at
+109.63 and 109.61 seconds, about eight seconds faster, with background source
+initialization retained. Physical panel/audio observation of these two boots
+is pending. The override is in the local registration database, not the signed
+0.1.6 manifest, and may need deliberate reapplication after package replacement.
+The exact AMD library contains a 90-second user-login fallback consistent with
+the remaining delay; its execution was not dynamically traced. See the
+[queue investigation](../../docs/samsung-qn90a-direct-boot.md#startup-queue-investigation--2026-10-11).
+
+## Journal rotation update — QN90A 0.1.7
+
+The updated agent automatically archives a full command journal before accepting
+another command. It commits a complete SHA-256-addressed archive before reducing
+the active journal to unfinished requests plus the latest 100 completed entries.
+Unfinished requests are never discarded or replayed. Archived IDs (including
+legacy SDK maintenance archives) remain replay-protected across restarts. Archives
+contain command hashes and outcomes, not shell command text. Archive files are
+retained; deleting them would remove their replay history.
+
+An enrolled administrator can also archive explicitly:
+
+```sh
+python3 research/autonomous-root/client.py --config /absolute/private/client.json archive-journal
+```
+
+The client reads `/v1/requests` and submits its digest to
+`POST /v1/journal/archive`. The existing mutual TLS enrollment pin and browser
+origin rejection apply. A stale digest is rejected; maintenance is serialized
+with command execution and works without a connected root worker. Storage failure
+blocks further execution until diagnosis/restart. A journal consisting entirely
+of unfinished requests still refuses new commands rather than discarding them.
+
+Host tests cover full-journal rotation, pending records, archived replay after
+restart, stale digests, interrupted file replacement, corrupt archives, symlinks,
+legacy archives, and authenticated maintenance while the root worker is disabled.
+Version 0.1.7 was installed and its signed contents verified on QN90A. With the
+root worker disabled, authenticated maintenance archived its 1,000-entry journal
+and retained 101 active entries: 100 completed requests and one unresolved
+request. The complete archive was verified on-device by its SHA-256. Existing
+enrollment certificates were preserved. S90D has not received this update.
+
+The upgraded service returned automatically after a software reboot. All 22
+package members, enrollment certificates, archive digest and restored service
+boot flags passed readback. An archived request ID was rejected after restart.
+Native Hub recorded its first-render callback at 12.914 seconds with web Hub
+autolaunch suppressed. This is software timing, not a fresh physical panel/audio
+observation or an isolated performance comparison.
