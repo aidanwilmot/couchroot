@@ -63,31 +63,42 @@ static void pstamp(const char *event){if(prof_enabled)stamp(event);}
 static void home_grab_start(void);
 static int pre_painted;static void pre_paint(Obj *ee){(void)ee;if(!pre_painted++)pstamp("first-pre-render");}
 static void paint(Obj *ee){(void)ee;if(!painted++){stamp("first-render-complete");home_grab_start();prof_finish();}}
-#include "hub-platform.h"
-#include "hub-lifecycle.h"
 /* A child supervisor owns waitpid; Ecore can reap our supervisor without losing
- * app_launcher status. Only nonblocking pipe reads occur in the UI timer. */
-static pid_t launch_child=-1;static int launch_fd=-1;static double launch_deadline;
-static void launch_app(const char *id){
- if(pending_launch||lifecycle.waiting||lifecycle.away)return;
- if(id!=launch_id)snprintf(launch_id,sizeof(launch_id),"%s",id);
- int fds[2];if(pipe(fds)){go(ERROR_PAGE,0);return;}
+ * app_launcher status. It reports one byte (1 accepted, 2 failed) on a nonblocking
+ * pipe, and its own process group lets a deadline kill supervisor and launcher together. */
+static const char *hub_launcher=HUB_LAUNCHER;
+static pid_t launcher_spawn(const char *id,int *fd){
+ int fds[2];if(pipe(fds))return -1;
  fcntl(fds[0],F_SETFL,O_NONBLOCK);fcntl(fds[0],F_SETFD,FD_CLOEXEC);fcntl(fds[1],F_SETFD,FD_CLOEXEC);
- launch_child=fork();
- if(launch_child==0){
+ pid_t child=fork();
+ if(child==0){
   close(fds[0]);setpgid(0,0);signal(SIGCHLD,SIG_DFL);
   sigset_t empty;sigemptyset(&empty);sigprocmask(SIG_SETMASK,&empty,0);
-  pid_t app=fork();if(app==0){close(fds[1]);execl(HUB_LAUNCHER,"app_launcher","-s",launch_id,"-u","5001","__NO_LOADING_LAUNCH","enable",(char*)0);_exit(127);}
+  pid_t app=fork();if(app==0){close(fds[1]);execl(hub_launcher,"app_launcher","-s",id,"-u","5001","__NO_LOADING_LAUNCH","enable",(char*)0);_exit(127);}
   int status=0;pid_t r=-1;if(app>0)do{r=waitpid(app,&status,0);}while(r<0&&errno==EINTR);
   unsigned char ok=(r==app&&r>0&&WIFEXITED(status)&&WEXITSTATUS(status)==0)?1:2;
   if(write(fds[1],&ok,1)<0)_exit(3);close(fds[1]);_exit(0);
  }
- close(fds[1]);if(launch_child<0){close(fds[0]);go(ERROR_PAGE,0);return;}
- setpgid(launch_child,launch_child);launch_fd=fds[0];pending_launch=1;launch_page=hub.page;launch_feedback_dismissed=0;launch_deadline=now_seconds()+10;
+ close(fds[1]);if(child<0){close(fds[0]);return -1;}
+ setpgid(child,child);*fd=fds[0];return child;
+}
+/* Nonblocking reap of a finished or killed supervisor; Ecore may already have reaped it. */
+static void child_reap(pid_t *pid){
+ if(*pid<=0)return;pid_t r=waitpid(*pid,0,WNOHANG);
+ if(r==*pid||(r<0&&errno!=EINTR))*pid=-1;
+}
+#include "hub-platform.h"
+#include "hub-lifecycle.h"
+static pid_t launch_child=-1;static int launch_fd=-1;static double launch_deadline;
+static void launch_app(const char *id){
+ if(pending_launch||lifecycle.waiting||lifecycle.away)return;
+ if(id!=launch_id)snprintf(launch_id,sizeof(launch_id),"%s",id);
+ launch_child=launcher_spawn(launch_id,&launch_fd);if(launch_child<0){go(ERROR_PAGE,0);return;}
+ pending_launch=1;launch_page=hub.page;launch_feedback_dismissed=0;launch_deadline=now_seconds()+10;
  stamp("remote-launch-request");snprintf(hub.notice,sizeof(hub.notice),"Opening app…");redraw();
 }
 static Bool tick(void *unused){
- (void)unused;double now=now_seconds();clock_update();platform_poll(now);
+ (void)unused;double now=now_seconds();clock_update();fallback_poll(now);platform_poll(now);
  if(pending_launch){unsigned char ok=0;ssize_t n=read(launch_fd,&ok,1);int failed=n==0||(n<0&&errno!=EAGAIN&&errno!=EINTR);
   if(n==1||failed||now>=launch_deadline){
    if(n!=1&&launch_child>0)kill(-launch_child,SIGKILL);
@@ -170,4 +181,4 @@ if(prof_enabled){*(void**)(&ecore_evas_callback_pre_render_set)=dlsym(RTLD_DEFAU
 ecore_evas_callback_focus_in_set(ee,native_focus_in);ecore_evas_callback_focus_out_set(ee,native_focus_out);
 if(!((argc==4&&!strcmp(argv[3],"--stay"))||(argc==3&&(!strcmp(argv[1],"--native-guard")||!strcmp(argv[1],"--warm-guard"))&&!strcmp(argv[2],"--stay"))))ecore_timer_add(45,deadline,0);
 ecore_timer_add(0.1,tick,0);ecore_timer_add(1.5,load_catalog,0);ecore_timer_add(1.7,platform_begin,0);
-ecore_evas_show(ee);stamp("window-show-requested");ecore_main_loop_begin();stamp("loop-exited");platform_close();if(pending_launch&&launch_child>0)kill(-launch_child,SIGKILL);if(launch_fd>=0)close(launch_fd);if(hub.dirty)hub_store(&hub.saved,state_path);ecore_evas_free(ee);ecore_evas_shutdown();return 0;}
+ecore_evas_show(ee);stamp("window-show-requested");ecore_main_loop_begin();stamp("loop-exited");platform_close();if(fallback.state!=FALLBACK_IDLE)fallback_end("native-home-fallback-cancelled");if(pending_launch&&launch_child>0)kill(-launch_child,SIGKILL);if(launch_fd>=0)close(launch_fd);if(hub.dirty)hub_store(&hub.saved,state_path);ecore_evas_free(ee);ecore_evas_shutdown();return 0;}

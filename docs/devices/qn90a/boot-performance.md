@@ -4,7 +4,10 @@ QN85QN90AAFXZA, firmware T-NKM2AKUC-2301.1, ARMv7 (4 cores, 1.7 GHz). All times 
 **software milestones in seconds since kernel boot**. For the web Hub that milestone is
 the Hub observed in the foreground; for the native Hub it is the first Ecore/Evas
 post-render callback. Neither is a panel-photon measurement. Single boots vary by
-0.5–1.5 s, so the table lists every retained sample rather than an average.
+0.5–1.5 s, so the table lists individual samples rather than averages. The web rows are
+historical cohorts summarised from earlier research records, measured with different hooks
+and scripts. The last row is the hook/card cohort for this change; later re-arm and visual
+runs, including one visual boot at 9.26 s, are recorded in the native Hub README.
 
 ## Progression
 
@@ -23,25 +26,30 @@ post-render callback. Neither is a panel-photon measurement. Single boots vary b
 
 A profile of the retained build showed the main thread used about **0.35 s of CPU**
 between exec and its first frame, but took **2.7–5.8 s**. It sat runnable while all
-four cores were 100 % busy with 9–20 runnable tasks. EGL, fonts and disk I/O were not
-the limit: every library it maps was already resident, loaded by the Live TV viewer
-at 1.3 s.
+four cores were 100 % busy with 9–20 runnable tasks. That points to CPU scheduling
+rather than EGL, fonts or disk I/O as the main cost. The Live TV viewer maps the same
+libraries at 1.3 s, so they were probably cached; residency was inferred from shared
+mappings, not measured, and the profile still recorded some D-state samples and major
+faults, so other costs are not excluded.
 
 A per-thread `/proc` sampler during boot showed why: `native-hub` had scheduling
-policy 5, **`SCHED_IDLE`**. Static analysis of the firmware's systemd confirmed the
-mechanism:
+policy 5, **`SCHED_IDLE`**. Static analysis of the firmware's systemd matches that
+observation:
 
 - `exec_child` calls `sched_setscheduler(0, SCHED_IDLE)` before `execve` for services
   started while a vendor boot-idle flag is set and `starter.target` is loaded. That
   happens from about 7.3 s.
-- A unit that sets `CPUSchedulingPolicy` takes an earlier branch and skips the demotion.
+- A unit that sets `CPUSchedulingPolicy` takes an earlier branch and skips the demotion
+  (the decompiled code has other exemptions too).
   Samsung's own boot-relevant units use exactly that (sensord, mbr-daemon, adagent,
   pisa, Bluetooth).
-- The vendor boot helper ends the mode about 50 s after app readiness.
+- The decompiled vendor boot helper sleeps 50 s after app readiness before ending the
+  mode. That timing is static; it was not observed at runtime.
 
 Earlier `nice -5` and autogroup `-5` trials could not help, because neither changes an
 idle-class policy. The fix is `systemd-run -p CPUSchedulingPolicy=other`: normal nice-0
-scheduling, not real-time or elevated. Main-to-first-frame dropped to **0.8–1.1 s**.
+scheduling, not real-time or elevated. Main-to-first-frame dropped to **0.8–1.1 s** in
+the three pre-card boots (1.07 / 1.58 s in the two card-binary boots).
 The vendor flag is deliberately left enabled for every other service.
 
 ## Finding 2: hook layering delayed dispatch by ~1.8 s
@@ -71,7 +79,8 @@ moved from about 9.2 s to 7.2–9.2 s.
   wait 0.2–1.5 s while PID 1 starts the starter batch. Those two costs now dominate the
   remaining spread.
 - **Physical observation:** the panel and audio were not observed for these boots.
-  Earlier owner observations confirmed blank, silent native boots.
+  Earlier owner observations reported blank, silent native boots on earlier builds; they
+  do not measure these boots, and no boot is guaranteed silent.
 - **Scope:** the measurements come from one firmware on one TV.
 
 ## Reproducing the profile
@@ -79,5 +88,6 @@ moved from about 9.2 s to 7.2–9.2 s.
 The native launcher has an opt-in profiler (`COUCHROOT_NATIVE_PROFILE=1`, see
 [the native Hub README](../../../native-hub/README.md#opt-in-profiler)). It reports
 per-milestone thread CPU, faults, a 4 ms sample of the main thread's state and
-syscall, and system-wide busy/iowait and runnable counts. It reads only the
-process's own `/proc` files and stops at the first frame.
+syscall, and system-wide busy/iowait and runnable counts. It reads the process's own
+`/proc` entries plus system-wide `/proc/stat` and `/proc/diskstats`, and stops at the
+first frame.

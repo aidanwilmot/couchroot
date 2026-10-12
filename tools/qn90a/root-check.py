@@ -29,7 +29,7 @@ def run(home_mode=None, telemetry_project=None, telemetry_config=None):
     if home_mode not in (None, 'telemetry', 'apply', 'restore', 'key', 'cast-apply', 'cast-restore', 'cast-early-apply', 'cast-early-restore') + tuple('cleanup-' + str(i) for i in range(10)) + ('saver-script-probe', 'saver-apply', 'saver-inspect', 'saver-capture', 'saver-wake', 'saver-memory-apply', 'saver-memory-restore', 'saver-module-restore', 'saver-idle-trial', 'saver-restore', 'saver-timeout-restore', 'saver-timeout-five-minutes'):
         raise ValueError('Unknown fixed QN90A operation')
     os.umask(0o077)
-    repo = Path(__file__).resolve().parents[2]s[2]
+    repo = Path(__file__).resolve().parents[2]
     toolkit = Path.home() / '.local/share/samsung-tv-research'
     sys.path.insert(0, str(toolkit))
     from samsung_tv import device, capture, SdbClient

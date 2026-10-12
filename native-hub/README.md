@@ -76,7 +76,7 @@ checkout with `--reader-directory` and its Snappy dependency location with
 An explicit localStorage JSON export is also supported:
 
 ```sh
-node research/native-hub/import-web-state.cjs /private/exported-storage.json /private/native-state
+node native-hub/import-web-state.cjs /private/exported-storage.json /private/native-state
 ```
 
 The JSON input is an object mapping the original `minimal-hub.*.v1` keys to their
@@ -167,20 +167,23 @@ admission denial matrix.
 ### Local verification
 
 ```sh
-sh research/native-hub/test.sh
+sh native-hub/test.sh
 # Optional scene SVGs from the same UI functions, using a mock Evas backend:
 mkdir -p test-results/native-scenes
-sh research/native-hub/test.sh test-results/native-scenes
-node research/native-hub/screenshots.cjs
+sh native-hub/test.sh test-results/native-scenes
+node native-hub/screenshots.cjs
 ```
 
 The C harness checks grid boundaries, cancel/save, undo after intervening edits,
 failed writes, reset preference preservation, 128-item paging, empty Home,
 strict state parsing, symlink rejection, 24-hour persistence, footer focus recovery,
-asynchronous child failure and timeout. It also exercises 10,000 focus moves with
-twelve branded cards to verify the bounded scene retains the same card objects.
-It also checks that visible-card objects survive focus changes. The unchanged
-native guard denial matrix runs alongside it. `npm test` includes this harness.
+asynchronous child failure and timeout. It also exercises 10,000 in-page focus moves
+with twelve branded cards (73 retained scene objects) to verify the bounded scene keeps
+the same card objects. Paging, moving and utility previews deliberately rebuild their
+scene content. Mocked Home-fallback tests cover launcher failure and timeout, repeated
+Home, worker restart, expiry and a foreground change. On Linux, a profiler test starts
+and joins the real sampler thread. The unchanged native guard denial matrix runs
+alongside it. `npm test` includes this harness.
 
 Scene SVGs are layout diagnostics, **not native screenshots**: the harness uses
 approximate text metrics and browser SVG rendering. They were reviewed at 1920×1080
@@ -452,8 +455,10 @@ does not establish that Samsung's long-press action receives them under the grab
 ## Boot critical path: SCHED_IDLE and hook ordering (2026-10-12)
 
 A fresh profile of the installed launcher found that native startup was not limited by
-EGL, fonts or disk I/O. Every library it maps is already resident because tv-viewer maps
-the same EFL/EGL/Mali stack at about 1.3 seconds. From exec to first frame the main thread
+EGL, fonts or disk I/O. tv-viewer maps the same EFL/EGL/Mali stack at about 1.3 seconds,
+so those libraries were probably already cached; that is inferred from shared mappings,
+not measured, and the profile still recorded some D-state samples and major faults. From
+exec to first frame the main thread
 used about 0.35 s of CPU but took 2.7-5.8 s: it was runnable and waiting for a CPU while all
 four cores were busy.
 
@@ -465,10 +470,11 @@ they return to `SCHED_OTHER`. Samsung's own boot-relevant units opt out with
 This also explains why earlier `nice -5` trials, and an autogroup `-5` trial this session,
 did not help: neither changes an idle-class policy.
 
-Static analysis of the firmware's systemd confirms the mechanism. `exec_child` sets
-`SCHED_IDLE` before `execve` while a vendor boot-idle flag is active and `starter.target` is
-loaded. An explicit `CPUSchedulingPolicy` skips that branch. Samsung's boot helper ends
-the mode about 50 seconds after app readiness and restores the demoted processes.
+Static analysis of the firmware's systemd matches the runtime observation. `exec_child`
+sets `SCHED_IDLE` before `execve` while a vendor boot-idle flag is active and `starter.target`
+is loaded. An explicit `CPUSchedulingPolicy` skips that branch; the decompiled code has other
+exemptions too. The decompiled boot helper sleeps 50 seconds after app readiness before
+restoring the demoted processes; that timing is static, not observed at runtime.
 Runtime evidence came from a per-thread `/proc` sampler during boot (policy column) and the
 opt-in profiler below. The vendor flag is deliberately left enabled for every other service. The policy itself is printed at every profiled milestone (`policy=0`).
 
@@ -489,12 +495,13 @@ The retained QN90A boot hook makes two changes, each tested separately:
 | `CPUSchedulingPolicy=other` (two boots) | 9.38 / 9.06 s | 11.001 / 10.705 s | 1.63 / 1.65 s |
 | Policy and early dispatch, with profiler | 7.21 s | 8.584 s | 1.37 s |
 | Policy and early dispatch (three boots, pre-card binary) | 7.74 / 9.18 / 8.98 s | 8.830 / 10.009 / 10.053 s | 1.09 / 0.83 / 1.07 s |
-| **Retained: same hook with the card-style binary (two boots)** | 7.95 / 8.46 s | **9.023 / 10.039 s** | 1.07 / 1.58 s |
+| **Same hook with the card-style binary (two boots)** | 7.95 / 8.46 s | **9.023 / 10.039 s** | 1.07 / 1.58 s |
 
 The remaining variation comes before `main`. The vendor hook starts between 5.8 and 7.0 s.
 A systemd ordering stall around 4.7 to 6.8 s, cause unproven, gates the whole starter
 batch. The dispatch `systemd-run` call itself can take 0.2 to 1.5 s while PID 1 starts
-that batch. All five boots of the retained hook kept ISP/background routing and suppressed web Hub
+that batch. The table is the hook/card cohort; the later re-arm and visual runs (one visual
+sample rendered at 9.263 s) are recorded separately. All five boots of this hook kept ISP/background routing and suppressed web Hub
 autolaunch. Native was the only visible app window, Home routing returned from YouTube
 in software, and the genuine completion markers, casting gate and voice gate all ran.
 These are software render callbacks, not panel measurements. Physical first-photon time
@@ -510,8 +517,9 @@ and audio silence still need observation.
 - system-wide busy/iowait, runnable count and eMMC utilisation.
 
 It also adds sub-phase stamps (`window-configured`, `scene-built`, `keys-grabbed`,
-`first-pre-render`). It reads only this process's `/proc` files and stops at the first
-frame. This firmware does not expose `schedstat` or `wchan`. Estimate run-queue wait as
+`first-pre-render`). It reads this process's `/proc` entries plus system-wide `/proc/stat`
+and `/proc/diskstats`, and stops at the first frame. Unless the variable is exactly `1`,
+no thread is started and no profiler descriptor is opened. This firmware does not expose `schedstat` or `wchan`. Estimate run-queue wait as
 sampled `R` time minus thread CPU.
 
 ## Card styles
@@ -529,9 +537,9 @@ budget, and that every polygon point stays inside the rounded card at every card
 evoke each brand with colour and typography; they do not reproduce logos.
 
 ```sh
-python3 research/native-hub/cards/cards.py validate research/native-hub/cards/*.json
-python3 research/native-hub/cards/cards.py preview /private/preview-dir research/native-hub/cards/*.json
-python3 research/native-hub/cards/cards.py header research/native-hub/hub-cards.h research/native-hub/cards/*.json
+python3 native-hub/cards/cards.py validate native-hub/cards/*.json
+python3 native-hub/cards/cards.py preview /private/preview-dir native-hub/cards/*.json
+python3 native-hub/cards/cards.py header native-hub/hub-cards.h native-hub/cards/*.json
 ```
 
 ## Saved-source re-arm: no Live TV after watching TV (2026-10-12)
@@ -549,29 +557,49 @@ public-level (`http://tizen.org/privilege/internal/default/public`), so the plat
 worker can do it with `vconf_set_str` as the owner, with a readback and no root or
 security changes.
 
-- **Every 15 s while native runs:** if Hub owns `db/was/isp_app_id` and the saved source
-  differs, rewrite `isp-service`. This works regardless of the foreground app; tests found
-  no visible side effect on a playing viewer. Only changes and failures are logged.
-- **Home while Live TV is in front, or the source is not ISP:** native first takes Samsung's
-  own route and launches the web Hub (an app launch stops the viewer's picture and audio).
-  It then re-arms and finishes the Home press by raising native, within 20 s. Before this,
-  native denied Home whenever the source was wrong, and the grabbed key did nothing.
+- **About every 15 s while native runs:** if Hub owns `db/was/isp_app_id` and the saved
+  source differs, rewrite `isp-service` and read it back. The interval starts after each
+  worker reply, so worker restarts and queued Home requests can lengthen it. It runs
+  regardless of the foreground app. In the QN90A test with Live TV playing, the saved
+  source changed while the foreground app, live-source values and compositor windows
+  stayed the same; picture and audio were not measured. Only changes and failures are logged.
+- **Home while Live TV is in front, or the source is not ISP:** native asks `app_launcher`
+  to open the web Hub, Samsung's own route away from the viewer. It then waits for a re-arm
+  reply that no longer names the viewer and finishes the Home press by raising native.
+  Only one attempt runs at a time: further Home presses are ignored, the launcher is killed
+  if it has not reported within 10 s, and the whole attempt ends 20 s after it started
+  (checked on the 0.1 s UI tick, so these are nominal bounds). Native is raised only if the
+  final check finds the web Hub or nothing in front; another app, the viewer, a lost worker
+  or a late reply cancels the attempt. Killing a late launcher cannot retract a request it
+  already handed to the platform. A foreground change does not prove playback or audio
+  stopped. Before this, native denied Home whenever the source was wrong, and the grabbed
+  key did nothing.
 - **Boots that start in normal mode:** the outermost hook layer starts a bounded owner unit,
-  `native-hub --source-rearm-wait`. It polls for at most 15 minutes and repairs the
-  setting for the next boot.
+  `native-hub --source-rearm-wait`. It makes up to 60 attempts about 15 s apart (nominally
+  15 minutes; each attempt can take longer, so the trial unit also sets a runtime cap) and
+  stops after the first readable result. It does not keep watching for a later Live TV
+  switch in that boot.
 
 Diagnostics: `--source-rearm-probe` rewrites the value only when it is already correct,
 proving write access. `COUCHROOT_NATIVE_SOURCE_REARM=1` enables the periodic re-arm.
 
 QN90A verification, software evidence only:
 - Live TV flip, then re-arm with the viewer still in front.
-- Home from Live TV reaches native through the web Hub in about 2.5–5 s.
+- Home from Live TV reached native through the web Hub in about 2.5–5 s in the recorded
+  successful examples (4.8 s in one saved run). This is not a maximum. These runs used the
+  earlier detached launcher; the tracked, cancellable fallback above is mock-tested only.
 - After a normal-mode boot, Home triggers a re-arm and the next boot is quiet.
 - End to end: Live TV flip, re-arm, then reboot directly from Live TV. The boot was quiet,
   with native first render at 9.164 s.
 
 Residual risks:
-- Powering off within about 15 s of switching to Live TV can still start one boot on
-  Live TV. The next Home press then repairs it.
+- Powering off before the next successful re-arm (nominally within about 15 s of
+  switching to Live TV, longer if the worker is delayed or restarting) can still start one
+  boot on Live TV. The next Home press then repairs it. Re-arming lowers the chance of a
+  Live TV boot; it does not guarantee a quiet one.
 - A real remote power-off was assumed to follow the same deviced path as the tested reboots.
 - Physical picture and audio were not observed.
+- Deferred: the ISP-owner and source reads and the write are separate calls, not an atomic
+  compare-and-set; `--source-rearm-probe` checks the setter result but not a readback; and
+  `CPUSchedulingPolicy=other` removes the vendor's boot deprioritisation for native and its
+  children, which the saved boots do not show to be harmless for every other service.

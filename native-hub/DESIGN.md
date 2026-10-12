@@ -101,7 +101,10 @@ Size is 0.19 x tile height (42 px at 4 columns, 57 at 3, 88 at 2, 67 in the prev
 - The validator composites glow (and the focus lift) over the base and checks, at 96 samples in the wordmark box, ink and tail contrast of at least 4.5:1 at rest and focused, and glyph contrast of at least 3:1. It also checks base luminance, every point inside the rounded card at all 5 sizes, at most 6 objects per tile, and that `*default*` exists.
 - The header exports CARD_LIFT_ALPHA, CARD_RADIUS_W and the type constants, so C and the validator share numbers. `preview` draws the same anatomy and lists object counts.
 
-### Object counts (harness)
+### Object counts (harness, at the time of this pass)
+Later tile changes moved these; the current harness reports 73 objects for twelve compact
+cards and 43 (+3 focus objects) for the six-tile Home.
+
 | scene | before | after |
 |---|---|---|
 | 12 compact branded cards (compact-brands) | 71 | 76 |

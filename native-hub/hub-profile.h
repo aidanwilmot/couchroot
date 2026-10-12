@@ -2,8 +2,9 @@
  * Diagnostics for the boot critical path: per-milestone scheduler counters for the
  * main thread (run time, run-queue wait, faults, context switches) and a 4 ms
  * wall-clock sampler of the main thread's kernel state, syscall and wait channel.
- * It reads only this process's /proc entries, sends no signals, changes no
- * scheduling, and stops after the first rendered frame. Off by default. */
+ * It reads this process's /proc entries plus system-wide /proc/stat and /proc/diskstats,
+ * sends no signals, changes no scheduling, and stops after the first rendered frame.
+ * Off by default: unless the variable is exactly "1" no thread or descriptor is created. */
 #ifndef HUB_PROFILE_INCLUDED
 #define HUB_PROFILE_INCLUDED
 #include <stdio.h>
@@ -50,13 +51,16 @@ static void prof_print_bucket(FILE *f,const char *event,const ProfBucket *b){
 #define RUSAGE_THREAD 1
 #endif
 static int prof_enabled,prof_running,prof_stat_fd=-1,prof_sys_fd=-1,prof_wchan_fd=-1,prof_sched_fd=-1;
-static volatile int prof_stop;static pthread_t prof_thread;static pthread_mutex_t prof_lock=PTHREAD_MUTEX_INITIALIZER;
+/* prof_stop is shared with the sampler thread, so it is read and written only under prof_lock. */
+static int prof_stop;static pthread_t prof_thread;static pthread_mutex_t prof_lock=PTHREAD_MUTEX_INITIALIZER;
+static int prof_stop_get(void){pthread_mutex_lock(&prof_lock);int stop=prof_stop;pthread_mutex_unlock(&prof_lock);return stop;}
+static void prof_stop_set(int stop){pthread_mutex_lock(&prof_lock);prof_stop=stop;pthread_mutex_unlock(&prof_lock);}
 static ProfBucket prof_bucket;
 static struct {double run,rq;unsigned long slices;struct rusage ru;double proc_cpu;} prof_last;
 static ssize_t prof_read(int fd,char *buf,size_t size){ssize_t n=fd<0?-1:pread(fd,buf,size-1,0);buf[n>0?n:0]=0;return n;}
 static void *prof_sample(void *unused){
  (void)unused;char stat[512],sys[128],wchan[64];
- while(!prof_stop){
+ while(!prof_stop_get()){
   struct timespec delay={0,4000000};nanosleep(&delay,0);
   if(prof_read(prof_stat_fd,stat,sizeof(stat))<=0)continue;
   char state=prof_state(stat);int nr=-1;wchan[0]=0;
@@ -102,6 +106,10 @@ static void prof_milestone(const char *event){
  ProfBucket copy;pthread_mutex_lock(&prof_lock);copy=prof_bucket;memset(&prof_bucket,0,sizeof(prof_bucket));pthread_mutex_unlock(&prof_lock);
  prof_print_bucket(stdout,event,&copy);prof_system(event);fflush(stdout);
 }
+static void prof_close_fds(void){
+ if(prof_stat_fd>=0)close(prof_stat_fd);if(prof_sys_fd>=0)close(prof_sys_fd);if(prof_wchan_fd>=0)close(prof_wchan_fd);if(prof_sched_fd>=0)close(prof_sched_fd);
+ prof_stat_fd=prof_sys_fd=prof_wchan_fd=prof_sched_fd=-1;
+}
 static void prof_start(void){
  const char *flag=getenv("COUCHROOT_NATIVE_PROFILE");prof_enabled=flag&&!strcmp(flag,"1");if(!prof_enabled)return;
  char path[96];long tid=syscall(SYS_gettid);
@@ -113,13 +121,13 @@ static void prof_start(void){
  if(fd>=0){if(prof_read(fd,buf,sizeof(buf))>0){const char *p=strrchr(buf,')');if(p)sscanf(p+2,"%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %*u %*u %*d %*d %*d %*d %*d %*d %llu",&start);}close(fd);}
  printf("process-start %.3f\n",start/(double)sysconf(_SC_CLK_TCK));
  printf("profile-fds stat=%d syscall=%d wchan=%d schedstat=%d\n",prof_stat_fd>=0,prof_sys_fd>=0,prof_wchan_fd>=0,prof_sched_fd>=0);
- prof_running=prof_stat_fd>=0&&pthread_create(&prof_thread,0,prof_sample,0)==0;
+ prof_stop_set(0);prof_running=prof_stat_fd>=0&&pthread_create(&prof_thread,0,prof_sample,0)==0;
+ if(!prof_running){prof_close_fds();return;}
  prof_milestone("profile-start");
 }
 static void prof_finish(void){
- if(!prof_running)return;prof_stop=1;pthread_join(prof_thread,0);prof_running=0;
- if(prof_stat_fd>=0)close(prof_stat_fd);if(prof_sys_fd>=0)close(prof_sys_fd);if(prof_wchan_fd>=0)close(prof_wchan_fd);if(prof_sched_fd>=0)close(prof_sched_fd);
- prof_stat_fd=prof_sys_fd=prof_wchan_fd=prof_sched_fd=-1;printf("profile-stopped\n");fflush(stdout);
+ if(!prof_running)return;prof_stop_set(1);pthread_join(prof_thread,0);prof_running=0;
+ prof_close_fds();printf("profile-stopped\n");fflush(stdout);
 }
 #else
 static int prof_enabled;

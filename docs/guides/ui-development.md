@@ -155,7 +155,10 @@ HDMI is not exposed until source handoff is verified on each model. See the
 web/         Shipped screens, state, presentation and TV adapters
 preview/     Local workbench, scenarios, shared mocks and screenshot tooling
 tests/       Unit and browser behavior checks
-native/      Native integration helpers
+native-hub/  Experimental QN90A native launcher (C, mock Evas harness)
+tools/       Guarded per-model device operation scripts
+scripts/     Packaging, signing and offline checks
+tvsetup/     Shared setup engine
 research/    Hardware research, exploit tooling and auxiliary services
 inventory/   Sanitized device evidence
 docs/        UI guides, owner procedures and historical verification
@@ -164,8 +167,9 @@ docs/        UI guides, owner procedures and historical verification
 Keep rendering and remote navigation in `web/hub.js`; put device API calls in
 the existing adapters. Preserve the separate model and presentation modules.
 Add modules when a responsibility needs separation, updating script order,
-package contents and tests together. Existing research paths remain stable for
-the build and rollback scripts that reference them.
+package contents and tests together. Build and rollback scripts reference
+research paths directly; move a path and its references together, and run
+`tests/repository_paths_test.py` to catch broken repository-root expressions.
 
 ## Startup work
 

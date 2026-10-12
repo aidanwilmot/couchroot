@@ -13,7 +13,7 @@ def main():
     parser.add_argument('mode', choices=['query', 'overlay', 'restore-overlay', 'enable', 'restore'])
     args = parser.parse_args()
     os.umask(0o077)
-    repo = Path(__file__).resolve().parents[2]s[2]
+    repo = Path(__file__).resolve().parents[2]
     toolkit = Path.home() / '.local/share/samsung-tv-research'
     sys.path.insert(0, str(toolkit))
     from samsung_tv import device, capture

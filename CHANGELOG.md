@@ -11,10 +11,14 @@
   - Dispatch moved ahead of the other hook layers.
   - See the [launcher guide](docs/guides/choosing-a-launcher.md) and the
     [boot performance record](docs/devices/qn90a/boot-performance.md).
-- Prevent QN90A Live TV boots after watching TV. Opening Live TV/TV Plus rewrites
-  the saved boot source at once, so native re-arms `isp-service` every 15 s.
-  Home from Live TV now routes through the web Hub, which stops the viewer, before
-  raising native.
+- Reduce QN90A Live TV boots after watching TV. Opening Live TV/TV Plus rewrites
+  the saved boot source at once, so native re-arms `isp-service` about every 15 s
+  while it runs. A power-off before the next re-arm can still start one Live TV boot.
+  Home from Live TV asks the web Hub to open, then raises native once a re-arm no
+  longer sees the viewer in front. Picture and audio were not measured.
+  - The Home fallback is now one tracked attempt at a time, with a launcher deadline,
+    a fixed overall deadline, and cancellation if another app takes the foreground,
+    the worker restarts or a reply is late. Mock-tested only; not yet on hardware.
 - Refresh the native Hub visuals (designed in two parallel passes, see
   `native-hub/DESIGN.md`):
   - Layout: one margin system, a quiet header clock, a balanced grid and a single
@@ -23,15 +27,19 @@
   - Tiles: dark brand-tinted, with a soft bottom brand glow and one Bold wordmark rule.
   - Focus: a bright ring with a dark gap, a halo, and brightened brand light.
   - The validator checks contrast against the composited tile, at rest and focused.
-  - QN90A capture verified; first render 9.26 s, unchanged.
+  - QN90A capture verified; one boot rendered at 9.26 s, within the earlier range.
 - Generate native tile art from validated per-app specs (`native-hub/cards/`), with
-  contrast, clean wordmark-area and in-card checks; 12 cards use 71 scene objects
-  instead of 386. Add an opt-in startup profiler (`COUCHROOT_NATIVE_PROFILE=1`).
+  contrast, clean wordmark-area and in-card checks; 12 cards use 73 retained scene
+  objects in the current harness, instead of 386. Add an opt-in startup profiler
+  (`COUCHROOT_NATIVE_PROFILE=1`); its stop flag is now mutex-guarded.
 - Root agent: archive and maintain the request journal; add the Python transport
   used by the setup engine.
 - Reorganize the repository. Device scripts move to `tools/`, signing and packaging
   to `scripts/`, and the native launcher to `native-hub/`. Docs are grouped into
   `guides/`, `devices/`, `research/` and `project/` with an [index](docs/README.md).
+  Fix two QN90A operation scripts that no longer parsed after the move and the card
+  preview's repository root; an offline test now parses every tracked Python file and
+  checks repository-root expressions.
 - Defer initial app discovery and monitoring I/O until Hub has focus, keeping
   saved shortcuts available first. Avoid inspecting the native sound fallback
   when Web Audio is available. QN90A startup profiling did not establish a

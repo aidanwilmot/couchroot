@@ -29,6 +29,16 @@ static void mock_geometry(Obj *o,int *x,int *y,int *w,int *h){
 }
 static void mock_point(Obj *o,int x,int y){Mock *m=o;assert(m->n<160);m->points[m->n][0]=x;m->points[m->n++][1]=y;}
 static void mock_quit(void){quits++;}
+/* Mock window activation and Home fallback replies; the launcher is a local stand-in. */
+static int activations;
+static void mock_window(Obj *o){(void)o;}
+static void mock_activate(Obj *o){(void)o;activations++;}
+static void mock_focus(Obj *o,Bool on){(void)o;(void)on;}
+static int mock_display(void){return 1;}
+static void home_reply(const char *fg,int safe){PlatformHeader h={PLATFORM_MAGIC,'H',sizeof(PlatformSnapshot),0};PlatformSnapshot s={.safe=safe};snprintf(s.foreground,sizeof(s.foreground),"%s",fg);home_checking=1;home_requested=0;platform_reply(&h,(const unsigned char*)&s);}
+static void rearm_reply(int result,int viewer){PlatformHeader h={PLATFORM_MAGIC,'R',sizeof(RearmReport),0};RearmReport r={result,viewer,"vc-service"};platform_reply(&h,(const unsigned char*)&r);}
+static void fallback_settle(void){for(int i=0;i<300&&(fallback.state==FALLBACK_LAUNCHING||fallback.reap>0);i++){struct timespec pause={0,10000000};nanosleep(&pause,0);fallback_poll(now_seconds());}}
+static pid_t fallback_begin(void){home_until=now_seconds()+3;home_reply(TV_VIEWER,1);assert(fallback.state==FALLBACK_LAUNCHING&&fallback.child>0);return fallback.child;}
 static void escape(FILE *f,const char *s){for(;*s;s++){if(*s=='&')fputs("&amp;",f);else if(*s=='<')fputs("&lt;",f);else if(*s=='>')fputs("&gt;",f);else fputc(*s,f);}}
 static void snapshot(const char *dir,const char *name){if(!dir)return;printf("scene %s: %d objects\n",name,scene_count);char path[1024];snprintf(path,sizeof(path),"%s/%s.svg",dir,name);FILE *f=fopen(path,"w");assert(f);fputs("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1920\" height=\"1080\" viewBox=\"0 0 1920 1080\"><rect width=\"1920\" height=\"1080\" fill=\"#111212\"/>",f);
  Mock *order[1024];int count=0;for(int i=0;i<1024;i++)if(objects[i].live&&objects[i].visible){int j=count++;while(j&&order[j-1]->seq>objects[i].seq){order[j]=order[j-1];j--;}order[j]=objects+i;}
@@ -123,6 +133,43 @@ int main(int argc,char **argv){
  home_until=now_seconds()+3;late.status=1;
  platform_reply(&late,(const unsigned char*)&ready);assert(lifecycle.away);
  lifecycle=(HubLifecycle){0};
+ /* Home over Live TV: one bounded, cancellable web fallback at a time. */
+ ecore_evas_show=mock_window;ecore_evas_raise=mock_window;ecore_evas_activate=mock_activate;evas_object_focus_set=mock_focus;home_display=mock_display;rearm_enabled=1;
+ char tools[]="/tmp/couchroot-native-launcher-XXXXXX";assert(mkdtemp(tools));char launcher_ok[1100],launcher_fail[1100],stall[1100];
+ const char *stand_ins[][2]={{"ok","exit 0"},{"fail","exit 1"},{"stall","exec sleep 30"}};char *paths[]={launcher_ok,launcher_fail,stall};
+ for(int i=0;i<3;i++){snprintf(paths[i],1100,"%s/%s",tools,stand_ins[i][0]);FILE *sf=fopen(paths[i],"w");assert(sf);fprintf(sf,"#!/bin/sh\n%s\n",stand_ins[i][1]);fclose(sf);assert(chmod(paths[i],0700)==0);}
+ /* Launcher failure ends the attempt; a later re-arm does not resume it. */
+ hub_launcher=launcher_fail;activations=0;fallback_begin();fallback_settle();
+ assert(fallback.state==FALLBACK_IDLE&&fallback.child<0&&fallback.reap<0&&fallback.fd<0);
+ rearm_reply(REARM_NEEDED,0);assert(!home_requested&&!activations);
+ /* A stalled launcher is killed with its process group at the launch deadline. */
+ hub_launcher=stall;pid_t group=fallback_begin();fallback_poll(now_seconds());assert(fallback.state==FALLBACK_LAUNCHING);
+ fallback_poll(fallback.launch_deadline);assert(fallback.state==FALLBACK_IDLE&&fallback.child<0&&fallback.reap==group);fallback_settle();assert(fallback.reap<0);
+ for(int i=0;i<200&&kill(-group,0)==0;i++){struct timespec pause={0,10000000};nanosleep(&pause,0);}assert(kill(-group,0)<0&&errno==ESRCH);
+ rearm_reply(REARM_OK,0);assert(!home_requested&&!activations);
+ /* Repeated Home neither overlaps attempts nor extends the fixed deadline; the
+  * resume waits for a re-arm without the viewer, then finishes over the web Hub. */
+ hub_launcher=launcher_ok;pid_t attempt=fallback_begin();double until=fallback.until;
+ home_grabbed=1;home_pressed=-1;home_key_down();home_key_up();assert(!home_requested);
+ home_until=now_seconds()+3;home_reply(TV_VIEWER,1);assert(fallback.child==attempt&&fallback.until==until);
+ home_until=now_seconds()+3;home_reply(HUB_WEB,1);assert(!activations&&fallback.state==FALLBACK_LAUNCHING);home_grabbed=0;
+ fallback_settle();assert(fallback.state==FALLBACK_REARMING&&fallback.until==until);
+ rearm_reply(REARM_NEEDED,1);assert(fallback.state==FALLBACK_REARMING&&!home_requested);
+ rearm_reply(REARM_OK,0);assert(fallback.state==FALLBACK_RESUMING&&home_requested&&fallback.until==until);
+ home_reply(HUB_WEB,1);assert(activations==1&&fallback.state==FALLBACK_IDLE);
+ /* A newly selected app, or the viewer again, cancels the resume without a second attempt. */
+ activations=0;fallback_begin();fallback_settle();rearm_reply(REARM_OK,0);home_reply("test.video",1);assert(!activations&&fallback.state==FALLBACK_IDLE);
+ fallback_begin();fallback_settle();rearm_reply(REARM_OK,0);home_reply(TV_VIEWER,1);assert(!activations&&fallback.state==FALLBACK_IDLE&&fallback.child<0);
+ /* Worker restart: re-arming survives it; a lost resume request is cancelled and its late reply ignored. */
+ fallback_begin();fallback_settle();platform_close();assert(fallback.state==FALLBACK_REARMING);
+ rearm_reply(REARM_OK,0);assert(fallback.state==FALLBACK_RESUMING);platform_close();assert(fallback.state==FALLBACK_IDLE&&!home_requested);
+ home_reply(HUB_WEB,1);assert(!activations&&fallback.state==FALLBACK_IDLE&&fallback.child<0);
+ /* Expiry while re-arming or resuming is final, including for an in-flight resume reply. */
+ fallback_begin();fallback_settle();fallback_poll(fallback.until);assert(fallback.state==FALLBACK_IDLE);rearm_reply(REARM_OK,0);assert(!home_requested);
+ fallback_begin();fallback_settle();rearm_reply(REARM_OK,0);fallback_poll(fallback.until);assert(fallback.state==FALLBACK_IDLE&&!home_requested);
+ home_reply(HUB_WEB,1);assert(!activations&&fallback.state==FALLBACK_IDLE);
+ for(int i=0;i<3;i++)unlink(paths[i]);rmdir(tools);hub_launcher=HUB_LAUNCHER;rearm_enabled=0;home_display=ng_display;
+ puts("native Home fallback: failure, timeout, repeated Home, worker restart, expiry and foreground change passed");
  /* Worst visible case: twelve branded cards. Repeated navigation must not
   * allocate new card objects, grow the scene, or cross its fixed capacity. */
  hub_init(&hub);hub.saved.compact=1;hub.saved.count=12;
@@ -154,7 +201,7 @@ int main(int argc,char **argv){
  assert(pb.n==44&&pb.r==1&&pb.s==42&&pb.d==1&&pb.sys_nr[0]==168&&pb.sys_n[0]==2&&pb.sys_nr[1]==54&&pb.wchan_n[0]==2&&!strcmp(pb.wchan[1],"kbase_ioctl"));
  FILE *pf=tmpfile();assert(pf);prof_print_bucket(pf,"phase",&pb);rewind(pf);char pline[512];assert(fgets(pline,sizeof(pline),pf));fclose(pf);
  assert(!strncmp(pline,"samp phase n=44 R=1 D=1 S=42 other=0 sys168=2 sys54=1",52)&&strstr(pline," w:poll_schedule_timeout=2 w:kbase_ioctl=1"));
- /* Saved-source re-arm: only when Hub owns ISP and the user is on Hub; never over the viewer or another app. */
+ /* Saved-source re-arm: only when Hub owns ISP; deliberately regardless of the foreground app, including the viewer. */
  assert(rearm_decision("MiniHub001.Hub","vc-service","")==REARM_NEEDED&&rearm_decision("MiniHub001.Hub","vc-service","MiniHub001.Hub")==REARM_NEEDED);
  assert(rearm_decision("MiniHub001.Hub","vc-service","org.tizen.tv-viewer")==REARM_NEEDED&&rearm_decision("MiniHub001.Hub","tv-service","9Ur5IzDKqV.TizenYouTube")==REARM_NEEDED);
  assert(rearm_decision("MiniHub001.Hub","isp-service","org.tizen.tv-viewer")==REARM_OK&&rearm_decision("","vc-service","")==REARM_NOT_ISP&&rearm_decision("Other.App","vc-service","")==REARM_NOT_ISP);
