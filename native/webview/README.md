@@ -182,6 +182,29 @@ Hub, and a second launch followed by owner app termination restored native focus
 with `native-return-focused`. The active watcher and every installed payload
 were checked before acceptance completed the setup journal.
 
+The deferred-presentation build passed another full background software boot.
+The logged milestones were:
+
+| Milestone | Seconds after boot (approximate) |
+| --- | ---: |
+| Admission | 9.21 |
+| EWK initialization begins (window hidden) | 10.52 |
+| Page load finishes (window hidden) | 16.09 |
+| EWK frame after load | 16.17 |
+| Window show request, after source/foreground recheck | 16.31 |
+| First visible canvas render | 16.35 |
+| Home grab ready | 16.44 |
+
+There was one child startup. The native loading screen was never mapped; the
+rendered Hub capture matched the prior ready-state capture byte for byte.
+Injected launch, Home and return after app exit passed before journal acceptance.
+An earlier warm trial confirmed EWK rendering with an unmapped window above the
+signed Hub. A separate startup screenshot sampler failed and supplied no frame
+sequence; logs and the final capture do **not** certify every physical panel
+frame or the full normal-mode transition. No person watched this profiled boot.
+An initial attempt was declined because the saved source was Live TV after the
+warm trial; restoring the configured Hub source preceded the successful cycle.
+
 Standby/resume and the WebView Live-TV detour remain unverified. The owner's
 "power cycle" was not independently classified as mains removal versus a remote
 restart. Pure-native Home/source behavior has separate evidence in its README.

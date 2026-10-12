@@ -51,7 +51,7 @@ supported installation. Both native options are experimental and QN90A-only.
 | Rendering | Samsung's web-app runtime | C/Ecore/Evas, no web engine | Existing web UI in an EFL/EWK host |
 | TVs | S90D and QN90A | QN90A firmware 2301.1 | QN90A firmware 2301.1 |
 | Install | Signed app via `./tv-setup` | Private journaled boot hook + root agent | Private journaled boot hook + root agent |
-| QN90A reboot milestone | ~37–47 s to observed foreground | ~9–10 s to native frame | ~10.3 s to loading frame; ~17.4 s to page load |
+| QN90A reboot milestone | ~37–47 s to observed foreground | ~9–10 s to native frame | ~16.3 s to first visible, rendered Hub (deferred presentation) |
 | Preferences | Signed app storage | Separate native file | WebView storage; one-time native import |
 | Features | Full platform integration | Core launcher UI | Shared web UI; native discovery/launch bridge, partial platform integration |
 | Maturity | Supported source release | Experimental | Experimental |
