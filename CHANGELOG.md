@@ -15,6 +15,15 @@
   the saved boot source at once, so native re-arms `isp-service` every 15 s.
   Home from Live TV now routes through the web Hub, which stops the viewer, before
   raising native.
+- Refresh the native Hub visuals (designed in two parallel passes, see
+  `native-hub/DESIGN.md`):
+  - Layout: one margin system, a quiet header clock, a balanced grid and a single
+    footer control bar with quiet key hints.
+  - List pages: consistent rows, previews and badges.
+  - Tiles: dark brand-tinted, with a soft bottom brand glow and one Bold wordmark rule.
+  - Focus: a bright ring with a dark gap, a halo, and brightened brand light.
+  - The validator checks contrast against the composited tile, at rest and focused.
+  - QN90A capture verified; first render 9.26 s, unchanged.
 - Generate native tile art from validated per-app specs (`native-hub/cards/`), with
   contrast, clean wordmark-area and in-card checks; 12 cards use 71 scene objects
   instead of 386. Add an opt-in startup profiler (`COUCHROOT_NATIVE_PROFILE=1`).

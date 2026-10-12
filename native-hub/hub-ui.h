@@ -1,13 +1,24 @@
 /* Native offline UI. Bounded scene, no animations, one moving focus ring. */
 #include "hub-model.h"
 #include <math.h>
+/* Design tokens (1920x1080, read from ~3 m). One margin, one header line, one footer row.
+ * Colours are opaque warm neutrals over the #111212 window; text pairs are >= 4.5:1. */
+enum{MX=120,MR=1800,HEAD_Y=64,FOOT_Y=956,FOOT_H=60,BODY_Y=168,
+ GRID_GAP=40,GRID_GAP_C=32,ROW_H=80,ROW_STRIDE=92,ROW_W=920,PANEL_X=1104,
+ R_PANEL=24,R_CTRL=14,R_CHIP=8,R_TILE=21,
+ T_TITLE=44,T_HEAD=32,T_BODY=28,T_CTRL=26,T_DETAIL=24,T_HINT=22};
+#define C_PANEL 24,26,25
+#define C_ROW 30,32,31
+#define C_WELL 35,38,36
+#define C_CHIP 38,40,39
+#define C_BADGE 50,53,50
 static Hub hub;
 static Obj *scene[512], *canvas, *ring; static int scene_count;
 static int preview_start, home_return_focus, home_return_action=-1;
 static void hints(void);
-static int bx[140],by[140],bw[140],bh[140], buttons;
+static int bx[140],by[140],bw[140],bh[140],br[140], buttons;
 static char state_path[1024], catalog_path[1024];
-static Obj *clock_label; static int clock_minute=-1;
+static Obj *clock_label; static int clock_minute=-1, title_right;
 static int preferences_invalid, catalog_loaded, launch_feedback_dismissed;
 static HubPage launch_page;
 static double selection_due;static int pending_launch;static char launch_id[257];
@@ -23,18 +34,40 @@ static Obj *round_box(int x,int y,int w,int h,int radius,int r,int g,int b){
  }
  evas_object_color_set(o,r,g,b,255);evas_object_show(o);return o;
 }
+/* Ink: 0 primary, 1 secondary, 2 quiet (hints, clock), 3 accent. */
+static void ink(Obj *o,int tone){
+ static const unsigned char c[4][3]={{240,239,229},{172,174,163},{146,148,139},{228,196,132}};
+ evas_object_color_set(o,c[tone&3][0],c[tone&3][1],c[tone&3][2],255);
+}
 static Obj *label(int x,int y,int size,const char *s,int maxw,int muted){
  Obj *o=remember(evas_object_text_add(canvas));evas_object_text_font_set(o,"Sans",size);evas_object_text_text_set(o,s);
  int w,h;evas_object_geometry_get(o,0,0,&w,&h);while(w>maxw&&size>18){size--;evas_object_text_font_set(o,"Sans",size);evas_object_geometry_get(o,0,0,&w,&h);}
  if(w>maxw){char clipped[512];snprintf(clipped,sizeof(clipped),"%s",s);size_t n=strlen(clipped);while(w>maxw&&n){n--;while(n&&((unsigned char)clipped[n]&0xc0)==0x80)n--;clipped[n]=0;char shown[516];snprintf(shown,sizeof(shown),"%s…",clipped);evas_object_text_text_set(o,shown);evas_object_geometry_get(o,0,0,&w,&h);}}
- evas_object_move(o,x,y);evas_object_color_set(o,muted?168:240,muted?170:239,muted?158:229,255);evas_object_show(o);return o;
+ evas_object_move(o,x,y);ink(o,muted);evas_object_show(o);return o;
 }
-static void centered(int x,int y,int w,int h,int size,const char *s){
- Obj *o=label(0,0,size,s,w-(w<150?10:34),0);int tw,th;evas_object_geometry_get(o,0,0,&tw,&th);evas_object_move(o,x+(w-tw)/2,y+(h-th)/2);
+static int text_w(Obj *o){int w,h;evas_object_geometry_get(o,0,0,&w,&h);return w;}
+static int text_h(Obj *o){int w,h;evas_object_geometry_get(o,0,0,&w,&h);return h;}
+/* Width of a string before anything is drawn, so plates can be created beneath their text. */
+static int measure(int size,const char *s){Obj *o=evas_object_text_add(canvas);evas_object_text_font_set(o,"Sans",size);evas_object_text_text_set(o,s);int w=text_w(o);evas_object_del(o);return w;}
+static Obj *right_label(int right,int y,int size,const char *s,int maxw,int tone){Obj *o=label(0,y,size,s,maxw,tone);evas_object_move(o,right-text_w(o),y);return o;}
+static Obj *centered_tone(int x,int y,int w,int h,int size,const char *s,int tone){
+ Obj *o=label(0,0,size,s,w-(w<150?10:34),tone);int tw,th;evas_object_geometry_get(o,0,0,&tw,&th);evas_object_move(o,x+(w-tw)/2,y+(h-th)/2);return o;
 }
-static void button(int index,int x,int y,int w,int h,const char *s){
- bx[index]=x;by[index]=y;bw[index]=w;bh[index]=h;if(index>=buttons)buttons=index+1;
- round_box(x,y,w,h,h<70?h/2:16,31,33,29);if(w>=800)label(x+28,y+20,29,s,w-56,0);else centered(x,y,w,h,24,s);
+static void centered(int x,int y,int w,int h,int size,const char *s){centered_tone(x,y,w,h,size,s,0);}
+static void target(int index,int x,int y,int w,int h,int radius){bx[index]=x;by[index]=y;bw[index]=w;bh[index]=h;br[index]=radius;if(index>=buttons)buttons=index+1;}
+/* List row: name on the left, optional value right-aligned in the secondary ink. */
+static void row(int index,int x,int y,const char *s,const char *value,int value_tone){
+ target(index,x,y,ROW_W,ROW_H,R_CTRL);round_box(x,y,ROW_W,ROW_H,R_CTRL,C_ROW);
+ int vw=value&&value[0]?measure(T_BODY,value):0;
+ Obj *o=label(x+32,y,T_BODY,s,ROW_W-64-(vw?vw+40:0),0);evas_object_move(o,x+32,y+(ROW_H-text_h(o))/2);
+ if(vw){Obj *v=right_label(x+ROW_W-32,y,T_BODY,value,300,value_tone);evas_object_move(v,x+ROW_W-32-text_w(v),y+(ROW_H-text_h(v))/2);}
+}
+/* Footer actions: one plate, equal-width segments; the focus ring frames a segment. */
+static int segments(int base,int n,const char *const *names,int accent_last){
+ enum{SEG=240};int x=MX;
+ round_box(x,FOOT_Y,SEG*n,FOOT_H,R_CTRL,C_ROW);
+ for(int i=0;i<n;i++){target(base+i,x+SEG*i,FOOT_Y,SEG,FOOT_H,R_CTRL);centered_tone(x+SEG*i,FOOT_Y,SEG,FOOT_H,T_CTRL,names[i],accent_last&&i==n-1?3:0);}
+ return x+SEG*n;
 }
 static void contour(Obj *o,int x,int y,int w,int h,int radius,int reverse){
  for(int n=0;n<=28;n++){int j=reverse?28-n:n,corner=(j%28)/7,step=(j%28)%7;
@@ -43,86 +76,116 @@ static void contour(Obj *o,int x,int y,int w,int h,int radius,int reverse){
   evas_object_polygon_point_add(o,x+cx+(int)(radius*cos(a)),y+cy+(int)(radius*sin(a)));
  }
 }
-static void focus_ring(void){
- if(ring){evas_object_del(ring);ring=0;}int i=hub.focus;if(i<0||i>=buttons||!bw[i])return;
- ring=evas_object_polygon_add(canvas);int x=bx[i]-9,y=by[i]-9,w=bw[i]+18,h=bh[i]+18;
- contour(ring,x,y,w,h,30,0);contour(ring,x+4,y+4,w-8,h-8,26,1);
- evas_object_color_set(ring,240,229,205,255);evas_object_show(ring);
-}
-static void clock_update(void){if(!clock_label)return;time_t t=time(0);struct tm *tm=localtime(&t);if(!tm||clock_minute==tm->tm_min)return;clock_minute=tm->tm_min;char value[40];strftime(value,sizeof(value),hub.saved.clock==2?"%H:%M":"%I:%M %p",tm);evas_object_text_text_set(clock_label,value);}
 #include "hub-art.h"
+/* Focus: a bright ring with a dark gap around the target. Tiles also get a soft outer halo
+ * and their brand light brightens (card_lift). Only these focus objects move; cards are retained. */
+static Obj *ring_extra[2];
+static Obj *focus_band(int x,int y,int w,int h,int radius,int width,int r,int g,int b,int a){
+ Obj *o=evas_object_polygon_add(canvas);contour(o,x,y,w,h,radius,0);
+ if(width)contour(o,x+width,y+width,w-2*width,h-2*width,radius-width,1);
+ evas_object_color_set(o,r*a/255,g*a/255,b*a/255,a);evas_object_show(o);return o;
+}
+static void focus_ring(void){
+ if(ring){evas_object_del(ring);ring=0;}for(int k=0;k<2;k++)if(ring_extra[k]){evas_object_del(ring_extra[k]);ring_extra[k]=0;}
+ int i=hub.focus;if(i<0||i>=buttons||!bw[i])return;
+ const HubSaved *s=hub.page==MOVING?&hub.draft:&hub.saved;int tile=(hub.page==HOME||hub.page==MOVING)&&i<s->count;
+ int radius=tile?card_radius(bw[i]):br[i]?br[i]:bh[i]<70?bh[i]/2:16,gap=tile?6:5,width=tile?5:4,o=gap+width;
+ if(tile){ring_extra[0]=focus_band(bx[i]-o-8,by[i]-o-8,bw[i]+2*o+16,bh[i]+2*o+16,radius+o+8,8,255,255,255,20);
+  ring_extra[1]=card_lift(bx[i],by[i],bw[i],bh[i],s->apps[i].id);}
+ ring=focus_band(bx[i]-o,by[i]-o,bw[i]+2*o,bh[i]+2*o,radius+o,width,248,247,243,255);
+}
+static void clock_update(void){if(!clock_label)return;time_t t=time(0);struct tm *tm=localtime(&t);if(!tm||clock_minute==tm->tm_min)return;clock_minute=tm->tm_min;char value[40];strftime(value,sizeof(value),hub.saved.clock==2?"%H:%M":"%I:%M %p",tm);evas_object_text_text_set(clock_label,value);evas_object_move(clock_label,MR-text_w(clock_label),HEAD_Y);}
 static void preview_panel(void);
 static void redraw(void){
- if(ring){evas_object_del(ring);ring=0;}for(int i=0;i<scene_count;i++)evas_object_del(scene[i]);scene_count=0;clock_label=0;clock_minute=-1;buttons=0;memset(bw,0,sizeof(bw));
+ if(ring){evas_object_del(ring);ring=0;}for(int i=0;i<scene_count;i++)evas_object_del(scene[i]);scene_count=0;clock_label=0;clock_minute=-1;buttons=0;title_right=0;memset(bw,0,sizeof(bw));
  HubSaved *s=hub.page==MOVING?&hub.draft:&hub.saved;
  if(hub.page==HOME||hub.page==MOVING){
-  if(s->clock){clock_label=label(1630,65,26,"",220,1);clock_update();}
-  if(hub.page==MOVING){char moving[180];snprintf(moving,sizeof(moving),"Move %s",s->apps[hub.move_at].name);label(120,65,34,moving,1300,0);snprintf(moving,sizeof(moving),"Position %d of %d",hub.move_at+1,s->count);label(1500,70,26,moving,300,1);}
-  int cols=hub_columns(s),rows=s->compact?3:2,w=(1688-(cols-1)*38)/cols,h=w*9/16;
+  if(hub.page==MOVING){char moving[180];snprintf(moving,sizeof(moving),"Move %s",s->apps[hub.move_at].name);title_right=MX+text_w(label(MX,HEAD_Y-8,T_TITLE,moving,1100,0));
+   if(!hub.notice[0]){snprintf(moving,sizeof(moving),"Position %d of %d",hub.move_at+1,s->count);right_label(MR,HEAD_Y,T_DETAIL+4,moving,400,1);}}
+  else if(s->clock){clock_label=label(MR-160,HEAD_Y,30,"",220,2);clock_update();}
+  int cols=hub_columns(s),rows=s->compact?3:2,gap=s->compact?GRID_GAP_C:GRID_GAP,w=(MR-MX-(cols-1)*gap)/cols,h=w*9/16;
   if(cols==1) {w=820;h=w*9/16;}
-  int row=hub.focus<s->count?hub.focus/cols:(hub.home_focus<s->count?hub.home_focus:0)/cols,top=row>=rows?row-rows+1:0;
+  int row_at=hub.focus<s->count?hub.focus/cols:(hub.home_focus<s->count?hub.home_focus:0)/cols,top=row_at>=rows?row_at-rows+1:0;
   int visible=(s->count+cols-1)/cols;if(visible>rows)visible=rows;
-  int y0=140+(720-(visible*h+(visible-1)*30))/2;if(y0<125)y0=125;
+  /* Optical centre (45/55) between the top margin and the footer; never above 132 (header line). */
+  int gh=visible*h+(visible-1)*gap,y0=HEAD_Y+(FOOT_Y-32-HEAD_Y-gh)*9/20;if(y0<132)y0=132;
   for(int i=top*cols;i<s->count&&i<(top+rows)*cols;i++){
-   int x=(cols==1?(1920-w)/2:116)+(i%cols)*(w+38),y=y0+(i/cols-top)*(h+30);
-   bx[i]=x;by[i]=y;bw[i]=w;bh[i]=h;buttons=i+1;
+   int x=(cols==1?(1920-w)/2:MX+(MR-MX-(cols*w+(cols-1)*gap))/2)+(i%cols)*(w+gap),y=y0+(i/cols-top)*(h+gap);
+   target(i,x,y,w,h,R_TILE);
    card_art(x,y,w,h,s->apps[i].id);
    wordmark(x,y,w,h,cols<3?76:cols==3?52:36,s->apps[i].name,s->apps[i].id);
   }
-  if(!s->count){button(0,640,320,640,260,"+ Add apps");label(750,630,28,"Nothing on Home yet",600,1);}
+  if(!s->count){int ew=640,eh=360,ex=(1920-ew)/2,ey=HEAD_Y+(FOOT_Y-32-HEAD_Y-eh-64)/2;target(0,ex,ey,ew,eh,R_TILE);round_box(ex,ey,ew,eh,R_TILE,C_ROW);
+   round_box(ex+ew/2-56,ey+92,112,112,56,C_BADGE);centered(ex+ew/2-56,ey+92,112,112,72,"+");centered(ex,ey+226,ew,48,T_HEAD,"Add apps");
+   Obj *c=label(0,ey+eh+28,T_BODY,"Nothing on Home yet",ew,1);evas_object_move(c,(1920-text_w(c))/2,ey+eh+28);}
   int base=s->count?s->count:1;
-  if(hub.page==MOVING){button(base,116,940,230,65,"Cancel");button(base+1,374,940,280,65,"Save position");}
-  else {button(base,120,973,156,58,"Edit apps");button(base+1,298,973,256,58,"Samsung Home");button(base+2,576,973,160,58,"Settings");button(base+3,758,973,166,58,"Web Hub");if(hub.undo_at>=0)button(base+4,946,973,202,58,"Undo remove");}
-  if(top>0)label(1840,180,32,"↑",60,1);if((top+rows)*cols<s->count)label(1840,780,32,"↓",60,1);
+  if(hub.page==MOVING){static const char *const names[]={"Cancel","Save position"};segments(base,2,names,0);}
+  else {static const char *const names[]={"Edit apps","Samsung Home","Settings","Web Hub","Undo remove"};segments(base,hub.undo_at>=0?5:4,names,hub.undo_at>=0);}
+  if(top>0)centered_tone(MR,y0,120,h,32,"↑",1);if((top+rows)*cols<s->count)centered_tone(MR,y0+(rows-1)*(h+gap),120,h,32,"↓",1);
  }else{
   const char *titles[]={"","Edit apps","Add apps","App actions","","Settings","Reset shortcuts?","Could not open app"};
-  label(116,95,48,titles[hub.page],1660,0);
-  char rows[132][160];int count=0;
-  if(hub.page==EDIT){strcpy(rows[count++],"Add apps");for(int i=0;i<s->count;i++)snprintf(rows[count++],160,"%s",s->apps[i].name);}
-  if(hub.page==PICK){for(int i=0;i<hub.catalog_count;i++)snprintf(rows[count++],160,"%s%s",hub_has(s,hub.catalog[i].id)?"Added · ":"+ ",hub.catalog[i].name);}
+  title_right=MX+text_w(label(MX,HEAD_Y-8,T_TITLE,titles[hub.page],1100,0));
+  char rows[132][160],values[132][24];int count=0;memset(values,0,sizeof(values));
+  if(hub.page==EDIT){strcpy(values[count],"+");strcpy(rows[count++],"Add apps");for(int i=0;i<s->count;i++)snprintf(rows[count++],160,"%s",s->apps[i].name);}
+  if(hub.page==PICK){for(int i=0;i<hub.catalog_count;i++){strcpy(values[count],hub_has(s,hub.catalog[i].id)?"Added":"+");snprintf(rows[count++],160,"%s",hub.catalog[i].name);}}
   if(hub.page==ACTIONS){strcpy(rows[count++],"Move");strcpy(rows[count++],"Remove from Home");strcpy(rows[count++],"Cancel");}
-  if(hub.page==SETTINGS){snprintf(rows[count++],160,"Tile layout · %s",s->compact?"Compact":"Comfortable");snprintf(rows[count++],160,"Clock · %s",s->clock==2?"24 hour":s->clock==1?"12 hour":"Off");snprintf(rows[count++],160,"Start on · %s",s->first?"First favorite":"Last selected");strcpy(rows[count++],"Reset shortcuts");strcpy(rows[count++],"Advanced settings in Web Hub");}
+  if(hub.page==SETTINGS){strcpy(values[count],s->compact?"Compact":"Comfortable");strcpy(rows[count++],"Tile layout");strcpy(values[count],s->clock==2?"24 hour":s->clock==1?"12 hour":"Off");strcpy(rows[count++],"Clock");strcpy(values[count],s->first?"First favorite":"Last selected");strcpy(rows[count++],"Start on");strcpy(rows[count++],"Reset shortcuts");strcpy(rows[count++],"Advanced settings in Web Hub");}
   if(hub.page==RESET){strcpy(rows[count++],"Keep my shortcuts");strcpy(rows[count++],"Reset to Plex and YouTube");}
   if(hub.page==ERROR_PAGE){strcpy(rows[count++],"Back to apps");strcpy(rows[count++],"Retry");strcpy(rows[count++],"Samsung Home");}
-  int top=hub.focus>=7?hub.focus-6:0;for(int i=top;i<count&&i<top+7;i++)button(i,116,215+(i-top)*94,900,76,rows[i]);
+  int top=hub.focus>=7?hub.focus-6:0;for(int i=top;i<count&&i<top+7;i++)row(i,MX,BODY_Y+(i-top)*ROW_STRIDE,rows[i],values[i],strcmp(values[i],"+")?1:3);
   buttons=count;
-  if(top)label(1040,240,30,"↑",60,1);if(top+7<count)label(1040,795,30,"↓",60,1);
+  if(top)centered_tone(MX+ROW_W,BODY_Y,PANEL_X-MX-ROW_W,ROW_H,30,"↑",1);if(top+7<count)centered_tone(MX+ROW_W,BODY_Y+6*ROW_STRIDE,PANEL_X-MX-ROW_W,ROW_H,30,"↓",1);
   preview_start=scene_count;
   preview_panel();
  }
  hints();focus_ring();
 }
+/* Key hints, right-aligned on the footer row: quiet keycap chips and secondary labels.
+ * A notice takes the free side of the header line (left on Home, right elsewhere). */
 static void hints(void){
- if(hub.notice[0])label(120,905,24,hub.notice,1680,1);
- else {
-  round_box(1210,982,142,40,10,31,33,29);centered(1210,982,142,40,22,"↑ ↓ ← →");
-  label(1368,987,23,hub.page==MOVING?"Move":"Choose",135,1);
-  round_box(1495,982,55,40,10,31,33,29);centered(1495,982,55,40,20,"OK");
-  label(1565,987,23,hub.page==HOME?"Open":"Select",100,1);
-  if(hub.page!=HOME){round_box(1670,982,80,40,10,31,33,29);centered(1670,982,80,40,20,"Back");label(1762,987,22,"Return",100,1);}
+ const char *keys[3]={"↑ ↓ ← →","OK","Back"},*says[3]={hub.page==MOVING?"Move":"Choose",hub.page==HOME?"Open":"Select","Return"};
+ int n=hub.page==HOME?2:3,right=MR,ch=40,cy=FOOT_Y+(FOOT_H-ch)/2;
+ for(int k=n-1;k>=0;k--){
+  int lw=measure(T_DETAIL,says[k]),kw=measure(T_HINT,keys[k])+28;if(kw<56)kw=56;
+  int lx=right-lw,kx=lx-12-kw;round_box(kx,cy,kw,ch,R_CHIP,C_CHIP);centered_tone(kx,cy,kw,ch,T_HINT,keys[k],0);
+  Obj *l=label(lx,0,T_DETAIL,says[k],lw+4,1);evas_object_move(l,lx,cy+(ch-text_h(l))/2);right=kx-32;
  }
+ if(hub.notice[0]){
+  int left=hub.page==HOME?MX:title_right+64,maxw=(hub.page==HOME&&clock_label?MR-220:MR)-left-28;
+  int tw=measure(T_DETAIL,hub.notice);if(tw>maxw)tw=maxw;int x=hub.page==HOME?MX:MR-tw-28;
+  round_box(x,HEAD_Y+11,12,12,6,228,196,132);label(x+28,HEAD_Y+2,T_DETAIL,hub.notice,maxw,0);
+ }
+}
+static void glyph_badge(int x,int y,int w,int h,const char *g,int alert){
+ int d=128;round_box(x+(w-d)/2,y+(h-d)/2,d,d,30,alert?212:50,alert?152:53,alert?102:50);
+ Obj *o=centered_tone(x+(w-d)/2,y+(h-d)/2,d,d,72,g,0);if(alert)evas_object_color_set(o,17,18,18,255);
 }
 static void preview_panel(void){
  const HubApp *app=0;
  if(hub.page==EDIT&&hub.focus>0&&hub.focus<=hub.saved.count)app=&hub.saved.apps[hub.focus-1];
  if(hub.page==PICK&&hub.focus<hub.catalog_count)app=&hub.catalog[hub.focus];
  if(hub.page==ACTIONS)app=&hub.saved.apps[hub.target];
- round_box(1110,215,690,590,22,25,28,24);
- if(app){card_art(1140,245,630,354,app->id);wordmark(1140,245,630,354,58,app->name,app->id);label(1140,646,30,app->name,620,0);label(1140,700,24,hub.page==PICK?(hub_has(&hub.saved,app->id)?"Already on Home":"OK adds this app to Home"):"Move it or remove its shortcut",620,1);return;}
+ int px=PANEL_X,pw=MR-PANEL_X,wx=px+32,wy=BODY_Y+32,ww=pw-64,wh=ww*9/16,ty=wy+wh+36;
+ int lines=!app&&(hub.page==RESET||hub.page==ERROR_PAGE)?(hub.page==RESET?4:3):2;
+ round_box(px,BODY_Y,pw,ty+50+(lines-2)*38+29+40-BODY_Y,R_PANEL,C_PANEL);
+ if(app){card_art(wx,wy,ww,wh,app->id);wordmark(wx,wy,ww,wh,58,app->name,app->id);label(wx,ty,T_HEAD,app->name,ww,0);label(wx,ty+50,T_DETAIL,hub.page==PICK?(hub_has(&hub.saved,app->id)?"Already on Home":"OK adds this app to Home"):"Move it or remove its shortcut",ww,1);return;}
+ round_box(wx,wy,ww,wh,R_TILE-3,C_WELL);
  const char *title="Your apps, your order",*detail="Choose an app to preview it.";
  if(hub.page==RESET){title="Reset your Home shortcuts?";detail="Your other settings stay as they are.";}
  if(hub.page==ERROR_PAGE){title="The TV did not open this app";detail="Your shortcuts and settings are unchanged.";}
  if(hub.page==PICK){title="Add your favorites";detail=catalog_loaded?"Choose an app to add to your Home screen.":"Only default apps are available in this preview.";}
  if(hub.page==EDIT){title="Make room for your favorites";detail="Add apps without changing installed applications.";}
  if(hub.page==SETTINGS){const char *titles[]={"Space to settle in","A quiet clock","Pick up where you left off","Start fresh","More settings"};const char *details[]={"Comfortable: six tiles. Compact: twelve.","Show the time on your Home screen.","Remember your selection or start at the first app.","Reset shortcuts. Keep your other settings.","Open the installed web Hub for advanced settings."};title=titles[hub.focus];detail=details[hub.focus];
-  if(hub.focus==0){int cols=hub.saved.compact?4:3,rows=hub.saved.compact?3:2;for(int i=0;i<cols*rows;i++)round_box(1170+(i%cols)*(550/cols),265+(i/cols)*95,500/cols,78,10,52,49,38);}
-  else if(hub.focus==1)centered(1140,270,630,250,70,hub.saved.clock==2?"21:41":hub.saved.clock==1?"9:41 PM":"Clock off");
-  else if(hub.focus==2)centered(1140,270,630,250,48,hub.saved.first?"First favorite":"Last selected");
-  else centered(1140,270,630,250,64,hub.focus==3?"↺":"Web Hub");
- }else {centered(1140,285,630,200,70,hub.page==ERROR_PAGE?"!":hub.page==RESET?"↺":"+");}
- label(1140,605,32,title,620,0);label(1140,665,24,detail,620,1);
- if(hub.page==RESET){label(1140,718,24,"Plex and YouTube will replace your shortcuts.",620,1);label(1140,755,24,"No apps will be uninstalled.",620,1);}
- if(hub.page==ERROR_PAGE){label(1140,718,24,"Retry, or return to your apps with Back.",620,1);}
+  if(hub.focus==0){int cols=hub.saved.compact?4:3,rows=hub.saved.compact?3:2,g=14,mw=(ww-80-(cols-1)*g)/cols,mh=mw*9/16,gx=wx+(ww-(cols*mw+(cols-1)*g))/2,gy=wy+(wh-(rows*mh+(rows-1)*g))/2;
+   for(int i=0;i<cols*rows;i++)round_box(gx+(i%cols)*(mw+g),gy+(i/cols)*(mh+g),mw,mh,8,C_BADGE);}
+  else if(hub.focus==1)centered(wx,wy,ww,wh,72,hub.saved.clock==2?"21:41":hub.saved.clock==1?"9:41 PM":"Clock off");
+  else if(hub.focus==2)centered(wx,wy,ww,wh,48,hub.saved.first?"First favorite":"Last selected");
+  else if(hub.focus==3)glyph_badge(wx,wy,ww,wh,"↺",0);
+  else centered(wx,wy,ww,wh,56,"Web Hub");
+ }else glyph_badge(wx,wy,ww,wh,hub.page==ERROR_PAGE?"!":hub.page==RESET?"↺":"+",hub.page==ERROR_PAGE);
+ label(wx,ty,T_HEAD,title,ww,0);label(wx,ty+50,T_DETAIL,detail,ww,1);
+ if(hub.page==RESET){label(wx,ty+88,T_DETAIL,"Plex and YouTube will replace your shortcuts.",ww,1);label(wx,ty+126,T_DETAIL,"No apps will be uninstalled.",ww,1);}
+ if(hub.page==ERROR_PAGE){label(wx,ty+88,T_DETAIL,"Retry, or return to your apps with Back.",ww,1);}
 }
 static void go(HubPage page,int focus){if(hub.page==HOME&&page!=HOME){home_return_focus=hub.focus;int base=hub.saved.count?hub.saved.count:1;home_return_action=hub.focus>=base?hub.focus-base:-1;}hub.page=page;hub.focus=focus;hub.notice[0]=0;redraw();}
 static int commit(HubSaved *next){

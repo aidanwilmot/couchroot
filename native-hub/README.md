@@ -518,12 +518,15 @@ sampled `R` time minus thread CPU.
 
 Card artwork is generated from validated per-app specs in `cards/*.json` by
 `cards/cards.py`. It emits `hub-cards.h`, matched by exact app ID, with a designed fallback
-for unknown apps. Each card has one rounded base, at most four flat polygons and a
-typeset wordmark. The wordmark can have an accent tail (for example Plex's `x`) or a play
-badge. The validator enforces 4.5:1 ink/base contrast and 3:1 contrast for shapes that
-cross the text band. It also checks that every point stays inside the rounded card at the
-3-column, 4-column and single-card sizes. Designs evoke each brand with colour and
-abstract geometry; they do not reproduce logos.
+for unknown apps. Every card shares one anatomy: a deep brand-tinted rounded base (corner
+radius proportional to width), two or three translucent glow layers rising from the bottom
+edge in the brand accent, and a centred Bold wordmark on one type scale with an optional accent
+tail (for example Plex's `x`) or a small play triangle. A card is at most six objects. On focus
+the ring adds a soft halo and repeats the outer glow layer in the accent, so the tile's light
+brightens without rebuilding the card. The validator composites the glow over the base and
+enforces 4.5:1 wordmark and tail contrast (3:1 for the glyph) at rest and focused, the object
+budget, and that every polygon point stays inside the rounded card at every card size. Designs
+evoke each brand with colour and typography; they do not reproduce logos.
 
 ```sh
 python3 research/native-hub/cards/cards.py validate research/native-hub/cards/*.json

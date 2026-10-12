@@ -1,77 +1,20 @@
 [
- {"id":"GHI3a0zMSx.XboxGamePass","name":"Xbox","word":"Xbox","weight":"bold","base":"#0e1a12","ink":"#eef7ec",
-  "shapes":[
-   {"points":[[0.60,0.0],[0.66,0.0],[0.50,0.26],[0.44,0.26]],"color":"#21573a"},
-   {"points":[[0.70,0.0],[0.76,0.0],[0.60,0.26],[0.54,0.26]],"color":"#2a6b44"},
-   {"points":[[0.80,0.0],[0.86,0.0],[0.70,0.26],[0.64,0.26]],"color":"#348350"},
-   {"points":[[0.06,0.80],[0.30,0.92],[0.06,0.92]],"color":"#1b4a2e"}
-  ],
-  "notes":"Deep forest carbon with three rising slashes top-right and a single wedge bottom-left. Green is darker and cooler than the mint of Hulu/Spotify; motif is slashes, not a logo."},
-
- {"id":"niYSnzL6h1.Viaplay","name":"Viaplay","word":"Viaplay","weight":"bold","base":"#241421","ink":"#fbeef5",
-  "shapes":[
-   {"points":[[0.76,1.0],[0.8302,0.698],[1.0,0.573],[1.0,0.716],[0.8869,0.799],[0.84,1.0]],"color":"#5e2650"},
-   {"points":[[0.10,0.0],[0.30,0.0],[0.04,0.14]],"color":"#4a1d3d"}
-  ],
-  "notes":"Plum-rose base with a quarter-ring sweeping out of the bottom-right corner and a shadow wedge at top-left. Ring stays clear of the centre wordmark."},
-
- {"id":"org.tizen.browser","name":"Internet","word":"Internet","weight":"regular","base":"#141a24","ink":"#e9eef7",
-  "shapes":[
-   {"points":[[0.52,0.0],[0.58,0.0],[1.0,0.22],[1.0,0.27]],"color":"#26354f"},
-   {"points":[[0.895,0.166],[0.8847,0.1222],[0.86,0.104],[0.8353,0.1222],[0.825,0.166],[0.8353,0.2098],[0.86,0.228],[0.8847,0.2098]],"color":"#7d97bd"},
-   {"points":[[0.06,0.80],[0.30,1.0],[0.06,1.0]],"color":"#1f2b3d"}
-  ],
-  "notes":"Slate base with an orbit line crossing the top-right and a small planet sitting on it, plus a quiet bottom-left wedge. Reads as a browser through orbit geometry, not a globe logo."},
-
- {"id":"9TYrsHWbaB.klyq","name":"klyq","word":"klyq","weight":"bold","base":"#1d1c1a","ink":"#f1ece2",
-  "shapes":[
-   {"points":[[0.60,0.88],[0.72,0.88],[0.72,1.0],[0.60,1.0]],"color":"#3f3a31"},
-   {"points":[[0.72,0.74],[0.84,0.74],[0.84,1.0],[0.72,1.0]],"color":"#554e41"},
-   {"points":[[0.84,0.58],[0.94,0.58],[0.94,1.0],[0.84,1.0]],"color":"#6a6252"},
-   {"points":[[0.07,0.02],[0.22,0.02],[0.07,0.20]],"color":"#2c2a26"}
-  ],
-  "notes":"Warm graphite with three stone-coloured steps rising toward the right corner, a neutral that stays distinct through its stepped geometry. Does not use gold or orange."},
-
- {"id":"oKZtnuTBW8.emanual","name":"e-Manual","word":"e-Manual","weight":"regular","base":"#171b1e","ink":"#e4e9ec",
-  "shapes":[
-   {"points":[[0.80,0.0],[0.94,0.0],[0.94,0.22]],"color":"#26303a"},
-   {"points":[[0.06,0.80],[0.34,0.80],[0.34,0.83],[0.06,0.83]],"color":"#3a4650"},
-   {"points":[[0.06,0.86],[0.24,0.86],[0.24,0.89],[0.06,0.89]],"color":"#3a4650"},
-   {"points":[[0.06,0.92],[0.30,0.92],[0.30,0.95],[0.06,0.95]],"color":"#3a4650"}
-  ],
-  "notes":"Utility: cool neutral with a dog-eared page corner and three text-line bars along the bottom. Regular weight and low contrast so it reads as reference material, not entertainment."},
-
- {"id":"J9fZJDMi1v.SecurityCenter","name":"Security Center","word":"Security Center","weight":"regular","base":"#12171d","ink":"#e8edf2",
-  "shapes":[
-   {"points":[[0.84,0.07],[0.88,0.04],[0.92,0.07],[0.92,0.17],[0.88,0.27],[0.84,0.17]],"color":"#2b4352"},
-   {"points":[[0.86,0.09],[0.88,0.07],[0.90,0.09],[0.90,0.15],[0.88,0.22],[0.86,0.15]],"color":"#3d5b6b"},
-   {"points":[[0.06,0.84],[0.30,0.84],[0.30,0.87],[0.06,0.87]],"color":"#243240"},
-   {"points":[[0.06,0.84],[0.18,0.84],[0.18,0.87],[0.06,0.87]],"color":"#3d5b6b"}
-  ],
-  "notes":"Utility: steel-blue shield in the top-right corner and a progress-style bar bottom-left. Calm, status-like, kept out of the wordmark band."},
-
- {"id":"MiniRoot01.App","name":"Minimal TV Administration","word":"TV Admin","weight":"regular","base":"#1b1d20","ink":"#e6e6e3",
-  "shapes":[
-   {"points":[[0.90,0.10],[0.915,0.10],[0.915,0.90],[0.90,0.90]],"color":"#2a2e35"},
-   {"points":[[0.885,0.30],[0.93,0.30],[0.93,0.38],[0.885,0.38]],"color":"#5d6571"},
-   {"points":[[0.06,0.86],[0.46,0.86],[0.46,0.875],[0.06,0.875]],"color":"#2a2e35"},
-   {"points":[[0.30,0.84],[0.34,0.84],[0.34,0.895],[0.30,0.895]],"color":"#5d6571"}
-  ],
-  "notes":"Utility: neutral graphite with two slider rails and knobs (one vertical at right, one horizontal at bottom). Reads as settings and controls; quieter than the entertainment tiles."},
-
- {"id":"MiniSave01.Saver","name":"Asteroids Screensaver","word":"Asteroids","weight":"bold","base":"#0a0c14","ink":"#eceef5",
-  "shapes":[
-   {"points":[[0.92,0.16],[0.90,0.08],[0.84,0.07],[0.80,0.14],[0.81,0.24],[0.87,0.26],[0.93,0.23]],"color":"#232a44"},
-   {"points":[[0.20,0.80],[0.19,0.90],[0.12,0.93],[0.07,0.88],[0.08,0.79],[0.13,0.75]],"color":"#262d48"},
-   {"points":[[0.10,0.10],[0.14,0.06],[0.17,0.12],[0.13,0.18],[0.09,0.16]],"color":"#1e2440"},
-   {"points":[[0.66,0.96],[0.70,0.96],[0.90,0.84],[0.87,0.82]],"color":"#3b3150"}
-  ],
-  "notes":"Near-black indigo space with irregular asteroid polygons at three corners and one streak. Retro, playful, but kept dark so it does not compete with apps."},
-
- {"id":"*default*","name":"Any app","word":"App name","weight":"bold","base":"#1e2124","ink":"#e5e7ea",
-  "shapes":[
-   {"points":[[0.74,1.0],[0.94,1.0],[0.94,0.78]],"color":"#2b3036"},
-   {"points":[[0.06,0.02],[0.20,0.02],[0.06,0.20]],"color":"#2b3036"}
-  ],
-  "notes":"Neutral graphite fallback with two opposite corner wedges. Written so the wordmark can be any app name without clashing."}
+ {"id":"GHI3a0zMSx.XboxGamePass","name":"Xbox","word":"Xbox","accent":"#2fb12f","base":"#0b130c",
+  "notes":"Forest carbon with Xbox green light."},
+ {"id":"niYSnzL6h1.Viaplay","name":"Viaplay","word":"Viaplay","accent":"#ff2e7e","glow":["#6a1f8f","#b0236f","#ff4f8b"],"base":"#170e1c",
+  "notes":"Purple-to-pink light."},
+ {"id":"org.tizen.browser","name":"Internet","word":"Internet","accent":"#5b8ad6","base":"#10151f","strength":"soft",
+  "notes":"Utility: slate with soft blue light."},
+ {"id":"9TYrsHWbaB.klyq","name":"klyq","word":"klyq","accent":"#c2ad8a","base":"#171614","strength":"soft",
+  "notes":"Warm graphite with soft stone light."},
+ {"id":"oKZtnuTBW8.emanual","name":"e-Manual","word":"e-Manual","accent":"#7f98a8","base":"#13171a","strength":"soft",
+  "notes":"Utility: cool neutral."},
+ {"id":"J9fZJDMi1v.SecurityCenter","name":"Security Center","word":"Security Center","accent":"#3f9bc4","base":"#0f141a","strength":"soft",
+  "notes":"Utility: steel blue."},
+ {"id":"MiniRoot01.App","name":"Minimal TV Administration","word":"TV Admin","accent":"#9aa3b0","base":"#15171a","strength":"soft",
+  "notes":"Utility: neutral graphite."},
+ {"id":"MiniSave01.Saver","name":"Asteroids Screensaver","word":"Asteroids","accent":"#7a6cff","glow":["#2a2f7a","#5047c8","#a08cff"],"base":"#0a0b14","strength":"soft",
+  "notes":"Space indigo with a violet nebula glow."},
+ {"id":"*default*","name":"Any app","word":"App name","accent":"#8d96a0","base":"#1a1d20","strength":"soft",
+  "notes":"Neutral graphite fallback; the wordmark is the app's own name."}
 ]

@@ -9,30 +9,31 @@ static char mock_isp[64],mock_last[64],mock_fg[64];static int mock_sets,mock_set
 static char *mock_vget(const char *k){const char *v=!strcmp(k,"db/was/isp_app_id")?mock_isp:!strcmp(k,"db/boot/last_service")?mock_last:!strcmp(k,"memory/appfw/current_fullscreen_appid")?mock_fg:0;return v&&strcmp(v,"<null>")?strdup(v):0;}
 static int mock_vset(const char *k,const char *v){mock_sets++;if(mock_set_fail)return -1;if(!mock_set_ignored&&!strcmp(k,"db/boot/last_service"))snprintf(mock_last,sizeof(mock_last),"%s",v);return 0;}
 static void mock_source(const char *isp,const char *last,const char *fg){snprintf(mock_isp,64,"%s",isp);snprintf(mock_last,64,"%s",last);snprintf(mock_fg,64,"%s",fg);mock_sets=mock_set_fail=mock_set_ignored=0;}
-typedef struct {int live,visible,x,y,w,h,r,g,b,size,n,bold;int points[160][2];char value[512];} Mock;
-static Mock objects[1024];static int quits;
-static Obj *mock_add(Obj *unused){(void)unused;for(int i=0;i<1024;i++)if(!objects[i].live){memset(&objects[i],0,sizeof(Mock));objects[i].live=1;return &objects[i];}abort();}
+typedef struct {int live,visible,x,y,w,h,r,g,b,a,size,n,bold;long seq;int points[160][2];char value[512];} Mock;
+static Mock objects[1024];static int quits;static long mock_seq;
+static Obj *mock_add(Obj *unused){(void)unused;for(int i=0;i<1024;i++)if(!objects[i].live){memset(&objects[i],0,sizeof(Mock));objects[i].live=1;objects[i].a=255;objects[i].seq=++mock_seq;return &objects[i];}abort();}
 static void mock_del(Obj *o){((Mock*)o)->live=0;}
 static void mock_show(Obj *o){((Mock*)o)->visible=1;}
 static void mock_move(Obj *o,int x,int y){((Mock*)o)->x=x;((Mock*)o)->y=y;}
 static void mock_resize(Obj *o,int w,int h){((Mock*)o)->w=w;((Mock*)o)->h=h;}
-static void mock_color(Obj *o,int r,int g,int b,int a){(void)a;((Mock*)o)->r=r;((Mock*)o)->g=g;((Mock*)o)->b=b;}
+static void mock_color(Obj *o,int r,int g,int b,int a){assert(r<=a&&g<=a&&b<=a);((Mock*)o)->r=r;((Mock*)o)->g=g;((Mock*)o)->b=b;((Mock*)o)->a=a;}
 static void mock_font(Obj *o,const char *font,int size){((Mock*)o)->bold=strstr(font,"Bold")!=0;((Mock*)o)->size=size;}
 static void mock_text(Obj *o,const char *s){snprintf(((Mock*)o)->value,512,"%s",s);}
 static void mock_geometry(Obj *o,int *x,int *y,int *w,int *h){
  Mock *m=o;double units=0;
  for(const unsigned char *p=(unsigned char*)m->value;*p;p++){
   if((*p&0xc0)==0x80)continue;
-  units+=*p>=128?.85:strchr("ilIjt ",*p)?.278:strchr("MWmw",*p)?.82:(m->bold&&strchr("pbd",*p))?.611:.556;
+  units+=*p>=128?.85:strchr("ilIjt ",*p)?.278:strchr("MWmw",*p)?.82:(m->bold&&strchr("pbd",*p))?.611:(*p>='A'&&*p<='Z')?(m->bold?.69:.66):strchr("+=<>",*p)?.584:.556;
  }
  if(x)*x=m->x;if(y)*y=m->y;if(w)*w=(int)(units*m->size);if(h)*h=m->size*12/10;
 }
 static void mock_point(Obj *o,int x,int y){Mock *m=o;assert(m->n<160);m->points[m->n][0]=x;m->points[m->n++][1]=y;}
 static void mock_quit(void){quits++;}
 static void escape(FILE *f,const char *s){for(;*s;s++){if(*s=='&')fputs("&amp;",f);else if(*s=='<')fputs("&lt;",f);else if(*s=='>')fputs("&gt;",f);else fputc(*s,f);}}
-static void snapshot(const char *dir,const char *name){if(!dir)return;char path[1024];snprintf(path,sizeof(path),"%s/%s.svg",dir,name);FILE *f=fopen(path,"w");assert(f);fputs("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1920\" height=\"1080\" viewBox=\"0 0 1920 1080\"><rect width=\"1920\" height=\"1080\" fill=\"#111212\"/>",f);
- for(int i=0;i<1024;i++){Mock *m=objects+i;if(!m->live||!m->visible)continue;
- if(m->n){fprintf(f,"<polygon fill=\"rgb(%d,%d,%d)\" points=\"",m->r,m->g,m->b);for(int j=0;j<m->n;j++)fprintf(f,"%d,%d ",m->points[j][0],m->points[j][1]);fputs("\"/>",f);}
+static void snapshot(const char *dir,const char *name){if(!dir)return;printf("scene %s: %d objects\n",name,scene_count);char path[1024];snprintf(path,sizeof(path),"%s/%s.svg",dir,name);FILE *f=fopen(path,"w");assert(f);fputs("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1920\" height=\"1080\" viewBox=\"0 0 1920 1080\"><rect width=\"1920\" height=\"1080\" fill=\"#111212\"/>",f);
+ Mock *order[1024];int count=0;for(int i=0;i<1024;i++)if(objects[i].live&&objects[i].visible){int j=count++;while(j&&order[j-1]->seq>objects[i].seq){order[j]=order[j-1];j--;}order[j]=objects+i;}
+ for(int i=0;i<count;i++){Mock *m=order[i];int a=m->a?m->a:1;
+ if(m->n){fprintf(f,"<polygon fill=\"rgb(%d,%d,%d)\" fill-opacity=\"%.3f\" points=\"",m->r*255/a,m->g*255/a,m->b*255/a,m->a/255.0);for(int j=0;j<m->n;j++)fprintf(f,"%d,%d ",m->points[j][0],m->points[j][1]);fputs("\"/>",f);}
  else if(m->value[0]){fprintf(f,"<text x=\"%d\" y=\"%d\" font-size=\"%d\" font-family=\"Arial, sans-serif\" font-weight=\"%s\" fill=\"rgb(%d,%d,%d)\">",m->x,m->y+m->size,m->size,m->bold?"bold":"normal",m->r,m->g,m->b);escape(f,m->value);fputs("</text>",f);}}
  fputs("</svg>",f);fclose(f);
 }
@@ -127,12 +128,23 @@ int main(int argc,char **argv){
  hub_init(&hub);hub.saved.compact=1;hub.saved.count=12;
  /* Card styles match exact ids only; unknown and near-miss ids use the fallback. */
  assert(card_style("9Ur5IzDKqV.TizenYouTube")!=card_style("9Ur5IzDKqV.TizenYouTube.extra")&&card_style("x.unknown")==card_style("y.unknown"));
- for(int i=0;i<CARD_STYLE_COUNT;i++){const CardStyle *c=card_style(card_styles[i].id);assert(c==&card_styles[i]&&c->shapes<=4&&c->split<4);for(int j=0;j<c->shapes;j++)assert(c->shape[j].n>=3&&c->shape[j].n<=8);}
+ for(int i=0;i<CARD_STYLE_COUNT;i++){const CardStyle *c=card_style(card_styles[i].id);assert(c==&card_styles[i]&&c->shapes<=CARD_MAX_SHAPES&&c->split<4&&!(c->split&&c->play));for(int j=0;j<c->shapes;j++)assert(c->shape[j].n>=3&&c->shape[j].n<=CARD_MAX_POINTS);
+  int before=scene_count;card_art(0,0,393,221,c->id);wordmark(0,0,393,221,36,"Any app",c->id);assert(scene_count-before<=CARD_MAX_OBJECTS);while(scene_count>before)evas_object_del(scene[--scene_count]);}
  for(int i=0;i<12;i++){const CardStyle *c=&card_styles[i%CARD_STYLE_COUNT];snprintf(hub.saved.apps[i].id,257,"%s",c->id);snprintf(hub.saved.apps[i].name,121,"%s",c->word[0]?c->word:"Any app");}
  home();int scene_bound=scene_count;assert(scene_bound<450);Obj *retained_card=scene[0];
  for(int i=0;i<10000;i++){ui_key(i%2?"Left":"Right");assert(scene_count==scene_bound&&scene[0]==retained_card);}
  snapshot(out,"compact-brands");
  printf("native scene: %d objects for twelve branded cards; 10000 focus moves retained the cards\n",scene_bound);
+ /* Design snapshots only (no assertions): the owner's six-shortcut Home with the clock,
+  * footer focus with Undo and a notice, and the picker over a real catalog. */
+ if(out){hub_init(&hub);hub.saved.count=6;hub.saved.clock=1;hub.saved.selected=1;
+  const char *six[][2]={{"kIciSQlYEM.plex","Plex"},{"9Ur5IzDKqV.TizenYouTube","YouTube"},{"MCmYXNxgcu.DisneyPlus","Disney+"},{"S9nU6P0m8Q.APM","Amazon Music"},{"OGLLvqej7u.CrunchyrollWebApp","Crunchyroll"},{"org.tizen.primevideo","Prime Video"}};
+  for(int i=0;i<6;i++){snprintf(hub.saved.apps[i].id,257,"%s",six[i][0]);snprintf(hub.saved.apps[i].name,121,"%s",six[i][1]);}
+  home();snapshot(out,"home-six");
+  hub.undo_at=2;snprintf(hub.notice,sizeof(hub.notice),"Opening app…");redraw();hub.focus=7;focus_ring();snapshot(out,"home-footer");hub.undo_at=-1;
+  /* Names come from the same style entry as each id, so preview art always matches its row. */
+  for(int i=0;i<CARD_STYLE_COUNT&&i<HUB_MAX;i++){snprintf(hub.catalog[i].id,257,"%s",card_styles[i].id);snprintf(hub.catalog[i].name,121,"%s",card_styles[i].word[0]?card_styles[i].word:"Any app");}
+  hub.catalog_count=CARD_STYLE_COUNT;catalog_loaded=1;go(PICK,2);snprintf(hub.notice,sizeof(hub.notice),"Added to Home");redraw();snapshot(out,"picker-real");go(ACTIONS,0);snapshot(out,"actions");go(RESET,1);snapshot(out,"reset");go(SETTINGS,1);snapshot(out,"settings-clock");}
  /* Optional profiler: off by default; parsers classify state, syscall and wait channel. */
  assert(!prof_enabled);pstamp("must-not-print");
  assert(prof_state("123 (native hub) S 1 2")=='S'&&prof_state("9 (a) b) R 1")=='R'&&prof_state("bad")=='?');
@@ -162,6 +174,16 @@ int main(int argc,char **argv){
  assert(home_settings_note("isp-service","MiniHub001.Hub","lcdon","x")&&!home_source_rearm);
  assert(!home_settings_note("vc-service","MiniHub001.Hub","lcdoff","")&&!home_source_rearm);
  assert(!home_settings_note("vc-service","","lcdon","")&&!home_source_rearm&&!home_settings_note(0,"MiniHub001.Hub","lcdon","")&&!home_source_rearm);
+ /* Review snapshots: the owner's six-tile Home and every card style at the compact size. */
+ hub_init(&hub);const char *owner[][2]={{"kIciSQlYEM.plex","Plex"},{"9Ur5IzDKqV.TizenYouTube","YouTube"},{"MCmYXNxgcu.DisneyPlus","Disney+"},{"S9nU6P0m8Q.APM","Amazon Music"},{"OGLLvqej7u.CrunchyrollWebApp","Crunchyroll"},{"org.tizen.primevideo","Prime Video"}};
+ hub.saved.count=6;for(int i=0;i<6;i++){snprintf(hub.saved.apps[i].id,257,"%s",owner[i][0]);snprintf(hub.saved.apps[i].name,121,"%s",owner[i][1]);}
+ go(HOME,1);printf("owner home: %d scene objects for six branded cards (+3 focus objects)\n",scene_count);snapshot(out,"owner-home");ui_key("Down");ui_key("Right");snapshot(out,"owner-home-focus");
+ for(int sheet=0;sheet*16<CARD_STYLE_COUNT;sheet++){
+  if(ring){evas_object_del(ring);ring=0;}for(int k=0;k<2;k++)if(ring_extra[k]){evas_object_del(ring_extra[k]);ring_extra[k]=0;}
+  for(int i=0;i<scene_count;i++)evas_object_del(scene[i]);scene_count=0;buttons=0;clock_label=0;hub.page=HOME;hub.saved.count=16;
+  for(int i=0;i<16&&sheet*16+i<CARD_STYLE_COUNT;i++){const CardStyle *c=&card_styles[sheet*16+i];int x=116+(i%4)*(393+38),y=40+(i/4)*(221+30);
+   snprintf(hub.saved.apps[i].id,257,"%s",c->id);bx[i]=x;by[i]=y;bw[i]=393;bh[i]=221;buttons=i+1;card_art(x,y,393,221,c->id);wordmark(x,y,393,221,36,!strcmp(c->id,"*default*")?"Unknown Application Name":c->word,c->id);}
+  hub.focus=5;focus_ring();char name[32];snprintf(name,sizeof(name),"tiles-%d",sheet+1);snapshot(out,name);}
  puts("native source re-arm: decision matrix, write readback, probe and failure handling passed");
  puts("native profiler: disabled by default; state, syscall and wait-channel accounting passed");
  puts("native UI: navigation, persistence, failure, edit, undo, paging and scene checks passed");return 0;
