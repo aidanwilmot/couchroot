@@ -36,6 +36,9 @@ jobs:
       - run: python -m unittest discover -s research/s90d-telemetry/tests
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - run: python -m unittest discover -s native/webview/tests -p 'test_*.py'
+      - run: node native/webview/tests/native-shim.cjs
+      - run: node native/webview/tests/diagnostic.cjs
       - run: npm test
       - run: python scripts/check-reproducible.py
       - run: python tests/qn90a_boot_relay_test.py

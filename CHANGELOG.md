@@ -2,6 +2,20 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Add the experimental QN90A native WebView launcher (`native/webview/`): shared
+  web UI on Chromium/EWK, verified engine selection, native app discovery/launch,
+  one-time native preference import, Home/source handling and bounded crash
+  supervision. The signed web package and S90D install path are unchanged.
+- Admit both normal and background boot modes to the native dispatch and its
+  monitor, fixing a normal-mode gap that suppressed web autostart but never
+  started native. On normal boot, wait for the display and hand the TV viewer
+  to the signed Hub before admitting WebView; cancel for another app or source.
+- Add first-boot recovery commands and fault tests. Dispatch watcher command text
+  through `sh -c` because this firmware rejects unsigned shell-script filenames;
+  serialize acceptance with hash-checked rollback. Deployment remains private
+  and journaled, not a new public setup default. See the WebView README for
+  hardware evidence and limitations.
+
 - Add the experimental native Hub (`native-hub/`, QN90A only). It is an Ecore/Evas
   launcher started from the earliest boot hook. QN90A software time to a rendered Hub
   is 8.8–10.1 s across five reboots; the best web path was about 37–47 s.

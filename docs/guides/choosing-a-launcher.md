@@ -1,6 +1,7 @@
-# Choosing a launcher: web Hub or native Hub
+# Choosing a launcher: signed web, pure-native or WebView
 
-Couchroot has two launchers. They share a purpose: a quiet, remote-first home screen
+Couchroot has three launcher options. The table below compares the signed web
+and pure-native options; the WebView option follows it. They share a purpose: a quiet, remote-first home screen
 that opens your apps. They differ in how they reach the screen, what they need from
 the TV, and how much of the feature set they carry.
 
@@ -15,6 +16,34 @@ the TV, and how much of the feature set they carry.
 | Features | Full: favourites, edit/move/undo, settings, sound, hold-OK, fade, telemetry, screensaver, monitoring | Core: favourites, edit/move/undo, settings, app discovery, Home routing; advanced web-only features stay in the web Hub |
 | Failure fallback | Samsung Home | Web Hub (installed alongside) and Samsung Home |
 | Maturity | Supported source release | Experimental research launcher |
+
+## Native WebView: shared UI on the native boot path
+
+The [WebView host](../../native/webview/README.md) loads the existing `web/`
+interface in Chromium/EWK, started by the QN90A native boot hook. This preserves
+the web editor and settings without maintaining a second drawing implementation.
+The tested upgrade engine is Chromium 120; the default is Chromium 76.
+
+It retains native boot admission, Home routing, source re-arm and app return,
+adds bounded child restart, and imports old native preferences once into separate
+WebView storage. Its native bridge exposes app discovery and launch, not the full
+Tizen API. Telemetry, monitoring, screensaver and platform sound integration do
+not automatically carry over. The signed web Hub remains installed as fallback.
+
+In one verified reboot the loading frame appeared at 10.270 seconds and page load
+finished at about 17.4 seconds, compared with roughly 9–10 seconds to the
+pure-native UI's first frame. This was a background-mode boot; normal-mode
+handoff loaded the page around 37.3 seconds in a later owner power-cycle test.
+It waits for the signed Hub to retire the viewer and currently shows a visible
+signed-Hub → loading screen → WebView transition, including white/black frames.
+These are software milestones, not panel measurements.
+Choose this experiment for the shared web interface, not an established speed or
+memory improvement over pure native. Long-term stability and standby remain open.
+
+Installation is still private and journaled, not a `./tv-setup` option. The public
+source includes a first-boot recovery renderer and fault tests; see its README
+for the execution-policy fix, acceptance checks and hardware validation limits.
+S90D and other firmware have not been verified.
 
 ## Pick the web Hub when
 
@@ -34,8 +63,11 @@ the TV, and how much of the feature set they carry.
   arrives around 17–40 seconds into boot.
 - You can run the autonomous root agent and accept an experimental boot hook,
   with the documented rollback.
-- You want to avoid Live TV at boot. Native admission requires the ISP/background
-  boot mode, an empty foreground, the screen on, and a ready compositor. If any
+- You want to avoid Live TV at boot. Pure-native admission requires the ISP/background
+  boot mode, an empty foreground, the screen on, and a ready compositor. The
+  WebView hook also handles normal-mode boot: it waits for the screen, opens
+  the signed Hub to retire the TV viewer, then admits over that Hub. It still
+  requires the correct ISP source/owner and compositor; another app cancels. If any
   check fails, native does not draw at all. This is not a quiet-boot guarantee: the
   firmware still starts Live TV whenever the saved source is not `isp-service` (see
   below), and picture and audio were not measured.
