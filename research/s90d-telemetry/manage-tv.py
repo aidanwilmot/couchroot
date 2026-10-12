@@ -7,7 +7,7 @@ R=Path(__file__).resolve().parent; REPO=R.parents[1]
 P=Path.home()/'.local/share/samsung-tv-research'
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
- raise SystemExit('Retired: use ./tv-setup plan/apply/verify --device DEVICE --components hub,telemetry; recovery uses ./tv-setup rollback --device DEVICE --run RUN_ID. See docs/samsung-tv-telemetry.md.')
+ raise SystemExit('Retired: use ./tv-setup plan/apply/verify --device DEVICE --components hub,telemetry; recovery uses ./tv-setup rollback --device DEVICE --run RUN_ID. See docs/guides/telemetry.md.')
 
 def root_operation(identity,script,timeout_seconds=10):
  if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 25: raise ValueError("Root operation deadline must be 1..25 seconds")
@@ -27,7 +27,7 @@ using(var c=Process.Start(p)){var o=c.StandardOutput.ReadToEndAsync();var e=c.St
    import base64
    (tmp/'Program.cs').write_text(code.replace('SCRIPT',base64.b64encode(script.encode()).decode()).replace("WaitForExit(10000)","WaitForExit("+str(timeout_seconds*1000)+")"))
    (tmp/'RootIdentity.csproj').write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>netcoreapp3.1</TargetFramework><OutputType>Exe</OutputType><UseAppHost>false</UseAppHost><CheckEolTargetFramework>false</CheckEolTargetFramework></PropertyGroup></Project>')
-   spec=importlib.util.spec_from_file_location('qn_root',REPO/'qn90a-root-check.py');mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+   spec=importlib.util.spec_from_file_location('qn_root',REPO/'tools/qn90a/root-check.py');mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
    profile=load_profiles()[identity]
    cfg=dict(tv_host=profile['host'],expected_model=profile['model'],expected_platform=profile['platform'])
    mod.run('telemetry',telemetry_project=tmp,telemetry_config=cfg)

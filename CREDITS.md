@@ -27,13 +27,13 @@ as upstream compatibility claims.
 - [Tizen platform source](https://git.tizen.org/cgit/): security-manager mount
   namespaces, AMD boot lifecycle and app-installer signature/trust handling.
   Exact source revisions and the conclusions drawn from them are linked in the
-  [Tizen 6 research survey](docs/samsung-tizen6-research-survey.md).
+  [Tizen 6 research survey](docs/research/tizen6-survey.md).
 - [reisxd/TizenTube](https://github.com/reisxd/TizenTube): service manifest and
   deployment references in that survey; a reference, not a bundled application.
 - [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen): TV host/runtime
   constraints considered during native-service research.
 - [mmajchr/SamsungKernelSecurity](https://github.com/mmajchr/SamsungKernelSecurity):
-  UEP implementation reference in the [native-service investigation](docs/samsung-tv-native-service-research.md).
+  UEP implementation reference in the [native-service investigation](docs/research/native-service-research.md).
 - [systemd](https://github.com/systemd/systemd): transient-unit lifecycle reference
   in the same investigation.
 

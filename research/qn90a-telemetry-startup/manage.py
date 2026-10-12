@@ -25,6 +25,6 @@ def install(profile,package):
  run([str(CLI),'install','-s',profile['host']+':26101','-n',package.name,'--',str(package.parent)])
 
 def main():
- raise SystemExit('Retired: use ./tv-setup plan/apply/verify --device DEVICE --components hub,telemetry; recovery uses ./tv-setup rollback --device DEVICE --run RUN_ID. See docs/samsung-tv-telemetry.md.')
+ raise SystemExit('Retired: use ./tv-setup plan/apply/verify --device DEVICE --components hub,telemetry; recovery uses ./tv-setup rollback --device DEVICE --run RUN_ID. See docs/guides/telemetry.md.')
 
 if __name__=='__main__':main()

@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix='tv-source-build-') as tmp:
         shutil.copy2(source,destination)
     for directory in (root,clean):
         env=dict(os.environ,SAMSUNG_TV_TOOLKIT=str(clean/'absent-toolkit'),TV_SETUP_STATE=str(clean/'private-state'))
-        for script in ('scripts/build-native.py','package.py'):
+        for script in ('scripts/build-native.py','scripts/package.py'):
             subprocess.run([sys.executable,script],cwd=directory,env=env,check=True,timeout=600)
     original=json.loads((root/'dist/native-manifest.json').read_text())
     reproduced=json.loads((clean/'dist/native-manifest.json').read_text())

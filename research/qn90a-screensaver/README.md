@@ -64,7 +64,7 @@ screensaver setter, creates no background service, and does not poll other apps.
 Samsung's public [AppCommon API](https://developer.samsung.com/smarttv/develop/api-references/samsung-product-api-references/appcommon-api.html)
 provides enable/disable, but no arbitrary timeout setter for web apps. This is
 therefore a **dashboard idle timer**, not a request to change Samsung's native
-interval. It is packaged only by `sign.py --profile MinimalHubQN90A`; the shared
+interval. It is packaged only by `scripts/sign.py --profile MinimalHubQN90A`; the shared
 S90D web package is untouched. The timer is installed code and needs no Mac/root
 helper after reboot. The separate system-wide Asteroids selector is still
 memory-only and still needs manual reapplication after a full reboot.
@@ -106,11 +106,11 @@ before installation. The ARM test needs clang, pyelftools and unicorn 2.1.4.
 From the repository root:
 
 ```sh
-~/.local/share/samsung-tv-research/.venv/bin/python qn90a-screensaver.py inspect
-~/.local/share/samsung-tv-research/.venv/bin/python qn90a-screensaver.py apply
+~/.local/share/samsung-tv-research/.venv/bin/python tools/qn90a/screensaver.py inspect
+~/.local/share/samsung-tv-research/.venv/bin/python tools/qn90a/screensaver.py apply
 ```
 
-Build the QN90A dashboard with `python3 sign.py --profile MinimalHubQN90A`.
+Build the QN90A dashboard with `python3 scripts/sign.py --profile MinimalHubQN90A`.
 This stages version 0.4.0 plus `hub-idle.js` outside Git. Install the printed
 `MinimalHub.wgt` on `192.0.2.11:26101` with the existing profile. See the exact
 forward-version dashboard rollback in ROLLBACK.md.
@@ -124,7 +124,7 @@ Reapply the optional system-wide selector manually after a full reboot if needed
 The dashboard timer itself does not require reapplication. The command is firmware-guarded
 and idempotent for its exact known original/patched states. It refuses unknown
 memory contents. If `inspect` reports no mapped module after reboot, first run
-`qn90a-screensaver.py module-restore` to recover the stock module, then `apply`.
+`tools/qn90a/screensaver.py module-restore` to recover the stock module, then `apply`.
 Ordinary standby/wake retention has not been verified.
 
 For a short acceptance test, `idle-trial` changes only the idle timeout to 15

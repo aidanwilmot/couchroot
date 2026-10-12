@@ -9,8 +9,8 @@ Use the active `samsung-tv-hub` checkout. When loaded through a personal skill
 symlink, resolve this skill's directory; the repository is three levels above it.
 Choose the narrowest workflow matching the user's request:
 
-- **UI update:** [UI deployment](../../../docs/ui-deployment.md), `./deploy-ui`.
-- **Setup or other device components:** [setup guide](../../../docs/tv-setup.md),
+- **UI update:** [UI deployment](../../../docs/guides/ui-deployment.md), `./deploy-ui`.
+- **Setup or other device components:** [setup guide](../../../docs/guides/tv-setup.md),
   `./tv-setup`. Read model-specific notes only for the component being changed.
 - **Browser-only work:** [UI skill](../samsung-tv-ui/SKILL.md).
 
@@ -34,7 +34,7 @@ other. Keep credentials, signed packages, journals and raw evidence outside Git.
 ## Telemetry
 
 Both TVs use Hub → no-window relay → `MiniTelemetry.Service`. Use `./tv-setup`
-with `--components hub,telemetry`; read [telemetry operations](../../../docs/samsung-tv-telemetry.md).
+with `--components hub,telemetry`; read [telemetry operations](../../../docs/guides/telemetry.md).
 Keep per-TV runtime/signing and receiver identities. S90D migration retires the
 legacy collector marker and drains its lock while preserving splash/saver helper
 bytes. Never re-enable the old marker alongside the signed service. Use privileged

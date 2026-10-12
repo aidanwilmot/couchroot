@@ -246,7 +246,7 @@ class Driver:
             if self.profile['id']=='qn90a':
                 # Exact original WAS mechanism, selected from the same immutable reviewed list.
                 import importlib.util
-                spec=importlib.util.spec_from_file_location('cleanup_targets',REPO/'qn90a-cleanup.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+                spec=importlib.util.spec_from_file_location('cleanup_targets',REPO/'tools/qn90a/cleanup.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
                 index=list(m.TARGETS).index(pkg)
                 self.tv.root('',cleanup_index=index)
             else:

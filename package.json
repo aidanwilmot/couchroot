@@ -6,7 +6,7 @@
     "test": "node --test tests/*.test.cjs",
     "test:ui": "node --test tests/ui.test.cjs tests/preview.test.cjs",
     "screenshots": "node preview/screenshots.cjs",
-    "package": "python3 package.py",
+    "package": "python3 scripts/package.py",
     "deploy:ui": "python3 deploy-ui"
   },
   "devDependencies": {

@@ -82,7 +82,7 @@ is not supported on 2019-and-later TVs and is not foreground autostart.
 ## Install, status, rollback
 
 Current updates use the shared setup engine with `--components startup`; see
-[TV setup](../../docs/tv-setup.md). The commands and ledger below describe the
+[TV setup](../../docs/guides/tv-setup.md). The commands and ledger below describe the
 original research rollout. Do not use the historical uninstall/reinstall flow
 for a routine update to an installed relay.
 
@@ -223,11 +223,11 @@ are device checks, not simulated proof.
 
 ## Boundaries
 
-The [2026-09-22 diagnostic follow-up](../../docs/samsung-qn90a-startup-launch-diagnostics.md)
+The [2026-09-22 diagnostic follow-up](../../docs/devices/qn90a/startup-launch-diagnostics.md)
 records the 0.2.2 retry correction, 18 production timer scenarios and additional
 device reboots. The earlier 0.2.0 measurements above remain historical evidence.
 
-The [web startup profiling pass](../../docs/samsung-qn90a-web-startup.md) tested
+The [web startup profiling pass](../../docs/devices/qn90a/web-startup.md) tested
 a three-second initial settle in 0.2.3. Its results overlapped the five-second
 controls, so 0.2.4 restores the five-second policy and retains the 0.2.2 retry fix.
 This pass also exercised the corrected post-return retry gap on real hardware.

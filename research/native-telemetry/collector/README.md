@@ -15,7 +15,7 @@ stops the loop and cancels an outstanding request.
 **This is a tested collector candidate, not the default deployment.** Permanent
 privileged bootstrap and the short-lived Hub control adapter remain separate work.
 The managed service remains the production/rollback path. See
-[hardware findings](../../../docs/samsung-tv-native-service-research.md).
+[hardware findings](../../../docs/research/native-service-research.md).
 
 ## Build and test
 

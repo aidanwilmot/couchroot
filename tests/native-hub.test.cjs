@@ -3,10 +3,10 @@ const {test}=require('node:test');
 const {execFileSync}=require('node:child_process');
 const path=require('node:path');
 test('native Hub remote state, bounded persistence, async launch and admission guards',()=>{
- execFileSync('sh',['research/native-hub/test.sh'],{cwd:path.join(__dirname,'..'),stdio:'pipe'});
+ execFileSync('sh',['native-hub/test.sh'],{cwd:path.join(__dirname,'..'),stdio:'pipe'});
 });
 const assert=require('node:assert/strict');
-const {convert}=require('../research/native-hub/import-web-state.cjs');
+const {convert}=require('../native-hub/import-web-state.cjs');
 test('native migration preserves favorites, order, empty Home, clock and startup selection',()=>{
  const apps=[{id:'test.second',name:'Second'},{id:'test.first',name:'First'}];
  const exportData={'minimal-hub.shortcuts.v1':JSON.stringify({version:1,apps}),'minimal-hub.layout.v1':'compact','minimal-hub.clock.v1':'24h','minimal-hub.start.v1':'first','minimal-hub.selection.v1':'test.first'};

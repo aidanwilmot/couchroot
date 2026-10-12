@@ -12,7 +12,7 @@ before(async () => {
 after(async () => { await browser?.close(); await new Promise(resolve => server.close(resolve)); });
 
 test('preview serves only UI assets and injects mocks only on its hub route', async () => {
-  for (const route of ['/README.md', '/sign.py', '/preview/server.cjs', '/web/missing.png', '/web/%2e%2e%2fsign.py']) {
+  for (const route of ['/README.md', '/scripts/sign.py', '/preview/server.cjs', '/web/missing.png', '/web/%2e%2e%2fscripts%2fsign.py']) {
     assert.equal((await fetch(url + route)).status, 404, route);
   }
   assert.match(await (await fetch(url + '/hub')).text(), /preview\/runtime.js/);

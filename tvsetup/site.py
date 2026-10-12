@@ -11,7 +11,7 @@ from .config import profile
 def load_site(path=None):
     path = Path(path or os.environ.get('TV_SETUP_SITE', '~/.config/samsung-tv-hub/site.json')).expanduser()
     if not path.is_file():
-        raise Refused('Create a private site.json from examples/site.json and pass --site PATH; see docs/tv-setup.md')
+        raise Refused('Create a private site.json from examples/site.json and pass --site PATH; see docs/guides/tv-setup.md')
     data = read_json(path)
     if not isinstance(data, dict) or set(data) - {'devices', 'nas', 'trust_file'}:
         raise Refused('Site accepts devices, nas and trust_file only; safety profiles cannot be overridden')

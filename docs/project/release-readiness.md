@@ -1,0 +1,202 @@
+# Current publication scope — 2026-10-11
+
+Couchroot is published as experimental source with 0BSD licensing for original
+work and retained upstream notices. The owner authorized a fresh source snapshot,
+not the old development history. See [publication review](publication-review.md),
+[licensing](../../LICENSE-STATUS.md) and [Security](../../SECURITY.md). Historical licensing
+and publication decisions below are superseded; incomplete hardware acceptance
+and portability work remain limitations, not completed tests.
+
+# Public release readiness — 2026-09-20
+
+Historical status (2026-09-20): **not ready for a stable release**. Work starts from main `7af6886`. No TV/NAS
+mutation, live reboot, push, release publication or history rewriting was used
+for this preparation. Historical hardware observations remain separate from the
+new orchestration's automated tests.
+
+**2026-09-21 update:** the [shared telemetry rollout](../guides/telemetry.md#service-unification-validation--2026-09-21)
+subsequently validated Hub/service deployment and automatic startup after full
+reboots on both TVs, plus recovery from an initial failed S90D install. The
+remaining full-setup/recovery acceptance matrix is still open. The preparation
+record below describes the earlier 2026-09-20 state.
+
+## Implemented
+
+- Removed personal addresses, local user paths, room names and historical boot
+  UUIDs from current source, examples, fixtures and evidence. Historical scripts
+  now contain documentation addresses and are outside the public setup path.
+- Split exact model/firmware safety profiles from site addresses, physical TV
+  UUIDs, SSH configuration, NAS endpoints and per-user signing trust. There is
+  no default personal destination, embedded signer identity or implicit first-run
+  telemetry opt-in. Model and protected-package guards remain mandatory.
+- Replaced the CLI's untracked S90D dump-collector dependency and private Python
+  imports with checked-in wrappers and a source-built bounded namespace runner.
+  Both models retain separate namespace selection and resource guards. Temporary
+  keys are generated locally; private keys are never pushed to the TV.
+- Fixed the toolkit requirements path, pinned lxml and the build SDK, added offline
+  dependency checks, deterministic native/path-independent builds and a build
+  manifest. Removed implicit searches through historical private artifact trees.
+- Bound journals to physical destination/site/trust, moved source checks before
+  reconciliation side effects, blocked applying a run after rollback starts,
+  preserved later edits and retained newly installed apps for manual review.
+  Missing managed-app reinstall packages no longer prevent other configuration
+  from being restored. Added per-file NAS checks and temporary-file protections.
+- Hardened archive verification against symlink/noncanonical entries and DTDs;
+  redacted preference extensions and unexpected tool exceptions from console/JSON.
+- Added offline CI, failure-injection/identity fixtures, installation/support
+  matrix, recovery/security guidance, development version and changelog.
+- Added schema 2 recovery for saved choices and the ownership ledger: mutations
+  stay pending until both local records are durable; resume can finish locally
+  without contacting the TV. Rollback restores earlier local records and refuses
+  later edits. Old journals require their original checkout.
+- Added interrupted inverse reloads and digest-checked run-specific staging
+  recovery. Unknown/partial staging bytes and symlinks remain for inspection.
+- Supervised reboot observations share one remaining host deadline, including
+  nested SDK/root/NAS tools. Timeout stops observation processes and records
+  unverified startup/uncertain diagnostic cleanup; no launch or reboot retry is
+  introduced. Snapshot/request transport budgets precede the observation budget.
+
+## Privacy audit (redacted findings)
+
+The audit inspected tracked working-tree files, all 37 reachable commits available
+at task start, 385 unique reachable file blobs, and author/committer metadata.
+The tree included source, documentation, fixtures, inventory and two PNG icons.
+The history heuristic found 99 file versions containing personal addresses, three
+containing personal filesystem paths, and 49 containing UUIDs (historical boot
+identifiers and fixtures). Author/committer metadata contains one personal name
+and email identity. Signing-profile names and public certificate fingerprints in
+the old profiles also identify the original installation; they are not private
+keys. The private remote URL is local Git configuration, not source content.
+
+No private-key blocks, obvious long credential literals, tracked signing
+containers, database archives, MAC literals or DUID/serial literals were detected
+by these checks. This is a **limited negative result**, not secret-scanner or
+manual-disclosure certification. Boot timelines, exact firmware hashes, app
+inventory, screenshots/artwork and exploit details still need owner disclosure
+review. No credential rotation is prescribed without evidence of exposure.
+
+Current examples/evidence use synthetic identities; they must not be mistaken for
+raw hardware captures. The latest-tree heuristic scan is clean. Old values remain
+in Git history and author metadata. **Owner decision required:** authorize a
+separately reviewed history sanitization or a clean public source export, and
+choose public author metadata. Neither action was performed. Audit tooling prints
+only paths/categories/counts, never matched values:
+
+```sh
+python3 scripts/privacy-audit.py --check
+python3 scripts/privacy-audit.py --history
+```
+
+Reachable refs are the audit boundary; unknown remote refs, server backups,
+reflogs/dangling objects and earlier copies are not certified. Historical findings
+make `--history --check` fail by design. Do not upload raw audit inputs or journals.
+
+## Validation and reproducibility
+
+Local macOS validation uses Python 3.14, the SDK pinned by global.json, OpenSSL and
+Chromium. The Python suite, telemetry suite, Node suite and native relay harness
+run without device access: **128 Python tests, 14 telemetry tests, 51 Node tests,
+and 12 native relay scenarios passed**. All **36 manifested native assemblies**
+built successfully. A separate source snapshot in a new directory and
+fresh virtual environment passed with toolkit/state paths pointing to empty
+locations. Its native manifest matched across source paths after removing Git
+informational-version leakage and normalizing temporary compilation paths.
+
+A disposable source-only Linux amd64 container (Ubuntu 24.04, Python 3.12,
+`mcr.microsoft.com/dotnet/sdk:10.0.301-noble`) also passed all 128 Python tests,
+14 telemetry tests, 12 relay scenarios, all 36 native assembly builds and unsigned
+Hub packaging. No private toolkit or historical deployment files were mounted.
+All 36 Linux/macOS native hashes and the unsigned Hub package matched exactly.
+The Node/Chromium suite was rerun on macOS; Linux browser validation remains in
+the unexecuted hosted matrix.
+
+Emscripten 3.1.64 in its upstream container produced identical QN90A saver output
+across two source paths. `shaders.js` matches its reviewed digest; **`core.js` does
+not**. Reproducibility is established for this compiler output, not equivalence to
+the historical binary or hardware acceptance. No profile pins were changed.
+`scripts/check-web-reproducible.py` writes hashes and these separate comparisons
+to `dist/saver-reproducibility.json`; CI now runs this check. The current core
+output must be reviewed and tested before becoming a verified release artifact.
+
+The repeatable check is `python3 scripts/check-reproducible.py`; it compares all
+manifested DLLs (including generated model-specific runners and ten QN90A cleanup
+variants) and the unsigned Hub package from two paths. It does not certify signed
+package reproducibility or S90D vendor-linked renderer bytes.
+
+```sh
+python3 scripts/check-dependencies.py
+python3 -m unittest discover -s tests -p '*_test.py'
+python3 -m unittest discover -s research/s90d-telemetry/tests
+npm ci
+npx playwright install chromium
+npm test
+python3 tests/qn90a_boot_relay_test.py
+python3 scripts/check-reproducible.py
+```
+
+CI is configured for macOS/Linux with Python 3.12 and 3.14, Node 22, pinned .NET,
+native builds and Chromium. A separate Emscripten job builds the QN90A saver. These
+hosted jobs have **not been run remotely** during this task. No secrets or vendor
+libraries are supplied, and no workflow signs, deploys or publishes. The S90D
+GLES-linked renderer is intentionally excluded from public CI pending a reviewed
+vendor-library arrangement and reproducible compiler/sysroot recipe.
+
+## Prioritized blockers and owner acceptance
+
+1. **P0 — Disclosure and licensing decisions.** Choose project license and confirm
+   provenance/rights for original code, icons, shaders, mesh data and any third-party
+   material. Approve the public scope of the privilege-chain details. Decide how
+   historical identifiers and commit author identity will be handled; changing the
+   current files alone is insufficient. Establish/test a private security-reporting
+   contact and maintenance policy. See LICENSE-STATUS.md and SECURITY.md.
+2. **P0 — Physical apply/recovery proof on both exact TVs.** The new CLI and rebuilt
+   root runner need owner-authorized tests from known recoverable states: baseline
+   root invocation is read-only, privileged invocation runs once, resource hashes
+   and labels remain intact, cleanup succeeds, ordinary apply is correct, second
+   apply is a no-op, and interruption before/during/after each mutation reconciles
+   without duplication. Exercise unreachable TV, timeout, host process death,
+   corrupt/missing backup, full state disk, concurrent changes and rollback restart.
+   Test recovery after a complete mutation but before saved choices/ledger writes.
+   Local locks only coordinate one management host; independent-host mutation is
+   unsupported. Do not conduct destructive interruption tests without recovery media.
+3. **P0 — Signed installation and application recovery.** Prove independently
+   enrolled author/distributor pins, device authorization, first install, forward
+   updates, certificate renewal and signed forward recovery on each TV. Verify
+   that in-place updates preserve newly edited app data. Confirm retained new apps
+   and removed optional apps are accurately reported for manual recovery. App
+   Store reinstall is an owner acceptance step, not a file-copy rollback guarantee.
+4. **P1 — Fresh NAS provisioning and shared recovery.** The adapter still requires
+   an existing TrueNAS app and two-device registry. Supply a reviewed provisioning
+   path and isolated credentials/certificate enrollment for a genuinely new NAS.
+   Physically test receiver/dashboard restart and partial-batch restore while the
+   other TV continues ingesting; confirm chart history, volume ownership, registry,
+   credentials and custom endpoints remain intact. Do not replay historical compose.
+5. **P1 — Native artifact/toolchain portability.** Run the hosted CI matrix.
+   Review why the reproducible Emscripten 3.1.64 core differs from the previously
+   reviewed digest and verify generated saver bytes on QN90A. Establish a clean S90D
+   ARM compiler/sysroot recipe that reproduces the reviewed renderer digest with
+   user-provided GLES libraries. Review supported hosts, old TV runtime maintenance,
+   dependency licenses/notices and exact dependency provenance before bundling.
+6. **P1 — End-to-end hardware experience.** After explicit owner-authorized full
+   reboot, observe a new boot ID and autonomous startup without launching Hub.
+   Test Home and both QN90A AirPlay returns, five-minute Hub saver, S90D splash/
+   screensaver, streaming, standby/wake and Samsung Home fallback. Verify reboot
+   observation deadlines under slow/disconnected transport and confirm TV-side
+   diagnostic cleanup after forced host cancellation. Host nested-process deadline
+   coverage now passes; it does not prove remote cleanup. Record configuration and runtime
+   acceptance separately, with redacted evidence.
+
+## Release checklist
+
+Use the [staged hardware acceptance procedure](../guides/hardware-acceptance.md) to prepare
+specific owner-authorized tests. None of its mutation steps were executed here.
+
+Resolve every P0 before a public candidate; either resolve P1 items or explicitly
+reduce and label supported scope. Re-run audits against the exact publication
+commit/export, run hosted CI, review the diff, record model/firmware hardware
+acceptance, freeze dependency/build manifests, review third-party notices, and
+inspect the proposed archive. It must exclude site/trust, logs, journals, tokens,
+certificates/keys, signed packages, raw evidence, extracted resources and vendor
+binaries. Confirm version/changelog, security-report route and recovery guide.
+Only then request explicit owner authorization to push or publish. Nothing here
+constitutes that authorization.

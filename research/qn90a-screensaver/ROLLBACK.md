@@ -63,9 +63,9 @@ Home/casting database. The later dashboard package rollback is described below.
 From `/path/to/samsung-tv-hub`:
 
 ```sh
-~/.local/share/samsung-tv-research/.venv/bin/python qn90a-screensaver.py wake
-~/.local/share/samsung-tv-research/.venv/bin/python qn90a-screensaver.py restore
-~/.local/share/samsung-tv-research/.venv/bin/python qn90a-screensaver.py inspect
+~/.local/share/samsung-tv-research/.venv/bin/python tools/qn90a/screensaver.py wake
+~/.local/share/samsung-tv-research/.venv/bin/python tools/qn90a/screensaver.py restore
+~/.local/share/samsung-tv-research/.venv/bin/python tools/qn90a/screensaver.py inspect
 ```
 
 `restore` restores the exact original pointer and 17 padding bytes, selects the
@@ -93,7 +93,7 @@ apps are separate and remain unchanged. Never uninstall the saver first while
 the default route points to it.
 
 To end a 15-second trial while keeping Asteroids selected, use
-`qn90a-screensaver.py timeout-restore` with the private Python, then press a key.
+`tools/qn90a/screensaver.py timeout-restore` with the private Python, then press a key.
 `memory-restore` reverses both runtime patches; `restore` also restores the
 7200-second timeout.
 

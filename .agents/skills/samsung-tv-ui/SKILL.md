@@ -7,9 +7,9 @@ description: Develop and refine the Samsung TV Minimal Hub interface using its l
 
 Use the active `samsung-tv-hub` checkout. When loaded through a personal skill
 symlink, resolve this skill's directory; the repository is three levels above it.
-Start with [UI development](../../../docs/ui-development.md). Read
-[design rules](../../../docs/design-guidelines.md) for visual work and
-[compatibility](../../../docs/device-compatibility.md) before changing runtime APIs.
+Start with [UI development](../../../docs/guides/ui-development.md). Read
+[design rules](../../../docs/guides/design-guidelines.md) for visual work and
+[compatibility](../../../docs/guides/device-compatibility.md) before changing runtime APIs.
 
 ## Source map
 
@@ -34,11 +34,11 @@ for review PNGs, then inspect affected states at 1920×1080 and a smaller viewpo
 Exercise affected error/empty states and remote navigation. Run relevant checks
 while iterating and `npm test` before handoff; screenshots are not visual assertions.
 
-If adding shipped assets, update `package.py`, `sign.py`,
+If adding shipped assets, update `scripts/package.py`, `scripts/sign.py`,
 `tvsetup/planner.py::hub_sources`, and the installed-file inventory in
 `tvsetup/transport.py` together. Those explicit lists must describe the same app;
 retain model-specific idle/monitoring additions when packaging QN90A.
 
 Document visible changes and remaining hardware checks. UI work alone does not
 include installation. For an explicitly requested deployment, follow
-[UI deployment](../../../docs/ui-deployment.md).
+[UI deployment](../../../docs/guides/ui-deployment.md).

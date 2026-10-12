@@ -86,7 +86,7 @@ def source_revision():
              REPO/'research/s90d-splash',REPO/'research/namespace-root-probe',REPO/'research/qn90a-app-cleanup',REPO/'research/qn90a-screensaver',REPO/'research/qn90a-hub-boot/relay',
              REPO/'research/qn90a-telemetry-startup/service', REPO/'research/qn90a-telemetry-startup/bootstrap']
     files = sorted({p for root in roots for p in root.rglob('*') if p.is_file() and p.suffix in ('.py','.json','.cs','.c','.h','.js','.css','.html','.xml','.csproj','.glsl') and not {'bin','obj'} & set(p.relative_to(root).parts) and p.name not in ('core.js','shaders.js')})
-    files=sorted(set(files)|{REPO/'qn90a-root-check.py',REPO/'global.json',REPO/'Directory.Build.props'})
+    files=sorted(set(files)|{REPO/'tools/qn90a/root-check.py',REPO/'global.json',REPO/'Directory.Build.props'})
     return sha(b''.join(str(p.relative_to(REPO)).encode()+b'\0'+p.read_bytes() for p in files))
 
 

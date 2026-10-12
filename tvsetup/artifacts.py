@@ -110,7 +110,7 @@ def next_version(current, base):
 
 def require_trust(profile):
     if not all(profile.get(k) for k in ('author_cert_sha256', 'distributor_cert_sha256')):
-        raise Refused('Signing trust is not enrolled; configure an independently reviewed trust_file in site.json (docs/tv-setup.md)')
+        raise Refused('Signing trust is not enrolled; configure an independently reviewed trust_file in site.json (docs/guides/tv-setup.md)')
 
 
 class Builder:

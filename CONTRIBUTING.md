@@ -4,7 +4,7 @@ Original contributions are made under the project's [0BSD license](LICENSE).
 Preserve existing third-party notices and document the origin of copied code.
 
 Use an isolated branch. Keep changes focused, document behavior and add tests for
-meaningful failures. Run the offline checks in docs/release-readiness.md. Do not
+meaningful failures. Run the offline checks in docs/project/release-readiness.md. Do not
 contact or modify someone else's TV or NAS, and do not treat mocked device state
 as hardware validation. Live mutations require the device owner's authorization.
 

@@ -7,9 +7,9 @@ device setup distinct; the user's requested scope determines which workflow runs
 | --- | --- |
 | Design or change the UI | [UI skill](.agents/skills/samsung-tv-ui/SKILL.md) |
 | Deploy, inspect, or recover a TV | [Operations skill](.agents/skills/samsung-tv-ops/SKILL.md) |
-| Local preview and browser checks | [UI development](docs/ui-development.md) |
-| Update just the Hub package | [UI deployment](docs/ui-deployment.md), `./deploy-ui` |
-| Full device setup/recovery | [Setup guide](docs/tv-setup.md), `./tv-setup` |
+| Local preview and browser checks | [UI development](docs/guides/ui-development.md) |
+| Update just the Hub package | [UI deployment](docs/guides/ui-deployment.md), `./deploy-ui` |
+| Full device setup/recovery | [Setup guide](docs/guides/tv-setup.md), `./tv-setup` |
 
 `web/` is the shipped interface; `preview/` serves that same source with simulated
 APIs. Keep browser tooling out of signed packages. Preserve remote navigation,

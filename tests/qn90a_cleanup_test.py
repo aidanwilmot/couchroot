@@ -4,7 +4,7 @@ from pathlib import Path
 import sqlite3
 import unittest
 
-spec = importlib.util.spec_from_file_location('cleanup', Path(__file__).resolve().parents[1] / 'qn90a-cleanup.py')
+spec = importlib.util.spec_from_file_location('cleanup', Path(__file__).resolve().parents[1] / 'tools/qn90a/cleanup.py')
 cleanup = importlib.util.module_from_spec(spec); spec.loader.exec_module(cleanup)
 
 

@@ -31,5 +31,5 @@ Use the shared setup engine with private site/signing configuration:
 ```
 
 Substitute `qn90a` for the other TV. Historical `manage.py` commands are retired.
-See [telemetry operations](../../docs/samsung-tv-telemetry.md) for migration,
+See [telemetry operations](../../docs/guides/telemetry.md) for migration,
 recovery, verification limits and model-specific startup behavior.

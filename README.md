@@ -5,7 +5,7 @@
 A minimal Samsung Tizen launcher, a read-only TV inspector, and an experimental
 on-TV root agent. Built through hands-on work with a QN90A and an S90D.
 
-[Get started](#try-the-launcher-on-your-computer) · [TV setup](docs/tv-setup.md) ·
+[Get started](#try-the-launcher-on-your-computer) · [TV setup](docs/guides/tv-setup.md) ·
 [Root agent](research/autonomous-root/README.md) · [Sources & credits](CREDITS.md) ·
 [0BSD license](LICENSE)
 
@@ -19,7 +19,7 @@ apps. Screenshots contain no live device data.*
 - **Minimal Hub:** an offline, remote-first launcher with editable favorites,
   move/remove controls, compact layout, clock, settings and a Samsung Home fallback.
 - **TV inspector:** read-only app, process and startup inspection alongside the
-  telemetry dashboard. See [telemetry and inspection](docs/samsung-tv-telemetry.md).
+  telemetry dashboard. See [telemetry and inspection](docs/guides/telemetry.md).
 - **Autonomous root agent:** a separate signed service that reacquires a temporary
   root context through TV-local SDB. It uses certificate-pinned HTTPS, authenticated
   loopback messages, bounded retries and a durable request journal.
@@ -60,14 +60,14 @@ npm test
 npm run screenshots
 ```
 
-See [UI development](docs/ui-development.md) for scenarios and remote-navigation
+See [UI development](docs/guides/ui-development.md) for scenarios and remote-navigation
 checks. Python 3 is also required to build an unsigned package with `npm run package`.
 
 ## Putting it on a TV
 
-Start with the [setup guide](docs/tv-setup.md), [compatibility notes](docs/device-compatibility.md)
-and [recovery guidance](docs/tv-setup.md#apply-interruption-and-recovery). If you already have an installation,
-use the separate [UI deployment guide](docs/ui-deployment.md).
+Start with the [setup guide](docs/guides/tv-setup.md), [compatibility notes](docs/guides/device-compatibility.md)
+and [recovery guidance](docs/guides/tv-setup.md#apply-interruption-and-recovery). If you already have an installation,
+use the separate [UI deployment guide](docs/guides/ui-deployment.md).
 
 You supply your own device addresses, Developer Mode setup, SDK tools and signing
 credentials. Examples use reserved addresses. Site/trust files, keys, certificates,
@@ -87,7 +87,7 @@ not bypass every SMACK, DRM or firmware restriction.
 These observations are not a promise for every size, region or firmware.
 The [agent notes](research/autonomous-root/README.md) record exact tests and limits,
 including remaining cold-power and recovery cases. Comprehensive installation
-acceptance remains work in progress; see [release readiness](docs/release-readiness.md).
+acceptance remains work in progress; see [release readiness](docs/project/release-readiness.md).
 
 ## How the pieces fit
 
@@ -129,7 +129,7 @@ network. Never post raw logs, device identifiers, keys or signing material in is
 See [Security](SECURITY.md) and [Contributing](CONTRIBUTING.md).
 
 This repo starts from a reviewed source snapshot rather than the development Git
-history. See the [publication review](docs/publication-review.md) for what was checked
+history. See the [publication review](docs/project/publication-review.md) for what was checked
 and the limits of those checks.
 
 ## License and thanks

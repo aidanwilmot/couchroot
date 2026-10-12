@@ -2,7 +2,7 @@
 
 This unofficial project uses a firmware-specific privilege chain on TVs you own
 or administer. This is an experimental source release; the full hardware acceptance matrix
-in [release readiness](docs/release-readiness.md) remains incomplete. It is not
+in [release readiness](docs/project/release-readiness.md) remains incomplete. It is not
 Samsung-supported software.
 
 The setup runner can execute privileged configuration changes through a bounded
