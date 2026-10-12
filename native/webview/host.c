@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -112,8 +113,19 @@ static double now(void) {
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (double)t.tv_sec + t.tv_nsec / 1e9;
 }
+/* CPU time (and its kernel part) covers every thread of this process, not
+ * Chromium child processes; major faults show engine pages read from flash. */
 static void stamp(const char *event) {
-    printf("webview event=%s elapsed_ms=%.3f\n", event, (now() - start) * 1000);
+    struct rusage use;
+    double cpu = -1, sys = -1; long faults = -1;
+    if (!getrusage(RUSAGE_SELF, &use)) {
+        cpu = (use.ru_utime.tv_sec + use.ru_stime.tv_sec) * 1e3 + (use.ru_utime.tv_usec + use.ru_stime.tv_usec) / 1e3;
+        sys = use.ru_stime.tv_sec * 1e3 + use.ru_stime.tv_usec / 1e3;
+#ifdef __linux__ /* Desktop test builds (strict POSIX on macOS) report -1. */
+        faults = use.ru_majflt;
+#endif
+    }
+    printf("webview event=%s elapsed_ms=%.3f cpu_ms=%.0f sys_ms=%.0f majflt=%ld\n", event, (now() - start) * 1000, cpu, sys, faults);
 }
 static int readable_engine(const char *path) {
     struct stat info;
@@ -301,12 +313,14 @@ static Bool create_view(void *unused) {
     if (failed || stopping) return 0;
     stamp("ewk-init-start");
     if (!ewk_api()) { failure("ewk-api-unavailable"); return 0; }
+    stamp("ewk-wrapper-loaded");
     if (engine_request == ENGINE_UPGRADE) {
         /* Must precede every other EWK call: the wrapper selects and caches
          * the implementation library on its first lazy resolution. */
         if (!ewk_set_version_policy) { failure("engine-upgrade-api-unavailable"); return 0; }
         int accepted = ewk_set_version_policy(1);
         printf("webview engine-policy requested=1 returned=%d\n", accepted);
+        stamp("engine-policy-set"); /* The wrapper forwards this call, loading the implementation. */
     }
     if (ewk_init() <= 0) { failure("ewk-init"); return 0; }
     ewk_started = 1;
@@ -317,6 +331,7 @@ static Bool create_view(void *unused) {
     if (engine_request == ENGINE_UPGRADE && strcmp(engine, "upgrade")) {
         failure("engine-upgrade-not-loaded"); return 0;
     }
+    stamp("ewk-init-done");
     if (stopping) return 0; /* Stop requested during the blocking init call. */
     view = ewk_view_add(canvas);
     if (!view) { failure("view-create"); return 0; }
@@ -460,7 +475,9 @@ int main(int argc, char **argv) {
     stamp("main");
     if (!wait_engine_files()) { free(url); return stopping ? 0 : 3; }
     if (!efl_api()) { free(url); return 3; }
+    stamp("efl-loaded");
     if (elm_init(argc, argv) <= 0) { free(url); return 3; } /* Also initializes Ecore_Evas. */
+    stamp("elm-init-done");
     window = ecore_evas_new("wayland_egl", 0, 0, 1920, 1080, NULL);
     canvas = window ? ecore_evas_get(window) : NULL;
     /* The fake window does not own the Ecore_Evas; freeing the Ecore_Evas
@@ -469,6 +486,7 @@ int main(int argc, char **argv) {
     background = elm_window ? evas_object_rectangle_add(canvas) : NULL;
     label = background ? evas_object_text_add(canvas) : NULL;
     if (!label) { if (window) ecore_evas_free(window); elm_shutdown(); free(url); return 4; }
+    stamp("window-created");
     ecore_evas_title_set(window, launcher_mode ? "Minimal Hub" : "Minimal Hub WebView experiment");
     if (!launcher_input(background)) { fputs("webview failure=launcher-input\n", stderr); ecore_evas_free(window); elm_shutdown(); free(url); return 3; }
     evas_object_color_set(background, 16, 20, 28, 255);
