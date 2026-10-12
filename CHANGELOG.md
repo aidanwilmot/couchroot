@@ -2,6 +2,27 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Add the experimental native Hub (`native-hub/`, QN90A only). It is an Ecore/Evas
+  launcher started from the earliest boot hook. QN90A software time to a rendered Hub
+  is 8.8–10.1 s across five reboots; the best web path was about 37–47 s.
+  - Root cause found: Samsung's systemd starts late boot services at `SCHED_IDLE`.
+    The native unit opts out with `CPUSchedulingPolicy=other`, the vendor
+    convention, at normal priority.
+  - Dispatch moved ahead of the other hook layers.
+  - See the [launcher guide](docs/guides/choosing-a-launcher.md) and the
+    [boot performance record](docs/devices/qn90a/boot-performance.md).
+- Prevent QN90A Live TV boots after watching TV. Opening Live TV/TV Plus rewrites
+  the saved boot source at once, so native re-arms `isp-service` every 15 s.
+  Home from Live TV now routes through the web Hub, which stops the viewer, before
+  raising native.
+- Generate native tile art from validated per-app specs (`native-hub/cards/`), with
+  contrast, clean wordmark-area and in-card checks; 12 cards use 71 scene objects
+  instead of 386. Add an opt-in startup profiler (`COUCHROOT_NATIVE_PROFILE=1`).
+- Root agent: archive and maintain the request journal; add the Python transport
+  used by the setup engine.
+- Reorganize the repository. Device scripts move to `tools/`, signing and packaging
+  to `scripts/`, and the native launcher to `native-hub/`. Docs are grouped into
+  `guides/`, `devices/`, `research/` and `project/` with an [index](docs/README.md).
 - Defer initial app discovery and monitoring I/O until Hub has focus, keeping
   saved shortcuts available first. Avoid inspecting the native sound fallback
   when Web Audio is available. QN90A startup profiling did not establish a

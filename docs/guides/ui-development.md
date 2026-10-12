@@ -147,7 +147,7 @@ UI deployment and native-key checks on both TVs, including remaining physical
 remote, playback and startup acceptance.
 
 HDMI is not exposed until source handoff is verified on each model. See the
-[HDMI investigation](hdmi-shortcuts.md) for evidence and the remaining checks.
+[HDMI investigation](../research/hdmi-shortcuts.md) for evidence and the remaining checks.
 
 ## Source boundaries
 

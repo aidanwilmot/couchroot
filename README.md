@@ -5,7 +5,7 @@
 A minimal Samsung Tizen launcher, a read-only TV inspector, and an experimental
 on-TV root agent. Built through hands-on work with a QN90A and an S90D.
 
-[Get started](#try-the-launcher-on-your-computer) · [TV setup](docs/guides/tv-setup.md) ·
+[Get started](#try-the-launcher-on-your-computer) · [Choose a launcher](docs/guides/choosing-a-launcher.md) · [TV setup](docs/guides/tv-setup.md) ·
 [Root agent](research/autonomous-root/README.md) · [Sources & credits](CREDITS.md) ·
 [0BSD license](LICENSE)
 
@@ -18,6 +18,11 @@ apps. Screenshots contain no live device data.*
 
 - **Minimal Hub:** an offline, remote-first launcher with editable favorites,
   move/remove controls, compact layout, clock, settings and a Samsung Home fallback.
+- **Native Hub (experimental, QN90A):** the same home screen drawn directly with the
+  TV's EFL libraries from the earliest boot hook, reaching a rendered Hub in about
+  **9–10 seconds** after a reboot instead of 37–47 seconds. See
+  [choosing a launcher](docs/guides/choosing-a-launcher.md) and
+  [QN90A boot performance](docs/devices/qn90a/boot-performance.md).
 - **TV inspector:** read-only app, process and startup inspection alongside the
   telemetry dashboard. See [telemetry and inspection](docs/guides/telemetry.md).
 - **Autonomous root agent:** a separate signed service that reacquires a temporary
@@ -35,6 +40,20 @@ Use the remote's arrows to choose, OK to open, and Back to return. Favorites are
 editable from the TV. The Samsung Home shortcut remains available.
 
 ![Compact launcher with clock](docs/images/compact.png)
+
+## Web Hub or native Hub?
+
+| | Web Hub | Native Hub |
+| --- | --- | --- |
+| TVs | S90D and QN90A | QN90A (firmware 2301.1) only |
+| Install | Signed Tizen app via `./tv-setup` | Experimental boot hook + root agent |
+| Hub after reboot | S90D: Samsung starts it at ~2 s. QN90A: ~37–47 s | QN90A: ~9–10 s |
+| Features | Complete | Core launcher; web-only extras stay in the web Hub |
+
+Most people should use the **web Hub**. Choose the native Hub only for a QN90A where
+boot-to-Hub time matters and you accept an experimental, root-dependent boot path.
+The [launcher guide](docs/guides/choosing-a-launcher.md) explains the trade-offs and
+the QN90A Live TV safeguards.
 
 ## Try the launcher on your computer
 
@@ -110,13 +129,18 @@ remote: restore Host PC IP to your management computer and restart. Read the
 
 | Path | Purpose |
 | --- | --- |
-| `web/` | Shipped launcher UI and platform adapters |
+| `web/` | Web Hub: the shipped launcher UI and platform adapters |
+| `native-hub/` | Native Hub (experimental, QN90A): C/EFL launcher, card styles, profiler |
 | `preview/` | Local browser workbench, fixtures and screenshot capture |
-| `tvsetup/`, `tv-setup`, `deploy-ui` | Setup, signing integration, deployment and recovery |
+| `tv-setup`, `deploy-ui`, `tvsetup/` | Setup, signing integration, deployment and recovery |
+| `tools/qn90a/`, `tools/s90d/` | One-shot, model-guarded device tools (Home routing, cleanup, casting, splash) |
+| `tools/dotnet/` | .NET helpers those tools build and run on the TV |
+| `scripts/` | Packaging, signing, reproducibility, dependency and privacy checks |
 | `research/autonomous-root/` | Agent, client, payload sources and upstream provenance |
 | `research/s90d-telemetry/` | Shared collector, inspector, receiver and dashboard |
-| `docs/` | Setup guides, compatibility and investigation records |
-| `tests/` | Offline UI, protocol, setup and recovery tests |
+| `research/` (other) | Experiment sources referenced by the device records |
+| `docs/` | [Index](docs/README.md): guides, per-device records, research and project notes |
+| `tests/` | Offline UI, native, protocol, setup and recovery tests |
 | `examples/` | Public configuration templates |
 
 Historical research scripts are not the supported setup entry point. The telemetry
