@@ -30,14 +30,19 @@ WebView storage. Its native bridge exposes app discovery and launch, not the ful
 Tizen API. Telemetry, monitoring, screensaver and platform sound integration do
 not automatically carry over. The signed web Hub remains installed as fallback.
 
-With deferred presentation, a full background software reboot reached the first
-visible, rendered Hub at about 16.35 seconds (pure native: roughly 9–10 seconds).
+The first deferred-presentation profile mapped a canvas at about 16.35 seconds,
+but later frame capture showed that an early paint could contain only the page
+background. The host now waits for Hub DOM/font readiness and a subsequent paint.
+Two captured background software boots showed one Hub appearance with no white
+frame or blackout afterward. Both needed an automatic early engine retry, reaching
+Hub content at 43.36 and 28.78 seconds; first-attempt Chromium startup remains an
+open reliability issue. Pure native has reached roughly 9–10 seconds.
+
 Normal-mode handoff loaded the page around 37.3 seconds in an earlier owner test.
-It waits for the signed Hub to retire the viewer; the new host leaves that Hub
-visible while the native window loads offscreen, then shows only a loaded,
-rendered page. This removes the intermediate native loading screen. The latest
-profile used logs and a final compositor capture, not a physical panel recording.
-These are software milestones, not panel measurements.
+It waits for the signed Hub to retire the viewer and leaves that Hub visible while
+the native window prepares offscreen. The latest captures do not validate that
+remote-power normal-mode path or physical panel behavior. See the detailed
+[evidence](../../native/webview/README.md#qn90a-evidence-2026-10-12).
 Choose this experiment for the shared web interface, not an established speed or
 memory improvement over pure native. Long-term stability and standby remain open.
 

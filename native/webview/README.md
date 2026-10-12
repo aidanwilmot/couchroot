@@ -24,8 +24,9 @@ journals or compiled TV binaries are included. S90D has not been tested.
   Requesting upgrade fails visibly if only the default engine loads.
 - **Rendering:** an Ecore/Evas `wayland_egl` window first draws a native loading
   screen in diagnostic mode. With `COUCHROOT_WEBVIEW_DEFER_SHOW=1`, the launcher
-  instead keeps its window unmapped until page load and a subsequent EWK
-  `frame,rendered` signal. Chromium starts directly from the event loop, so hidden
+  instead lays out the hidden view at 1920×1080 and keeps its window unmapped
+  until the Hub signals initial DOM/font readiness and EWK reports a subsequent
+  `frame,rendered` signal. Page load or a background-only paint is insufficient. Chromium starts directly from the event loop, so hidden
   startup does not depend on a visible loading frame. Normal boot leaves the
   signed Hub visible during this wait; no native loading screen is shown. A
   bounded worker rechecks source, ISP owner, display and foreground before
@@ -102,7 +103,8 @@ other TVs or weaken firmware checks.
 ## Bridge boundary
 
 The page sends serialized requests through `document.title`:
-`hubbridge:1:<request-id>:discover` or `hubbridge:1:<request-id>:launch:<app-id>`.
+`hubbridge:1:<request-id>:discover`, `hubbridge:1:<request-id>:launch:<app-id>`,
+or `hubbridge:1:<request-id>:ready` (initial UI readiness).
 The host replies with `HubNativePlatform.receive(...)` using
 `ewk_view_script_execute`. IDs, operations, app IDs, sizes and URL identity are
 validated; late, duplicate and unknown replies are ignored. No shell, filesystem,
@@ -192,7 +194,7 @@ The logged milestones were:
 | Page load finishes (window hidden) | 16.09 |
 | EWK frame after load | 16.17 |
 | Window show request, after source/foreground recheck | 16.31 |
-| First visible canvas render | 16.35 |
+| First mapped canvas render (not proof of Hub content) | 16.35 |
 | Home grab ready | 16.44 |
 
 There was one child startup. The native loading screen was never mapped; the
@@ -204,6 +206,29 @@ sequence; logs and the final capture do **not** certify every physical panel
 frame or the full normal-mode transition. No person watched this profiled boot.
 An initial attempt was declined because the saved source was Live TV after the
 warm trial; restoring the configured Hub source preceded the successful cycle.
+
+The repaired buffer sampler subsequently exposed a gap in that earlier claim:
+the first mapped frame was only the dark page background. Hub cards arrived
+about 2.4 seconds later. The host now waits for the bundled Hub's initial DOM
+and fonts, a readiness message before an animation frame, and a subsequent EWK
+paint. The hidden view is sized before navigation and remains browser-visible
+so hidden startup can continue rendering.
+
+Two full background software reboots with this change produced 33/32 recorded
+buffers (28/24 display commits). In both captures, the first nonblank display
+commit contained the Hub cards; they stayed visible afterward. There was one
+mapped Hub window, no loading text, no full white frame and no return to black
+after the Hub appeared. The sampler stopped cleanly after its post-presentation
+tail. Home retained native focus and the installed payload hashes were verified
+before journal acceptance.
+
+Both boots also exposed early engine failures before any native window mapped:
+one aborted inside EWK view creation with allocator corruption; the other loaded
+the default engine despite requesting upgrade. The existing supervisor recovered
+with Chromium 120. Hub content appeared at 43.36 and 28.78 seconds respectively.
+These failures remain unexplained; the visual handoff result is not evidence of
+reliable first-attempt Chromium startup. Neither captured cycle reproduced the
+handheld remote's normal-mode boot, and neither was a physical-panel recording.
 
 Standby/resume and the WebView Live-TV detour remain unverified. The owner's
 "power cycle" was not independently classified as mains removal versus a remote
@@ -246,3 +271,21 @@ comes from the QN90A 2301.1 captured binaries.
     76.0.3809.146 and 120.0.6099.5.
 - **Runtime confirmation.** On the TV, mapped libraries and child argv
   confirmed the upgrade selection.
+
+## Boot frame capture
+
+`capture.sh` records QN90A compositor buffers, including direct hardware planes,
+plus uptime and Hub-window changes. It uses 1/8-size images, a 512-buffer cap,
+a low-memory cutoff and an exit trap that flushes/stops the dump. This is a
+firmware-specific diagnostic, not a physical-panel recording or fixed-rate video.
+Static frames are not repeated. Keep its output private.
+
+The private installer runs it only during an unaccepted test boot, with a
+60-second systemd runtime limit, 5-second stop timeout, and an independent unit
+that stops buffer dumping after 65 seconds. Do not leave dumping enabled on
+ordinary boots. Encode the script as base64, then pass one shell argument that
+decodes it into `/bin/sh` standard input. This prevents systemd from expanding
+shell variables in the script before execution; passing the raw multiline body
+through systemd caused the original sampler's empty counters and failed capture.
+No firmware security setting is changed. Buffer filenames contain leading spaces;
+preserve and quote them when reading timestamps or analyzing frames.

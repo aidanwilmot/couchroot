@@ -659,6 +659,7 @@
   bootMark('handlers-attached');
   document.getElementById('preview').hidden = !bridge.preview; renderHome(startOnLast ? lastHome : ''); message(loaded.warning, true);
   bootMark('initial-dom-render');
+  if (window.HubNativePlatform && window.HubNativePlatform.ready) { window.HubNativePlatform.ready(); }
   if (window.HubBootTrace && window.requestAnimationFrame) { requestAnimationFrame(function () { bootMark('render-frame-1'); requestAnimationFrame(function () { bootMark('render-frame-2'); }); }); }
   function scheduleStartupDiscovery() {
     if (document.hidden || (document.hasFocus && !document.hasFocus())) { return; }

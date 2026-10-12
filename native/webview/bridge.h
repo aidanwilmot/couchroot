@@ -223,7 +223,10 @@ static int bridge_message(const char *title) {
     if (parts < 3 || strcmp(part[0], "1") || !bridge_request_id(part[1])) {
         fputs("webview bridge-rejected reason=format\n", stderr); return 1;
     }
-    if (parts == 3 && !strcmp(part[2], "discover")) bridge_start(0, part[1], NULL);
+    if (parts == 3 && !strcmp(part[2], "ready")) {
+        page_ready(); bridge_reply(part[1], "\"ok\":true");
+    }
+    else if (parts == 3 && !strcmp(part[2], "discover")) bridge_start(0, part[1], NULL);
     else if (parts == 4 && !strcmp(part[2], "launch") && bridge_app_id(part[3])) bridge_start(1, part[1], part[3]);
     else bridge_error(part[1], "InvalidValuesError", "Unsupported request.");
     return 1;
@@ -236,7 +239,7 @@ static void bridge_shutdown(void) {
  * hidden as the app having taken over, so window focus drives visibility. */
 static void bridge_visibility(Bool visible) {
     /* Only meaningful for a loaded page: hub.js reads it after a launch. */
-    if (bridge_enabled && view && loaded && !failed && ewk_view_visibility_set) ewk_view_visibility_set(view, visible);
+    if (bridge_enabled && view && loaded && !failed && (!defer_show || presented) && ewk_view_visibility_set) ewk_view_visibility_set(view, visible);
 }
 
 /* ---- Worker processes (fresh, single-threaded; never load EFL or EWK) ---- */

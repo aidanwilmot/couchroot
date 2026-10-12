@@ -88,5 +88,16 @@
   };
   var create = root.HubBridge.create;
   root.HubBridge.create = function (given) { return create(given || platform); };
-  root.HubNativePlatform = { receive: receive };
+  var readySent = false;
+  root.HubNativePlatform = { receive: receive, ready: function () {
+    if (readySent) { return; }
+    readySent = true;
+    // Wait for layout/fonts, then signal before the next paint. The host still
+    // requires EWK's subsequent rendered-frame callback before mapping.
+    function painted() {
+      root.requestAnimationFrame(function () { request('ready', '', function () {}, function () {}); });
+    }
+    if (root.document.fonts && root.document.fonts.ready) { root.document.fonts.ready.then(painted, painted); }
+    else { painted(); }
+  } };
 }(typeof window !== 'undefined' ? window : globalThis));

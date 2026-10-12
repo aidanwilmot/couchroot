@@ -113,7 +113,21 @@ void ecore_main_loop_begin(void) {
             }
             if (hidden_start && frame && !mode("no-page-frame")) {
                 assert(!shown); frame(NULL, &web, NULL);
+                if (getenv("COUCHROOT_WEBVIEW_DEFER_SHOW")) {
+                    assert(!shown); /* A background paint is not UI readiness. */
+                    if (!mode("no-ui-ready")) {
+                        const char *saved = getenv("FAKE_TITLE");
+                        char *copy = saved ? strdup(saved) : NULL;
+                        setenv("FAKE_TITLE", "hubbridge:1:ready1:ready", 1);
+                        title(NULL, &web, NULL);
+                        if (copy) { setenv("FAKE_TITLE", copy, 1); free(copy); }
+                        else unsetenv("FAKE_TITLE");
+                        assert(!shown);
+                        frame(NULL, &web, NULL);
+                    }
+                }
                 if (!shown) drive(has_shown);
+                if (mode("no-ui-ready")) { assert(!shown); close_request(NULL, &fake_win, NULL); }
                 if (quit) return;
                 assert(shown); rendered = 1; post_render(&win);
             }
@@ -153,7 +167,7 @@ Obj *evas_object_rectangle_add(Obj *c) { assert(c == &canvas); return &rectangle
 Obj *evas_object_text_add(Obj *c) { assert(c == &canvas); return &text; }
 void evas_object_color_set(Obj *o, int r, int g, int b, int a) { (void)o; (void)r; (void)g; (void)b; (void)a; }
 void evas_object_move(Obj *o, int x, int y) { (void)o; (void)x; (void)y; }
-void evas_object_resize(Obj *o, int w, int h) { assert(o == &rectangle && w == 1920 && h == 1080); }
+void evas_object_resize(Obj *o, int w, int h) { assert((o == &rectangle || o == &web) && w == 1920 && h == 1080); }
 void evas_object_show(Obj *o) { (void)o; }
 void evas_object_hide(Obj *o) { (void)o; }
 void evas_object_del(Obj *o) { assert(o == &web && !win_freed); web_deleted = 1; puts("mock view-delete"); }

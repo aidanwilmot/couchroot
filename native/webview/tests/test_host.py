@@ -264,7 +264,14 @@ class HostTests(unittest.TestCase):
         result = self.launcher(COUCHROOT_WEBVIEW_DEFER_SHOW="1")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("page-present", result.stdout)
+        self.assertLess(result.stdout.index("hub-ui-ready"), result.stdout.index("page-frame"))
         self.assertLess(result.stdout.index("page-frame"), result.stdout.index("page-present"))
+
+    def test_hidden_launcher_does_not_present_background_without_ui_ready(self):
+        result = self.launcher(mode="no-ui-ready", COUCHROOT_WEBVIEW_DEFER_SHOW="1", FAKE_WAIT_MS="100")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("page-present", result.stdout)
+        self.assertNotIn("mock window-show", result.stdout)
 
     def test_hidden_launcher_cancels_for_app_or_source_takeover(self):
         for change in [{"FAKE_FG_AFTER_START": "example.other"}, {"FAKE_SOURCE_AFTER_START": "vc-service"}]:

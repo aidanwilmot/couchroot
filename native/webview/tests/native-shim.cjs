@@ -140,3 +140,24 @@ function capture() {
   assert.deepEqual(load({ hash, search: '' }).storage, {});
 }
 console.log('Native shim: inactive outside host, discovery/launch through bridge.js, serialization, stale/timeout/error handling passed');
+
+// Readiness waits for fonts and an animation frame, shares the serialized
+// channel, and is sent once even if startup calls it again.
+{
+  const { window, titles } = load();
+  let fontsReady, frame;
+  window.document.fonts = { ready: { then: fn => { fontsReady = fn; } } };
+  window.requestAnimationFrame = fn => { frame = fn; };
+  window.HubNativePlatform.ready();
+  window.HubNativePlatform.ready();
+  assert.deepEqual(titles, []);
+  fontsReady();
+  assert.deepEqual(titles, []);
+  const bridge = window.HubBridge.create(undefined);
+  bridge.discover(() => {}, () => {});
+  frame();
+  assert.deepEqual(titles, ['hubbridge:1:r1:discover']);
+  window.HubNativePlatform.receive({ v: 1, id: 'r1', ok: true, apps: [] });
+  assert.deepEqual(titles, ['hubbridge:1:r1:discover', 'hubbridge:1:r2:ready']);
+  window.HubNativePlatform.receive({ v: 1, id: 'r2', ok: true });
+}

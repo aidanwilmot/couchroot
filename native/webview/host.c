@@ -79,7 +79,8 @@ static int engine_request = ENGINE_DEFAULT;
 static Obj *window, *elm_window, *canvas, *view, *background, *label, *defer_timer, *watch_timer;
 static void *elm_library, *ewk_library;
 static int ewk_started, failed, loaded, first_frame, focused;
-static int defer_show, page_frame, presented, presentation_pending;
+static int defer_show, page_frame, presented, presentation_pending, ui_ready;
+static void page_ready(void);
 static void presentation_result(int safe);
 static int lifetime = 60;
 static double start, load_start;
@@ -148,10 +149,10 @@ static void focus_out(void *data, Obj *obj, void *info) {
     if (view) view_focus(0);
     bridge_visibility(0);
 }
-/* EWK can paint while the Wayland window is unmapped. Require a frame after
- * load, not only DOM completion, before replacing the already-visible Hub. */
+/* EWK can paint while the Wayland window is unmapped. The Hub readiness
+ * handshake excludes early background-only frames; require a later paint. */
 static void present_page(void) {
-    if (!defer_show || presented || failed || stopping || !loaded || !page_frame) return;
+    if (!defer_show || presented || failed || stopping || !loaded || !page_frame || (bridge_enabled && !ui_ready)) return;
     if (launcher_mode) { presentation_pending = 1; return; }
     presentation_result(1);
 }
@@ -165,9 +166,14 @@ static void presentation_result(int safe) {
     stamp("page-present");
     ecore_evas_show(window);
 }
+static void page_ready(void) {
+    if (ui_ready || failed || stopping) return;
+    ui_ready = 1; page_frame = 0;
+    stamp("hub-ui-ready");
+}
 static void page_rendered(void *data, Obj *obj, void *info) {
     (void)data; (void)obj; (void)info;
-    if (!loaded || failed || stopping) return;
+    if (!loaded || failed || stopping || (bridge_enabled && !ui_ready)) return;
     if (!page_frame) stamp("page-frame");
     page_frame = 1;
     present_page();
@@ -287,6 +293,8 @@ static Bool create_view(void *unused) {
     evas_object_smart_callback_add(view, "webprocess,crashed", crashed, NULL);
     if (ewk_view_title_get) evas_object_smart_callback_add(view, "title,changed", title_changed, NULL);
     elm_win_resize_object_add(elm_window, view); /* Elementary parent; follows window size. */
+    /* Hidden startup must lay out at the final size before the window maps. */
+    evas_object_resize(view, 1920, 1080);
     evas_object_show(view);
     if (defer_show && ewk_view_visibility_set) ewk_view_visibility_set(view, 1);
     load_start = now();
