@@ -142,10 +142,20 @@ int main(int argc,char **argv){
  hub_launcher=launcher_fail;activations=0;fallback_begin();fallback_settle();
  assert(fallback.state==FALLBACK_IDLE&&fallback.child<0&&fallback.reap<0&&fallback.fd<0);
  rearm_reply(REARM_NEEDED,0);assert(!home_requested&&!activations);
- /* A stalled launcher is killed with its process group at the launch deadline. */
- hub_launcher=stall;pid_t group=fallback_begin();fallback_poll(now_seconds());assert(fallback.state==FALLBACK_LAUNCHING);
+ /* A stalled launcher is killed with its process group at the launch deadline.
+  * An inherited pipe proves both supervisor and launcher have exited, without
+  * depending on when the OS reaps an orphan zombie/process-group record. */
+ int live[2];assert(pipe(live)==0);assert(fcntl(live[0],F_SETFL,O_NONBLOCK)==0);
+ char ready_path[1100];snprintf(ready_path,sizeof(ready_path),"%s/ready",tools);
+ FILE *sf=fopen(stall,"w");assert(sf);fprintf(sf,"#!/bin/sh\nprintf ready > '%s'\nexec sleep 30\n",ready_path);fclose(sf);
+ hub_launcher=stall;pid_t group=fallback_begin();close(live[1]);fallback_poll(now_seconds());assert(fallback.state==FALLBACK_LAUNCHING);
+ for(int i=0;i<500&&access(ready_path,F_OK);i++){struct timespec pause={0,10000000};nanosleep(&pause,0);}
+ assert(access(ready_path,F_OK)==0);assert(getpgid(group)==group);
+ char byte;assert(read(live[0],&byte,1)<0&&errno==EAGAIN);
  fallback_poll(fallback.launch_deadline);assert(fallback.state==FALLBACK_IDLE&&fallback.child<0&&fallback.reap==group);fallback_settle();assert(fallback.reap<0);
- for(int i=0;i<200&&kill(-group,0)==0;i++){struct timespec pause={0,10000000};nanosleep(&pause,0);}assert(kill(-group,0)<0&&errno==ESRCH);
+ ssize_t remaining=-1;
+ for(int i=0;i<500;i++){remaining=read(live[0],&byte,1);if(remaining==0)break;assert(remaining<0&&errno==EAGAIN);struct timespec pause={0,10000000};nanosleep(&pause,0);}
+ assert(remaining==0);close(live[0]);unlink(ready_path);
  rearm_reply(REARM_OK,0);assert(!home_requested&&!activations);
  /* Repeated Home neither overlaps attempts nor extends the fixed deadline; the
   * resume waits for a re-arm without the viewer, then finishes over the web Hub. */
