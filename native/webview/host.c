@@ -79,11 +79,22 @@ static int engine_request = ENGINE_DEFAULT;
 static Obj *window, *elm_window, *canvas, *view, *background, *label, *defer_timer, *watch_timer;
 static void *elm_library, *ewk_library;
 static int ewk_started, failed, loaded, first_frame, focused;
+static int defer_show, page_frame, presented, presentation_pending;
+static void presentation_result(int safe);
 static int lifetime = 60;
 static double start, load_start;
 static char *url;
 static volatile sig_atomic_t stopping, stop_signals;
 
+/* signal() has implementation-dependent reset semantics under strict POSIX.
+ * Keep handlers installed for repeated stop requests on Linux and macOS. */
+static void set_signal(int number, void (*handler)(int)) {
+    struct sigaction action;
+    memset(&action, 0, sizeof action);
+    action.sa_handler = handler;
+    sigemptyset(&action.sa_mask);
+    if (sigaction(number, &action, NULL)) { perror("sigaction"); exit(3); }
+}
 static double now(void) {
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
@@ -137,6 +148,30 @@ static void focus_out(void *data, Obj *obj, void *info) {
     if (view) view_focus(0);
     bridge_visibility(0);
 }
+/* EWK can paint while the Wayland window is unmapped. Require a frame after
+ * load, not only DOM completion, before replacing the already-visible Hub. */
+static void present_page(void) {
+    if (!defer_show || presented || failed || stopping || !loaded || !page_frame) return;
+    if (launcher_mode) { presentation_pending = 1; return; }
+    presentation_result(1);
+}
+static void presentation_result(int safe) {
+    presentation_pending = 0;
+    if (failed || stopping || presented) return;
+    if (!safe) {
+        stamp("presentation-cancelled"); stopping = 1; ecore_main_loop_quit(); return;
+    }
+    presented = 1;
+    stamp("page-present");
+    ecore_evas_show(window);
+}
+static void page_rendered(void *data, Obj *obj, void *info) {
+    (void)data; (void)obj; (void)info;
+    if (!loaded || failed || stopping) return;
+    if (!page_frame) stamp("page-frame");
+    page_frame = 1;
+    present_page();
+}
 static void load_finished(void *data, Obj *obj, void *info) {
     (void)data; (void)obj; (void)info;
     if (failed || loaded) return;
@@ -145,6 +180,7 @@ static void load_finished(void *data, Obj *obj, void *info) {
     if (!focused && ecore_evas_focus_get(window)) focused = 1; /* Focus arrived before the signal hookup. */
     view_focus((Bool)focused);
     stamp("load-finished"); /* Not a paint or interaction-ready measurement. */
+    present_page();
 }
 static void load_error(void *data, Obj *obj, void *info) {
     (void)data; (void)obj; (void)info; failure("load-error");
@@ -246,11 +282,13 @@ static Bool create_view(void *unused) {
     if (stopping) return 0;
     stamp("view-created");
     evas_object_smart_callback_add(view, "load,finished", load_finished, NULL);
+    if (defer_show) evas_object_smart_callback_add(view, "frame,rendered", page_rendered, NULL);
     evas_object_smart_callback_add(view, "load,error", load_error, NULL);
     evas_object_smart_callback_add(view, "webprocess,crashed", crashed, NULL);
     if (ewk_view_title_get) evas_object_smart_callback_add(view, "title,changed", title_changed, NULL);
     elm_win_resize_object_add(elm_window, view); /* Elementary parent; follows window size. */
     evas_object_show(view);
+    if (defer_show && ewk_view_visibility_set) ewk_view_visibility_set(view, 1);
     load_start = now();
     stamp("navigation-start");
     if (!ewk_view_url_set(view, url)) failure("navigation-rejected");
@@ -264,8 +302,10 @@ static void rendered(Obj *win) {
     ecore_evas_callback_post_render_set(win, NULL);
     /* Next event-loop turn; EWK stays on the EFL thread. This does not make
      * synchronous EWK initialization nonblocking. */
-    defer_timer = ecore_timer_add(0, create_view, NULL);
-    if (!defer_timer) failure("defer-timer");
+    if (!defer_show) {
+        defer_timer = ecore_timer_add(0, create_view, NULL);
+        if (!defer_timer) failure("defer-timer");
+    }
 }
 static Bool watch(void *unused) {
     (void)unused;
@@ -276,7 +316,7 @@ static Bool watch(void *unused) {
     }
     bridge_poll();
     launcher_poll();
-    if (!first_frame && now() - start > 10) failure("native-render-timeout");
+    if (!first_frame && now() - start > (defer_show ? 35 : 10)) failure("native-render-timeout");
     if (view && !loaded && now() - load_start > 20) failure("page-load-timeout");
     return 1;
 }
@@ -330,6 +370,8 @@ static int launcher_child_setup(void) {
     engine_request = engine && !strcmp(engine, "default") ? ENGINE_DEFAULT : ENGINE_UPGRADE;
     const char *home = getenv("COUCHROOT_NATIVE_HOME"), *rearm = getenv("COUCHROOT_NATIVE_SOURCE_REARM");
     launcher_mode = 1; bridge_enabled = 1; lifetime = 0;
+    const char *handoff = getenv("COUCHROOT_WEBVIEW_DEFER_SHOW");
+    defer_show = handoff && !strcmp(handoff, "1");
     launcher_home = home && !strcmp(home, "1"); launcher_rearm = rearm && !strcmp(rearm, "1");
     char *base = file_url(page, "?host=native-webview");
     if (!base) return 0;
@@ -348,8 +390,8 @@ int main(int argc, char **argv) {
     if (argc == 2 && !strcmp(argv[1], "--source-rearm-wait")) return source_rearm_wait();
     if (argc == 3 && !strcmp(argv[1], "--native-guard") && !strcmp(argv[2], "--stay")) return launcher_supervise();
     start = now(); setvbuf(stdout, NULL, _IOLBF, 0);
-    signal(SIGINT, stop_signal); signal(SIGTERM, stop_signal);
-    signal(SIGPIPE, SIG_IGN);
+    set_signal(SIGINT, stop_signal); set_signal(SIGTERM, stop_signal);
+    set_signal(SIGPIPE, SIG_IGN);
     int first = 1;
     if (argc == 2 && !strcmp(argv[1], "--launcher-child")) {
         if (!launcher_child_setup()) { fputs("webview failure=launcher-setup\n", stderr); return 2; }
@@ -359,10 +401,11 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[first], "--engine=upgrade")) engine_request = ENGINE_UPGRADE;
         else if (!strcmp(argv[first], "--engine=default")) engine_request = ENGINE_DEFAULT;
         else if (!strcmp(argv[first], "--native-bridge")) bridge_enabled = 1;
+        else if (!strcmp(argv[first], "--defer-show")) defer_show = 1;
         else return 2;
     }
     if (!launcher_mode && (argc - first < 1 || argc - first > 2)) {
-        fprintf(stderr, "Usage: %s [--engine=default|upgrade] [--native-bridge] LOCAL_HTML [LIFETIME_SECONDS:1..3600]\n", argv[0]); return 2;
+        fprintf(stderr, "Usage: %s [--engine=default|upgrade] [--native-bridge] [--defer-show] LOCAL_HTML [LIFETIME_SECONDS:1..3600]\n", argv[0]); return 2;
     }
     if (!launcher_mode && argc - first == 2) {
         char *end; errno = 0; long value = strtol(argv[first + 1], &end, 10);
@@ -398,7 +441,10 @@ int main(int argc, char **argv) {
     ecore_evas_callback_post_render_set(window, rendered); /* Unused by Elementary 1.25. */
     watch_timer = ecore_timer_add(0.1, watch, NULL);
     if (!watch_timer) failure("watch-timer");
-    ecore_evas_show(window);
+    if (defer_show) {
+        defer_timer = ecore_timer_add(0, create_view, NULL);
+        if (!defer_timer) failure("defer-timer");
+    } else ecore_evas_show(window);
     if (watch_timer) ecore_main_loop_begin();
     else fputs("webview failure=watch-timer-no-loop\n", stderr);
     if (defer_timer) ecore_timer_del(defer_timer);

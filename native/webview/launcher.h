@@ -148,7 +148,7 @@ static int normal_boot_guard(void) {
     double up = ng_uptime();
     if (up < 0 || up >= 120 || !ng_marker()) return 0;
     double until = now() + (120 - up < NORMAL_BOOT_WAIT_LIMIT ? 120 - up : NORMAL_BOOT_WAIT_LIMIT);
-    alarm((unsigned)(until - now()) + 1);
+    alarm((unsigned)(until - now()) + 2); /* Grace for the last bounded sleep. */
     ng_stamp("normal-boot-wait");
     double launch_due = 0; int submitted = 0;
     while (now() < until && ng_marker()) {
@@ -191,6 +191,11 @@ static int native_boot_guard(void) {
 /* ---- Saved-source re-arm and Home predicates (hub-platform.h) ---- */
 static int home_settings_match(const char *source, const char *isp, const char *power, const char *foreground) {
     return source && isp && power && foreground && !strcmp(source, "isp-service") && !strcmp(isp, HUB_WEB_APP) && !strcmp(power, "lcdon");
+}
+/* Recheck after hidden rendering: never replace an app/source selected while loading. */
+static int presentation_settings_match(const char *source, const char *isp, const char *power, const char *foreground) {
+    return home_settings_match(source, isp, power, foreground) &&
+        (!foreground[0] || !strcmp(foreground, HUB_WEB_APP));
 }
 static int home_source_rearm;
 static int home_settings_note(const char *source, const char *isp, const char *power, const char *foreground) {
@@ -245,18 +250,23 @@ static int source_rearm_wait(void) {
 }
 
 /* ---- Persistent platform worker (fd 3; one-line text replies) ----
+ *   P -> "P <safe>"                                  hidden-window presentation
  *   S -> "S <status> <safe> <foreground>"            strict boot predicates
  *   H -> "H <status> <safe> <rearm> <foreground>"    explicit Home predicates
  *   R -> "R <result> <viewer> <previous>"            saved-source re-arm
  *   F -> "F <ok>"                                    web Hub launch (Home over Live TV) */
 static int launcher_worker(void) {
-    signal(SIGPIPE, SIG_IGN);
+    set_signal(SIGPIPE, SIG_IGN);
     char *(*get)(const char *) = NULL; int (*set)(const char *, const char *) = NULL;
     vconf_api(&get, &set);
     char command;
     while (read(3, &command, 1) == 1) {
         char line[512]; int safe;
-        if (command == 'S' || command == 'H') {
+        if (command == 'P') {
+            alarm(5);
+            safe = native_settings_read_checked(presentation_settings_match) && ng_display();
+            snprintf(line, sizeof line, "P %d\n", safe);
+        } else if (command == 'S' || command == 'H') {
             alarm(5);
             home_source_rearm = 0;
             safe = command == 'H' ? native_settings_read_checked(home_settings_note) : native_settings_read();
@@ -301,7 +311,7 @@ static int launcher_supervise(void) {
     ng_stamp("main-entered");
     if (!native_boot_guard()) { ng_stamp("admission-denied"); return 8; }
     ng_stamp("admission-passed");
-    signal(SIGTERM, supervisor_signal); signal(SIGINT, supervisor_signal);
+    set_signal(SIGTERM, supervisor_signal); set_signal(SIGINT, supervisor_signal);
     double window = now(); int restarts = 0;
     for (;;) {
         char *args[] = { "native-hub", "--launcher-child", NULL };
@@ -413,6 +423,7 @@ static int lw_start(void) {
 static void lw_reply(char *line) {
     double t = now();
     char kind = line[0];
+    if (kind == 'P') { presentation_result(!strcmp(line, "P 1")); return; }
     if (kind == 'H' || kind == 'S') {
         int status = 1, safe = 0, rearm = 0, consumed = 0;
         if (kind == 'H') sscanf(line, "H %d %d %d %n", &status, &safe, &rearm, &consumed);
@@ -466,9 +477,9 @@ static void lw_reply(char *line) {
 }
 /* Called from the EFL watch timer; never blocks. */
 static void launcher_poll(void) {
-    if (!launcher_mode || !first_frame) return;
+    if (!launcher_mode || failed || stopping || (!first_frame && !presentation_pending)) return;
     double t = now();
-    home_grab_start();
+    if (first_frame) home_grab_start();
     if (fallback.state != FALLBACK_IDLE && t >= fallback.until) fallback_end("native-home-resume-expired");
     if (lifecycle.waiting && t >= lifecycle.deadline) { lifecycle.waiting = 0; ng_stamp("app-handoff-timeout"); }
     if (lw_fd >= 0 && lw_pending) {
@@ -487,7 +498,8 @@ static void launcher_poll(void) {
     }
     if (lw_pending || t < lw_due) return;
     char kind = 0;
-    if (home_requested) { kind = 'H'; home_requested = 0; home_checking = 1; }
+    if (presentation_pending) kind = 'P';
+    else if (home_requested) { kind = 'H'; home_requested = 0; home_checking = 1; }
     else if (fallback.state == FALLBACK_LAUNCHING && !fallback_sent) { kind = 'F'; fallback_sent = 1; }
     else if ((launcher_rearm || fallback.state == FALLBACK_REARMING) && t >= rearm_due) kind = 'R';
     else if ((lifecycle.waiting || lifecycle.away) && t >= snapshot_due) { kind = 'S'; snapshot_due = t + 1; }

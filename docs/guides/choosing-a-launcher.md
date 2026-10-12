@@ -34,8 +34,10 @@ In one verified reboot the loading frame appeared at 10.270 seconds and page loa
 finished at about 17.4 seconds, compared with roughly 9–10 seconds to the
 pure-native UI's first frame. This was a background-mode boot; normal-mode
 handoff loaded the page around 37.3 seconds in a later owner power-cycle test.
-It waits for the signed Hub to retire the viewer and currently shows a visible
-signed-Hub → loading screen → WebView transition, including white/black frames.
+It waits for the signed Hub to retire the viewer. With deferred presentation,
+the signed Hub stays visible while the native window loads offscreen; only a
+loaded, rendered page can replace it. This removes the intermediate native
+loading screen.
 These are software milestones, not panel measurements.
 Choose this experiment for the shared web interface, not an established speed or
 memory improvement over pure native. Long-term stability and standby remain open.

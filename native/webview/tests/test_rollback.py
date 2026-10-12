@@ -3,6 +3,7 @@ import hashlib
 import os
 from pathlib import Path
 import stat
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -31,6 +32,15 @@ class RecoveryTests(unittest.TestCase):
                                  digest(self.target.read_bytes()), digest(self.backup.read_bytes()),
                                  'webview-test', 0)
         self.bin = self.root / 'bin'; self.bin.mkdir()
+        # The TV has sha256sum; stock macOS CI may only have shasum. Supply
+        # the same file-digest contract in that host fixture, with real bytes.
+        if not shutil.which('sha256sum'):
+            checksum = self.bin / 'sha256sum'
+            checksum.write_text('#!' + sys.executable + '\n'
+                'import hashlib, pathlib, sys\n'
+                'for name in sys.argv[1:]:\n'
+                ' print(hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() + "  " + name)\n')
+            checksum.chmod(0o755)
         # Model the firmware's unsigned-file rejection. Running command text is
         # permitted; submitting a script filename must fail this integration test.
         runner = self.bin / 'systemd-run'

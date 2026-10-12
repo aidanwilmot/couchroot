@@ -1,5 +1,6 @@
 /* Fake libvconf + libsystemd for launcher tests: values come from files in
  * $FAKE_STATE (source, isp, fg, power); writes are logged. Not firmware evidence. */
+#define _POSIX_C_SOURCE 200809L
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>

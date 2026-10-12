@@ -23,7 +23,15 @@ journals or compiled TV binaries are included. S90D has not been tested.
   QN90A's tested engines are Chromium 76.0.3809.146 and 120.0.6099.5.
   Requesting upgrade fails visibly if only the default engine loads.
 - **Rendering:** an Ecore/Evas `wayland_egl` window first draws a native loading
-  screen. `elm_win_fake_add` provides the Elementary parent EWK expects;
+  screen in diagnostic mode. With `COUCHROOT_WEBVIEW_DEFER_SHOW=1`, the launcher
+  instead keeps its window unmapped until page load and a subsequent EWK
+  `frame,rendered` signal. Chromium starts directly from the event loop, so hidden
+  startup does not depend on a visible loading frame. Normal boot leaves the
+  signed Hub visible during this wait; no native loading screen is shown. A
+  bounded worker rechecks source, ISP owner, display and foreground before
+  mapping the ready window. Another app/source cancels presentation without
+  restarting or taking focus. Missing rendering times out after 35 seconds.
+  `elm_win_fake_add` provides the Elementary parent EWK expects;
   explicit EWK focus makes arrows, OK and Back reach Chromium 120.
 - **App bridge:** bounded workers discover installed consumer apps and launch
   them through `app_launcher`. Platform work does not block Chromium's event
@@ -79,11 +87,12 @@ require the project's Playwright installation and Chromium.
 Standalone application mode (no boot installation):
 
 ```text
-minimal-hub-webview [--engine=default|upgrade] [--native-bridge] /absolute/page.html [seconds:1..3600]
+minimal-hub-webview [--engine=default|upgrade] [--native-bridge] [--defer-show] /absolute/page.html [seconds:1..3600]
 ```
 
 The launcher installer sets `COUCHROOT_NATIVE_HOME=1`,
-`COUCHROOT_NATIVE_SOURCE_REARM=1`, `COUCHROOT_NATIVE_STATE` to the retained old
+`COUCHROOT_NATIVE_SOURCE_REARM=1`, `COUCHROOT_WEBVIEW_DEFER_SHOW=1`,
+`COUCHROOT_NATIVE_STATE` to the retained old
 native preferences, and `COUCHROOT_WEBVIEW_ENGINE=upgrade` (or `default`). It must
 provision `hub/index.html` beside the executable. Use the same owner UID, SMACK
 label, read-only bind, Wayland/session environment and normal CPU policy as the
@@ -161,8 +170,8 @@ With the standby-aware guard, the owner's next power-cycle test opened Hub
 without pressing Home. Logs show one native child: normal admission at 21.792
 seconds, native loading frame at 24.295 seconds, Home grab at 35.237 seconds and
 page load around 37.3 seconds. The owner observed the signed Hub, loading text,
-white/black frames and then the final Hub. This transition remains visibly rough;
-it was not a crash/restart loop. Injected OK launched the selected Crunchyroll
+white/black frames and then the final Hub. This was not a crash/restart loop. The later deferred-presentation change
+removes the intermediate native loading window; see validation below. Injected OK launched the selected Crunchyroll
 app and injected Home restored native Hub focus. Acceptance was withheld while
 an app-exit check was incomplete, and the watchdog again restored the fallback.
 

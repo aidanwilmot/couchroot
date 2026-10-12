@@ -13,7 +13,7 @@ static int win, canvas, fake_win, rectangle, text, web;
 static int shown, rendered, web_deleted, win_freed, initialized, focus, elm_focus, quit, elm, view_parented;
 static void (*post_render)(Obj *);
 typedef void (*Smart)(void *, Obj *, void *);
-static Smart close_request, focus_in, focus_out, loaded, error, crash, title;
+static Smart close_request, focus_in, focus_out, loaded, error, crash, title, frame;
 static int window_focused; /* What ecore_evas_focus_get reports. */
 typedef struct { Bool (*callback)(void *); int active; } Timer;
 static Timer watch_timer, deferred;
@@ -38,7 +38,7 @@ Obj *ecore_evas_new(const char *engine, int x, int y, int w, int h, const char *
     return mode("window-fail") ? NULL : &win;
 }
 Obj *ecore_evas_get(Obj *w) { assert(w == &win); return &canvas; }
-void ecore_evas_show(Obj *w) { assert(w == &win); shown = 1; }
+void ecore_evas_show(Obj *w) { assert(w == &win); shown = 1; puts("mock window-show"); }
 void ecore_evas_free(Obj *w) { assert(w == &win && !initialized && elm); win_freed = 1; puts("mock window-free"); }
 void ecore_evas_title_set(Obj *w, const char *s) { (void)w; (void)s; }
 void ecore_evas_callback_post_render_set(Obj *w, void (*f)(Obj *)) { (void)w; post_render = f; }
@@ -79,6 +79,7 @@ static void drive(int (*done)(void)) {
     }
 }
 static int has_replied(void) { return replied; }
+static int has_shown(void) { return shown || quit; }
 static int has_raised(void) { return raised > 0; }
 static void write_state(const char *name, const char *value) {
     char path[1024]; snprintf(path, sizeof path, "%s/%s", getenv("FAKE_STATE"), name);
@@ -87,12 +88,13 @@ static void write_state(const char *name, const char *value) {
 static int ewk_focus_value(void);
 static void both_focus(int expected) { assert(focus == expected && elm_focus == expected && ewk_focus_value() == expected); }
 void ecore_main_loop_begin(void) {
-    assert(shown && !initialized && post_render && close_request && focus_in && focus_out);
+    assert(!initialized && post_render && close_request && focus_in && focus_out);
+    int hidden_start = !shown;
     /* Launcher tests: TV state changes after boot admission. */
     if (getenv("FAKE_FG_AFTER_START")) write_state("fg", getenv("FAKE_FG_AFTER_START"));
     if (getenv("FAKE_SOURCE_AFTER_START")) write_state("source", getenv("FAKE_SOURCE_AFTER_START"));
     if (getenv("FAKE_ISP_AFTER_START")) write_state("isp", getenv("FAKE_ISP_AFTER_START"));
-    rendered = 1; post_render(&win);
+    if (!hidden_start) { rendered = 1; post_render(&win); }
     assert(deferred.active);
     if (mode("close-early")) { close_request(NULL, &fake_win, NULL); assert(quit); return; }
     if (!deferred.callback(NULL)) deferred.active = 0;
@@ -101,12 +103,19 @@ void ecore_main_loop_begin(void) {
         if (mode("load-error")) error(NULL, &web, NULL);
         else {
             if (title && !getenv("FAKE_TITLE")) title(NULL, &web, NULL);
+            if (frame && mode("frame-before-load")) { frame(NULL, &web, NULL); assert(!shown); }
             /* Losing focus while loading must not steal it at load completion. */
             if (mode("focus-before-load")) {
                 /* The window already had focus; no signal arrives after load. */
                 window_focused = 1; loaded(NULL, &web, NULL); both_focus(1);
             } else {
                 focus_out(NULL, &fake_win, NULL); loaded(NULL, &web, NULL); both_focus(0);
+            }
+            if (hidden_start && frame && !mode("no-page-frame")) {
+                assert(!shown); frame(NULL, &web, NULL);
+                if (!shown) drive(has_shown);
+                if (quit) return;
+                assert(shown); rendered = 1; post_render(&win);
             }
             focus_in(NULL, &fake_win, NULL); both_focus(1);
             focus_out(NULL, &fake_win, NULL); both_focus(0);
@@ -167,6 +176,7 @@ void evas_object_smart_callback_add(Obj *o, const char *name, Smart f, const voi
     else if (!strcmp(name, "load,error")) error = f;
     else if (!strcmp(name, "webprocess,crashed")) crash = f;
     else if (!strcmp(name, "title,changed")) title = f;
+    else if (!strcmp(name, "frame,rendered")) frame = f;
     else assert(0);
 }
 #ifndef OMIT_VERSION_POLICY
@@ -194,7 +204,7 @@ Bool ewk_view_script_execute(Obj *o, const char *script, void *callback, void *d
 }
 Bool ewk_view_visibility_set(Obj *o, Bool visible) { assert(o == &web); printf("mock visibility=%d\n", visible); return 1; }
 int ewk_init(void) {
-    assert(rendered && elm); puts("mock ewk-init");
+    assert(elm); puts("mock ewk-init");
     if (mode("sigterm-in-init")) raise(SIGTERM);
     if (mode("init-fail")) return 0;
     initialized = 1; return 1;

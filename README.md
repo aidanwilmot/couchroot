@@ -59,7 +59,8 @@ supported installation. Both native options are experimental and QN90A-only.
 These timings are different software milestones, not equivalent panel-latency
 measurements. The WebView numbers are from background-mode boot; remote cold
 restart loaded around 37.3 seconds in a later test while the signed Hub retired
-the TV viewer. That handoff still shows loading and white/black frames.
+the TV viewer. Deferred presentation now keeps the native window hidden until
+its page has rendered, preserving the signed Hub during that handoff.
 On S90D the signed Hub starts early through Samsung's own path;
 neither native implementation has been ported or verified there.
 

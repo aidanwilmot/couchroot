@@ -2,6 +2,11 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Keep the native WebView window hidden until page load and a subsequent rendered
+  frame, leaving the signed Hub visible during normal boot. Recheck the source,
+  foreground and display before showing it; do not interrupt a newly opened app.
+  The journaled launcher enables `COUCHROOT_WEBVIEW_DEFER_SHOW=1`.
+
 - Add the experimental QN90A native WebView launcher (`native/webview/`): shared
   web UI on Chromium/EWK, verified engine selection, native app discovery/launch,
   one-time native preference import, Home/source handling and bounded crash

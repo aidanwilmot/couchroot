@@ -95,6 +95,26 @@ class HostTests(unittest.TestCase):
         self.assertNotIn("version-policy", output)
         self.assertIn("page-title=diag ready?ok", output)  # Control byte sanitized.
 
+    def test_deferred_window_requires_loaded_page_and_rendered_frame(self):
+        result = self.run_host(args=["--defer-show", str(self.page)])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for earlier, later in [("mock ewk-init", "load-finished"),
+                               ("load-finished", "page-frame"),
+                               ("page-frame", "mock window-show"),
+                               ("mock window-show", "native-first-render")]:
+            self.assertLess(result.stdout.index(earlier), result.stdout.index(later))
+        self.assertEqual(result.stdout.count("mock window-show"), 1)
+
+    def test_deferred_window_does_not_show_on_load_without_frame(self):
+        result = self.run_host("no-page-frame", args=["--defer-show", str(self.page)])
+        self.assertNotIn("mock window-show", result.stdout)
+        self.assertNotIn("page-present", result.stdout)
+
+    def test_deferred_window_does_not_show_failed_page(self):
+        result = self.run_host("load-error", args=["--defer-show", str(self.page)])
+        self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+        self.assertNotIn("mock window-show", result.stdout)
+
     def test_window_focus_before_load_is_applied_at_load(self):
         result = self.run_host("focus-before-load")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -239,6 +259,26 @@ class HostTests(unittest.TestCase):
         env = dict(os.environ, FAKE_MODE=mode, FAKE_STATE=str(self.state), FAKE_LAUNCH_LOG=str(self.launches), **extra)
         env["DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"] = str(self.out)
         return subprocess.run([str(self.host), *args], env=env, capture_output=True, text=True, timeout=timeout)
+
+    def test_hidden_launcher_rechecks_source_before_presenting(self):
+        result = self.launcher(COUCHROOT_WEBVIEW_DEFER_SHOW="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("page-present", result.stdout)
+        self.assertLess(result.stdout.index("page-frame"), result.stdout.index("page-present"))
+
+    def test_hidden_launcher_cancels_for_app_or_source_takeover(self):
+        for change in [{"FAKE_FG_AFTER_START": "example.other"}, {"FAKE_SOURCE_AFTER_START": "vc-service"}]:
+            with self.subTest(change=change):
+                result = self.launcher(COUCHROOT_WEBVIEW_DEFER_SHOW="1", **change)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("presentation-cancelled", result.stdout)
+                self.assertNotIn("mock window-show", result.stdout)
+                self.assertNotIn("launcher-restart", result.stdout)
+
+    def test_frame_before_load_does_not_present_blank_document(self):
+        result = self.run_host("frame-before-load", args=["--defer-show", str(self.page)])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertLess(result.stdout.index("load-finished"), result.stdout.index("page-frame"))
 
     def test_launcher_guard_refuses_without_boot_marker(self):
         result = self.launcher(admitted=False)
