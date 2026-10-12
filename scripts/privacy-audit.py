@@ -14,7 +14,9 @@ import subprocess
 RULES = {
  'private-key': rb'-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----',
  'credential-literal': rb'(?i)(?:password|token|secret)["\x27]?\s*[:=]\s*["\x27][a-zA-Z0-9_+/=-]{24,}',
- 'personal-network': rb'\b(?:10(?:\.[0-9]{1,3}){3}|192\.168(?:\.[0-9]{1,3}){2})\b',
+ 'personal-network': rb'\b(?:10(?:\.[0-9]{1,3}){3}|192\.168(?:\.[0-9]{1,3}){2}|172\.(?:1[6-9]|2[0-9]|3[01])(?:\.[0-9]{1,3}){2})\b',
+ # Bracketed letters keep this file from matching its own rule.
+ 'room-name': rb'(?i)\b(?:livin[g] ?room|be[d] ?room|basemen[t]|kitche[n]|famil[y] ?room|gam[e] ?room|medi[a] ?room|nurser[y])\b',
  'personal-home': rb'/Users/[a-zA-Z][^/\s"\x27]*|/home/(?!owner/|root/|user/)[a-zA-Z][^/\s"\x27]*/',
  'mac-address': rb'(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b',
  'device-identifier': rb'(?i)(?:duid|serialnumber|serial_number|udn)["\x27]?\s*[:=]\s*["\x27][^"\x27]{8,}',

@@ -54,9 +54,9 @@ test('visibility return reloads preferences after the startup retry budget is ex
  x.w.HubTelemetry.create=create;x.listeners.visibilitychange();x.flush();assert.equal(x.launches.length,1);
 });
 test('configured device identity validates its own route without copying launcher code',()=>{
- const context={window:{HUB_DEVICE_ID:'livingroom2'},URL};
+ const context={window:{HUB_DEVICE_ID:'example-tv-2'},URL};
  vm.runInNewContext(fs.readFileSync('web/telemetry.js','utf8'),context);
- const value={schema:1,enabled:true,endpoint:'https://nas:20490/v1/devices/livingroom2'};
+ const value={schema:1,enabled:true,endpoint:'https://nas:20490/v1/devices/example-tv-2'};
  assert.equal(context.window.HubTelemetry.validate(value).endpoint,value.endpoint);
  assert.throws(()=>context.window.HubTelemetry.validate({...value,endpoint:'https://nas:20490/v1/devices/qn90a'}));
 });

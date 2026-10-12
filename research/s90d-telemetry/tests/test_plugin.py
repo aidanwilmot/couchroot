@@ -13,7 +13,7 @@ class PluginTests(unittest.TestCase):
   spec=importlib.util.spec_from_loader(loader.name,loader);module=importlib.util.module_from_spec(spec);loader.exec_module(module)
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp);data=root/'s90d-data';data.mkdir()
-   devices={'s90d':dict(name='Basement',chart_prefix='s90d',snapshot='latest.json'),'qn90a':dict(name='Living room',chart_prefix='qn90a',snapshot='qn90a.json')}
+   devices={'s90d':dict(name='Example TV A',chart_prefix='s90d',snapshot='latest.json'),'qn90a':dict(name='Example TV B',chart_prefix='qn90a',snapshot='qn90a.json')}
    (data/'devices.json').write_text(json.dumps(devices));clock=[1000];step=[0]
    def write(id,up,seq):
     s=dict(sample(up,seq),device=id,received_at=clock[0]);(data/devices[id]['snapshot']).write_text(json.dumps(s))
