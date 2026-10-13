@@ -254,12 +254,23 @@ static void fake_held_crash(void) {
     f = fopen(path, "w"); fprintf(f, "%d (exe) D 1 1 1 0 -1 4195332 0 0\n", pid); fclose(f);
     snprintf(path, sizeof path, "%s/%d/stat", root, pid);
     f = fopen(path, "w"); fprintf(f, "%d (exe) D 1 1 1 0 -1 4195332 0 0\n", pid); fclose(f);
+    snprintf(path, sizeof path, "%s/%d/task/%d/syscall", root, pid, pid + 1);
+    f = fopen(path, "w"); fputs("-1 0x100ff0 0xb5fe2200\n", f); fclose(f);
+    snprintf(path, sizeof path, "%s/%d/task/%d/syscall", root, pid, pid);
+    f = fopen(path, "w"); fputs("running\n", f); fclose(f);
     snprintf(path, sizeof path, "%s/%d/maps", root, pid);
     f = fopen(path, "w");
-    fputs("a4979000-a5c5a000 r-xp 011d5000 b3:15 42 /usr/share/chromium-efl/upgrade/lib/libchromium-impl.so\n"
+    /* More mappings than a fixed table would hold, all before the stack (like the Hub's ~1450). */
+    for (unsigned long i = 0; i < 2100; i++) fprintf(f, "%08lx-%08lx rw-p 00000000 00:00 0 \n", 0x10000000 + i * 0x2000, 0x10001000 + i * 0x2000);
+    fputs("00100000-00101000 rw-p 00000000 00:00 0          [stack]\n"
+          "a4979000-a5c5a000 r-xp 011d5000 b3:15 42 /usr/share/chromium-efl/upgrade/lib/libchromium-impl.so\n"
           "a5c5a000-a5ea0000 rw-p 0517b000 b3:15 42 /usr/share/chromium-efl/upgrade/lib/libchromium-impl.so\n"
           "b5fe2000-b6100000 r-xp 00000000 b3:15 7 /usr/lib/libc-2.30.so\n", f);
     fclose(f);
+    /* Sparse memory image: the faulting thread's 16 stack bytes up to the end of [stack]. */
+    uint32_t stack[4] = { 0xb5fe2101, 0x12345678, 0xa497a235, 0x00100004 };
+    snprintf(path, sizeof path, "%s/%d/mem", root, pid);
+    f = fopen(path, "wb"); assert(f && !fseek(f, 0x100ff0, SEEK_SET) && fwrite(stack, sizeof stack, 1, f) == 1); fclose(f);
     struct timespec held = { 1, 200000000 }; nanosleep(&held, NULL);
     _exit(134);
 }

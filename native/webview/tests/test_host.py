@@ -449,8 +449,13 @@ class HostTests(unittest.TestCase):
                                    ("launcher-child-ended exit=134", "launcher-restart"),
                                    ("launcher-restart", "launcher-exited")]:
                 self.assertLess(output.index(earlier), output.index(later))
-            self.assertRegex(output, r"launcher-crash-thread tid=\d+ name=ThreadPoolForeg state=D flags=0x400400\n")
-            self.assertNotIn("name=exe", output)  # Exiting threads are not the faulting one.
+            self.assertRegex(output, r"launcher-crash-thread tid=\d+ name=ThreadPoolForeg state=D flags=0x400400 "
+                                     r"faulting=1 sp=0x100ff0 pc=libc-2.30.so\+0x200\n")
+            # Exiting threads are listed without the faulting mark; a running task has no registers.
+            self.assertRegex(output, r"launcher-crash-thread tid=\d+ name=exe state=D flags=0x400404 sp=0x0 pc=\?\n")
+            # Stack words that point into executable mappings, resolved to library offsets, in stack order.
+            stack = [l.split(" ", 2)[2] for l in output.splitlines() if l.startswith("launcher-crash-stack ")]
+            self.assertEqual(stack, ["sp+0x0 libc-2.30.so+0x101", "sp+0x8 libchromium-impl.so+0x11d6235"])
             maps = [l for l in output.splitlines() if l.startswith("launcher-crash-map ")]
             self.assertEqual(len(maps), 2)  # Executable mappings only.
             self.assertIn("011d5000 b3:15 42 /usr/share/chromium-efl/upgrade/lib/libchromium-impl.so", maps[0])
