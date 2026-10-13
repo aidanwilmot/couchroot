@@ -2,6 +2,13 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Native WebView: return to the Hub when the TV wakes from standby on Live TV.
+  A cheap once-a-second display-state check detects screen-on and runs the Home
+  path (signed Hub handoff, re-arm, native Hub). Live TV opened deliberately with
+  the screen on is untouched. A changed saved source is re-armed immediately so a
+  quick power-off does not boot on Live TV. On QN90A, Hub was back about 5.6 s
+  after wake.
+
 - Native WebView: never present the static default tiles. Under QN90A boot load
   a frame of the pre-script markup could finish after the Hub's readiness
   message; 3 of 9 captured boots showed the default tiles for 70–180 ms. The

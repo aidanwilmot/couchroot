@@ -43,6 +43,10 @@
 #ifndef RESTART_DELAY
 #define RESTART_DELAY 1
 #endif
+#ifndef WAKE_STATE_KEY
+#define WAKE_STATE_KEY "memory/pm/state" /* Samsung deviced display state; 1 = screen on. */
+#endif
+#define WAKE_WINDOW 20 /* Seconds after the screen turns on in which Live TV is returned. */
 #define HUB_WEB_APP "MiniHub001.Hub"
 #define TV_VIEWER "org.tizen.tv-viewer"
 #define REARM_SOURCE "isp-service"
@@ -254,11 +258,15 @@ static int source_rearm_wait(void) {
  *   S -> "S <status> <safe> <foreground>"            strict boot predicates
  *   H -> "H <status> <safe> <rearm> <foreground>"    explicit Home predicates
  *   R -> "R <result> <viewer> <previous>"            saved-source re-arm
- *   F -> "F <ok>"                                    web Hub launch (Home over Live TV) */
+ *   F -> "F <ok>"                                    web Hub launch (Home over Live TV)
+ *   W -> "W <display> <isp-source> <foreground>"     wake watch (memory/pm/state; 1 = on) */
 static int launcher_worker(void) {
     set_signal(SIGPIPE, SIG_IGN);
     char *(*get)(const char *) = NULL; int (*set)(const char *, const char *) = NULL;
     vconf_api(&get, &set);
+    int (*get_int)(const char *, int *) = NULL;
+    void *vc = dlopen("libvconf.so.0", RTLD_NOW | RTLD_LOCAL);
+    if (vc) *(void **)(&get_int) = dlsym(vc, "vconf_get_int");
     char command;
     while (read(3, &command, 1) == 1) {
         char line[512]; int safe;
@@ -280,6 +288,15 @@ static int launcher_worker(void) {
             RearmReport r = source_rearm(get, set);
             for (char *p = r.previous; *p; p++) if (*p == ' ' || *p == '\n') *p = '_';
             snprintf(line, sizeof line, "R %d %d %s\n", r.result, r.viewer, r.previous);
+        } else if (command == 'W') {
+            /* Cheap, frequent: three in-memory/db reads, no D-Bus. */
+            alarm(5);
+            int display = -1;
+            if (!get_int || get_int(WAKE_STATE_KEY, &display)) display = -1;
+            char *source = get ? get("db/boot/last_service") : NULL, *fg = get ? get("memory/appfw/current_fullscreen_appid") : NULL;
+            int ok = fg && strlen(fg) <= 256 && !strpbrk(fg, " \n");
+            snprintf(line, sizeof line, "W %d %d %s\n", display, source ? !strcmp(source, REARM_SOURCE) : -1, ok ? fg : "");
+            free(source); free(fg);
         } else if (command == 'F') {
             alarm(12);
             char uid[16]; snprintf(uid, sizeof uid, "%u", (unsigned)getuid());
@@ -345,7 +362,9 @@ typedef struct { char *keyname; } KeyPrefix; /* Only the documented first field 
 
 static int launcher_mode, launcher_home, launcher_rearm, launcher_grabbed;
 static pid_t lw_pid = -1; static int lw_fd = -1; static char lw_pending;
-static double lw_deadline, lw_due, rearm_due, snapshot_due;
+static double lw_deadline, lw_due, rearm_due, snapshot_due, wake_due, wake_until;
+static int display_state = -2; /* Last memory/pm/state seen by the wake watch; -2 = none yet. */
+static int source_isp = -2; /* Whether the last wake watch saw the Hub as saved source. */
 static char lw_line[640]; static size_t lw_used;
 static int home_requested, home_checking; static double home_pressed = -1, home_until;
 /* Return from a launched app needs an observed foreground, then two safe empty snapshots. */
@@ -470,6 +489,32 @@ static void lw_reply(char *line) {
         }
         return;
     }
+    if (kind == 'W') {
+        /* Samsung shows Live TV when the screen wakes from remote standby (the
+         * system keeps running), which also saves Live TV as the boot source.
+         * Only a screen-on transition opens the wake window: Live TV opened
+         * deliberately while the screen is on is left alone. */
+        int display = -1, isp = -1, consumed = 0;
+        sscanf(line, "W %d %d %n", &display, &isp, &consumed);
+        const char *fg = consumed ? line + consumed : "";
+        if (display != display_state) {
+            if (display_state != -2) printf("native-display-state %d\n", display);
+            /* Only a readable off state counts: an unreadable key (-1) is not standby. */
+            if (display_state >= 0 && display_state != 1 && display == 1) { wake_until = t + WAKE_WINDOW; ng_stamp("native-wake-observed"); }
+            display_state = display;
+        }
+        if (display != 1) wake_until = 0;
+        if (wake_until && t < wake_until && !strcmp(fg, TV_VIEWER) && fallback.state == FALLBACK_IDLE &&
+            !home_requested && !home_checking && ng_display()) {
+            /* Exactly the Home path: web Hub handoff pauses Live TV, then native. */
+            wake_until = 0; home_requested = 1; home_until = t + 3; ng_stamp("native-wake-return");
+        }
+        /* When the saved source leaves the Hub, re-arm now, not up to 15 s later:
+         * a quick power-off would otherwise boot the next time on Live TV. */
+        if (!isp && source_isp != 0 && launcher_rearm) rearm_due = t;
+        source_isp = isp;
+        return;
+    }
     if (kind == 'F' && fallback.state == FALLBACK_LAUNCHING) {
         if (!strcmp(line, "F 1")) { fallback.state = FALLBACK_REARMING; rearm_due = t; ng_stamp("native-home-fallback-launched"); }
         else fallback_end("native-home-fallback-failed");
@@ -503,6 +548,7 @@ static void launcher_poll(void) {
     else if (fallback.state == FALLBACK_LAUNCHING && !fallback_sent) { kind = 'F'; fallback_sent = 1; }
     else if ((launcher_rearm || fallback.state == FALLBACK_REARMING) && t >= rearm_due) kind = 'R';
     else if ((lifecycle.waiting || lifecycle.away) && t >= snapshot_due) { kind = 'S'; snapshot_due = t + 1; }
+    else if (launcher_rearm && t >= wake_due) { kind = 'W'; wake_due = t + 1; }
     if (!kind) return;
     if (lw_fd < 0 && !lw_start()) { lw_due = t + 5; if (kind == 'H') home_checking = 0; return; }
     if (send(lw_fd, &kind, 1, MSG_NOSIGNAL) != 1) { lw_close(); lw_due = t + 5; return; }

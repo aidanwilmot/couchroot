@@ -70,10 +70,14 @@ Bool ecore_wl2_window_keygrab_set(Obj *w, const char *key, int mod, int not_mod,
     assert(w == &wl_window && !strcmp(key, "XF86Home") && !mod && !not_mod && !priority && type == 3);
     puts("mock keygrab XF86Home"); return 1;
 }
+static void write_state(const char *name, const char *value);
 static void drive(int (*done)(void)) {
-    const char *wait = getenv("FAKE_WAIT_MS");
-    int rounds = wait ? atoi(wait) / 10 : 300;
+    const char *wait = getenv("FAKE_WAIT_MS"), *wake = getenv("FAKE_WAKE_AT_MS");
+    int rounds = wait ? atoi(wait) / 10 : 300, wake_round = wake ? atoi(wake) / 10 : -1;
     for (int i = 0; i < rounds && !done() && watch_timer.active; i++) {
+        if (i == wake_round) { /* Remote wake: screen on, Samsung brings Live TV forward. */
+            write_state("pm", "1"); write_state("fg", "org.tizen.tv-viewer"); write_state("source", "vc-service");
+        }
         watch_timer.callback(NULL);
         struct timespec pause = { 0, 10000000 }; nanosleep(&pause, NULL);
     }
