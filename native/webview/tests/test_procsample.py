@@ -46,6 +46,9 @@ class ProcsampleTests(unittest.TestCase):
                 self.assertIn("snapshot\tt+0.2\t", memory)
                 self.assertIn("snapshot\tend\t", memory)
                 self.assertEqual(memory.count("\nprocess\t"), 4)
+                system = (out / "system").read_text()
+                self.assertRegex(system, r"(?m)^stat\t[0-9.]+\tcpu ")
+                self.assertRegex(system, rf"(?m)^proc\t[0-9.]+\t{other.pid}\t")  # Every process, not just the Hub.
             finally:
                 hub.kill(); other.kill(); hub.wait(); other.wait()
 

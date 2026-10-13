@@ -11,7 +11,9 @@
  * offset (seconds after start) and at the end, OUT_DIR/memory receives PSS and
  * private/shared totals per process, split into the Chromium engine library,
  * other file mappings, anonymous memory and device (GPU) mappings, plus
- * MemAvailable. Nothing on the device is changed. */
+ * MemAvailable. Once a second OUT_DIR/system receives the aggregate /proc/stat
+ * CPU line, running/blocked task counts and every process's CPU ticks, so
+ * contention from other boot work is visible. Nothing on the device is changed. */
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <dirent.h>
@@ -143,6 +145,29 @@ static void memory(FILE *out, const char *label) {
     }
     fflush(out);
 }
+/* Whole-system view: what else competes for CPU while the Hub starts. */
+static void system_sample(FILE *out) {
+    double now = uptime(); char line[512];
+    FILE *f = fopen("/proc/stat", "r");
+    if (f) {
+        while (fgets(line, sizeof line, f)) {
+            line[strcspn(line, "\n")] = 0;
+            if (!strncmp(line, "cpu ", 4) || !strncmp(line, "procs_", 6)) fprintf(out, "stat\t%.2f\t%s\n", now, line);
+        }
+        fclose(f);
+    }
+    DIR *d = opendir("/proc"); struct dirent *e;
+    if (!d) return;
+    while ((e = readdir(d))) {
+        if (!isdigit((unsigned char)e->d_name[0])) continue;
+        char path[300], comm[64], state; int ppid; unsigned long long v[6];
+        snprintf(path, sizeof path, "/proc/%s/stat", e->d_name);
+        if (read_stat(path, comm, sizeof comm, &state, &ppid, v))
+            fprintf(out, "proc\t%.2f\t%s\t%d\t%s\t%c\t%llu\t%llu\t%llu\n", now, e->d_name, ppid, comm, state, v[0], v[1], v[3]);
+    }
+    closedir(d);
+    fflush(out);
+}
 int main(int argc, char **argv) {
     if (argc < 5 || argv[2][0] != '/') { fputs("usage: procsample OUT_DIR EXE_PREFIX SECONDS INTERVAL_MS [S1,S2...]\n", stderr); return 2; }
     prefix = argv[2];
@@ -152,18 +177,22 @@ int main(int argc, char **argv) {
     char path[PATH_MAX];
     snprintf(path, sizeof path, "%s/samples", argv[1]); FILE *samples = fopen(path, "w");
     snprintf(path, sizeof path, "%s/memory", argv[1]); FILE *mem = fopen(path, "w");
-    if (!samples || !mem) return 3;
+    snprintf(path, sizeof path, "%s/system", argv[1]); FILE *sys = fopen(path, "w");
+    if (!samples || !mem || !sys) return 3;
+    double next_system = 0;
     struct timespec begin, t; clock_gettime(CLOCK_MONOTONIC, &begin);
     for (;;) {
         clock_gettime(CLOCK_MONOTONIC, &t);
         double elapsed = (t.tv_sec - begin.tv_sec) + (t.tv_nsec - begin.tv_nsec) / 1e9;
         scan();
         sample(samples);
+        if (elapsed >= next_system) { system_sample(sys); next_system = (double)(long)elapsed + 1; }
         if (taken < snap_count && elapsed >= snaps[taken]) { char label[32]; snprintf(label, sizeof label, "t+%g", snaps[taken++]); memory(mem, label); }
         if (elapsed >= seconds) break;
         struct timespec pause = { (time_t)interval, (long)((interval - (time_t)interval) * 1e9) };
         nanosleep(&pause, NULL);
     }
     memory(mem, "end");
-    fclose(samples); fclose(mem); return 0;
+    system_sample(sys);
+    fclose(samples); fclose(mem); fclose(sys); return 0;
 }
