@@ -15,6 +15,7 @@
  * hub-lifecycle.h. Platform reads run in a persistent single-threaded worker,
  * never in the Chromium process. The hook's casting monitor requires a
  * `first-render-complete` line in this process's stdout. */
+#include <dirent.h>
 #include <sys/socket.h>
 #include <stdint.h>
 #if !defined(O_NOFOLLOW) && !defined(__linux__)
@@ -42,6 +43,9 @@
 #endif
 #ifndef RESTART_DELAY
 #define RESTART_DELAY 1
+#endif
+#ifndef PROC_ROOT
+#define PROC_ROOT "/proc" /* Overridable only for desktop tests. */
 #endif
 #ifndef WAKE_STATE_KEY
 #define WAKE_STATE_KEY "memory/pm/state" /* Samsung deviced display state; 1 = screen on. */
@@ -320,6 +324,54 @@ static int launcher_worker(void) {
     return 0;
 }
 
+/* ---- Crash capture ----
+ * QN90A's kernel holds a crashing process about 20 s before it exits (Samsung's
+ * minimal-core wait) and writes no core; in-process signal handlers are not
+ * invoked. Its memory map is still readable then. The supervisor checks one
+ * stat line per poll; once the child carries PF_SIGNALED it records the threads
+ * that are not yet exiting (the faulting one) and the executable mappings, so
+ * the firmware's fault PC/LR can be resolved to a library offset. */
+#define TASK_PF_EXITING 0x00000004
+#define TASK_PF_SIGNALED 0x00000400
+static int crash_stat(const char *path, char *comm, size_t size, char *state, unsigned long *flags) {
+    char line[512]; FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    size_t n = fread(line, 1, sizeof line - 1, f); fclose(f); line[n] = 0;
+    char *open = strchr(line, '('), *close = strrchr(line, ')');
+    if (!open || !close || close < open) return 0;
+    size_t length = (size_t)(close - open - 1) < size - 1 ? (size_t)(close - open - 1) : size - 1;
+    memcpy(comm, open + 1, length); comm[length] = 0;
+    for (char *c = comm; *c; c++) if (*c < 0x20 || *c == 0x7f) *c = '?';
+    int ppid, pgrp, session, tty, tpgid;
+    return sscanf(close + 2, "%c %d %d %d %d %d %lu", state, &ppid, &pgrp, &session, &tty, &tpgid, flags) == 7;
+}
+static int crash_detected(pid_t pid) {
+    char path[64], comm[64], state; unsigned long flags = 0;
+    snprintf(path, sizeof path, PROC_ROOT "/%d/stat", (int)pid);
+    return crash_stat(path, comm, sizeof comm, &state, &flags) && (flags & TASK_PF_SIGNALED);
+}
+static void crash_snapshot(pid_t pid) {
+    char path[96]; snprintf(path, sizeof path, PROC_ROOT "/%d/task", (int)pid);
+    printf("launcher-child-crashing pid=%d\n", (int)pid);
+    DIR *d = opendir(path); struct dirent *e;
+    while (d && (e = readdir(d))) {
+        if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+        char stat[128], comm[64], state; unsigned long flags = 0;
+        snprintf(stat, sizeof stat, "%s/%.20s/stat", path, e->d_name);
+        if (crash_stat(stat, comm, sizeof comm, &state, &flags) && !(flags & TASK_PF_EXITING))
+            printf("launcher-crash-thread tid=%s name=%s state=%c flags=0x%lx\n", e->d_name, comm, state, flags);
+    }
+    if (d) closedir(d);
+    snprintf(path, sizeof path, PROC_ROOT "/%d/maps", (int)pid);
+    FILE *maps = fopen(path, "r"); char line[512];
+    while (maps && fgets(line, sizeof line, maps)) {
+        char perms[8] = "";
+        if (sscanf(line, "%*s %7s", perms) == 1 && perms[2] == 'x') printf("launcher-crash-map %s", line);
+    }
+    if (maps) fclose(maps);
+    fflush(stdout);
+}
+
 /* ---- Supervisor: admission once, then run and restart the Hub process ---- */
 static volatile sig_atomic_t supervisor_stop; static volatile pid_t supervisor_child;
 static void supervisor_signal(int sig) { supervisor_stop = 1; if (supervisor_child > 0) kill(supervisor_child, sig); }
@@ -336,8 +388,13 @@ static int launcher_supervise(void) {
         if (posix_spawn(&pid, SELF_EXE, NULL, NULL, args, environ)) { ng_stamp("launcher-spawn-failed"); return 1; }
         supervisor_child = pid;
         if (supervisor_stop) kill(pid, SIGTERM);
-        int status = 0; pid_t r;
-        do { r = waitpid(pid, &status, 0); } while (r < 0 && errno == EINTR);
+        int status = 0, crashing = 0; pid_t r;
+        for (;;) { /* Poll so a dying child can be inspected before it exits. */
+            r = waitpid(pid, &status, WNOHANG);
+            if (r == pid || (r < 0 && errno != EINTR)) break;
+            if (r == 0 && !crashing && crash_detected(pid)) { crashing = 1; crash_snapshot(pid); }
+            struct timespec pause = { 0, 250000000 }; nanosleep(&pause, NULL);
+        }
         supervisor_child = 0;
         if (supervisor_stop) { ng_stamp("launcher-stopped"); return 0; }
         if (r == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0) { ng_stamp("launcher-exited"); return 0; }

@@ -52,6 +52,7 @@ class HostTests(unittest.TestCase):
                         f'-DUPTIME_PATH="{cls.uptime}"', f'-DMARKER_PATH="{cls.marker}"',
                         f'-DWM_READY_PATH="{cls.ready}"', f'-DWAYLAND_SOCKET_PATH="{cls.socket_path}"',
                         f'-DNORMAL_MODE_PATH="{cls.normal}"', '-DNORMAL_BOOT_WAIT_LIMIT=12',
+                   f'-DPROC_ROOT="{cls.boot / "proc"}"',
                         "-DRESTART_DELAY=0", str(SOURCE / "host.c"), "-ldl", "-o", str(cls.host)], check=True)
         library = cls.out / "libecore_evas.so.1"
         subprocess.run(["cc", *flags, *shared, str(SOURCE / "tests/fake_runtime.c"), "-o", str(library)], check=True)
@@ -435,6 +436,31 @@ class HostTests(unittest.TestCase):
         self.assertEqual(result.stdout.count("launcher-restart "), 5)
         self.assertIn("launcher-restart-limit", result.stdout)
         self.assertEqual(result.stdout.count("admission-passed"), 1)  # Admission only at boot.
+
+    def test_supervisor_records_held_crash_then_restarts(self):
+        proc = self.boot / "proc"
+        try:
+            result = self.launcher(mode="held-crash-once", FAKE_PROC=str(proc))
+            output = result.stdout
+            self.assertEqual(result.returncode, 0, output + result.stderr)
+            for earlier, later in [("launcher-child-crashing", "launcher-crash-thread"),
+                                   ("launcher-crash-thread", "launcher-crash-map"),
+                                   ("launcher-crash-map", "launcher-child-ended exit=134"),
+                                   ("launcher-child-ended exit=134", "launcher-restart"),
+                                   ("launcher-restart", "launcher-exited")]:
+                self.assertLess(output.index(earlier), output.index(later))
+            self.assertRegex(output, r"launcher-crash-thread tid=\d+ name=ThreadPoolForeg state=D flags=0x400400\n")
+            self.assertNotIn("name=exe", output)  # Exiting threads are not the faulting one.
+            maps = [l for l in output.splitlines() if l.startswith("launcher-crash-map ")]
+            self.assertEqual(len(maps), 2)  # Executable mappings only.
+            self.assertIn("011d5000 b3:15 42 /usr/share/chromium-efl/upgrade/lib/libchromium-impl.so", maps[0])
+            self.assertEqual(output.count("launcher-child-crashing"), 1)
+        finally:
+            shutil.rmtree(proc, ignore_errors=True)
+
+    def test_normal_children_are_never_reported_as_crashing(self):
+        result = self.launcher(mode="crash")  # Renderer crash: an ordinary exit, no PF_SIGNALED.
+        self.assertNotIn("launcher-child-crashing", result.stdout)
 
     def test_home_press_raises_hub_over_an_app(self):
         result = self.launcher(COUCHROOT_NATIVE_HOME="1", FAKE_HOME_PRESS="1", FAKE_FG_AFTER_START="kIciSQlYEM.plex")
