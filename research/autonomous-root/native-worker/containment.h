@@ -87,13 +87,36 @@ static void containment_worker_stop(void) {
     pulse_started = 0;
   }
 }
-static void containment_freeze(void) {
+static void containment_freeze(pid_t worker) {
   if (!freezer_write("freezer.state", "FROZEN")) {
     perror("prototype: freezer request");
     containment_failed = 1;
     return;
   }
+  /* This is our unreaped child, so its PID cannot be recycled. */
+  if (kill(worker, SIGKILL) && errno != ESRCH) {
+    containment_failed = 1;
+    return;
+  }
 #ifndef NATIVE_WORKER_TEST
+  /* A dying multithreaded process can prevent the old freezer from reaching
+   * FROZEN. Move only our already-killed worker back out; descendants remain
+   * in the private leaf. SIGKILL prevents that worker returning to userspace.
+   */
+  int parent = openat(freezer_root, "cgroup.procs", O_WRONLY | O_CLOEXEC);
+  char worker_text[32];
+  snprintf(worker_text, sizeof worker_text, "%d", worker);
+  int moved =
+      parent >= 0 && job_write(parent, worker_text, strlen(worker_text));
+  int move_error = errno;
+  if (parent >= 0)
+    close(parent);
+  if (!moved && move_error != ESRCH) {
+    errno = move_error;
+    perror("prototype: remove dying worker from freezer");
+    containment_failed = 1;
+    return;
+  }
   /* Older TV kernels retain killed tasks in a frozen cgroup. Wait until no
    * member can fork, queue SIGKILL to every member, then thaw so exit can run.
    * The exclusive private leaf, not persisted PIDs, establishes ownership. */

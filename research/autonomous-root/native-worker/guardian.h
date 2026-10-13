@@ -259,7 +259,7 @@ static void guardian_start(void) {
     if (!guardian_watchdog &&
         stamp() - last_pulse > (pulse_seen ? 1000 : 5000)) {
       guardian_watchdog = 1;
-      containment_freeze();
+      containment_freeze(pid);
       kill(pid, SIGKILL);
       fputs("prototype: guardian watchdog froze experiment and killed "
             "unresponsive worker\n",
@@ -270,7 +270,7 @@ static void guardian_start(void) {
         kill(pid, SIGTERM);
         stopping_at = stamp();
       } else if (stamp() - stopping_at > 3000) {
-        containment_freeze();
+        containment_freeze(pid);
         kill(pid, SIGKILL);
       }
     }
