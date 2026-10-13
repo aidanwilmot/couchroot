@@ -62,7 +62,7 @@ RootAgentServer.prototype._handle = function (socket) {
     var nonce = crypto.randomBytes(32);
     socket.write(PROTOCOL_VERSION + '\t' + nonce.toString('hex') + '\n');
 
-    var buf = '';
+    var lineBuffer = Buffer.alloc(4096), lineBytes = 0, binary = null, binaryBuffer = null, binaryBytes = 0;
     var authed = false;
 
     // the agent must AUTH within 10s; a silent peer is dropped (the host tool
@@ -71,58 +71,86 @@ RootAgentServer.prototype._handle = function (socket) {
         if (!authed) socket.destroy();
     }, 10000);
 
-    socket.on('data', function (chunk) {
-        buf += chunk.toString('utf8');
-        var idx;
-        if (buf.length > MAX_FRAME_BYTES && buf.indexOf('\n') === -1) {
-            self.note('frame too large'); socket.destroy(); return;
-        }
-        while ((idx = buf.indexOf('\n')) !== -1) {
-            if (idx > MAX_FRAME_BYTES) { self.note('frame too large'); socket.destroy(); return; }
-            var line = buf.slice(0, idx);
-            buf = buf.slice(idx + 1);
-            if (!line) continue;
+    function handleLine(line) {
+        if (!line) return;
+        var payload;
+        try { payload = self._verify(line, nonce); }
+        catch (e) { self.note('auth frame rejected: ' + (e.message || e)); socket.destroy(); return; }
 
-            var payload;
-            try { payload = self._verify(line, nonce); }
-            catch (e) { self.note('auth frame rejected: ' + (e.message || e)); socket.destroy(); return; }
-
-            if (!authed) {
-                // expect AUTH with a full root identity (same require_root as
-                // the host tool: a non-root "agent" must never be accepted)
-                var af = payload.split('\t');
-                if (af.length !== 8 || af[0] !== 'AUTH' || self._conn
-                    || !/^[1-9][0-9]*$/.test(af[1])
-                    || !af.slice(2, 6).every(function (v) { return v === '0'; })) {
-                    self.note('invalid AUTH identity or competing agent');
-                    socket.destroy();
-                    return;
-                }
-                var ident = {
-                    pid: parseInt(af[1], 10),
-                    uid: parseInt(af[2], 10),
-                    euid: parseInt(af[3], 10),
-                    gid: parseInt(af[4], 10),
-                    egid: parseInt(af[5], 10),
-                    cap_eff: af[6],
-                    smack: Buffer.from(af[7] || '', 'base64').toString('utf8')
-                };
-                if (ident.uid !== 0 || ident.euid !== 0 || ident.gid !== 0 || ident.egid !== 0) {
-                    self.note('non-root agent uid=' + ident.uid + ' euid=' + ident.euid);
-                    socket.destroy();
-                    return;
-                }
-                authed = true;
-                clearTimeout(authTimer);
-                self._conn = new RootAgentConnection(socket, self.secret, nonce, ident);
-                if (self.onConnect) self.onConnect(self._conn);
-                continue;
+        if (!authed) {
+            // expect AUTH with a full root identity (same require_root as
+            // the host tool: a non-root "agent" must never be accepted)
+            var af = payload.split('\t');
+            if (af.length !== 8 || af[0] !== 'AUTH' || self._conn
+                || !/^[1-9][0-9]*$/.test(af[1])
+                || !af.slice(2, 6).every(function (v) { return v === '0'; })) {
+                self.note('invalid AUTH identity or competing agent');
+                socket.destroy();
+                return;
             }
-
-            // after auth, frames are handled by the connection
-            if (self._conn) self._conn._onFrame(payload);
+            var ident = {
+                pid: parseInt(af[1], 10),
+                uid: parseInt(af[2], 10),
+                euid: parseInt(af[3], 10),
+                gid: parseInt(af[4], 10),
+                egid: parseInt(af[5], 10),
+                cap_eff: af[6],
+                smack: Buffer.from(af[7] || '', 'base64').toString('utf8')
+            };
+            if (ident.uid !== 0 || ident.euid !== 0 || ident.gid !== 0 || ident.egid !== 0) {
+                self.note('non-root agent uid=' + ident.uid + ' euid=' + ident.euid);
+                socket.destroy();
+                return;
+            }
+            authed = true;
+            clearTimeout(authTimer);
+            self._conn = new RootAgentConnection(socket, self.secret, nonce, ident);
+            if (self.onConnect) self.onConnect(self._conn);
+            return;
         }
-        if (buf.length > MAX_FRAME_BYTES) { self.note('frame too large'); socket.destroy(); }
+
+        // A binary body is admitted only after its header was authenticated.
+        if (self._conn) binary = self._conn._onFrame(payload) || null;
+    }
+
+    socket.on('data', function (chunk) {
+        var offset = 0;
+        try {
+            while (offset < chunk.length && !socket.destroyed) {
+                if (binary) {
+                    var count = Math.min(binary.length - binaryBytes, chunk.length - offset);
+                    chunk.copy(binaryBuffer, binaryBytes, offset, offset + count);
+                    binaryBytes += count; offset += count;
+                    if (binaryBytes === binary.length) {
+                        var body = binaryBuffer, completed = binary;
+                        binary = null; binaryBuffer = null; binaryBytes = 0;
+                        completed.complete(body);
+                    }
+                    continue;
+                }
+                var newline = chunk.indexOf(10, offset);
+                var end = newline < 0 ? chunk.length : newline;
+                var nextBytes = lineBytes + end - offset;
+                if (nextBytes > MAX_FRAME_BYTES) throw Error('frame too large');
+                if (nextBytes > lineBuffer.length) {
+                    var grown = Buffer.alloc(Math.min(MAX_FRAME_BYTES, Math.max(nextBytes, lineBuffer.length * 2)));
+                    lineBuffer.copy(grown, 0, 0, lineBytes); lineBuffer = grown;
+                }
+                chunk.copy(lineBuffer, lineBytes, offset, end); lineBytes = nextBytes;
+                offset = end + (newline < 0 ? 0 : 1);
+                if (newline >= 0) {
+                    var line = lineBuffer.toString('utf8', 0, lineBytes);
+                    lineBytes = 0;
+                    if (lineBuffer.length > 65536) lineBuffer = Buffer.alloc(4096);
+                    handleLine(line);
+                    if (binary) binaryBuffer = Buffer.alloc(binary.length);
+                    if (binary && binary.length === 0) {
+                        var empty = binary; binary = null; binaryBuffer = null;
+                        empty.complete(Buffer.alloc(0));
+                    }
+                }
+            }
+        } catch (e) { self.note('invalid worker response: ' + e.message); socket.destroy(); }
     });
 
     socket.on('error', function (e) { self.note('socket error: ' + (e.message || e)); });
@@ -184,6 +212,22 @@ RootAgentConnection.prototype._send = function (payload) {
 
 RootAgentConnection.prototype._onFrame = function (payload) {
     var f = payload.split('\t');
+    if (f[0] === 'OPDATA') {
+        var self = this, pending = this._pending[f[1]], read = pending && pending.read;
+        if (f.length !== 5 || !read || !/^(0|[1-9][0-9]*)$/.test(f[2])
+            || !/^(0|[1-9][0-9]*)$/.test(f[3]) || !/^[a-f0-9]{64}$/.test(f[4]))
+            throw Error('unexpected binary result');
+        var offset = Number(f[2]), length = Number(f[3]), digest = f[4];
+        if (!Number.isSafeInteger(offset) || offset !== read.offset || !Number.isInteger(read.length)
+            || read.length < 1 || read.length > 1048576 || length > read.length)
+            throw Error('invalid binary range');
+        return {length:length, complete:function(data) {
+            if (self._pending[f[1]] !== pending || crypto.createHash('sha256').update(data).digest('hex') !== digest)
+                throw Error('invalid binary digest or expired request');
+            delete self._pending[f[1]]; clearTimeout(pending.timer);
+            pending.resolve({data:data, offset:offset, sha256:digest});
+        }};
+    }
     if (f[0] === 'RESULT' && f.length >= 6) {
         var seq = f[1];
         var p = this._pending[seq];
@@ -263,8 +307,8 @@ RootAgentConnection.prototype.execute = function (command, timeoutMs) {
 };
 
 module.exports = { RootAgentServer };
-// Bounded, authenticated administrative operations. Binary chunks are base64 only
-// on this loopback framing layer; the HTTPS data endpoints carry raw bytes.
+// Bounded operations: uploads retain OP framing; downloads use an authenticated
+// OPDATA header followed by at most 1 MiB of digest-checked raw bytes.
 RootAgentServer.prototype.operation = function (value) {
     if (!this._conn) return Promise.reject(Object.assign(Error('Root worker unavailable'), {outcome:'rejected'}));
     return this._conn.operation(value);
@@ -276,7 +320,7 @@ RootAgentConnection.prototype.operation = function (value) {
     return new Promise(function(resolve,reject) {
         var seq=++self._sequence;
         var timer=setTimeout(function(){delete self._pending[seq];reject(Error('Operation outcome unknown'));self._socket.destroy();},30000);
-        self._pending[seq]={resolve:resolve,reject:reject,timer:timer};
+        self._pending[seq]={resolve:resolve,reject:reject,timer:timer,read:value.op==='file.read'?{offset:value.offset,length:value.length}:null};
         try {self._send('OP\t'+seq+'\t'+bytes.toString('base64'));}
         catch(e){clearTimeout(timer);delete self._pending[seq];reject(e);self._socket.destroy();}
     });

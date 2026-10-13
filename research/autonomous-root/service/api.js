@@ -36,7 +36,7 @@ function createApi(options){
     const result=await agent.operation(operation);
     if(operationId)journal.finish(operationId,{exit_code:Number.isInteger(result.exit_code)?result.exit_code:0,timed_out:!!result.timed_out});
     if(operation.op==='file.read'){
-     const data=Buffer.from(result.data,'base64');
+     const data=Buffer.isBuffer(result.data)?result.data:Buffer.from(result.data,'base64');
      if(data.length>1048576||hash(data)!==result.sha256)throw Error('Invalid worker chunk digest');
      res.writeHead(200,{'Content-Type':'application/octet-stream','Cache-Control':'no-store','Connection':'close','X-SHA256':result.sha256,'X-Offset':String(result.offset)});res.end(data);
     }else reply(200,{id:value.id,...result});

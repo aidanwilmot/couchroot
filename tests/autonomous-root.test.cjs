@@ -42,12 +42,13 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
   const serverCert=cert('server'),clientCert=cert('client'),foreign=cert('foreign');
   const pin=hash(new crypto.X509Certificate(clientCert.cert).raw);
-  let calls=0,enabled=true,uncertain=false,exitCode=0;
-  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async op=>{if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(Buffer.from(op.data,'base64').toString(),'chunk');return {offset:5};}return {state:'running'};}};
+  let calls=0,enabled=true,uncertain=false,exitCode=0,badChunk=false;
+  const downloadBytes=Buffer.from([0,10,13,128,255]);
+  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async op=>{if(op.op==='file.read')return {data:downloadBytes,offset:7,sha256:badChunk?'0'.repeat(64):hash(downloadBytes)};if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(Buffer.from(op.data,'base64').toString(),'chunk');return {offset:5};}return {state:'running'};}};
   const journal=new Journal(dir+'/requests.json');
   server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
-  function request(route,body,credentials=clientCert,extra={}){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:false,headers:{'Content-Type':'application/json',...extra}},res=>{let data='';res.on('data',d=>data+=d);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(data)}));});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
+  function request(route,body,credentials=clientCert,extra={}){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:false,headers:{'Content-Type':'application/json',...extra}},res=>{let parts=[];res.on('data',d=>parts.push(d));res.on('end',()=>{const data=Buffer.concat(parts);resolve({status:res.statusCode,headers:res.headers,body:res.headers['content-type']==='application/octet-stream'?data:JSON.parse(data)});});});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
   await assert.rejects(request('/v1/status',undefined,{}));await assert.rejects(request('/v1/status',undefined,foreign));
   assert.equal((await request('/v1/status')).status,200);
   assert.equal((await request('/v1/status',undefined,clientCert,{Origin:'https://example.invalid'})).status,403);
@@ -59,6 +60,9 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   const binary=await request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:crypto.randomUUID(),operation:{op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')}})});
   assert.equal(binary.status,200);assert.equal(binary.body.offset,5);
   assert.equal((await request('/v1/op',{id:crypto.randomUUID(),operation:{op:'file.write'}})).body.outcome,'rejected');
+  const read=()=>request('/v1/files/read',{id:crypto.randomUUID(),operation:{op:'file.read',transfer_id:'example',offset:7,length:5}});
+  const downloaded=await read();assert.equal(downloaded.status,200);assert.deepEqual(downloaded.body,downloadBytes);assert.equal(downloaded.headers['x-sha256'],hash(downloadBytes));assert.equal(downloaded.headers['x-offset'],'7');
+  badChunk=true;assert.equal((await read()).status,409);
   uncertain=true;const lost=command();assert.equal((await request('/v1/exec',lost)).status,409);assert.equal((await request('/v1/exec',lost)).status,409);assert.equal(calls,2);assert.equal(journal.rows.find(r=>r.id===lost.id).state,'submitted');
   assert.equal((await request('/v1/disable',{})).status,200);assert.equal((await request('/v1/exec',command())).status,503);
   const snapshot=await request('/v1/requests');assert.equal(snapshot.body.sha256,journal.digest());

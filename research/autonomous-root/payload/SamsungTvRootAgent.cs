@@ -171,17 +171,21 @@ internal static partial class SamsungTvRootAgent
 
                     if (fields[0] == "OP" && fields.Length == 3)
                     {
-                        string response;
+                        object operationResult = null;
+                        string response = null;
                         try
                         {
                             using (var document = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(fields[2])))
-                                response = System.Text.Json.JsonSerializer.Serialize(new { ok = true, result = Operation(document.RootElement, readableDirectory, runtimeDirectory) });
+                                operationResult = Operation(document.RootElement, readableDirectory, runtimeDirectory);
                         }
                         catch (Exception error)
                         {
                             response = System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = error.Message, outcome = "failed" });
                         }
-                        WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + fields[1] + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(response)));
+                        if (response == null)
+                            WriteOperationSuccess(stream, nonce, secret, fields[1], operationResult);
+                        else
+                            WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + fields[1] + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(response)));
                         continue;
                     }
 
@@ -454,6 +458,24 @@ internal static partial class SamsungTvRootAgent
         Buffer.BlockCopy(standardError, 0, result, 0, standardError.Length);
         Buffer.BlockCopy(notice, 0, result, standardError.Length, notice.Length);
         return result;
+    }
+
+    private static void WriteOperationSuccess(Stream stream, byte[] nonce, byte[] secret, string sequence, object result)
+    {
+        var chunk = result as FileChunk;
+        if (chunk != null)
+        {
+            // The authenticated header binds sequence, range, length and digest.
+            // A partial write is a transport failure; never append a JSON result.
+            WriteAuthenticated(stream, nonce, secret, string.Join("\t", "OPDATA", sequence,
+                chunk.offset.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                chunk.data.Length.ToString(System.Globalization.CultureInfo.InvariantCulture), chunk.sha256));
+            stream.Write(chunk.data, 0, chunk.data.Length);
+            stream.Flush();
+            return;
+        }
+        string response = System.Text.Json.JsonSerializer.Serialize(new { ok = true, result });
+        WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + sequence + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(response)));
     }
 
     private static void WriteAuthenticated(

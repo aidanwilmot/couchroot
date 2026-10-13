@@ -11,6 +11,12 @@ internal static partial class SamsungTvRootAgent
     private static readonly string WorkerId = Guid.NewGuid().ToString("N");
     private const int ChunkBytes = 1024 * 1024;
     private const long TransferLimit = 2L * 1024 * 1024 * 1024;
+    private sealed class FileChunk
+    {
+        public byte[] data { get; set; }
+        public long offset { get; set; }
+        public string sha256 { get; set; }
+    }
     private sealed class Transfer : IDisposable
     {
         internal FileStream File;
@@ -61,7 +67,7 @@ internal static partial class SamsungTvRootAgent
     private static object Operation(JsonElement value, string staging, string runtime)
     {
         string op = Text(value, "op");
-        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1" } };
+        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "binary-download-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1" } };
         if (op.StartsWith("helper.", StringComparison.Ordinal)) return HelperOperation(value);
         if (op.StartsWith("job.", StringComparison.Ordinal)) return JobOperation(value);
         if (op == "app.exec")
@@ -122,7 +128,7 @@ internal static partial class SamsungTvRootAgent
             byte[] bytes = new byte[(int)Math.Min(length, transfer.Size - offset)];
             int count = 0;
             while (count < bytes.Length) { int read = transfer.File.Read(bytes, count, bytes.Length - count); if (read == 0) throw new IOException("File changed during transfer"); count += read; }
-            using (var sha = SHA256.Create()) return new { data = Convert.ToBase64String(bytes), offset, sha256 = HexEncode(sha.ComputeHash(bytes)) };
+            using (var sha = SHA256.Create()) return new FileChunk { data = bytes, offset = offset, sha256 = HexEncode(sha.ComputeHash(bytes)) };
         }
         if (!transfer.Upload) throw new ArgumentException("Not an upload");
         if (op == "file.write")

@@ -20,6 +20,23 @@ internal static partial class SamsungTvRootAgent
     }
     private static void TestProtocolReader()
     {
+        byte[] nonce = new byte[32], secret = new byte[32];
+        new Random(12).NextBytes(secret);
+        foreach (int size in new[] { 0, 17, ChunkBytes })
+        {
+            byte[] payload = new byte[size]; new Random(13).NextBytes(payload);
+            string digest = HexEncode(System.Security.Cryptography.SHA256.HashData(payload));
+            using (var encoded = new MemoryStream())
+            {
+                WriteOperationSuccess(encoded, nonce, secret, "7", new FileChunk { data = payload, offset = 123, sha256 = digest });
+                WriteOperationSuccess(encoded, nonce, secret, "8", new { closed = true });
+                encoded.Position = 0;
+                var reader = new ProtocolReader(encoded);
+                Check(VerifyAuthenticated(reader.ReadLine(), nonce, secret) == "OPDATA\t7\t123\t" + size + "\t" + digest, "binary header contract differs");
+                Check(reader.ReadExact(size).SequenceEqual(payload), "binary encoded data differs");
+                Check(VerifyAuthenticated(reader.ReadLine(), nonce, secret).StartsWith("OPRESULT\t8\t"), "binary response corrupted next frame");
+            }
+        }
         byte[] binary = new byte[] { 0, 10, 13, 255, 128 };
         byte[] wire = Encoding.UTF8.GetBytes("hello ☃\r\n").Concat(binary)
             .Concat(Encoding.UTF8.GetBytes("next\n\n")).ToArray();
