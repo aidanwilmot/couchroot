@@ -15,13 +15,40 @@ It loads the TV's libcrypto and json-c APIs, rather than implementing cryptograp
 or a complete JSON parser itself. This is still experimental C with a substantially
 smaller test history than the managed worker.
 
-Missing parity includes background jobs and durable job recovery, managed helper
-view creation/release, autonomous root acquisition, independent launcher staging,
-production packaging/recovery integration and the broader production file access
-policy. Legacy READFILE/WRITEFILE and JSON file.write are also omitted. Unsupported
+The lifecycle extension adds `job.start/status/output/cancel/forget` with a
+supervisor thread, root/app profiles, exclusive durable launch intents, bounded
+1 MiB rings per stream and 64 KiB cursor windows. Sixteen jobs can be retained in
+memory and 64 records on disk. Records live under the experiment's private `.jobs`
+directory, locked to one native worker. Restarted workers report saved outcomes
+and refuse to replay starts. Logs are in-memory only. Cancellation of a saved,
+previous-worker job is deliberately refused on these older kernels: process-group
+ownership cannot be established atomically from a saved PID. Unknown records
+require inspection, rather than being treated as safe to forget.
+
+`helper.prepare/release` copies a digest-checked source from the experiment file
+scope into an exclusively owned `/opt/couchroot-agent/native-helpers` directory,
+sets Smack `User`, and creates a read-only, nosuid/nodev bind view. The native worker
+unshares its mount namespace before starting threads. It owns at most eight views;
+release is refused while any of its jobs are active. Cleanup kills/reaps owned job
+groups before unmounting helpers. Failed unmounts retain their backing files.
+Abrupt SIGKILL/crashes can leave records/files requiring explicit inspection;
+there is no claim of durable log recovery or containment of deliberately detached
+processes. The controller and deployed .NET worker retain their original namespace.
+
+Missing parity still includes autonomous root acquisition, independent launcher
+staging, production packaging/recovery integration and the broader production file
+access policy. Legacy READFILE/WRITEFILE and JSON file.write are omitted. Unsupported
 operations fail explicitly; there is no automatic fallback or replay. The app
-launcher and any executable helper views are borrowed from the deployed worker.
-Thus startup numbers are not a comparison of complete independent service startup.
+launcher is borrowed from the deployed worker. Thus startup numbers are not a
+comparison of complete independent service startup. The worker's five-minute
+experiment lifetime remains bounded; jobs cannot outlive that worker. Disconnect,
+SIGTERM and graceful shutdown clean up owned active jobs and helper views.
+
+`accept.c` exercises the native job/helper lifecycle on the TV via a private
+loopback controller. It checks an over-25-second job, simultaneous foreground and
+background execution, app-user helper execution, read-only mounts, output limits,
+cancellation, retention, disconnect cleanup and saved status after a native restart.
+These checks do not restart the production worker or TV.
 
 `bench.c` runs on the TV as an authenticated root job. It alternates freshly
 executed copies of the installed .NET DLL and the C worker on independent loopback
@@ -43,11 +70,14 @@ sh research/autonomous-root/native-worker/build.sh /private/native-worker-build
 ```
 
 On Linux, compile `worker.c` with `-DNATIVE_WORKER_TEST` only for the host tests,
-which substitute the unavailable host Smack label. Use address/undefined-behavior
+which substitute the unavailable host Smack label and explicitly disable helper
+staging when the real Smack/mount guards cannot run. Link with `-pthread -ldl`. Use address/undefined-behavior
 sanitizers and set `NATIVE_WORKER` to that executable when running
 `tests/native_worker_test.py`. The normal ARM build never enables this test mode.
 Tests cover authentication, replay, corrupted/truncated transfers, bounds, path
 and symlink rejection, conditional replacement, bounded output and timeouts.
+Job tests also cover duplicate intents, cursor truncation, retention, signal and
+disconnect cleanup, and saved-record handling.
 
 Device execution must use the enrolled .NET client's existing verified upload,
 helper and job APIs with firmware guards, per-device locks, durable private
@@ -61,7 +91,7 @@ installed DLL and verified launcher for that device, never another model's paths
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
 
-## Both-TV comparison — 2026-10-13
+## Historical comparison before the lifecycle extension — 2026-10-13
 
 The native worker built from `8d8e195` completed eight measured pairs per TV after
 two warmup pairs. The follow-up harness `fb5bcc4` used the **identical native worker
@@ -115,7 +145,7 @@ fall to 11–12 KiB while roughly 332–336 KiB was in swap; managed PSS fell to
 at that point would hide memory commitment. `results.json` retains RSS, PSS,
 private resident memory, swap and proportional swap for each measurement stage.
 
-### Capability comparison
+### Capability comparison at the original measured revision
 
 | Capability | Native result on both TVs | Remaining difference |
 | --- | --- | --- |
@@ -142,8 +172,10 @@ attempts were inspected and cleaned before retrying under fresh experiment IDs.
 
 **Recommendation:** the footprint and startup improvements justify continuing a
 native implementation if those costs matter, but this prototype is not a drop-in
-replacement. Keep .NET deployed until jobs, helper/launcher lifecycle, acquisition,
-recovery, long-running behavior and failure-path parity are implemented and tested.
+replacement. Keep .NET deployed until complete launcher lifecycle, acquisition, recovery,
+long-running behavior and failure-path parity are implemented and tested. The
+original measurements above predate the new job supervisor and helper management;
+they must not be presented as measurements of the extended worker.
 The measured steady transfer gains alone do not require switching workers.
 
 No TV was rebooted or had its installed package, SDK host setting, enrollment or

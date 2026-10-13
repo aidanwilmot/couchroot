@@ -18,7 +18,11 @@ static void release(Transfer *t) {
   memset(t, 0, sizeof *t);
   t->fd = -1;
 }
+static void jobs_cleanup(void);
+static void helpers_cleanup(void);
 static void cleanup(void) {
+  jobs_cleanup();
+  helpers_cleanup();
   if (active_child > 0) {
     kill(-active_child, SIGKILL);
     kill(active_child, SIGKILL);
@@ -35,7 +39,7 @@ static int leaf(const char *path, const char **name) {
     return 0;
   const char *p = path + n + 1;
   if (!*p || strlen(p) > 255 || strchr(p, '/') || !strcmp(p, ".") ||
-      !strcmp(p, "..") || !strncmp(p, ".upload-", 8))
+      !strcmp(p, "..") || !strcmp(p, ".jobs") || !strncmp(p, ".upload-", 8))
     return 0;
   *name = p;
   return 1;
@@ -145,9 +149,12 @@ static Result execute(const char *command, int timeout, int app) {
       close(pipes[i][1]);
     }
     if (app)
-      execl(launcher, launcher, "--command", command, (char *)NULL);
+      execve(launcher,
+             (char *const[]){launcher, "--command", (char *)command, NULL},
+             environ);
     else
-      execl("/bin/sh", "sh", "-c", command, (char *)NULL);
+      execve("/bin/sh", (char *const[]){"sh", "-c", (char *)command, NULL},
+             environ);
     _exit(127);
   }
   active_child = pid;
@@ -241,10 +248,28 @@ static int verified_launcher(void) {
   close(fd);
   return good;
 }
+#include "jobs.h"
+
+#include "helpers.h"
+static int signal_socket = -1;
+static void stop_signal(int sig) {
+  (void)sig;
+  stopping = 1;
+  if (signal_socket >= 0)
+    shutdown(signal_socket, SHUT_RDWR);
+  if (active_child > 0) {
+    kill(-active_child, SIGKILL);
+    kill(active_child, SIGKILL);
+  }
+}
 static J *operation(J *request, Wire *w, const char *seq) {
   const char *op = textval(request, "op");
   if (!op)
     return failure("Invalid operation");
+  if (!strncmp(op, "job.", 4))
+    return job_operation(request, op);
+  if (!strncmp(op, "helper.", 7))
+    return helper_operation(request, op);
   if (!strcmp(op, "status")) {
     J *j = obj(), *caps = json_object_new_array();
     char b[128];
@@ -255,8 +280,10 @@ static J *operation(J *request, Wire *w, const char *seq) {
                            json_object_new_double(strtod(b, NULL)));
     str(j, "worker_id", worker_id);
     str(j, "implementation", "native-prototype");
-    const char *names[] = {"prototype-scoped-files-v1", "binary-upload-v1",
-                           "binary-download-v1", "prototype-app-exec-v1"};
+    const char *names[] = {
+        "prototype-scoped-files-v1", "binary-upload-v1",
+        "binary-download-v1",        "prototype-app-exec-v1",
+        "prototype-jobs-v1",         "prototype-helper-lifecycle-v1"};
     for (size_t i = 0; i < sizeof names / sizeof *names; i++)
       json_object_array_add(caps, json_object_new_string(names[i]));
     json_object_object_add(j, "capabilities", caps);
@@ -418,6 +445,9 @@ int main(int argc, char **argv) {
   if (getuid() || geteuid() || getgid() || getegid())
     return 77;
   signal(SIGPIPE, SIG_IGN);
+  signal(SIGTERM, stop_signal);
+  signal(SIGINT, stop_signal);
+  signal(SIGALRM, stop_signal);
   alarm(300);
   libraries();
   for (int i = 0; i < 8; i++)
@@ -442,6 +472,8 @@ int main(int argc, char **argv) {
   unsigned char id[16];
   random_bytes(id, sizeof id);
   hex(id, sizeof id, worker_id);
+  helpers_init();
+  jobs_init();
   Wire w = {0};
   int token = open(argv[3], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   if (token < 0 || fstat(token, &st) || !S_ISREG(st.st_mode) ||
@@ -474,9 +506,10 @@ int main(int argc, char **argv) {
   w.fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
   if (w.fd < 0)
     fatal("socket");
+  signal_socket = w.fd;
   int one = 1;
   setsockopt(w.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
-  struct timeval limit = {30, 0};
+  struct timeval limit = {300, 0};
   setsockopt(w.fd, SOL_SOCKET, SO_RCVTIMEO, &limit, sizeof limit);
   setsockopt(w.fd, SOL_SOCKET, SO_SNDTIMEO, &limit, sizeof limit);
   if (connect(w.fd, (struct sockaddr *)&addr, sizeof addr))
@@ -578,6 +611,7 @@ int main(int argc, char **argv) {
     free(frame);
   }
   memset(w.secret, 0, 32);
+  signal_socket = -1;
   close(w.fd);
   return 0;
 }
