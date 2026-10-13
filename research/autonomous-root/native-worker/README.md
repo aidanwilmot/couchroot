@@ -55,13 +55,23 @@ its own nonterminal job records to `interrupted` and deleting owned execution vi
 It never signals a PID from a saved job file. Completed records remain unchanged;
 crash records have an unknown exit code and unavailable in-memory output. A new
 worker invocation reads those records and refuses duplicate starts. It does not
-automatically restart or replay commands. The protocol worker is non-dumpable
-and handles fatal signals with an alternate-stack, async-signal-safe `_exit`.
-That path deliberately bypasses worker cleanup; the guardian owns recovery. It
-limits work performed in a damaged process. Fatal signal teardown on the TVs can
-still take seconds, so the guardian also uses a heartbeat watchdog and an isolated
-freezer cgroup to stop descendants during that delay. The controller waits for
-recovery and does not force-kill a guardian merely because its wait expires.
+automatically restart or replay commands. The protocol worker is non-dumpable.
+Before allowing that child to create threads, the guardian attaches with
+`PTRACE_SEIZE`, `PTRACE_O_TRACECLONE` and `PTRACE_O_EXITKILL`. It observes only the
+owned worker and its newly created threads; forked root/app commands are not
+traced. SIGSEGV, SIGBUS, SIGILL, SIGFPE and SIGABRT delivery stops terminate that
+worker before the
+TV's default crash collector. The original signal is saved separately as
+`worker_fault_signal`; interrupted jobs still have an unknown exit code. Normal
+signals are forwarded, group stops remain stopped for the heartbeat watchdog,
+and unavailable tracing fails startup closed. No process is selected from a
+saved PID, and no system-wide crash setting is changed. See the Linux
+[ptrace interface](https://man7.org/linux/man-pages/man2/ptrace.2.html) for the
+signal-delivery and clone-stop semantics used here.
+
+The guardian also uses a heartbeat watchdog and an isolated freezer cgroup for
+an unresponsive worker. The controller waits for recovery and does not force-kill
+a guardian merely because its wait expires.
 
 Each native run exclusively creates `/sys/fs/cgroup/freezer/couchroot-native-ID`.
 Only the protocol worker joins it before spawning threads or commands; its root
@@ -114,7 +124,13 @@ On Linux, compile `worker.c` with `-DNATIVE_WORKER_TEST` only for the host tests
 which substitute the unavailable host Smack label and explicitly disable helper
 staging when the real Smack/mount guards cannot run. Link with `-pthread -ldl`. Use address/undefined-behavior
 sanitizers and set `NATIVE_WORKER` to that executable when running
-`tests/native_worker_test.py`. The normal ARM build never enables this test mode.
+`tests/native_worker_test.py`. The normal ARM build never enables this test mode. Guardian tracing tests require
+native Linux execution and ptrace permission (for example, `--cap-add SYS_PTRACE`
+in a dedicated container); an emulated x86 userspace is not a substitute.
+`worker-fault-test` and `accept-fault-test` are separately named builds with
+`NATIVE_WORKER_FAULT_TEST`. Only that worker build contains the authenticated
+`test.fault` operation, which writes a PROT_NONE page on the main thread or a new
+worker thread. Do not use this fault-injection build as a production worker.
 Tests cover authentication, replay, corrupted/truncated transfers, bounds, path
 and symlink rejection, conditional replacement, bounded output and timeouts.
 Job tests also cover duplicate intents, cursor truncation, retention, signal and
@@ -134,7 +150,56 @@ model's runtime paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
 
-## Independent launcher and crash recovery validation — 2026-10-13
+## Crash delay and test-mount cleanup fix — 2026-10-13
+
+Revision `6b41b6d` passed the normal **16-group suite and extended 18-group suite
+on each TV**. The extended suite deliberately writes an inaccessible memory page
+on both the protocol thread and a newly created worker thread. All fault recoveries
+finished within the suite's two-second limit, removed detached descendants and
+owned execution views, preserved interrupted records without replay, and allowed
+app-user execution after restart. Local validation passed 226 repository tests
+and 24 native tests under address/undefined-behavior sanitizers on native ARM64 Linux.
+[crash-delay-results.json](crash-delay-results.json) retains the build identities,
+individual observations and cleanup checks.
+
+| Recovery observation | QN90A | S90D |
+| --- | ---: | ---: |
+| Previous SIGSEGV path | 20,573 ms | 20,890 ms |
+| SIGSEGV, normal build | 192 ms | 101 ms |
+| SIGSEGV, extended test build | 172 ms | 874 ms |
+| Actual main-thread memory fault | 194 ms | 92 ms |
+| Actual new-thread memory fault | 215 ms | 103 ms |
+
+These are individual fault-to-guardian-exit observations, not a latency distribution
+or a new CPU/memory benchmark. The higher S90D injected-signal sample is retained;
+all real-memory-fault samples were 92–215 ms.
+
+The earlier delay was in Samsung's kernel crash collector: kernel logs repeatedly
+reported `Extended-Mincore` waiting for `get_coredump_config` for about 20 seconds.
+On **both TVs**, isolated probes showed that installing handlers for SIGSEGV,
+SIGABRT, SIGBUS and SIGILL returned success but read back as the default disposition.
+SIGUSR1 and SIGFPE handlers installed normally. The same result occurred through
+libc and direct `rt_sigaction`, with dumpability both disabled and enabled. Removing
+SA_RESETHAND and using SA_SIGINFO did not solve it. The guardian now intercepts
+worker faults at the kernel signal-delivery stop; it no longer depends on a fatal
+handler running in the damaged worker. It does not change global crash settings.
+
+The original non-traced signal probe also reproduced the busy executable mount.
+With supervision, **all helper releases succeeded through the normal .NET API on
+both TVs in both suites**, including after real memory faults: no lazy unmount,
+detach/rebind or manual mount repair was needed. Captured kernel windows contained
+no crash-collector wait messages. Avoiding the vendor crash path eliminated both
+symptoms in these controlled runs; the exact retained kernel mount reference was
+not identified.
+
+All test files, jobs, helper/launcher views and private freezer groups were removed.
+Original .NET worker/process and boot identities, launcher hashes, protected files,
+cgroup memberships and execution mount sets were verified unchanged. Neither TV
+was rebooted; .NET remains deployed. Forked command/helper processes are intentionally
+not traced, so this does not qualify their own fatal-fault behavior or replace
+production root acquisition and service recovery.
+
+## Historical independent launcher and crash recovery validation — 2026-10-13
 
 Revision `d6fe00e` passed **16 acceptance groups on each TV**, with zero controller
 exit codes. [recovery-results.json](recovery-results.json) records the sanitized
