@@ -273,6 +273,75 @@ unknown. The later early-boot upgrade trial also aborted during view creation,
 as recorded above. Supervision
 bounds recovery attempts but does not prove long-term stability.
 
+### Startup and memory profile (2026-10-12)
+
+Thirteen further background software reboots ran instrumented builds with the
+compositor capture and `minimal-hub-procsample`. Every measurement candidate was
+rolled back; the accepted launcher was not replaced. Child-relative seconds,
+from readable engine files to the first presented frame:
+
+| Segment | `main` behavior (3 clean boots) | Final candidate (5 clean boots)¹ |
+| --- | ---: | ---: |
+| EFL load, `elm_init`, window | 0.93–1.13 | 0.81–1.08 |
+| Engine load in `ewk_set_version_policy` | 4.40–4.88 | 4.71–5.18 |
+| View creation | 0.36–0.66 | 0.30–0.39 |
+| Navigation to presented window | 1.98–2.67 | 2.42–3.07 |
+| Total | 8.36–8.60 | 8.83–9.21 |
+| Hub content (compositor, uptime) | 16.99–17.86 | 17.98–19.70 |
+| Processes after startup | 5 | 5 |
+| Hub-tree CPU until content | 4.44–4.70 s | 4.45–4.54 s |
+| Idle CPU (50 s, Hub in front)² | 0.21–0.30 % of one core | 0.21–0.31 % |
+| PSS / private, 20 s after start | 91.5–91.8 / 60.2–60.3 MB | 91.4–92.5 / 60.1–60.4 MB |
+| PSS / private / swap, settled² | 57.4–58.0 / 30.2–30.8 / 7.9–8.9 MB | 56.8–59.0 / 29.6–31.8 / 6.6–10.2 MB |
+
+¹ Same host binary; three of these boots used the rule as a separate stylesheet.
+² Measurement boots only; verification boots launched apps during that window.
+
+The five processes are the supervisor, Chromium host, zygote, renderer and
+platform worker. Of the settled PSS, about 25 MB is the shared engine library.
+The final candidate's slower engine segment comes before any changed code runs;
+boots differ by up to 0.8 s in that segment. Startup time did not improve.
+
+- **Engine load dominates.** `ewk_set_version_policy(1)` makes the wrapper load
+  the 88 MB Chromium 120 implementation from its zlib squashfs image: 4.4–5.2
+  seconds, about 1.75 s of it CPU (1.5 s kernel), with no major faults. The same
+  load in a restarted child later in the boot took 0.55 s. All four cores were
+  99.7–99.9 % busy, mainly with Samsung Home, `slive-provider` and preloaded web
+  apps. Those apps use the default engine image; the processes found mapping the
+  upgrade engine afterwards all started later.
+- **Rejected after measurement.** Each of these was built, measured on device and
+  removed:
+  - Starting the platform worker before EWK left the presentation check
+    unchanged at 0.11–0.20 s.
+  - A read-ahead helper shortened the engine segment by about 0.5 s but slowed
+    EFL by about 0.5 s and used 103 MB of page cache.
+  - Lowering the Hub session's autogroup nice to −10 did not change the
+    engine's CPU share.
+  - On Chromium 120, `ewk_process_model_set` and
+    `ewk_memory_optimization_mode_enable` only log, and
+    `ewk_context_memory_saving_mode_set` and
+    `ewk_chromium_append_command_line_flag` are empty stubs.
+- **Intermittent crash.** Two of these boots (one with `main` behavior) aborted
+  in `ewk_view_add` with glibc `double free or corruption (fasttop)`.
+  Samsung's kernel then waits 100 × 0.204 s for `get_coredump_config` and writes
+  no core. That wait does not change with `RLIMIT_CORE` or `PR_SET_DUMPABLE`,
+  and signal handlers are not invoked. Restart cost about 23 s: Hub content
+  arrived at 40.6 and 43.1 seconds. The cause remains open.
+- **Stale default tiles (fixed).** Under boot load a compositor frame takes about
+  one second. A frame of the static `index.html` markup could therefore finish
+  after `ready` and pass for the Hub. 3 of 9 captured boots, `main` included,
+  showed the default Plex/YouTube tiles for 70–180 ms before the saved
+  shortcuts. With the transparent markup and the `painted` confirmation, 6
+  candidate boots showed the saved tiles from the first content frame, including
+  one where confirmation followed the frame by 0.33 s. No boot had a white frame
+  or a return to black after content. In fast boots the confirmation adds 3–5 ms.
+
+The final candidate passed the injected-key checks after a single Chromium
+start: arrows, OK launching Plex, Home back to Hub, and `app_launcher -k`
+returning focus (`native-return-focused`). It also passed them after the crash
+recovery above. These are background software reboots, not physical-panel
+recordings, handheld-remote normal-mode boots or a crash-rate estimate.
+
 ## ABI and evidence
 
 The EFL and EWK view APIs follow the

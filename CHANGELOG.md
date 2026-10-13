@@ -2,6 +2,17 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Native WebView: never present the static default tiles. Under QN90A boot load
+  a frame of the pre-script markup could finish after the Hub's readiness
+  message; 3 of 9 captured boots showed the default tiles for 70–180 ms. The
+  native bundle keeps that markup transparent until the saved Home renders, and
+  the host also waits for the page's presented first contentful paint.
+- Add WebView startup instrumentation (EFL, engine load, view, page milestones
+  with CPU, kernel time and page faults) and `minimal-hub-procsample` for private
+  process, memory and contention profiles. Profiling showed the 4.4–5.2 s cold
+  load of Samsung's Chromium 120 engine under saturated boot CPU dominates;
+  tested launcher-side changes did not reduce it and were not kept.
+
 - Keep the native WebView window hidden until page load and a subsequent rendered
   frame, leaving the signed Hub visible during normal boot. Recheck the source,
   foreground and display before showing it; do not interrupt a newly opened app.

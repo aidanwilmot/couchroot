@@ -37,7 +37,12 @@ Two captured background software boots showed one Hub appearance with no white
 frame or blackout afterward. Those initial trials needed early engine retries. A subsequent fix waits for
 the base/upgrade filesystem contents before loading EWK; two further full boots
 loaded Chromium 120 without retry and showed Hub content at about 17.3 seconds.
-Pure native has reached roughly 9–10 seconds.
+Thirteen later profiled software reboots put clean boots at 17–19.7 seconds. In
+each, 4.4–5.2 seconds went to Samsung's wrapper loading the compressed Chromium
+120 engine while boot work kept all four cores busy. No launcher change tried so
+far reduced it. Two of those boots hit an intermittent Chromium abort during view
+creation; firmware crash handling then delayed Hub content to about 41–43
+seconds. Pure native has reached roughly 9–10 seconds.
 
 Normal-mode handoff loaded the page around 37.3 seconds in an earlier owner test.
 It waits for the signed Hub to retire the viewer and leaves that Hub visible while
