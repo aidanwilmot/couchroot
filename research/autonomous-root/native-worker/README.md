@@ -91,6 +91,50 @@ installed DLL and verified launcher for that device, never another model's paths
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
 
+## Lifecycle validation on both TVs — 2026-10-13
+
+The extended worker at `ffe97f3` passed **12 acceptance groups on QN90A and S90D**.
+Each controller exited zero. [lifecycle-results.json](lifecycle-results.json)
+contains the source revision, worker digest and sanitized per-device results.
+
+- A 27-second background job completed while other requests ran and the connection
+  sat idle. Duplicate starts and forgetting active jobs were rejected.
+- Root and app jobs returned actual exit codes and cursor-based stdout/stderr.
+  A 1,200,004-byte output verified ring truncation, the 64 KiB response window,
+  retained tail bytes and invalid-cursor rejection.
+- Timeout and cancellation killed owned process groups while a foreground command
+  was busy. A shell that exited before its descendants retained a waitable PID
+  until group cleanup, preventing cancellation from targeting a reused PID.
+- Native-prepared unsigned helpers ran with UID/EUID 5001, GID 100 and Smack `User`.
+  Wrong digests were rejected, writes to the mounted executable failed even as
+  root, and native mounts were absent from the controller's original namespace.
+- Helper release, duplicate release rejection and the eight-view retention limit
+  passed. Active jobs prevented helper release.
+- Disconnect, graceful shutdown and SIGTERM cleaned up active jobs and helper
+  views. Fresh native processes read saved terminal/interrupted records, refused
+  duplicate starts, and forgot completed records without replaying them.
+
+Local validation passed 226 repository tests plus 16 native tests under address
+and undefined-behavior sanitizers. The latter were run explicitly in the Linux
+container; normal repository discovery skips them without a native executable.
+The real helper lifecycle was validated on the TVs, not simulated by host tests.
+Intentional disconnect/signal tests produce the expected transport-closure
+message from the prototype; controller success requires the subsequent cleanup
+and saved-state checks to pass.
+
+Both original .NET workers stayed ready with unchanged worker IDs, PIDs and boot
+IDs. Their launcher hashes, execution mounts and protected-file hashes matched
+baseline. All experiment jobs, helper views, sources and owned storage were removed.
+Neither TV was rebooted. The initial lifecycle build also passed ten groups on
+each TV before the foreground-process hardening and expanded final acceptance run.
+
+This closes the basic job API and native helper-view gaps. It does **not** qualify
+full production parity: the five-minute experimental lifetime, in-memory logs,
+conservative refusal of previous-worker cancellation, abrupt-crash recovery,
+independent launcher staging and autonomous acquisition remain differences.
+The .NET worker remains the deployed implementation and fallback. These lifecycle
+runs do not update the earlier CPU, memory or startup measurements below.
+
 ## Historical comparison before the lifecycle extension — 2026-10-13
 
 The native worker built from `8d8e195` completed eight measured pairs per TV after
