@@ -44,7 +44,7 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   const pin=hash(new crypto.X509Certificate(clientCert.cert).raw);
   let calls=0,enabled=true,uncertain=false,exitCode=0,badChunk=false;
   const downloadBytes=Buffer.from([0,10,13,128,255]);
-  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async op=>{if(op.op==='file.read')return {data:downloadBytes,offset:7,sha256:badChunk?'0'.repeat(64):hash(downloadBytes)};if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(Buffer.from(op.data,'base64').toString(),'chunk');return {offset:5};}return {state:'running'};}};
+  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async (op,data)=>{if(op.op==='file.read')return {data:downloadBytes,offset:7,sha256:badChunk?'0'.repeat(64):hash(downloadBytes)};if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(op.data,undefined);assert.equal(op.length,5);assert.ok(Buffer.isBuffer(data));assert.equal(data.toString(),'chunk');return {offset:5};}return {state:'running'};}};
   const journal=new Journal(dir+'/requests.json');
   server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
@@ -52,12 +52,12 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   let connections=0;server.on('secureConnection',()=>connections++);
   const clientConfig={host:'127.0.0.1',port,server_certificate:dir+'/server.pem',client_certificate:dir+'/client.pem',client_key:dir+'/client-key.pem',server_sha256:hash(new crypto.X509Certificate(serverCert.cert).raw)};
   fs.writeFileSync(dir+'/client.json',JSON.stringify(clientConfig),{mode:0o600});
-  const script=`import importlib.util,json,sys
+  const script=`import hashlib,importlib.util,json,sys
 spec=importlib.util.spec_from_file_location('client',sys.argv[1]);api=importlib.util.module_from_spec(spec);spec.loader.exec_module(api)
 c=json.load(open(sys.argv[2]))
 with api.Session(c) as session:
  assert api.request(c,'GET','/v1/status',session=session)['connected']
- assert api.operation(c,dict(op='file.write',offset=0),binary=b'chunk',session=session)['offset']==5
+ assert api.operation(c,dict(op='file.write',offset=0,sha256=hashlib.sha256(b'chunk').hexdigest()),binary=b'chunk',session=session)['offset']==5
  assert api.operation(c,dict(op='file.read',offset=7,length=5),session=session)==bytes([0,10,13,128,255])
  assert api.request(c,'GET','/v1/status',session=session)['connected']
 `;
@@ -86,6 +86,15 @@ with api.Session(c) as session:
   assert.equal(failed.body.outcome,'failed');assert.equal(journal.rows.find(r=>r.id===operationId).state,'completed');
   const binary=await request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:crypto.randomUUID(),operation:{op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')}})});
   assert.equal(binary.status,200);assert.equal(binary.body.offset,5);
+  const uploadId=crypto.randomUUID(),uploadOp={op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')};
+  const upload=op=>request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:uploadId,operation:op})});
+  assert.equal((await upload({...uploadOp,sha256:hash('other')})).body.outcome,'rejected');
+  assert.ok(!journal.rows.some(r=>r.id===uploadId));
+  assert.equal((await upload({...uploadOp,data:'unexpected'})).body.outcome,'rejected');
+  assert.equal((await upload(uploadOp)).status,200);
+  assert.equal(journal.rows.find(r=>r.id===uploadId).sha256,hash('operation:'+hash(JSON.stringify({...uploadOp,length:5}))));
+  assert.equal((await upload(uploadOp)).body.outcome,'rejected');
+
   assert.equal((await request('/v1/op',{id:crypto.randomUUID(),operation:{op:'file.write'}})).body.outcome,'rejected');
   const read=()=>request('/v1/files/read',{id:crypto.randomUUID(),operation:{op:'file.read',transfer_id:'example',offset:7,length:5}});
   const downloaded=await read();assert.equal(downloaded.status,200);assert.deepEqual(downloaded.body,downloadBytes);assert.equal(downloaded.headers['x-sha256'],hash(downloadBytes));assert.equal(downloaded.headers['x-offset'],'7');

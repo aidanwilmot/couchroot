@@ -307,21 +307,30 @@ RootAgentConnection.prototype.execute = function (command, timeoutMs) {
 };
 
 module.exports = { RootAgentServer };
-// Bounded operations: uploads retain OP framing; downloads use an authenticated
-// OPDATA header followed by at most 1 MiB of digest-checked raw bytes.
-RootAgentServer.prototype.operation = function (value) {
+// OPWRITE and OPDATA authenticate bounded metadata before raw upload/download bytes.
+RootAgentServer.prototype.operation = function (value, data) {
     if (!this._conn) return Promise.reject(Object.assign(Error('Root worker unavailable'), {outcome:'rejected'}));
-    return this._conn.operation(value);
+    return this._conn.operation(value, data);
 };
-RootAgentConnection.prototype.operation = function (value) {
-    var self=this, bytes=Buffer.from(JSON.stringify(value));
-    if (bytes.length>1500000 || self._socket.destroyed || Object.keys(self._pending).length>=MAX_PENDING)
+RootAgentConnection.prototype.operation = function (value, data) {
+    var self=this, binary=data!==undefined;
+    if (binary && (!Buffer.isBuffer(data) || value.op!=='file.write' || typeof value.transfer_id!=='string' || value.transfer_id.length!==32 || !/^[a-f0-9]{32}$/.test(value.transfer_id)
+        || !Number.isSafeInteger(value.offset) || value.offset<0 || value.offset>2147483648-data.length
+        || data.length<1 || data.length>1048576 || typeof value.sha256!=='string' || value.sha256.length!==64 || !/^[a-f0-9]{64}$/.test(value.sha256)))
+        return Promise.reject(Object.assign(Error('Invalid binary upload metadata'), {outcome:'rejected'}));
+    var bytes=binary?null:Buffer.from(JSON.stringify(value));
+    if ((!binary && bytes.length>1500000) || self._socket.destroyed || Object.keys(self._pending).length>=MAX_PENDING)
         return Promise.reject(Object.assign(Error('Operation unavailable or oversized'), {outcome:'rejected'}));
     return new Promise(function(resolve,reject) {
         var seq=++self._sequence;
         var timer=setTimeout(function(){delete self._pending[seq];reject(Error('Operation outcome unknown'));self._socket.destroy();},30000);
         self._pending[seq]={resolve:resolve,reject:reject,timer:timer,read:value.op==='file.read'?{offset:value.offset,length:value.length}:null};
-        try {self._send('OP\t'+seq+'\t'+bytes.toString('base64'));}
+        try {
+            if (binary) {
+                self._send('OPWRITE\t'+seq+'\t'+value.transfer_id+'\t'+value.offset+'\t'+data.length+'\t'+value.sha256);
+                self._socket.write(data);
+            } else self._send('OP\t'+seq+'\t'+bytes.toString('base64'));
+        }
         catch(e){clearTimeout(timer);delete self._pending[seq];reject(e);self._socket.destroy();}
     });
 };

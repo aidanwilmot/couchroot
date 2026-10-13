@@ -99,6 +99,19 @@ internal static partial class SamsungTvRootAgent
         }
     }
 
+    private static void ValidateUploadHeader(string[] fields, out long offset, out int length)
+    {
+        offset = 0; length = 0;
+        if (fields.Length != 6 || fields[0] != "OPWRITE"
+            || !System.Text.RegularExpressions.Regex.IsMatch(fields[2], "\\A[a-f0-9]{32}\\z")
+            || !long.TryParse(fields[3], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out offset)
+            || offset < 0 || offset > TransferLimit
+            || !int.TryParse(fields[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out length)
+            || length < 1 || length > ChunkBytes || length > TransferLimit - offset
+            || fields[5].Length != 64 || !IsDigest(fields[5]))
+            throw new InvalidDataException("Invalid binary upload header");
+    }
+
     private static void RunSession(
         string host,
         int port,
@@ -168,6 +181,22 @@ internal static partial class SamsungTvRootAgent
                             "root-agent command sequence is not increasing");
                     }
                     previousSequence = sequence;
+
+                    if (fields[0] == "OPWRITE")
+                    {
+                        // Framing failures terminate the channel. Consume a bounded body
+                        // before reporting operation failures so the next frame stays aligned.
+                        long offset; int length;
+                        ValidateUploadHeader(fields, out offset, out length);
+                        byte[] bytes = input.ReadExact(length);
+                        object uploadResult = null; string failure = null;
+                        try { uploadResult = WriteTransferChunk(fields[2], offset, bytes, fields[5]); }
+                        catch (Exception error)
+                        { failure = System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = error.Message, outcome = "failed" }); }
+                        if (failure == null) WriteOperationSuccess(stream, nonce, secret, fields[1], uploadResult);
+                        else WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + fields[1] + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(failure)));
+                        continue;
+                    }
 
                     if (fields[0] == "OP" && fields.Length == 3)
                     {

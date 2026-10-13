@@ -35,14 +35,16 @@ function createApi(options){
     if(!allowed.includes(operation.op))throw Error('Unknown worker operation');
     if(req.url==='/v1/files/write'){
      if(operation.op!=='file.write'||!raw.length)throw Error('Expected file.write bytes');
-     operation.data=raw.toString('base64');
+     if(operation.data!==undefined)throw Error('Upload data belongs in the body');
+     if(hash(raw)!==operation.sha256)throw Error('Invalid chunk digest');
+     operation.length=raw.length;
     }else if(operation.op==='file.write')throw Error('Use the binary upload endpoint');
     if((req.url==='/v1/files/read')!==(operation.op==='file.read'))throw Error('Use the binary download endpoint');
     if(!agent.status().connected||agent.status().worker_ready===false){reply(503,{outcome:'rejected',error:'Root agent unavailable'});return;}
     const readOnly=['file.read','file.status','job.status','job.output'].includes(operation.op);
     if(!readOnly){journal.begin({id:value.id,command:'operation:'+hash(JSON.stringify(operation)),timeout_ms:25000});operationId=value.id;}
     submitted=true;
-    const result=await agent.operation(operation);
+    const result=await agent.operation(operation,operation.op==='file.write'?raw:undefined);
     if(operationId)journal.finish(operationId,{exit_code:Number.isInteger(result.exit_code)?result.exit_code:0,timed_out:!!result.timed_out});
     if(operation.op==='file.read'){
      const data=Buffer.isBuffer(result.data)?result.data:Buffer.from(result.data,'base64');

@@ -18,6 +18,47 @@ internal static partial class SamsungTvRootAgent
         try { reader.ReadLine(); } catch (InvalidDataException) { return; }
         throw new Exception("oversized line accepted");
     }
+    private static void TestBinaryUploads(string root)
+    {
+        byte[] bytes = new byte[ChunkBytes]; new Random(17).NextBytes(bytes);
+        string digest = HexEncode(System.Security.Cryptography.SHA256.HashData(bytes));
+        string target = root + "binary-upload";
+        string id = Call(new { op = "file.begin", path = target, size = bytes.Length, sha256 = digest, expected_sha256 = "absent" }, root).GetProperty("transfer_id").GetString();
+        string[] fields = new[] { "OPWRITE", "1", id, "0", bytes.Length.ToString(), digest };
+        foreach (var change in new[] { (2, "bad"), (3, "-1"), (3, "2147483648"), (3, "999999999999999999999"), (4, "0"), (4, "1048577"), (5, "bad") })
+        {
+            var bad = (string[])fields.Clone(); bad[change.Item1] = change.Item2;
+            Reject(() => ValidateUploadHeader(bad, out _, out _), "invalid upload header accepted");
+        }
+        Reject(() => ValidateUploadHeader(fields.Take(5).ToArray(), out _, out _), "short header accepted");
+        Reject(() => { ValidateUploadHeader(fields, out long off, out int len); WriteTransferChunk(id, off, new ProtocolReader(new MemoryStream(bytes.Take(17).ToArray())).ReadExact(len), digest); }, "truncated upload accepted");
+        Check(Transfers[id].File.Length == 0, "truncation mutated transfer");
+        Reject(() => WriteTransferChunk(id, 0, bytes, new string('0', 64)), "bad digest accepted");
+        Check(Transfers[id].File.Length == 0, "bad digest mutated transfer");
+        byte[] nonce = new byte[32], secret = new byte[32]; new Random(9).NextBytes(secret);
+        using (var wire = new MemoryStream())
+        {
+            WriteAuthenticated(wire, nonce, secret, string.Join("\t", fields)); wire.Write(bytes);
+            WriteAuthenticated(wire, nonce, secret, "PING\t2");
+            foreach (int fragment in new[] { 3, 65536 })
+            using (var stream = new FragmentStream(wire.ToArray(), fragment))
+            {
+                var reader = new ProtocolReader(stream);
+                string line = reader.ReadLine();
+                Reject(() => VerifyAuthenticated(line, nonce, new byte[32]), "wrong MAC accepted");
+                var header = VerifyAuthenticated(line, nonce, secret).Split('\t');
+                ValidateUploadHeader(header, out long offset, out int length);
+                var body = reader.ReadExact(length);
+                Reject(() => WriteTransferChunk(new string('f', 32), offset, body, digest), "unknown transfer accepted");
+                Check(VerifyAuthenticated(reader.ReadLine(), nonce, secret) == "PING\t2", "upload desynchronized channel");
+                if (fragment == 65536) WriteTransferChunk(id, offset, body, digest);
+            }
+        }
+        Reject(() => WriteTransferChunk(id, 0, bytes, digest), "binary replay accepted");
+        Call(new { op = "file.commit", transfer_id = id }, root);
+        Check(File.ReadAllBytes(target).SequenceEqual(bytes), "binary upload differs");
+        Console.WriteLine("PASS binary uploads: framing, authentication, bounds, truncation, digest, alignment, replay and commit");
+    }
     private static void TestProtocolReader()
     {
         byte[] nonce = new byte[32], secret = new byte[32];

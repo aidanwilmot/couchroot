@@ -8,7 +8,7 @@ internal static partial class SamsungTvRootAgent
 {
     private static void Check(bool value,string message){if(!value)throw new Exception(message);}
     private static JsonElement Call(object request,string root){using(var doc=JsonDocument.Parse(JsonSerializer.Serialize(request)))return JsonSerializer.SerializeToElement(Operation(doc.RootElement,root,root));}
-    private static void Reject(Action action,string message){try{action();}catch(ArgumentException){return;}catch(IOException){return;}throw new Exception(message);}
+    private static void Reject(Action action,string message){try{action();}catch(ArgumentException){return;}catch(InvalidDataException){return;}catch(IOException){return;}throw new Exception(message);}
     private static void TestJobs(string root)
     {
         // Exercise the actual process boundary, including nested launcher quoting.
@@ -57,6 +57,7 @@ internal static partial class SamsungTvRootAgent
         if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX) && root.StartsWith("/var/"))root="/private"+root;
         Directory.CreateDirectory(root);
         try {
+            TestBinaryUploads(root);
             string native=root+"native-launcher";File.WriteAllText(native,"test launcher bytes");
             AppLauncherPath=native;AppLauncherDigest=DigestPath(native);
             Check(AppCommand("printf '%s' 'quoted command'")=="exec "+ShellQuote(native)+" --command "+ShellQuote("printf '%s' 'quoted command'"),"native command quoting differs");

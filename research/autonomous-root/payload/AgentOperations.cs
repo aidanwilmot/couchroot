@@ -67,7 +67,7 @@ internal static partial class SamsungTvRootAgent
     private static object Operation(JsonElement value, string staging, string runtime)
     {
         string op = Text(value, "op");
-        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "binary-download-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1" } };
+        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "binary-download-v1", "binary-upload-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1" } };
         if (op.StartsWith("helper.", StringComparison.Ordinal)) return HelperOperation(value);
         if (op.StartsWith("job.", StringComparison.Ordinal)) return JobOperation(value);
         if (op == "app.exec")
@@ -133,12 +133,8 @@ internal static partial class SamsungTvRootAgent
         if (!transfer.Upload) throw new ArgumentException("Not an upload");
         if (op == "file.write")
         {
-            long offset = value.GetProperty("offset").GetInt64(); byte[] bytes = Convert.FromBase64String(Text(value, "data"));
-            using (var sha = SHA256.Create())
-                if (bytes.Length == 0 || bytes.Length > ChunkBytes || HexEncode(sha.ComputeHash(bytes)) != Text(value, "sha256")) throw new ArgumentException("Invalid chunk or digest");
-            if (offset != transfer.File.Length || offset + bytes.Length > transfer.Size) throw new ArgumentException("Offset conflict; inspect transfer status before retrying");
-            transfer.File.Position = offset; transfer.File.Write(bytes, 0, bytes.Length); transfer.File.Flush(true);
-            return new { offset = transfer.File.Length };
+            return WriteTransferChunk(key, value.GetProperty("offset").GetInt64(),
+                Convert.FromBase64String(Text(value, "data")), Text(value, "sha256"));
         }
         if (op == "file.commit")
         {
@@ -161,6 +157,20 @@ internal static partial class SamsungTvRootAgent
         }
         throw new ArgumentException("Unknown operation");
     }
+    private static object WriteTransferChunk(string key, long offset, byte[] bytes, string digest)
+    {
+        Transfer transfer;
+        if (!Transfers.TryGetValue(key, out transfer)) throw new ArgumentException("Unknown transfer (worker may have restarted)");
+        if (!transfer.Upload) throw new ArgumentException("Not an upload");
+        using (var sha = SHA256.Create())
+            if (bytes.Length == 0 || bytes.Length > ChunkBytes || HexEncode(sha.ComputeHash(bytes)) != digest)
+                throw new ArgumentException("Invalid chunk or digest");
+        if (offset < 0 || offset != transfer.File.Length || bytes.Length > transfer.Size - offset)
+            throw new ArgumentException("Offset conflict; inspect transfer status before retrying");
+        transfer.File.Position = offset; transfer.File.Write(bytes, 0, bytes.Length); transfer.File.Flush(true);
+        return new { offset = transfer.File.Length };
+    }
+
     private static void CloseTransfers() { foreach (var t in Transfers.Values) t.Dispose(); Transfers.Clear(); }
     [DllImport("libc", SetLastError = true)] private static extern int rename(string from, string to);
     [DllImport("libc", SetLastError = true)] private static extern int link(string from, string to);

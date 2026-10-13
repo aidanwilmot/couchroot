@@ -62,7 +62,7 @@ invalidates the session. No request is automatically replayed, including a reque
 that encounters a stale keep-alive socket. Diagnose the outcome before explicitly
 resuming an upload. A successful response that explicitly closes the socket permits
 a new, re-pinned connection for the next request; this also supports older services.
-The .NET worker and native app-user launcher are unchanged.
+HTTPS reuse does not change the .NET worker or native app-user launcher.
 
 ## File transfer
 
@@ -85,6 +85,18 @@ before returning any bytes over HTTPS. It rejects malformed, oversized, truncate
 or corrupted responses by closing the worker channel; it never retries the request.
 The worker and service must be upgraded together. HTTPS clients are unchanged,
 and the new service still accepts the earlier JSON/base64 worker responses.
+
+Agent 0.7.0 adds `binary-upload-v1`: the service sends an HMAC-authenticated
+`OPWRITE` header binding the sequence, transfer ID, offset, byte length and SHA-256,
+then at most 1 MiB of raw bytes. Chunk payloads are no longer encoded in JSON or
+base64 between the service and the retained .NET worker. HTTPS clients are unchanged.
+The journal binds the upload metadata, actual body length and verified digest.
+The worker authenticates and bounds the header, reads the entire chunk before any
+write, then verifies its digest and expected offset. Malformed framing or truncated
+bodies close the channel; known operation failures leave it aligned. Durable chunk
+flushes, final-file verification, conditional replacement and no-retry behavior are
+preserved. Upgrade service and worker together; legacy JSON operations remain
+available internally for compatibility, without automatic fallback after failure.
 
 The worker holds at most eight
 transfers, each limited to 2 GiB. Downloads support arbitrary byte offsets and

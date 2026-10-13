@@ -75,6 +75,6 @@ function createAgent(config,options={}){
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
  function stop(){running=false;connected=false;workerReady=false;identity=null;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
- return {status,start,stop,operation:value=>{if(!running||!connected||!channel)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value);},execute:(command,timeout)=>{if(!running||!connected||!channel)return Promise.reject(Error('Root agent unavailable'));return channel.execute(command,timeout);}};
+ return {status,start,stop,operation:(value,data)=>{if(!running||!connected||!channel)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value,data);},execute:(command,timeout)=>{if(!running||!connected||!channel)return Promise.reject(Error('Root agent unavailable'));return channel.execute(command,timeout);}};
 }
 module.exports={createAgent,launchRequest};
