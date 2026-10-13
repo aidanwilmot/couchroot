@@ -3,7 +3,7 @@
 static pid_t child;
 static Wire w;
 static int sequence;
-static const char *scope;
+static const char *scope, *filescope;
 static void stop_child(void) {
   if (child > 0) {
     kill(child, SIGKILL);
@@ -198,7 +198,7 @@ static J *workload(void) {
   random_bytes(data, size);
   char sha[65];
   digest(data, size, sha);
-  char *path = format("%s/bench-file", scope);
+  char *path = format("%s/bench-file", filescope);
   char *id = begin(path, size, sha, "absent");
   upload(id, 1, data, CHUNK, 0);
   double cpu = worker_cpu(child), start = stamp();
@@ -339,7 +339,7 @@ static void sample(const char *dll, const char *binary, const char *app,
   if (!child) {
     alarm(90);
     if (native)
-      execl(binary, binary, "127.0.0.1", port, token, scope, app, appsha,
+      execl(binary, binary, "127.0.0.1", port, token, filescope, app, appsha,
             (char *)NULL);
     else
       execl("/usr/bin/dotnet", "dotnet", dll, "127.0.0.1", port, token, scope,
@@ -429,6 +429,9 @@ int main(int argc, char **argv) {
   atexit(stop_child);
   libraries();
   scope = argv[3];
+  filescope = getenv("COUCHROOT_BENCH_FILES");
+  if (!filescope)
+    fatal("COUCHROOT_BENCH_FILES is required");
   int64_t rounds;
   if (!decimal(argv[6], &rounds) || rounds < 1 || rounds > 20)
     return 64;

@@ -52,8 +52,11 @@ and symlink rejection, conditional replacement, bounded output and timeouts.
 Device execution must use the enrolled .NET client's existing verified upload,
 helper and job APIs with firmware guards, per-device locks, durable private
 intent/results, unique staging names and a bounded run. Prepare the benchmark and
-worker as private read-only helpers. Use an experiment directory below the SDK
-staging root so the existing managed worker can run unchanged. Pass the actual
+worker as private read-only helpers. Use a token/status directory below the SDK staging root so the existing managed
+worker can run unchanged. Set `COUCHROOT_BENCH_FILES` to a separate canonical,
+private directory below `/opt/couchroot-agent/files` for both workers’ transfers.
+The SDK staging path may have symlinked ancestors on the TV; it is not suitable
+for the native prototype’s strict canonical file scope. Pass the actual
 installed DLL and verified launcher for that device, never another model's paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
