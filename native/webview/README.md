@@ -276,8 +276,10 @@ bounds recovery attempts but does not prove long-term stability.
 ### Startup and memory profile (2026-10-12)
 
 Thirteen further background software reboots ran instrumented builds with the
-compositor capture and `minimal-hub-procsample`. Every measurement candidate was
-rolled back; the accepted launcher was not replaced. Child-relative seconds,
+compositor capture and `minimal-hub-procsample`. Measurement candidates were
+rolled back. The final candidate was later installed and accepted after another
+verification boot: one Chromium start, Hub content at 15.6 seconds, saved tiles
+in the first content frame, and the injected-key checks below. Child-relative seconds,
 from readable engine files to the first presented frame:
 
 | Segment | `main` behavior (3 clean boots) | Final candidate (5 clean boots)¹ |
