@@ -89,6 +89,7 @@ static void containment_worker_stop(void) {
 }
 static void containment_freeze(void) {
   if (!freezer_write("freezer.state", "FROZEN")) {
+    perror("prototype: freezer request");
     containment_failed = 1;
     return;
   }
@@ -106,6 +107,8 @@ static void containment_freeze(void) {
     if (n > 0 && !strncmp(state, "FROZEN", 6))
       break;
     if (n < 0 || stamp() > deadline) {
+      fprintf(stderr, "prototype: freezer wait failed state=%s errno=%d\n",
+              state, errno);
       containment_failed = 1;
       return;
     }
@@ -116,6 +119,7 @@ static void containment_freeze(void) {
   if (!members) {
     if (fd >= 0)
       close(fd);
+    perror("prototype: freezer members");
     containment_failed = 1;
     return;
   }
@@ -123,13 +127,19 @@ static void containment_freeze(void) {
   int good = 1;
   while (fscanf(members, "%ld", &member) == 1) {
     if (member < 1 || member > INT_MAX ||
-        (kill((pid_t)member, SIGKILL) && errno != ESRCH))
+        (kill((pid_t)member, SIGKILL) && errno != ESRCH)) {
+      perror("prototype: freezer kill");
       good = 0;
+    }
   }
-  if (ferror(members) || !feof(members))
+  if (ferror(members) || !feof(members)) {
+    perror("prototype: freezer scan");
     good = 0;
+  }
   fclose(members);
-  if (!good || !freezer_write("freezer.state", "THAWED"))
+  if (!good || !freezer_write("freezer.state", "THAWED")) {
+    perror("prototype: freezer thaw");
     containment_failed = 1;
+  }
 #endif
 }
