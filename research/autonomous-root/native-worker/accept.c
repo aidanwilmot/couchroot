@@ -68,6 +68,8 @@ static void launch(void) {
     fatal("boot changed");
   if (number(get(r, "result"), "guardian_pid") != child ||
       number(get(r, "result"), "worker_dumpable") != 0 ||
+      strcmp(textval(get(r, "result"), "fault_supervision"),
+             "ptrace-owned-worker-threads") ||
       !json_object_get_boolean(
           get(get(get(r, "result"), "app_launcher"), "independently_staged")))
     fatal("native guardian or launcher status");
@@ -83,7 +85,14 @@ static void launch(void) {
 }
 static void finish(int disconnect) {
   double stop_started = stamp();
-  if (disconnect == 5)
+#ifdef NATIVE_WORKER_FAULT_TEST
+  if (disconnect == 6 || disconnect == 7) {
+    J *fault = req("test.fault");
+    num(fault, "thread", disconnect == 7);
+    json_object_put(call(fault));
+  } else
+#endif
+      if (disconnect == 5)
     kill(worker_pid, SIGSTOP);
   else if (disconnect == 3 || disconnect == 4)
     kill(worker_pid, disconnect == 3 ? SIGKILL : SIGSEGV);
@@ -116,10 +125,13 @@ static void finish(int disconnect) {
   if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
     fprintf(stderr, "prototype: controller stop mode=%d %.0f ms\n", disconnect,
             stamp() - stop_started);
-  if ((disconnect == 3 || disconnect == 4 || disconnect == 5) &&
-      (!WIFEXITED(status) || (WEXITSTATUS(status) != 137 &&
-                              (disconnect != 4 || WEXITSTATUS(status) != 139))))
-    fatal("guardian crash status");
+  if (disconnect >= 3 && disconnect <= 7) {
+    int expected = (disconnect == 3 || disconnect == 5) ? 137 : 139;
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != expected)
+      fatal("guardian crash status");
+    if (stamp() - stop_started > 2000)
+      fatal("worker fault recovery exceeded two seconds");
+  }
   if (!disconnect && (!WIFEXITED(status) || WEXITSTATUS(status)))
     fatal("native shutdown failed");
 }
@@ -454,7 +466,12 @@ int main(int argc, char **argv) {
     mark(mode == 0 ? "graceful_stop_cleans_active_job_and_helper"
                    : "signal_stop_cleans_active_job_and_helper");
   }
-  for (int mode = 3; mode <= 5; mode++) {
+#ifdef NATIVE_WORKER_FAULT_TEST
+  const int last_crash_mode = 7;
+#else
+  const int last_crash_mode = 5;
+#endif
+  for (int mode = 3; mode <= last_crash_mode; mode++) {
     j = req("helper.prepare");
     str(j, "path", source);
     str(j, "sha256", sha);
@@ -502,6 +519,9 @@ int main(int argc, char **argv) {
         strcmp(textval(record, "recovery"), "guardian-reaped-descendants") ||
         get(record, "exit_code") != NULL)
       fatal("crash recovery record");
+    if ((mode == 4 || mode == 6 || mode == 7) &&
+        number(record, "worker_fault_signal") != SIGSEGV)
+      fatal("worker fault was not intercepted");
     if (mode == 5 &&
         !json_object_get_boolean(get(record, "watchdog_froze_group")))
       fatal("watchdog containment not used");
@@ -521,9 +541,11 @@ int main(int argc, char **argv) {
     discard(call(job_req("job.forget", "native-after-crash-01")));
     mark(mode == 3
              ? "sigkill_recovery_reaps_detached_children_and_restages_launcher"
-         : mode == 4
-             ? "sigsegv_recovery_no_replay_and_app_execution"
-             : "stopped_worker_watchdog_freezes_owned_group_and_recovers");
+         : mode == 4 ? "sigsegv_recovery_no_replay_and_app_execution"
+         : mode == 5
+             ? "stopped_worker_watchdog_freezes_owned_group_and_recovers"
+         : mode == 6 ? "main_thread_memory_fault_recovery"
+                     : "new_worker_thread_memory_fault_recovery");
   }
   finish(0);
   if (unlink(app))

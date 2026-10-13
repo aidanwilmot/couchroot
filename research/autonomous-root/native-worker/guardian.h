@@ -1,6 +1,8 @@
 /* Native crash guardian: owns descendants, lock, journal and runtime namespace.
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
+#include <sys/ptrace.h>
 static pid_t guardian_pid;
+static int guardian_fault_signal;
 static volatile sig_atomic_t guardian_stop;
 static int guardian_journal_owned;
 static void guardian_signal(int sig) {
@@ -97,6 +99,7 @@ static int guardian_recover_records(void) {
     }
     str(r, "state", "interrupted");
     str(r, "recovery", "guardian-reaped-descendants");
+    num(r, "worker_fault_signal", guardian_fault_signal);
     boolean(r, "watchdog_triggered", guardian_watchdog);
     boolean(r, "watchdog_froze_group",
             guardian_watchdog && freezer_dir >= 0 && !containment_failed);
@@ -162,7 +165,7 @@ static int guardian_drain(void) {
       return 0;
     int status;
     pid_t pid;
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    while ((pid = waitpid(-1, &status, WNOHANG | __WALL)) > 0) {
     }
     if (pid < 0 && errno == ECHILD)
       return 1;
@@ -173,31 +176,37 @@ static int guardian_drain(void) {
     usleep(10000);
   }
 }
-/* Fatal faults must not enter the TV's slow default signal teardown while
- * detached children continue running. Exit the damaged process immediately;
- * only the independent guardian performs cleanup. Use an alternate stack so
- * this path also works when the protocol thread exhausts its normal stack. */
-static unsigned char fatal_stack[65536];
-static void worker_fatal_signal(int sig) {
-  /* Nonblocking, async-signal-safe evidence that userspace received the fault.
-   */
-  ssize_t sent = write(pulse_pipe[1], "F", 1);
-  (void)sent;
-  _exit(128 + sig);
-}
-static void worker_fault_handlers(void) {
-  stack_t stack = {.ss_sp = fatal_stack, .ss_size = sizeof fatal_stack};
-  if (sigaltstack(&stack, NULL))
-    fatal("fatal signal stack");
-  struct sigaction action;
-  memset(&action, 0, sizeof action);
-  action.sa_handler = worker_fatal_signal;
-  action.sa_flags = SA_ONSTACK;
-  sigfillset(&action.sa_mask);
-  const int signals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT};
-  for (size_t i = 0; i < sizeof signals / sizeof *signals; i++)
-    if (sigaction(signals[i], &action, NULL))
-      fatal("fatal signal handler");
+/* Some TV kernels silently ignore fatal-signal sigaction registrations and
+ * run a slow crash collector. Seize only our own gated child before it creates
+ * threads, then follow clone-created worker threads (not forked commands).
+ * A signal-delivery stop is handled before the kernel's default crash path.
+ */
+static void guardian_trace_stop(pid_t thread, int status, pid_t worker) {
+  int sig = WSTOPSIG(status), event = (unsigned)status >> 16;
+  enum __ptrace_request action = PTRACE_CONT;
+  int deliver = 0;
+  if (event == PTRACE_EVENT_STOP) {
+    if (sig != SIGTRAP)
+      action =
+          PTRACE_LISTEN; /* Preserve deliberate group stops for watchdog. */
+  } else if (event == PTRACE_EVENT_CLONE) {
+    /* The auto-attached thread has its own initial PTRACE_EVENT_STOP. */
+  } else if (event) {
+    fatal("unexpected worker trace event");
+  } else if (sig == SIGSEGV || sig == SIGBUS || sig == SIGILL ||
+             sig == SIGFPE || sig == SIGABRT) {
+    if (!guardian_fault_signal)
+      guardian_fault_signal = sig;
+    if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+      fprintf(stderr, "prototype: guardian intercepted worker fault %d\n", sig);
+    if (kill(worker, SIGKILL) && errno != ESRCH)
+      fatal("terminate faulted worker");
+    deliver = SIGKILL;
+  } else {
+    deliver = sig; /* Do not swallow normal signals, especially SIGCHLD. */
+  }
+  if (ptrace(action, thread, NULL, (void *)(intptr_t)deliver) && errno != ESRCH)
+    fatal("resume supervised worker thread");
 }
 static void guardian_start(void) {
   if (prctl(PR_SET_CHILD_SUBREAPER, 1))
@@ -213,6 +222,9 @@ static void guardian_start(void) {
   signal(SIGTERM, guardian_signal);
   signal(SIGINT, guardian_signal);
   signal(SIGALRM, guardian_signal);
+  int gate[2];
+  if (pipe2(gate, O_CLOEXEC))
+    fatal("worker supervision gate");
   pid_t pid = fork();
   if (pid < 0)
     fatal("fork native worker");
@@ -226,11 +238,33 @@ static void guardian_start(void) {
     signal(SIGALRM, stop_signal);
     if (sigprocmask(SIG_SETMASK, &previous, NULL))
       _exit(125);
-    worker_fault_handlers();
+    close(gate[1]);
+    char ready;
+    ssize_t got;
+    do {
+      got = read(gate[0], &ready, 1);
+    } while (got < 0 && errno == EINTR);
+    close(gate[0]);
+    if (got != 1 || ready != 'R')
+      _exit(125);
     containment_enter();
     alarm(300);
     return;
   }
+  close(gate[0]);
+  if (ptrace(PTRACE_SEIZE, pid, NULL,
+             (void *)(uintptr_t)(PTRACE_O_TRACECLONE | PTRACE_O_EXITKILL))) {
+    int saved = errno;
+    kill(pid, SIGKILL);
+    while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {
+    }
+    close(gate[1]);
+    errno = saved;
+    fatal("native fault supervision unavailable");
+  }
+  if (!job_write(gate[1], "R", 1))
+    fatal("release supervised worker");
+  close(gate[1]);
   signal(SIGTERM, guardian_signal);
   signal(SIGINT, guardian_signal);
   signal(SIGALRM, guardian_signal);
@@ -248,18 +282,18 @@ static void guardian_start(void) {
     while ((n = read(pulse_pipe[0], pulses, sizeof pulses)) > 0) {
       last_pulse = stamp();
       pulse_seen = 1;
-      if (memchr(pulses, 'F', (size_t)n) &&
-          getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
-        fputs("prototype: fatal handler notification received\n", stderr);
     }
     if (n < 0 && errno != EAGAIN && errno != EINTR)
       _exit(125);
     pid_t got;
-    while ((got = waitpid(-1, &status, WNOHANG)) > 0)
-      if (got == pid) {
+    while ((got = waitpid(-1, &status, WNOHANG | __WALL)) > 0) {
+      if (WIFSTOPPED(status))
+        guardian_trace_stop(got, status, pid);
+      else if (got == pid) {
         worker_done = 1;
         worker_status = status;
       }
+    }
     if (got < 0 && ((!worker_done && errno == ECHILD) ||
                     (errno != ECHILD && errno != EINTR)))
       _exit(125);
@@ -307,6 +341,8 @@ static void guardian_start(void) {
   jobs_cleanup();
   if (directory >= 0)
     close(directory);
+  if (guardian_fault_signal)
+    _exit(128 + guardian_fault_signal);
   _exit(WIFEXITED(worker_status) ? WEXITSTATUS(worker_status)
                                  : 128 + WTERMSIG(worker_status));
 }

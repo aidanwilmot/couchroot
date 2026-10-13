@@ -291,10 +291,20 @@ static void stop_signal(int sig) {
     kill(pid, SIGKILL);
   }
 }
+#include "fault-test.h"
 static J *operation(J *request, Wire *w, const char *seq) {
   const char *op = textval(request, "op");
   if (!op)
     return failure("Invalid operation");
+#ifdef NATIVE_WORKER_FAULT_TEST
+  if (!strcmp(op, "test.fault")) {
+    int64_t thread = number(request, "thread");
+    if (thread != 0 && thread != 1)
+      return failure("Invalid fault test thread");
+    fault_test_requested = thread ? 2 : 1;
+    return success(obj());
+  }
+#endif
   if (!strncmp(op, "job.", 4))
     return job_operation(request, op);
   if (!strncmp(op, "helper.", 7))
@@ -310,6 +320,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     str(j, "worker_id", worker_id);
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
+    str(j, "fault_supervision", "ptrace-owned-worker-threads");
     num(j, "worker_dumpable", prctl(PR_GET_DUMPABLE));
     str(j, "freezer_group", freezer_name);
     num(j, "heartbeat_timeout_ms", 1000);
@@ -384,7 +395,8 @@ static J *operation(J *request, Wire *w, const char *seq) {
     if (upload) {
       strcpy(t->sha, sha);
       strcpy(t->expected, expected);
-      snprintf(t->temp, sizeof t->temp, ".upload-%s", t->id);
+      memcpy(t->temp, ".upload-", 8);
+      memcpy(t->temp + 8, t->id, sizeof t->id);
       t->fd = openat(directory, t->temp,
                      O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     } else
@@ -657,6 +669,9 @@ int main(int argc, char **argv) {
       json_object_put(reply);
     }
     free(frame);
+#ifdef NATIVE_WORKER_FAULT_TEST
+    fault_test_execute();
+#endif
   }
   memset(w.secret, 0, 32);
   signal_socket = -1;

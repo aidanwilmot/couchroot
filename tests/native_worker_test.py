@@ -228,8 +228,23 @@ class NativeWorkerTests(unittest.TestCase):
         record=json.loads((self.root/'.jobs/native-test-job-01.json').read_text())
         self.assertEqual(record['state'],'interrupted');self.assertIsNone(record['exit_code'])
         self.assertEqual(record['recovery'],'guardian-reaped-descendants')
+        self.assertEqual(record['worker_fault_signal'],signal.SIGSEGV)
         time.sleep(.6);self.assertFalse(marker.exists())
         self.restart();self.assertEqual(self.job('job.status')['result']['state'],'interrupted')
+    def check_memory_fault(self,thread):
+        self.start_job('sleep 30',timeout=60000)
+        self.assertTrue(self.op('test.fault',thread=thread)['ok'])
+        self.proc.wait(timeout=2);self.assertEqual(self.proc.returncode,139)
+        record=json.loads((self.root/'.jobs/native-test-job-01.json').read_text())
+        self.assertEqual(record['worker_fault_signal'],signal.SIGSEGV)
+        self.assertEqual(record['state'],'interrupted');self.assertIsNone(record['exit_code'])
+        self.restart();self.assertEqual(self.job('job.status')['result']['state'],'interrupted')
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'),'requires separate fault-injection build')
+    def test_main_thread_memory_fault_recovery(self):
+        self.check_memory_fault(0)
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'),'requires separate fault-injection build')
+    def test_new_thread_memory_fault_recovery(self):
+        self.check_memory_fault(1)
     def test_stopped_worker_watchdog_recovers(self):
         self.start_job('sleep 30',timeout=60000)
         os.kill(self.worker_pid,signal.SIGSTOP)
