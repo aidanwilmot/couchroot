@@ -176,6 +176,7 @@ class NativeWorkerTests(unittest.TestCase):
     def test_independent_launcher_and_guardian_status(self):
         status=self.op('status')['result']
         self.assertEqual(status['guardian_pid'],self.proc.pid)
+        self.assertEqual(status['worker_dumpable'],0)
         staged=Path(status['app_launcher']['path'])
         self.assertNotEqual(staged,self.root/'launcher-source')
         self.assertEqual(staged.read_bytes(),(self.root/'launcher-source').read_bytes())
@@ -185,6 +186,10 @@ class NativeWorkerTests(unittest.TestCase):
     def test_worker_sigkill_recovers_jobs_and_detached_descendants(self):
         status=self.op('status')['result'];staged=Path(status['app_launcher']['path'])
         marker=self.root/'detached-survivor'
+        self.start_job('exit 7',id='native-completed-01');self.completed('native-completed-01')
+        foreign=self.root/'.jobs/native-foreign-01.json'
+        foreign.write_text(json.dumps({'worker_id':'different-owner','id':'native-foreign-01','boot_id':status['boot_id'],'state':'running','pid':os.getpid(),'process_start':'0'}));foreign.chmod(0o600)
+        foreign_bytes=foreign.read_bytes()
         started=self.start_job(f"setsid sh -c 'sleep 1; touch {marker}' >/dev/null 2>&1 & echo ready; sleep 30",5000)
         deadline=time.monotonic()+3
         while time.monotonic()<deadline:
@@ -192,6 +197,7 @@ class NativeWorkerTests(unittest.TestCase):
             if b'ready' in base64.b64decode(data):break
             time.sleep(.02)
         else:self.fail('Detached child did not start')
+        interrupted_save=self.root/'.jobs/native-test-job-01.json.next';interrupted_save.write_text('partial-save');interrupted_save.chmod(0o600)
         os.kill(self.worker_pid,signal.SIGKILL)
         self.proc.wait(timeout=5);self.assertEqual(self.proc.returncode,137)
         self.assertFalse(staged.exists());self.assertFalse((self.root/'.jobs/guardian').exists())
@@ -199,9 +205,12 @@ class NativeWorkerTests(unittest.TestCase):
         record=json.loads((self.root/'.jobs/native-test-job-01.json').read_text())
         self.assertEqual(record['state'],'interrupted');self.assertIsNone(record['exit_code'])
         self.assertEqual(record['recovery'],'guardian-reaped-descendants')
+        self.assertFalse(interrupted_save.exists());self.assertEqual(foreign.read_bytes(),foreign_bytes)
         time.sleep(1.1);self.assertFalse(marker.exists())
         self.restart()
         saved=self.job('job.status')['result'];self.assertEqual(saved['state'],'interrupted');self.assertFalse(saved['output_available'])
+        completed=self.job('job.status','native-completed-01')['result'];self.assertEqual(completed['state'],'completed');self.assertEqual(completed['record']['exit_code'],7)
+        self.assertTrue(self.job('job.forget','native-completed-01')['ok'])
         self.assertFalse(self.job('job.start',command='touch '+str(marker),profile='root',timeout_ms=1000)['ok'])
         self.assertTrue(self.job('job.forget')['ok'])
         self.assertFalse(marker.exists())

@@ -305,6 +305,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     str(j, "worker_id", worker_id);
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
+    num(j, "worker_dumpable", prctl(PR_GET_DUMPABLE));
     J *app = obj();
     str(app, "path", launcher);
     str(app, "sha256", launcher_sha);
@@ -504,7 +505,7 @@ int main(int argc, char **argv) {
   random_bytes(id, sizeof id);
   hex(id, sizeof id, worker_id);
   struct rlimit core_limit = {0, 0};
-  if (setrlimit(RLIMIT_CORE, &core_limit))
+  if (setrlimit(RLIMIT_CORE, &core_limit) || prctl(PR_SET_DUMPABLE, 0))
     fatal("disable prototype core dumps");
   signal(SIGCHLD, SIG_DFL);
   jobs_storage();

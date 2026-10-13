@@ -6,17 +6,17 @@ static const char *scope, *filescope;
 static void stop_child(void) {
   if (child > 0) {
     kill(child, SIGTERM);
-    double deadline = stamp() + 5000;
+    double deadline = stamp() + 15000;
     pid_t got;
     do {
       got = waitpid(child, NULL, WNOHANG);
       if (!got)
         usleep(10000);
     } while (!got && stamp() < deadline);
-    if (!got) {
-      kill(child, SIGKILL);
-      waitpid(child, NULL, 0);
-    }
+    if (!got)
+      fputs("prototype: guardian still recovering; retain journal for "
+            "inspection\n",
+            stderr);
     child = 0;
   }
   if (w.fd > 0) {

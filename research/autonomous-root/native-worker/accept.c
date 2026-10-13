@@ -67,6 +67,7 @@ static void launch(void) {
   if (strcmp(textval(get(r, "result"), "boot_id"), boot))
     fatal("boot changed");
   if (number(get(r, "result"), "guardian_pid") != child ||
+      number(get(r, "result"), "worker_dumpable") != 0 ||
       !json_object_get_boolean(
           get(get(get(r, "result"), "app_launcher"), "independently_staged")))
     fatal("native guardian or launcher status");
@@ -99,7 +100,7 @@ static void finish(int disconnect) {
   close(w.fd);
   w.fd = -1;
   int status;
-  double deadline = stamp() + 5000;
+  double deadline = stamp() + 30000;
   pid_t got;
   do {
     got = waitpid(child, &status, WNOHANG);
