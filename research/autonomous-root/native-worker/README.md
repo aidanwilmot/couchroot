@@ -60,3 +60,94 @@ for the native prototype’s strict canonical file scope. Pass the actual
 installed DLL and verified launcher for that device, never another model's paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
+
+## Both-TV comparison — 2026-10-13
+
+The native worker built from `8d8e195` completed eight measured pairs per TV after
+two warmup pairs. The follow-up harness `fb5bcc4` used the **identical native worker
+bytes**, two measured pairs per TV, a 20-second idle window and three subsequent
+transfers per process. The production .NET 0.7.0 worker remained running; temporary
+managed workers used that TV's installed DLL. All samples finished successfully.
+Aggregate metrics, ranges and sample counts are in [results.json](results.json).
+The native worker executable was 37,788 bytes, unstripped, excluding shared libraries.
+
+| Median metric | QN90A .NET | QN90A C | S90D .NET | S90D C |
+| --- | ---: | ---: | ---: | ---: |
+| Worker readiness | 457.6 ms | 11.1 ms | 748.4 ms | 12.3 ms |
+| Worker CPU through readiness | 366 ms | 8 ms | 704 ms | 8 ms |
+| Freshly ready RSS | 21.15 MiB | 1.26 MiB | 22.14 MiB | 1.27 MiB |
+| Freshly ready PSS | 8.36 MiB | 0.32 MiB | 8.18 MiB | 0.33 MiB |
+| Freshly ready private resident memory | 6.19 MiB | 0.31 MiB | 6.94 MiB | 0.32 MiB |
+| PSS immediately after initial workload | 9.76 MiB | 0.24 MiB | 11.47 MiB | 0.37 MiB |
+
+PSS apportions shared resident pages; private memory excludes shared mappings.
+These freshly ready samples had no swap. They are warm-cache launches and include
+app-launcher preparation for .NET, while C verifies and borrows an existing launcher.
+**They do not establish a 41–61× improvement in complete service/root acquisition.**
+The prototype does less lifecycle work and has fewer capabilities.
+
+The follow-up used 8 MiB + 17-byte files and reports six warmed-up transfers per
+implementation per TV after a 20-second pause. These are TV-local protocol costs,
+not HTTPS upload/download timings; disk flushing remains enabled.
+
+| Warm transfer median | QN90A .NET | QN90A C | S90D .NET | S90D C |
+| --- | ---: | ---: | ---: | ---: |
+| Upload worker CPU | 160 ms | 134 ms | 342 ms | 134 ms |
+| Upload elapsed | 394 ms | 384 ms | 461 ms | 360 ms |
+| Download worker CPU | 58 ms | 56 ms | 70 ms | 50 ms |
+| Download elapsed | 84 ms | 87 ms | 89 ms | 83 ms |
+
+Upload CPU fell by about 16% on QN90A and 61% on S90D in this small follow-up;
+elapsed upload time fell only about 3% and 22%. Initial transfer medians were even
+closer: C uploads were slightly slower on both TVs. CPU measurements include the
+worker's hashing, protocol handling, runtime/GC work and kernel time, but exclude
+controller and shell-child CPU. They do not isolate cryptographic throughput.
+
+S90D's managed process consumed 420–492 ms of CPU during the first second of the
+long idle follow-up, then only 4–8 ms over the remaining 19 seconds. QN90A's .NET
+workers used 8–12 ms over those 19 seconds; native workers registered zero clock
+ticks. This shows transient activity after the workload, consistent with runtime
+warmup/JIT, rather than sustained idle CPU use. CPU accounting resolution was 4 ms.
+
+Both TVs aggressively reclaim/swap idle pages. After 20 seconds, native PSS could
+fall to 11–12 KiB while roughly 332–336 KiB was in swap; managed PSS fell to roughly
+2.6–3.6 MiB while another 7.0–7.5 MiB was swapped. Reporting resident memory alone
+at that point would hide memory commitment. `results.json` retains RSS, PSS,
+private resident memory, swap and proportional swap for each measurement stage.
+
+### Capability comparison
+
+| Capability | Native result on both TVs | Remaining difference |
+| --- | --- | --- |
+| Authentication/readiness | HMAC handshake and status passed | Existing root acquisition is borrowed; no autonomous acquisition/recovery |
+| Root command results | Exit 7, stdout/stderr and process-group timeout passed | Long-lived production supervision remains unqualified |
+| App execution | UID 5001, Smack `User`, runtime environment and quoted Unicode passed | Uses the deployed worker's verified native launcher view |
+| Binary transfer | 1 MiB chunks, byte/digest verification, ranges, EOF, wrong/replayed offset and conditional replacement passed | Files restricted to one canonical private directory; legacy transfer frames omitted |
+| Unsigned helper execution | Existing staged helper ran correctly as the app user | `helper.prepare`/`helper.release` explicitly unsupported; .NET owns those views |
+| Background jobs | Explicitly unsupported | No start/status/output/cancel/forget or durable job recovery |
+| Packaging/lifecycle | Deliberately absent | No signed production integration, boot readiness or rollback replacement |
+
+The host tests additionally reject bad MACs, replayed sequences, malformed JSON,
+symlink/out-of-scope paths, oversized frames and truncated/corrupt uploads; they
+check bounded output, offsets and conditional replacement under address and
+undefined-behavior sanitizers. They do not establish production-grade C memory
+safety or complete .NET error-semantic parity. Arbitrary binary app-command output,
+long-duration soak/failure recovery and the wider filesystem policy remain unqualified.
+
+The first two smoke attempts stopped before samples: QN90A exposes
+`json_object_is_type` but lacks the usual public `json_object_get_type`, and the SDK
+staging directory has symlinked ancestors. The implementation now uses the common
+JSON API and separates SDK token staging from canonical transfer storage. Failed
+attempts were inspected and cleaned before retrying under fresh experiment IDs.
+
+**Recommendation:** the footprint and startup improvements justify continuing a
+native implementation if those costs matter, but this prototype is not a drop-in
+replacement. Keep .NET deployed until jobs, helper/launcher lifecycle, acquisition,
+recovery, long-running behavior and failure-path parity are implemented and tested.
+The measured steady transfer gains alone do not require switching workers.
+
+No TV was rebooted or had its installed package, SDK host setting, enrollment or
+boot configuration changed. Original worker IDs and boot IDs were unchanged at
+completion. Helpers, benchmark jobs and owned test files were removed; original
+execution mounts and protected-file hashes were verified. Reboot behavior was not
+tested. Raw logs, credentials and copied system libraries remain private.

@@ -569,3 +569,12 @@ cross-path source-only builds. Upload protocol tests cover authenticated metadat
 raw byte preservation, fragmented/coalesced reads, bounds, truncation, digest and
 offset failures, channel alignment and no replay after disconnect. Private device
 identities, signed artifacts and raw evidence remain outside the repository.
+
+## Native worker experiment
+
+A separate [C worker prototype](native-worker/README.md) was compared with temporary
+copies of the deployed .NET worker on both TVs. It reduces startup and memory cost,
+but lacks production job, helper lifecycle and root-acquisition/recovery parity.
+It is not selected or packaged by the service. The deployed .NET 0.7.0 workers
+remain unchanged; neither TV was rebooted. See the experiment's aggregate metrics,
+capability matrix and limitations before considering a replacement.
