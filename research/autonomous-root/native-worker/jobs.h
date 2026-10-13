@@ -78,12 +78,13 @@ static int job_save(Job *j, int exclusive) {
     snprintf(code, sizeof code, "%d", j->code);
   else
     strcpy(code, "null");
-  int n = snprintf(bytes, sizeof bytes,
-                   "{\"id\":\"%s\",\"boot_id\":\"%s\",\"state\":\"%s\","
-                   "\"started_at\":\"%s\",\"pid\":%d,\"process_start\":\"%s\","
-                   "\"exit_code\":%s,\"timed_out\":%s}",
-                   j->id, j->boot, j->state, j->started, j->pid, j->identity,
-                   code, j->timed ? "true" : "false");
+  int n = snprintf(
+      bytes, sizeof bytes,
+      "{\"worker_id\":\"%s\",\"id\":\"%s\",\"boot_id\":\"%s\",\"state\":\"%s\","
+      "\"started_at\":\"%s\",\"pid\":%d,\"process_start\":\"%s\","
+      "\"exit_code\":%s,\"timed_out\":%s}",
+      worker_id, j->id, j->boot, j->state, j->started, j->pid, j->identity,
+      code, j->timed ? "true" : "false");
   if (n < 0 || n >= (int)sizeof bytes)
     return 0;
   int fd = openat(jobs_dir, exclusive ? name : temp,
@@ -240,7 +241,7 @@ static void *job_monitor(void *unused) {
   }
   return NULL;
 }
-static void jobs_init(void) {
+static void jobs_storage(void) {
   if (mkdirat(directory, ".jobs", 0700) && errno != EEXIST)
     fatal("job directory");
   jobs_dir = openat(directory, ".jobs",
@@ -255,6 +256,8 @@ static void jobs_init(void) {
     fatal("exclusive job ownership");
   readtext("/proc/sys/kernel/random/boot_id", current_boot,
            sizeof current_boot);
+}
+static void jobs_init(void) {
   /* Deliver lifecycle signals on the protocol thread only. Its foreground PID
    * cannot be reaped concurrently with a signal handler targeting that PID. */
   sigset_t blocked, previous;

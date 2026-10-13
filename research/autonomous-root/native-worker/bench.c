@@ -18,6 +18,9 @@ static double worker_cpu(pid_t pid) {
       ticks += strtod(v, NULL);
   return ticks * 1000.0 / sysconf(_SC_CLK_TCK);
 }
+static double live_cpu(void) {
+  return worker_cpu(worker_pid) + (worker_pid != child ? worker_cpu(child) : 0);
+}
 static J *memory(pid_t pid) {
   char path[64], linebuf[512];
   snprintf(path, sizeof path, "/proc/%d/smaps", pid);
@@ -54,12 +57,12 @@ static J *workload(void) {
   char *path = format("%s/bench-file", filescope);
   char *id = begin(path, size, sha, "absent");
   upload(id, 1, data, CHUNK, 0);
-  double cpu = worker_cpu(child), start = stamp();
+  double cpu = live_cpu(), start = stamp();
   for (int offset = 0; offset < size; offset += CHUNK)
     upload(id, offset, data + offset,
            size - offset > CHUNK ? CHUNK : size - offset, 1);
   transfer_op("file.commit", id, 1);
-  double up = stamp() - start, upcpu = worker_cpu(child) - cpu;
+  double up = stamp() - start, upcpu = live_cpu() - cpu;
   free(id);
   J *j = req("file.open");
   str(j, "path", path);
@@ -68,13 +71,13 @@ static J *workload(void) {
   if (strcmp(textval(get(r, "result"), "sha256"), sha))
     fatal("file hash");
   json_object_put(r);
-  cpu = worker_cpu(child);
+  cpu = live_cpu();
   start = stamp();
   for (int offset = 0; offset < size; offset += CHUNK) {
     int n = size - offset > CHUNK ? CHUNK : size - offset;
     download(id, offset, n, data + offset, n);
   }
-  double down = stamp() - start, downcpu = worker_cpu(child) - cpu;
+  double down = stamp() - start, downcpu = live_cpu() - cpu;
   download(id, CHUNK - 7, 17, data + CHUNK - 7, 17);
   download(id, size, 1, data, 0);
   transfer_op("file.close", id, 1);
@@ -218,35 +221,42 @@ static void sample(const char *dll, const char *binary, const char *app,
   free(hello);
   char *auth = receive(&w), *fields_a[10];
   if (fields(auth, fields_a, 10) != 8 || strcmp(fields_a[0], "AUTH") ||
-      atoi(fields_a[1]) != child)
+      atoi(fields_a[1]) <= 0 || (!native && atoi(fields_a[1]) != child))
     fatal("AUTH identity");
   for (int i = 2; i <= 5; i++)
     if (strcmp(fields_a[i], "0"))
       fatal("AUTH not root");
+  worker_pid = atoi(fields_a[1]);
   free(auth);
   J *r = call(req("status"));
   json_object_put(r);
-  double startup = stamp() - start, startcpu = worker_cpu(child);
+  double startup = stamp() - start, startcpu = live_cpu();
   J *report = obj();
   str(report, "kind", native ? "native" : "dotnet");
   num(report, "round", round);
   json_object_object_add(report, "startup_ms", json_object_new_double(startup));
   json_object_object_add(report, "startup_cpu_ms",
                          json_object_new_double(startcpu));
-  json_object_object_add(report, "ready_memory", memory(child));
+  json_object_object_add(report, "ready_memory", memory(worker_pid));
+  if (native)
+    json_object_object_add(report, "guardian_ready_memory", memory(child));
+  str(report, "resource_accounting",
+      "CPU includes guardian; memory reports worker and guardian separately");
   if (round >= 0) {
     json_object_object_add(report, "parity", parity(native));
     json_object_object_add(report, "transfer", workload());
-    json_object_object_add(report, "loaded_memory", memory(child));
+    json_object_object_add(report, "loaded_memory", memory(worker_pid));
+    if (native)
+      json_object_object_add(report, "guardian_loaded_memory", memory(child));
     int64_t seconds = 1;
     const char *setting = getenv("COUCHROOT_BENCH_IDLE_SECONDS");
     if (setting && (!decimal(setting, &seconds) || seconds < 1 || seconds > 30))
       fatal("idle window");
-    double idlecpu = worker_cpu(child), idle = stamp(), prior = idlecpu;
+    double idlecpu = live_cpu(), idle = stamp(), prior = idlecpu;
     J *series = json_object_new_array();
     for (int64_t i = 0; i < seconds; i++) {
       usleep(1000000);
-      double now = worker_cpu(child);
+      double now = live_cpu();
       json_object_array_add(series, json_object_new_double(now - prior));
       prior = now;
     }
@@ -255,13 +265,17 @@ static void sample(const char *dll, const char *binary, const char *app,
     json_object_object_add(report, "idle_elapsed_ms",
                            json_object_new_double(stamp() - idle));
     json_object_object_add(report, "idle_cpu_series_ms", series);
-    json_object_object_add(report, "settled_memory", memory(child));
+    json_object_object_add(report, "settled_memory", memory(worker_pid));
+    if (native)
+      json_object_object_add(report, "guardian_settled_memory", memory(child));
     if (seconds > 1) {
       J *warm = json_object_new_array();
       for (int i = 0; i < 3; i++)
         json_object_array_add(warm, workload());
       json_object_object_add(report, "warm_transfers", warm);
-      json_object_object_add(report, "warm_memory", memory(child));
+      json_object_object_add(report, "warm_memory", memory(worker_pid));
+      if (native)
+        json_object_object_add(report, "guardian_warm_memory", memory(child));
     }
   }
   char *bye = format("SHUTDOWN\t%d", ++sequence);

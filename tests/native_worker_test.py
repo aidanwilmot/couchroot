@@ -22,11 +22,22 @@ class NativeWorkerTests(unittest.TestCase):
         self.secret=os.urandom(32); self.nonce=os.urandom(32); self.seq=0
         self.token=self.root/'token'; self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
         self.listener=socket.socket();self.listener.bind(('127.0.0.1',0));self.listener.listen();self.listener.settimeout(5)
-        launcher=Path('/bin/true').resolve();sha=hashlib.sha256(launcher.read_bytes()).hexdigest()
-        self.proc=subprocess.Popen([os.environ['NATIVE_WORKER'],'127.0.0.1',str(self.listener.getsockname()[1]),str(self.token),str(self.root),str(launcher),sha],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        launcher=self.root/'launcher-source';launcher.write_bytes(Path('/bin/true').read_bytes());launcher.chmod(0o600);sha=hashlib.sha256(launcher.read_bytes()).hexdigest()
+        self.worker_args=[os.environ['NATIVE_WORKER'],'127.0.0.1',str(self.listener.getsockname()[1]),str(self.token),str(self.root),str(launcher),sha]
+        self.proc=subprocess.Popen(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
         self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')
-        self.assertTrue(self.receive().startswith('AUTH\t'))
+        auth=self.receive().split('\t');self.assertEqual(auth[0],'AUTH');self.worker_pid=int(auth[1]);self.assertNotEqual(self.worker_pid,self.proc.pid)
+    def restart(self):
+        self.stream.close();self.sock.close()
+        _,stderr=self.proc.communicate(timeout=5)
+        self.assertNotRegex(stderr.decode(errors='replace'),r'ERROR: AddressSanitizer|runtime error:|SUMMARY:')
+        self.secret=os.urandom(32);self.nonce=os.urandom(32);self.seq=0
+        self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
+        self.proc=subprocess.Popen(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
+        self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')
+        auth=self.receive().split('\t');self.assertEqual(auth[0],'AUTH');self.worker_pid=int(auth[1])
     def tearDown(self):
         self.stream.close();self.sock.close();self.listener.close()
         try:_,stderr=self.proc.communicate(timeout=3)
@@ -162,6 +173,56 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertFalse(self.job('job.start',data['id'],command=':',timeout_ms=1000,profile='root')['ok'])
         data['state']='completed';record.write_text(json.dumps(data))
         self.assertTrue(self.job('job.forget',data['id'])['ok'])
+    def test_independent_launcher_and_guardian_status(self):
+        status=self.op('status')['result']
+        self.assertEqual(status['guardian_pid'],self.proc.pid)
+        staged=Path(status['app_launcher']['path'])
+        self.assertNotEqual(staged,self.root/'launcher-source')
+        self.assertEqual(staged.read_bytes(),(self.root/'launcher-source').read_bytes())
+        self.assertEqual(staged.stat().st_mode & 0o777,0o500)
+        self.assertTrue(status['app_launcher']['independently_staged'])
+        self.assertTrue((self.root/'.jobs/guardian').exists())
+    def test_worker_sigkill_recovers_jobs_and_detached_descendants(self):
+        status=self.op('status')['result'];staged=Path(status['app_launcher']['path'])
+        marker=self.root/'detached-survivor'
+        started=self.start_job(f"setsid sh -c 'sleep 1; touch {marker}' >/dev/null 2>&1 & echo ready; sleep 30",5000)
+        deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            data=self.job('job.output',stdout_cursor=0,stderr_cursor=0)['result']['stdout']['data']
+            if b'ready' in base64.b64decode(data):break
+            time.sleep(.02)
+        else:self.fail('Detached child did not start')
+        os.kill(self.worker_pid,signal.SIGKILL)
+        self.proc.wait(timeout=5);self.assertEqual(self.proc.returncode,137)
+        self.assertFalse(staged.exists());self.assertFalse((self.root/'.jobs/guardian').exists())
+        with self.assertRaises(ProcessLookupError):os.kill(started['pid'],0)
+        record=json.loads((self.root/'.jobs/native-test-job-01.json').read_text())
+        self.assertEqual(record['state'],'interrupted');self.assertIsNone(record['exit_code'])
+        self.assertEqual(record['recovery'],'guardian-reaped-descendants')
+        time.sleep(1.1);self.assertFalse(marker.exists())
+        self.restart()
+        saved=self.job('job.status')['result'];self.assertEqual(saved['state'],'interrupted');self.assertFalse(saved['output_available'])
+        self.assertFalse(self.job('job.start',command='touch '+str(marker),profile='root',timeout_ms=1000)['ok'])
+        self.assertTrue(self.job('job.forget')['ok'])
+        self.assertFalse(marker.exists())
+    def test_scope_lock_and_unresolved_guardian_refuse_replacement(self):
+        other=subprocess.run(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
+        self.assertNotEqual(other.returncode,0);self.assertIn(b'exclusive job ownership',other.stderr)
+        self.assertTrue(self.op('status')['ok'])
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        marker=self.root/'.jobs/guardian';marker.write_text('unresolved');marker.chmod(0o600)
+        other=subprocess.run(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
+        self.assertNotEqual(other.returncode,0);self.assertIn(b'unresolved guardian journal',other.stderr)
+        self.assertEqual(marker.read_text(),'unresolved')
+    def test_launcher_source_integrity_rejection(self):
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        source=self.root/'launcher-source';source.write_bytes(b'invalid'*10)
+        for digest in ['0'*64,hashlib.sha256(source.read_bytes()).hexdigest()]:
+            args=self.worker_args.copy();args[-1]=digest
+            other=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
+            self.assertNotEqual(other.returncode,0);self.assertIn(b'launcher source',other.stderr)
+            self.assertFalse((self.root/'.jobs/guardian').exists())
+        self.assertFalse((self.root/'.views').exists())
     def test_helpers_fail_closed_without_smack_mount_support(self):
         path=self.root/'helper';path.write_bytes(b'not executable');path.chmod(0o600)
         result=self.op('helper.prepare',path=str(path),sha256=hashlib.sha256(path.read_bytes()).hexdigest())

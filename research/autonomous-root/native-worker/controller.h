@@ -1,5 +1,5 @@
 /* Shared private-loopback experiment client. SPDX-License-Identifier: 0BSD */
-static pid_t child;
+static pid_t child, worker_pid;
 static Wire w;
 static int sequence;
 static const char *scope, *filescope;

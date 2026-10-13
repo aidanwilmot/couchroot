@@ -8,7 +8,7 @@ service replacement, root reacquisition or TV reboot is needed.
 The prototype uses the existing HMAC protocol with strict sequence ordering,
 bounded binary chunks and structured failure responses. It implements status,
 root commands, bounded output and process-group timeouts, app commands through a
-verified existing launcher, and file begin/write/status/read/commit/close with
+independently staged, digest-verified native launcher, and file begin/write/status/read/commit/close with
 per-chunk/full-file hashes and conditional replacement. File access is deliberately
 restricted to direct children of a private, root-owned experiment directory.
 It loads the TV's libcrypto and json-c APIs, rather than implementing cryptography
@@ -29,20 +29,38 @@ require inspection, rather than being treated as safe to forget.
 scope into an exclusively owned `/opt/couchroot-agent/native-helpers` directory,
 sets Smack `User`, and creates a read-only, nosuid/nodev bind view. The native worker
 unshares its mount namespace before starting threads. It owns at most eight views;
-release is refused while any of its jobs are active. Cleanup kills/reaps owned job
-groups before unmounting helpers. Failed unmounts retain their backing files.
-Abrupt SIGKILL/crashes can leave records/files requiring explicit inspection;
-there is no claim of durable log recovery or containment of deliberately detached
-processes. The controller and deployed .NET worker retain their original namespace.
+release is refused while any of its jobs are active. A separate native guardian kills/reaps remaining descendants before unmounting
+helpers and its independently staged launcher. Failed unmounts retain their backing files.
+Worker SIGKILL/crashes are recovered by that guardian; loss of the guardian itself
+leaves its journal for explicit inspection. There is no durable log recovery. The
+controller and deployed .NET worker retain their original namespace.
 
-Missing parity still includes autonomous root acquisition, independent launcher
-staging, production packaging/recovery integration and the broader production file
+Missing parity still includes autonomous root acquisition and production
+packaging/recovery integration and the broader production file
 access policy. Legacy READFILE/WRITEFILE and JSON file.write are omitted. Unsupported
-operations fail explicitly; there is no automatic fallback or replay. The app
-launcher is borrowed from the deployed worker. Thus startup numbers are not a
-comparison of complete independent service startup. The worker's five-minute
+operations fail explicitly; there is no automatic fallback or replay. The build also produces the existing native `app-launcher` source as a separate
+binary. The worker accepts its source path inside the canonical file scope and an
+expected SHA-256; it validates ARM ELF32, stages a private root-only copy, applies
+Smack and a read-only bind mount, and verifies the staged digest before use. It no
+longer accepts a borrowed .NET execution view. Root acquisition and transport
+service integration are still borrowed, so startup is not complete service startup. The worker's five-minute
 experiment lifetime remains bounded; jobs cannot outlive that worker. Disconnect,
 SIGTERM and graceful shutdown clean up owned active jobs and helper views.
+
+The worker executable starts a small guardian before the protocol worker and its
+threads. The guardian is a Linux child subreaper and holds the scope lock, runtime
+mount namespace and durable ownership journal. After a worker dies, it kills and
+reaps its actual children, including adopted detached descendants, before changing
+its own nonterminal job records to `interrupted` and deleting owned execution views.
+It never signals a PID from a saved job file. Completed records remain unchanged;
+crash records have an unknown exit code and unavailable in-memory output. A new
+worker invocation reads those records and refuses duplicate starts. It does not
+automatically restart or replay commands.
+
+Failure to finish recovery retains the ownership journal and blocks replacement.
+Loss of both worker and guardian, storage corruption, power loss and uninterruptible
+processes remain fail-closed/manual-inspection cases. This prototype does not
+replace the deployed service's root acquisition, enrollment or restart machinery.
 
 `accept.c` exercises the native job/helper lifecycle on the TV via a private
 loopback controller. It checks an over-25-second job, simultaneous foreground and
@@ -60,7 +78,9 @@ root failures/timeouts, app identity/environment/quoting, ranges/EOF, offset rej
 and conditional replacement. Neither HTTP nor the deployed service's request
 queue is in this benchmark path. The existing fallback and controller remain alive,
 so PSS depends on their shared mappings. Idle CPU uses one-second windows and the
-kernel clock-tick resolution. Warm-cache worker startup is not boot readiness.
+kernel clock-tick resolution. Warm-cache worker startup is not boot readiness. The updated harness includes
+guardian CPU and reports its memory separately; old measurements below predate
+the guardian and must not be attributed to the current implementation.
 
 Build outside the source checkout with the project's cached ARMv7 soft-float
 Bullseye toolchain:
@@ -81,17 +101,19 @@ disconnect cleanup, and saved-record handling.
 
 Device execution must use the enrolled .NET client's existing verified upload,
 helper and job APIs with firmware guards, per-device locks, durable private
-intent/results, unique staging names and a bounded run. Prepare the benchmark and
-worker as private read-only helpers. Use a token/status directory below the SDK staging root so the existing managed
+intent/results, unique staging names and a bounded run. Prepare the controller and worker as private read-only helpers. Upload the freshly
+built launcher as a regular file inside the native file scope; do not supply the
+deployed launcher path. Use a token/status directory below the SDK staging root so the existing managed
 worker can run unchanged. Set `COUCHROOT_BENCH_FILES` to a separate canonical,
 private directory below `/opt/couchroot-agent/files` for both workers’ transfers.
 The SDK staging path may have symlinked ancestors on the TV; it is not suitable
 for the native prototype’s strict canonical file scope. Pass the actual
-installed DLL and verified launcher for that device, never another model's paths.
+installed DLL for that device and the new launcher source/digest, never another
+model's runtime paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
 
-## Lifecycle validation on both TVs — 2026-10-13
+## Historical lifecycle validation before independent staging — 2026-10-13
 
 The extended worker at `ffe97f3` passed **12 acceptance groups on QN90A and S90D**.
 Each controller exited zero. [lifecycle-results.json](lifecycle-results.json)

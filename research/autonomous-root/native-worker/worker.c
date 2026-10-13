@@ -20,6 +20,7 @@ static void release(Transfer *t) {
 }
 static void jobs_cleanup(void);
 static void helpers_cleanup(void);
+static void runtime_cleanup(void);
 static void cleanup(void) {
   if (active_child > 0) {
     pid_t pid = active_child;
@@ -29,8 +30,8 @@ static void cleanup(void) {
     while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {
     }
   }
+  runtime_cleanup();
   jobs_cleanup();
-  helpers_cleanup();
   for (int i = 0; i < 8; i++)
     release(&transfers[i]);
   if (directory >= 0)
@@ -42,7 +43,8 @@ static int leaf(const char *path, const char **name) {
     return 0;
   const char *p = path + n + 1;
   if (!*p || strlen(p) > 255 || strchr(p, '/') || !strcmp(p, ".") ||
-      !strcmp(p, "..") || !strcmp(p, ".jobs") || !strncmp(p, ".upload-", 8))
+      !strcmp(p, "..") || !strcmp(p, ".jobs") || !strcmp(p, ".views") ||
+      !strncmp(p, ".upload-", 8))
     return 0;
   *name = p;
   return 1;
@@ -261,6 +263,18 @@ static int verified_launcher(void) {
 #include "jobs.h"
 
 #include "helpers.h"
+
+#include "runtime.h"
+
+static void stop_signal(int sig);
+#include "guardian.h"
+static void runtime_cleanup(void) {
+  if (runtime_owned && runtime_sweep() && guardian_journal_owned) {
+    unlinkat(jobs_dir, "guardian", 0);
+    fsync(jobs_dir);
+    guardian_journal_owned = 0;
+  }
+}
 static volatile sig_atomic_t signal_socket = -1;
 static void stop_signal(int sig) {
   (void)sig;
@@ -290,10 +304,20 @@ static J *operation(J *request, Wire *w, const char *seq) {
                            json_object_new_double(strtod(b, NULL)));
     str(j, "worker_id", worker_id);
     str(j, "implementation", "native-prototype");
-    const char *names[] = {
-        "prototype-scoped-files-v1", "binary-upload-v1",
-        "binary-download-v1",        "prototype-app-exec-v1",
-        "prototype-jobs-v1",         "prototype-helper-lifecycle-v1"};
+    num(j, "guardian_pid", guardian_pid);
+    J *app = obj();
+    str(app, "path", launcher);
+    str(app, "sha256", launcher_sha);
+    boolean(app, "independently_staged", 1);
+    json_object_object_add(j, "app_launcher", app);
+    const char *names[] = {"prototype-scoped-files-v1",
+                           "binary-upload-v1",
+                           "binary-download-v1",
+                           "prototype-app-exec-v1",
+                           "prototype-jobs-v1",
+                           "prototype-helper-lifecycle-v1",
+                           "prototype-independent-launcher-v1",
+                           "prototype-crash-guardian-v1"};
     for (size_t i = 0; i < sizeof names / sizeof *names; i++)
       json_object_array_add(caps, json_object_new_string(names[i]));
     json_object_object_add(j, "capabilities", caps);
@@ -448,7 +472,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
 int main(int argc, char **argv) {
   if (argc != 7) {
     fputs("usage: worker HOST PORT TOKEN EXPERIMENT_DIRECTORY "
-          "VERIFIED_LAUNCHER SHA256\n",
+          "LAUNCHER_SOURCE SHA256\n",
           stderr);
     return 64;
   }
@@ -475,14 +499,19 @@ int main(int argc, char **argv) {
     fatal("private root-owned directory required");
   if (strlen(argv[5]) >= sizeof launcher || !hexvalid(argv[6], 64))
     fatal("launcher arguments");
-  strcpy(launcher, argv[5]);
   strcpy(launcher_sha, argv[6]);
-  if (!verified_launcher())
-    fatal("launcher digest");
   unsigned char id[16];
   random_bytes(id, sizeof id);
   hex(id, sizeof id, worker_id);
+  struct rlimit core_limit = {0, 0};
+  if (setrlimit(RLIMIT_CORE, &core_limit))
+    fatal("disable prototype core dumps");
+  signal(SIGCHLD, SIG_DFL);
+  jobs_storage();
+  guardian_journal();
   helpers_init();
+  launcher_stage(argv[5]);
+  guardian_start();
   jobs_init();
   Wire w = {0};
   int token = open(argv[3], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);

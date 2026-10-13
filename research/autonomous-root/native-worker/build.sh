@@ -10,3 +10,5 @@ for name in worker bench accept; do
   ${ARCH_FLAGS:--march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp} \
   "$src/$name.c" -ldl -pthread -o "$1/$name"
 done
+
+sh "$src/../native-launcher/build.sh" "$1" --launcher-only

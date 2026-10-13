@@ -11,6 +11,14 @@ static Helper helpers[8];
 static int helper_parent = -1, helper_owner = -1, helper_parent_created;
 static char helper_owner_path[PATH_MAX];
 static int helpers_available;
+static int helper_label(int fd) {
+#ifdef NATIVE_WORKER_TEST
+  (void)fd;
+  return 0;
+#else
+  return fsetxattr(fd, "security.SMACK64", "User", 4, 0);
+#endif
+}
 static int helper_directory(int parent, const char *name, int *created) {
   if (mkdirat(parent, name, 0755) == 0) {
     if (created)
@@ -23,7 +31,7 @@ static int helper_directory(int parent, const char *name, int *created) {
   if (fd < 0)
     return -1;
   if (fstat(fd, &st) || st.st_uid || (st.st_mode & 0777) != 0755 ||
-      fsetxattr(fd, "security.SMACK64", "User", 4, 0)) {
+      helper_label(fd)) {
     close(fd);
     return -1;
   }
@@ -41,12 +49,15 @@ static void helpers_init(void) {
 static int helper_storage(void) {
   if (helper_owner >= 0)
     return 1;
-  if (!helpers_available || helper_owner_path[0])
+  if (helper_owner_path[0])
     return 0;
   if (helper_parent >= 0) {
     close(helper_parent);
     helper_parent = -1;
   }
+#ifdef NATIVE_WORKER_TEST
+  helper_parent = helper_directory(directory, ".views", &helper_parent_created);
+#else
   int opt = open("/opt", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   if (opt < 0)
     return 0;
@@ -57,6 +68,7 @@ static int helper_storage(void) {
   helper_parent =
       helper_directory(agent, "native-helpers", &helper_parent_created);
   close(agent);
+#endif
   if (helper_parent < 0)
     return 0;
   int scan = openat(helper_parent, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
@@ -78,8 +90,14 @@ static int helper_storage(void) {
    */
   if (mkdirat(helper_parent, worker_id, 0755))
     return 0;
+#ifdef NATIVE_WORKER_TEST
+  if (snprintf(helper_owner_path, sizeof helper_owner_path, "%s/.views/%s",
+               root, worker_id) >= (int)sizeof helper_owner_path)
+    fatal("runtime path");
+#else
   snprintf(helper_owner_path, sizeof helper_owner_path,
            "/opt/couchroot-agent/native-helpers/%s", worker_id);
+#endif
   helper_owner = helper_directory(helper_parent, worker_id, NULL);
   return helper_owner >= 0;
 }
@@ -115,8 +133,13 @@ static void helpers_cleanup(void) {
     close(helper_parent);
     helper_parent = -1;
   }
-  if (helper_parent_created)
+  if (helper_parent_created) {
+#ifdef NATIVE_WORKER_TEST
+    unlinkat(directory, ".views", AT_REMOVEDIR);
+#else
     rmdir("/opt/couchroot-agent/native-helpers");
+#endif
+  }
 }
 static J *helper_operation(J *request, const char *op) {
   if (!strcmp(op, "helper.release")) {
@@ -166,7 +189,7 @@ static J *helper_operation(J *request, const char *op) {
     close(source);
     return failure("Invalid helper source file");
   }
-  if (!helper_storage()) {
+  if (!helpers_available || !helper_storage()) {
     close(source);
     return failure("Private Smack helper staging unavailable");
   }

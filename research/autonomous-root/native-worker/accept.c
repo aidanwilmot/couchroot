@@ -55,18 +55,24 @@ static void launch(void) {
   writeall(w.fd, hello, strlen(hello));
   free(hello);
   char *auth = receive(&w), *f[10];
-  if (fields(auth, f, 10) != 8 || strcmp(f[0], "AUTH") || atoi(f[1]) != child)
+  if (fields(auth, f, 10) != 8 || strcmp(f[0], "AUTH") || atoi(f[1]) <= 0 ||
+      atoi(f[1]) == child)
     fatal("AUTH");
   for (int i = 2; i <= 5; i++)
     if (strcmp(f[i], "0"))
       fatal("not root");
+  worker_pid = atoi(f[1]);
   free(auth);
   J *r = call(req("status"));
   if (strcmp(textval(get(r, "result"), "boot_id"), boot))
     fatal("boot changed");
+  if (number(get(r, "result"), "guardian_pid") != child ||
+      !json_object_get_boolean(
+          get(get(get(r, "result"), "app_launcher"), "independently_staged")))
+    fatal("native guardian or launcher status");
   json_object_put(r);
   char path[64], ns[80];
-  snprintf(path, sizeof path, "/proc/%d/ns/mnt", child);
+  snprintf(path, sizeof path, "/proc/%d/ns/mnt", worker_pid);
   ssize_t len = readlink(path, ns, sizeof ns - 1);
   if (len < 0)
     fatal("native mount namespace");
@@ -75,7 +81,9 @@ static void launch(void) {
     fatal("native mount namespace not isolated");
 }
 static void finish(int disconnect) {
-  if (disconnect == 2)
+  if (disconnect == 3 || disconnect == 4)
+    kill(worker_pid, disconnect == 3 ? SIGKILL : SIGSEGV);
+  else if (disconnect == 2)
     kill(child, SIGTERM);
   else if (disconnect)
     shutdown(w.fd, SHUT_RDWR);
@@ -101,6 +109,10 @@ static void finish(int disconnect) {
   if (got != child)
     fatal("native did not stop");
   child = 0;
+  if ((disconnect == 3 || disconnect == 4) &&
+      (!WIFEXITED(status) ||
+       WEXITSTATUS(status) != 128 + (disconnect == 3 ? SIGKILL : SIGSEGV)))
+    fatal("guardian crash status");
   if (!disconnect && (!WIFEXITED(status) || WEXITSTATUS(status)))
     fatal("native shutdown failed");
 }
@@ -234,6 +246,19 @@ int main(int argc, char **argv) {
     fatal("parent namespace");
   namespace_before[ns] = 0;
   launch();
+  J *initial = call(req("status"));
+  const char *staged =
+      textval(get(get(initial, "result"), "app_launcher"), "path");
+  if (!staged || !strcmp(staged, app) ||
+      !strstr(staged, "/.launcher/app-launcher"))
+    fatal("independent launcher path");
+  char *check = format("test \"$(sha256sum '%s' | cut -d' ' -f1)\" = '%s' && "
+                       "if printf x > '%s'; then exit 1; else exit 0; fi",
+                       staged, appsha, staged);
+  command(check, 5000, 0, 0);
+  free(check);
+  discard(initial);
+  mark("independent_launcher_digest_and_readonly_view");
   char *helper_id, *helper_path = stage_helper(&helper_id);
   discard(start_job("native-long-job-01",
                     "printf begin; sleep 27; printf end; exit 7", 40000,
@@ -406,7 +431,75 @@ int main(int argc, char **argv) {
     mark(mode == 0 ? "graceful_stop_cleans_active_job_and_helper"
                    : "signal_stop_cleans_active_job_and_helper");
   }
+  for (int mode = 3; mode <= 4; mode++) {
+    j = req("helper.prepare");
+    str(j, "path", source);
+    str(j, "sha256", sha);
+    r = call(j);
+    helper_path = strdup(textval(get(r, "result"), "path"));
+    discard(r);
+    r = call(req("status"));
+    char *old_launcher =
+        strdup(textval(get(get(r, "result"), "app_launcher"), "path"));
+    discard(r);
+    cmd = format("setsid sh -c \"sleep 2; touch '%s/crash-survivor'\" "
+                 ">/dev/null 2>&1 & printf ready; sleep 30",
+                 filescope);
+    discard(start_job("native-crash-job-01", cmd, 60000, "root"));
+    free(cmd);
+    double deadline = stamp() + 5000;
+    for (;;) {
+      r = output("native-crash-job-01", 0, 0);
+      size_t n;
+      unsigned char *data =
+          decode(textval(get(get(r, "result"), "stdout"), "data"), &n);
+      int ready = data && strstr((char *)data, "ready");
+      free(data);
+      discard(r);
+      if (ready)
+        break;
+      if (stamp() > deadline)
+        fatal("crash job readiness");
+      usleep(10000);
+    }
+    finish(mode);
+    if (access(helper_path, F_OK) == 0 || access(old_launcher, F_OK) == 0)
+      fatal("crash runtime survived guardian cleanup");
+    free(helper_path);
+    free(old_launcher);
+    usleep(2200000);
+    char *marker = format("%s/crash-survivor", filescope);
+    if (access(marker, F_OK) == 0)
+      fatal("detached descendant survived crash");
+    free(marker);
+    launch();
+    r = call(job_req("job.status", "native-crash-job-01"));
+    J *record = get(get(r, "result"), "record");
+    if (strcmp(textval(get(r, "result"), "state"), "interrupted") ||
+        strcmp(textval(record, "recovery"), "guardian-reaped-descendants") ||
+        get(record, "exit_code") != NULL)
+      fatal("crash recovery record");
+    discard(r);
+    j = job_req("job.start", "native-crash-job-01");
+    str(j, "command", ":");
+    str(j, "profile", "root");
+    num(j, "timeout_ms", 1000);
+    rejected(j);
+    discard(call(job_req("job.forget", "native-crash-job-01")));
+    discard(
+        start_job("native-after-crash-01", "printf recovered", 5000, "app"));
+    await_job("native-after-crash-01", "completed", 0, 7000);
+    r = output("native-after-crash-01", 0, 0);
+    contains(r, "stdout", "recovered");
+    discard(r);
+    discard(call(job_req("job.forget", "native-after-crash-01")));
+    mark(mode == 3
+             ? "sigkill_recovery_reaps_detached_children_and_restages_launcher"
+             : "sigsegv_recovery_no_replay_and_app_execution");
+  }
   finish(0);
+  if (unlink(app))
+    fatal("remove launcher source");
   if (unlink(source))
     fatal("remove helper source");
   free(source);
