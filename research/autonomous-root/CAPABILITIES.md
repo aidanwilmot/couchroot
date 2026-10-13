@@ -146,8 +146,9 @@ root-owned `/opt/couchroot-agent/helpers/ID/helper`, applies mode 0555 and `User
 labels, and creates a private read-only bind view. It refuses the initial mount
 namespace and never changes a Samsung resource or disables signature enforcement.
 This encapsulates the previously investigated execution-view technique; **the new
-implementation still needs verification on each supported TV/firmware**. App-user
-Smack and D-Bus behavior likewise cannot be certified by desktop tests.
+implementation requires verification on each TV/firmware**. The two existing
+profiles passed the hardware checks below; desktop tests alone cannot certify
+app-user Smack or D-Bus behavior on other firmware.
 
 There are at most eight active helper views and 64 retained helper directories.
 Release explicitly after jobs finish. Clean shutdown attempts cleanup; crashes or
@@ -176,5 +177,45 @@ root job harness passed. The first parallel Node run failed an unchanged native-
 process-group assertion; its isolated rerun and the complete sequential suite passed.
 Both worker target frameworks compile. All 42 native assemblies and the unsigned
 Hub package match across source paths. Privacy and whitespace checks passed.
-No TV installation, reboot, app-user/Smack acceptance or helper execution-view
-acceptance was performed for this change.
+Hardware acceptance followed separately, as recorded below.
+
+## Hardware acceptance — 2026-10-13
+
+Owner-authorized signed version 0.2.0, built from source commit `389ead8`, was
+installed on both existing QN90A and S90D profiles through the shared setup engine.
+The prior signed packages, enrollment backups and raw evidence remain private.
+Both deployment journals completed after installed-content and post-reboot checks.
+
+Both TVs passed:
+
+- An 8 MiB + 123 byte upload with explicit resume after the first 1 MiB chunk,
+  full SHA-256-verified download, and a 12,345-byte read spanning a chunk boundary.
+- Rejection of a wrong current-file hash without changing the target, followed by
+  successful replacement using the matching hash. A malformed binary chunk digest
+  was rejected with the upload offset still zero.
+- A 32-second app-profile job returning exit code 7 and retained output, explicit
+  cancellation of a running job, and bounded output after producing 1,200,000 bytes.
+  The latter reported cursor truncation and returned at most 64 KiB per tail read.
+- App commands reporting UID/EUID 5001, GID 100, Smack `User`, the owner runtime
+  directory, Wayland display and kernel D-Bus addresses.
+- Upload, preparation and execution of an unsigned ARM helper as that app user.
+  Mount readback confirmed the private helper view was read-only; release succeeded.
+- A no-match `grep` returning exit code 1 and stdout normally, and a command timeout
+  returning exit code 124 with `timed_out: true`.
+- Automatic root-worker acquisition after a full software reboot, with a different
+  boot ID and `worker_ready: true`. Readiness was first observed at approximately
+  51 seconds of uptime on QN90A and 84 seconds on S90D; these are observations,
+  not startup guarantees. App execution and digest/timeout checks passed afterward.
+
+All 22 installed package inventory entries, enrollment certificates, protected
+file hashes and enabled service boot flags verified after reboot. Developer Mode
+was restored to loopback. Temporary SDK admission initially used a saved host
+address while the administrator's Mac was on another network; access recovered
+after correcting the Mac's network connection. No router change was required.
+Samsung's HTTP Developer Mode address remained cached during live maintenance;
+admission was instead checked against the live SDK setting while retaining model,
+physical-device and firmware guards. Samsung's device-service reboot API was used
+after S90D rejected the generic systemd reboot target.
+
+The large-file check used an 8 MiB payload, not the 88 MiB Chromium library.
+No power-loss, firmware-upgrade or long-duration stress acceptance is claimed.
