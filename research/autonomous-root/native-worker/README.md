@@ -7,7 +7,7 @@ service replacement, root reacquisition or TV reboot is needed.
 
 The prototype uses the existing HMAC protocol with strict sequence ordering,
 bounded binary chunks and structured failure responses. It implements status,
-root commands, bounded output and process-group timeouts, app commands through a
+root commands, bounded output and process-group timeouts, app commands through an
 independently staged, digest-verified native launcher, and file begin/write/status/read/commit/close with
 per-chunk/full-file hashes and conditional replacement. File access is deliberately
 restricted to direct children of a private, root-owned experiment directory.
@@ -67,12 +67,16 @@ Each native run exclusively creates `/sys/fs/cgroup/freezer/couchroot-native-ID`
 Only the protocol worker joins it before spawning threads or commands; its root
 and app descendants inherit membership. The guardian and deployed .NET processes
 stay outside. A dedicated worker thread sends a heartbeat every 100 ms. After a
-one-second heartbeat gap, the guardian requests freezing of only that group and
-kills its own unreaped worker. Once that worker exits, the guardian proves child
+one-second heartbeat gap, the guardian freezes only that group, waits until its
+members cannot fork, and queues SIGKILL to every member. Before waiting for full
+freezing, it kills its own unreaped protocol child and moves that dying process
+back to the parent freezer group; this avoids a multithreaded exit deadlock on
+older kernels. Descendants stay in the private leaf. It then thaws the group
+so older kernels can finish process exit. Once the worker exits, the guardian proves child
 ownership with `waitid(..., WNOWAIT)` before killing/reaping adopted descendants.
 It removes the empty cgroup along with owned runtime views. It never changes the
 state of an existing system cgroup. Host tests bypass unavailable freezer support;
-actual membership, freezing and removal require TV validation.
+actual membership, freezing and removal are exercised by the TV acceptance suite.
 
 Failure to finish recovery retains the ownership journal and blocks replacement.
 Loss of both worker and guardian, storage corruption, power loss and uninterruptible
@@ -129,6 +133,48 @@ installed DLL for that device and the new launcher source/digest, never another
 model's runtime paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
+
+## Independent launcher and crash recovery validation — 2026-10-13
+
+Revision `d6fe00e` passed **16 acceptance groups on each TV**, with zero controller
+exit codes. [recovery-results.json](recovery-results.json) records the sanitized
+build hashes, checks, timings and cleanup verification. Local validation passed
+226 repository tests and 22 native tests under address/undefined-behavior sanitizers.
+
+Both TVs independently staged the uploaded launcher, enforced its digest and
+read-only view, and ran helpers as UID 5001 with Smack `User`. The suite retained
+the job/helper lifecycle checks and added SIGKILL, SIGSEGV and stopped-worker
+recovery. Detached descendants could not create their delayed marker. Restarted
+native workers restaged their own launcher, ran app commands, reported interrupted
+jobs without invented exit codes, and rejected duplicate starts without replay.
+Root and app commands inherited the private freezer group.
+
+| Worker fault | QN90A recovery | S90D recovery |
+| --- | ---: | ---: |
+| SIGKILL | 162 ms | 81 ms |
+| SIGSEGV | 20,573 ms | 20,890 ms |
+| SIGSTOP / heartbeat watchdog | 1,078 ms | 1,024 ms |
+
+These are single acceptance observations, from fault injection through guardian
+exit, not performance distributions. Fatal-signal teardown still takes roughly
+21 seconds; the watchdog contains descendants during that delay. Earlier attempts
+exposed delayed teardown and freezer completion/exit interactions. Those failed
+runs were inspected and cleaned before retrying. The final sequence excludes only
+the already-killed protocol child from freezer completion, terminates the frozen
+descendants, and thaws them so old kernels can finish exit.
+
+Native launcher/helper views and private cgroups were removed by the guardian.
+On both TVs the outer test worker's **.NET-managed executable view** remained busy
+after the crash tests despite no matching process maps or open descriptors. It
+required an inspected, experiment-only detach/rebind before registered release.
+That harness cleanup limitation remains unresolved; it is not evidence of fully
+automatic production recovery. No deployed launcher view was detached or replaced.
+
+Both original .NET workers stayed active with unchanged process/worker and boot
+identities, launcher hashes, cgroup memberships, protected files and execution
+mount sets. Owned experiment files, jobs, views and freezer groups were removed.
+Neither TV was rebooted. Production integration, guardian loss and power/storage
+failure recovery remain outside this validation; keep .NET deployed.
 
 ## Historical lifecycle validation before independent staging — 2026-10-13
 
