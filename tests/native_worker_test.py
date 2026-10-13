@@ -214,6 +214,22 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertFalse(self.job('job.start',command='touch '+str(marker),profile='root',timeout_ms=1000)['ok'])
         self.assertTrue(self.job('job.forget')['ok'])
         self.assertFalse(marker.exists())
+    def test_fatal_signal_uses_guardian_recovery(self):
+        marker=self.root/'fatal-survivor'
+        self.start_job(f"setsid sh -c 'sleep .5; touch {marker}' >/dev/null 2>&1 & printf ready; sleep 30")
+        deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            out=self.job('job.output',stdout_cursor=0,stderr_cursor=0)['result']['stdout']['data']
+            if b'ready' in base64.b64decode(out):break
+            time.sleep(.01)
+        else:self.fail('Fatal-signal child not ready')
+        os.kill(self.worker_pid,signal.SIGSEGV);self.proc.wait(timeout=5)
+        self.assertEqual(self.proc.returncode,139)
+        record=json.loads((self.root/'.jobs/native-test-job-01.json').read_text())
+        self.assertEqual(record['state'],'interrupted');self.assertIsNone(record['exit_code'])
+        self.assertEqual(record['recovery'],'guardian-reaped-descendants')
+        time.sleep(.6);self.assertFalse(marker.exists())
+        self.restart();self.assertEqual(self.job('job.status')['result']['state'],'interrupted')
     def test_scope_lock_and_unresolved_guardian_refuse_replacement(self):
         other=subprocess.run(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
         self.assertNotEqual(other.returncode,0);self.assertIn(b'exclusive job ownership',other.stderr)

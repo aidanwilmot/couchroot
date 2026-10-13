@@ -175,6 +175,26 @@ static int guardian_drain(void) {
     usleep(10000);
   }
 }
+/* Fatal faults must not enter the TV's slow default signal teardown while
+ * detached children continue running. Exit the damaged process immediately;
+ * only the independent guardian performs cleanup. Use an alternate stack so
+ * this path also works when the protocol thread exhausts its normal stack. */
+static unsigned char fatal_stack[65536];
+static void worker_fatal_signal(int sig) { _exit(128 + sig); }
+static void worker_fault_handlers(void) {
+  stack_t stack = {.ss_sp = fatal_stack, .ss_size = sizeof fatal_stack};
+  if (sigaltstack(&stack, NULL))
+    fatal("fatal signal stack");
+  struct sigaction action;
+  memset(&action, 0, sizeof action);
+  action.sa_handler = worker_fatal_signal;
+  action.sa_flags = SA_ONSTACK | SA_RESETHAND;
+  sigfillset(&action.sa_mask);
+  const int signals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT};
+  for (size_t i = 0; i < sizeof signals / sizeof *signals; i++)
+    if (sigaction(signals[i], &action, NULL))
+      fatal("fatal signal handler");
+}
 static void guardian_start(void) {
   if (prctl(PR_SET_CHILD_SUBREAPER, 1))
     fatal("native subreaper");
@@ -202,6 +222,7 @@ static void guardian_start(void) {
     signal(SIGALRM, stop_signal);
     if (sigprocmask(SIG_SETMASK, &previous, NULL))
       _exit(125);
+    worker_fault_handlers();
     alarm(300);
     return;
   }
