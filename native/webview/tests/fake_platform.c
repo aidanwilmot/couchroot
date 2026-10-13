@@ -23,6 +23,12 @@ static const char *file_for(const char *key) {
     return NULL;
 }
 char *vconf_get_str(const char *key) { const char *name = file_for(key); return name ? state(name) : NULL; }
+int vconf_get_int(const char *key, int *out) {
+    if (strcmp(key, "memory/pm/state")) return -1;
+    char *value = state("pm");
+    if (!value) return -1;
+    *out = atoi(value); free(value); return 0;
+}
 int vconf_set_str(const char *key, const char *value) {
     const char *dir = getenv("FAKE_STATE"); char path[1024];
     if (!dir || strcmp(key, "db/boot/last_service")) return -1;

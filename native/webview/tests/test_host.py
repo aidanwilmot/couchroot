@@ -453,6 +453,38 @@ class HostTests(unittest.TestCase):
         self.assertEqual(self.launches.read_text().split(), ["-s", "MiniHub001.Hub", "-u", str(os.getuid()),
                                                                "__NO_LOADING_LAUNCH", "enable"])
 
+    def test_wake_with_live_tv_returns_through_web_hub(self):
+        # Remote standby keeps the system running; on wake Samsung shows Live TV.
+        result = self.launcher(state={"pm": "3"}, COUCHROOT_NATIVE_HOME="1", COUCHROOT_NATIVE_SOURCE_REARM="1",
+                               FAKE_DRIVE="1", FAKE_WAKE_AT_MS="1500", FAKE_WAIT_MS="8000", FAKE_LAUNCH_FG="MiniHub001.Hub")
+        output = result.stdout
+        self.assertEqual(result.returncode, 0, output + result.stderr)
+        events = ["native-display-state 1", "native-wake-observed", "native-wake-return", "native-home-source-fallback",
+                  "native-home-fallback-launched", "native-home-resume", "native-home-activate"]
+        for earlier, later in zip(events, events[1:]):
+            self.assertLess(output.index(earlier), output.index(later))
+        self.assertIn("source-rearm rearmed previous=vc-service", output)
+        self.assertEqual(self.launches.read_text().split(), ["-s", "MiniHub001.Hub", "-u", str(os.getuid()),
+                                                               "__NO_LOADING_LAUNCH", "enable"])
+
+    def test_live_tv_opened_with_screen_on_is_left_alone(self):
+        result = self.launcher(state={"pm": "1"}, COUCHROOT_NATIVE_HOME="1", COUCHROOT_NATIVE_SOURCE_REARM="1",
+                               FAKE_DRIVE="1", FAKE_WAIT_MS="3000", FAKE_FG_AFTER_START="org.tizen.tv-viewer",
+                               FAKE_SOURCE_AFTER_START="vc-service")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("native-wake", result.stdout)
+        self.assertNotIn("native-home", result.stdout.replace("native-home-grab-ready", ""))
+        self.assertNotIn("mock raise", result.stdout)
+        self.assertEqual(self.launches.read_text(), "")
+        # The saved source is still re-armed promptly, as before.
+        self.assertIn("source-rearm rearmed previous=vc-service", result.stdout)
+
+    def test_unreadable_display_state_never_triggers_a_return(self):
+        result = self.launcher(COUCHROOT_NATIVE_HOME="1", COUCHROOT_NATIVE_SOURCE_REARM="1", FAKE_DRIVE="1",
+                               FAKE_WAKE_AT_MS="1000", FAKE_WAIT_MS="3000")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("native-wake-return", result.stdout.replace("native-wake-observed", ""))
+
     def test_home_press_denied_when_hub_does_not_own_isp(self):
         result = self.launcher(COUCHROOT_NATIVE_HOME="1", FAKE_HOME_PRESS="1", FAKE_WAIT_MS="800",
                                FAKE_ISP_AFTER_START="other.app")
