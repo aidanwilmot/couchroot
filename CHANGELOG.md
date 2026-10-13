@@ -2,6 +2,14 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Native WebView: fix the intermittent QN90A startup crash (glibc heap
+  corruption while Chromium created its first browser context; about 24 s lost
+  per affected boot). The host now loads libpthread at startup instead of
+  receiving it later through EFL/Chromium's `dlopen` on glibc 2.30. Stress runs
+  on the TV: 0 crashes in 853 starts with it (idle, CPU-loaded, default engine),
+  51 in 290 without. The supervisor also records
+  every thread's stack while the firmware holds a crashing child.
+
 - Native WebView: return to the Hub when the TV wakes from standby on Live TV.
   A cheap once-a-second display-state check detects screen-on and runs the Home
   path (signed Hub handoff, re-arm, native Hub). Live TV opened deliberately with
