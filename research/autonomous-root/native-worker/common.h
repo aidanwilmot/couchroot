@@ -47,7 +47,7 @@ typedef void J;
   X(int, json_object_get_string_len, (const J *))                              \
   X(int64_t, json_object_get_int64, (const J *))                               \
   X(int, json_object_get_boolean, (const J *))                                 \
-  X(int, json_object_get_type, (const J *))                                    \
+  X(int, json_object_is_type, (const J *, int))                                \
   X(const char *, json_object_to_json_string_ext, (J *, int))                  \
   X(int, json_object_put, (J *))                                               \
   X(J *, json_tokener_parse_verbose, (const char *, int *))
@@ -280,14 +280,14 @@ static J *get(J *j, const char *key) {
 }
 static const char *textval(J *j, const char *key) {
   J *v = get(j, key);
-  if (!v || json_object_get_type(v) != 6)
+  if (!v || !json_object_is_type(v, 6))
     return NULL;
   const char *s = json_object_get_string(v);
   return strlen(s) == (size_t)json_object_get_string_len(v) ? s : NULL;
 }
 static int integer(J *j, const char *key, int64_t *out) {
   J *v = get(j, key);
-  if (!v || json_object_get_type(v) != 3)
+  if (!v || !json_object_is_type(v, 3))
     return 0;
   *out = json_object_get_int64(v);
   return 1;
@@ -339,7 +339,7 @@ static J *parse(const char *s) {
     return NULL;
   int error = 0;
   J *j = json_tokener_parse_verbose(s, &error);
-  if (error || !j || json_object_get_type(j) != 4) {
+  if (error || !j || !json_object_is_type(j, 4)) {
     if (j)
       json_object_put(j);
     return NULL;
