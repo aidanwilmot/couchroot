@@ -136,10 +136,31 @@ python3 research/autonomous-root/client.py --config /private/client.json \
   helper-release --helper-id RETURNED_HELPER_ID
 ```
 
-The app profile drops supplementary groups, uses UID/EUID 5001 and GID 100,
+The app profile uses the signed worker's embedded native launcher. The .NET worker
+continues to handle authentication, commands, jobs and transfers. The launcher
+drops supplementary groups, uses UID/EUID 5001 and GID/EGID 100,
 requires the `User` Smack label, sets HOME/USER/LOGNAME, PATH, the owner runtime
 directory, Wayland display and D-Bus addresses, then runs in `/home/owner`.
-A failed identity/label transition fails the command; it does not fall back to root.
+A failed identity/label transition fails the command; it does not fall back to root
+or the old managed launcher. Only standard input/output/error descriptors and an
+explicit app environment reach the shell; inherited SDK/loader variables are removed.
+
+During acquisition, the worker extracts its embedded ARM ELF into an exclusively
+created, root-only directory under `/opt/couchroot-agent/launchers`, verifies its
+digest, and creates a private read-only view. Root readiness requires successful
+preparation. Each app invocation verifies the staged digest again. Clean shutdown
+attempts to release its view and delete only its own two paths. Crashes or busy
+mounts can leave directories for inspection; at 64 retained directories acquisition
+refuses further staging. No arbitrary external launcher path is accepted.
+
+`native-app-launcher-v1` in the ready worker's capabilities identifies this path.
+The worker `status` operation also returns the embedded launcher's SHA-256.
+Build the toolchain image from `research/native-telemetry/collector/Dockerfile`
+before preparing signed autonomous-root packages. The shared builder compiles from
+source and embeds the result in the worker DLL for each TV framework. Ordinary
+standalone .NET builds without the resource are useful for host tests but refuse
+worker startup on a TV. `python3 scripts/check-root-launcher.py` verifies both
+embedded targets and reproducibility without signing or contacting TVs.
 
 Helper preparation copies a digest-verified managed upload into a dedicated,
 root-owned `/opt/couchroot-agent/helpers/ID/helper`, applies mode 0555 and `User`
@@ -220,6 +241,6 @@ after S90D rejected the generic systemd reboot target.
 The large-file check used an 8 MiB payload, not the 88 MiB Chromium library.
 No power-loss, firmware-upgrade or long-duration stress acceptance is claimed.
 
-The separate [native app-user launcher prototype](native-launcher/README.md)
+The [native app-user launcher measurements](native-launcher/README.md)
 compares measured command startup, worker memory, reacquisition and transfer costs
-on both TVs. It does not change the installed worker or the APIs described here.
+on both TVs motivated this implementation. The public app APIs remain unchanged.

@@ -67,27 +67,6 @@ internal static partial class SamsungTvRootAgent
         while((count=await stream.ReadAsync(buffer,0,buffer.Length))>0) log.Add(buffer,count);
     }
     private static string ShellQuote(string value) { return "'"+value.Replace("'","'\\''")+"'"; }
-    private static string AppCommand(string command)
-    {
-        return "/usr/bin/dotnet "+ShellQuote(typeof(SamsungTvRootAgent).Assembly.Location)+" --app-exec "+ShellQuote(Convert.ToBase64String(Encoding.UTF8.GetBytes(command)));
-    }
-    private static int AppExec(string encoded)
-    {
-        string command=Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
-        File.WriteAllText("/proc/self/attr/current","User");
-        if(setgroups(UIntPtr.Zero,IntPtr.Zero)!=0 || setgid(100)!=0 || setuid(5001)!=0) return 77;
-        if(getuid()!=5001 || geteuid()!=5001 || getgid()!=100 || File.ReadAllText("/proc/self/attr/current").Trim()!="User") return 77;
-        Environment.SetEnvironmentVariable("HOME","/home/owner");
-        Environment.SetEnvironmentVariable("USER","owner"); Environment.SetEnvironmentVariable("LOGNAME","owner");
-        Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR","/run/user/5001");
-        Environment.SetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS","kernel:path=/sys/fs/kdbus/5001-user/bus");
-        Environment.SetEnvironmentVariable("DBUS_SYSTEM_BUS_ADDRESS",Directory.Exists("/sys/fs/kdbus/0-system") ? "kernel:path=/sys/fs/kdbus/0-system/bus" : "unix:path=/run/dbus/system_bus_socket");
-        Environment.SetEnvironmentVariable("WAYLAND_DISPLAY","wayland-0");
-        Environment.SetEnvironmentVariable("PATH","/usr/bin:/bin:/usr/sbin:/sbin");
-        Directory.SetCurrentDirectory("/home/owner");
-        var start=new ProcessStartInfo("/bin/sh"){UseShellExecute=false}; start.ArgumentList.Add("-c");start.ArgumentList.Add(command);
-        using(var process=Process.Start(start)){process.WaitForExit();return process.ExitCode;}
-    }
     private static object JobOperation(JsonElement value)
     {
         JobDirectory(); string op=Text(value,"op"),id=Text(value,"id");
@@ -98,12 +77,13 @@ internal static partial class SamsungTvRootAgent
             if(Jobs.Count>=16 || Directory.GetFiles(JobRoot,"*.json").Length>=64) throw new IOException("Job retention limit reached; forget completed jobs");
             int timeout=value.GetProperty("timeout_ms").GetInt32();string command=Text(value,"command"),profile=Text(value,"profile");
             if(timeout<100 || timeout>86400000 || Encoding.UTF8.GetByteCount(command)>16384 || string.IsNullOrWhiteSpace(command) || command.IndexOf('\0')>=0 || (profile!="root" && profile!="app")) throw new ArgumentException("Invalid job request");
+            string launchCommand = profile=="app" ? AppCommand(command) : command;
             // Persist intent exclusively before process launch. Lost starts are never replayed.
             using(var intent=new FileStream(file,FileMode.CreateNew,FileAccess.Write,FileShare.None)) { byte[] bytes=Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new {id,boot_id=BootId(),state="unknown",pid=0}));intent.Write(bytes,0,bytes.Length);intent.Flush(true); }
             if(chmod(file,384)!=0) throw new IOException("Cannot protect job record");
             job=new Job{Id=id,Boot=BootId(),Started=DateTime.UtcNow.ToString("o")};
             var start=new ProcessStartInfo("/usr/bin/setsid"){UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true};
-            start.ArgumentList.Add("/bin/sh");start.ArgumentList.Add("-c");start.ArgumentList.Add(profile=="app"?AppCommand(command):command);
+            start.ArgumentList.Add("/bin/sh");start.ArgumentList.Add("-c");start.ArgumentList.Add(launchCommand);
             try
             {
                 job.Process=Process.Start(start);
@@ -158,7 +138,4 @@ internal static partial class SamsungTvRootAgent
     }
     private static void StopJobs() { foreach(var job in Jobs.Values) lock(job){if(job.State=="running"){kill(-job.Process.Id,SignalKill);job.State="interrupted";try{job.Save();}catch{}}} }
     [DllImport("libc", SetLastError=true)]private static extern int mkdir(string path,uint mode);
-    [DllImport("libc", SetLastError=true)]private static extern int setgroups(UIntPtr count,IntPtr groups);
-    [DllImport("libc", SetLastError=true)]private static extern int setgid(uint gid);
-    [DllImport("libc", SetLastError=true)]private static extern int setuid(uint uid);
 }

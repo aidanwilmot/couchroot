@@ -29,7 +29,6 @@ internal static partial class SamsungTvRootAgent
         string runtimeDirectory = null;
         try
         {
-            if (arguments.Length == 2 && arguments[0] == "--app-exec") return AppExec(arguments[1]);
             if (arguments.Length != 4)
             {
                 throw new ArgumentException(
@@ -67,6 +66,7 @@ internal static partial class SamsungTvRootAgent
                     "setsid failed with errno " + Marshal.GetLastWin32Error());
             }
             DetachStandardStreams();
+            PrepareAppLauncher();
             RunSession(
                 arguments[0],
                 port,
@@ -90,6 +90,7 @@ internal static partial class SamsungTvRootAgent
             StopJobs();
             CloseTransfers();
             CloseHelpers();
+            CloseAppLauncher();
             DeleteRuntimeDirectory(runtimeDirectory);
             if (secret != null)
             {

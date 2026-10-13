@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Security.Cryptography;
-class Harness { public static int Main(string[] args){if(args.Length>0)return SamsungTvRootAgent.Main(args);SamsungTvRootAgent.TestOperations();return 0;} }
+class Harness { public static int Main(string[] args){if(args.Length==1 && args[0]=="--native-resource"){using(var resource=typeof(SamsungTvRootAgent).Assembly.GetManifestResourceStream("Couchroot.AppLauncher")){if(resource==null)throw new Exception("Missing resource");Console.WriteLine("NATIVE_RESOURCE_SHA256 "+Convert.ToHexString(SHA256.HashData(resource)).ToLowerInvariant());}return 0;}if(args.Length>0)return SamsungTvRootAgent.Main(args);SamsungTvRootAgent.TestOperations();return 0;} }
 internal static partial class SamsungTvRootAgent
 {
     private static void Check(bool value,string message){if(!value)throw new Exception(message);}
@@ -38,10 +38,16 @@ internal static partial class SamsungTvRootAgent
     }
     public static void TestOperations()
     {
+        Reject(()=>AppCommand("echo should-not-run"),"unprepared native launcher accepted");
         string root=Path.GetTempPath()+"couchroot-operations-"+Guid.NewGuid().ToString("N")+"/";
         if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX) && root.StartsWith("/var/"))root="/private"+root;
         Directory.CreateDirectory(root);
         try {
+            string native=root+"native-launcher";File.WriteAllText(native,"test launcher bytes");
+            AppLauncherPath=native;AppLauncherDigest=DigestPath(native);
+            Check(AppCommand("printf '%s' 'quoted command'")=="exec "+ShellQuote(native)+" --command "+ShellQuote("printf '%s' 'quoted command'"),"native command quoting differs");
+            File.AppendAllText(native,"tampered");Reject(()=>AppCommand("echo should-not-run"),"tampered launcher accepted");
+            AppLauncherPath=AppLauncherDigest=null;
             byte[] bytes=new byte[5*1024*1024+17];new Random(4).NextBytes(bytes);
             string digest=HexEncode(SHA256.HashData(bytes)),target=root+"large.bin";
             var session=Call(new {op="file.begin",path=target,size=bytes.Length,sha256=digest,expected_sha256="absent"},root);

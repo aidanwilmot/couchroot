@@ -1,9 +1,10 @@
-# Native app-user launcher prototype
+# Native app-user launcher
 
-The measurements favor replacing the per-command managed launcher, while retaining
-.NET for the persistent worker. This prototype is not wired into the signed
-service, worker, package builder or setup workflow. Both TVs still run the validated
-0.2.0 worker. No full native-worker implementation or performance comparison exists.
+The measurements below motivated replacing the per-command managed launcher while
+retaining .NET for the persistent worker. The shared package builder now embeds the
+source-built launcher in the signed worker DLL; both `app.exec` and app-profile
+jobs use it. See [capability documentation](../CAPABILITIES.md) for lifecycle and
+build requirements. No full native-worker implementation or comparison exists.
 
 `app-launcher.c` is a small root-only executable that applies the existing app
 profile and then replaces itself with `/bin/sh -c COMMAND`. It clears supplementary
@@ -11,8 +12,9 @@ groups, drops GID/UID, verifies identities and Smack `User`, sets the same runti
 environment overrides, and changes to the owner's home directory. A failed
 transition exits without executing the requested command. It is **not a setuid
 program**, network listener, authentication layer or standalone privilege grant.
-Like the managed profile, it inherits other environment variables; environment and
-file-descriptor sanitization require a separate integration review.
+The integrated version closes descriptors above stderr and supplies an explicit
+app environment to the shell. The earlier prototype measured below inherited the
+other environment variables and was staged through the generic helper API.
 
 ## Measurements on both supported TVs — 2026-10-13
 
@@ -103,12 +105,9 @@ group transitions, label verification, environment setup and directory changes
 prevent shell execution. It also checks exact shell argument forwarding and exec
 failure handling. This complements, but cannot replace, hardware Smack checks.
 
-Recommended next step: integrate the small launcher behind the existing `app.exec`
-and app job API, preserving digest-verified staging and root-only invocation.
-That needs package/lifecycle integration, timeout/cancellation tests and the full
-hardware acceptance suite before becoming the default. Separately profile and
-buffer incoming protocol reads. The measured worker footprint and acquisition
-latency do not currently justify a full C rewrite.
+The integration preserves digest-verified staging and root-only invocation.
+Separately profiling incoming protocol reads remains a useful next step. The
+measured worker footprint and acquisition latency do not justify a full C rewrite.
 
 ## Reproducing the prototype
 
@@ -128,4 +127,7 @@ as its arguments. Give the job a bounded timeout (180 seconds in this experiment
 The benchmark emits JSON lines; exclude rounds -3 through -1 for the warmup.
 Never substitute another TV's runtime or bypass the model/firmware guards. Release
 both views after the job finishes and remove only the experiment's uploaded files.
-No changes to SDK admission, signature enforcement or boot flags are needed.
+No changes to SDK admission, signature enforcement or boot flags are needed for
+this standalone experiment. Its managed comparison specifically requires the old
+0.2.0 DLL, which still supported `--app-exec`; the integrated worker removes that
+entry point and never falls back to it.

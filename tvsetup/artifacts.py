@@ -128,8 +128,9 @@ class Builder:
         with (self.folder/'build.log').open('a') as f:f.write(output+'\n')
         return output
 
-    def build_managed(self, project, output):
-        self.command(['dotnet','build',project,'-c','Release','--nologo','-v','quiet','-f',self.profile['framework'],'-o',output])
+    def build_managed(self, project, output, *, native_app_launcher=None):
+        extra = ['-p:NativeAppLauncher='+str(Path(native_app_launcher).resolve())] if native_app_launcher else []
+        self.command(['dotnet','build',project,'-c','Release','--nologo','-v','quiet','-f',self.profile['framework'],'-o',output]+extra)
 
     def find_renderer(self):
         path=self.choices['artifacts'].get('renderer')

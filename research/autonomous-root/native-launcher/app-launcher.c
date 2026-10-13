@@ -1,5 +1,6 @@
-/* Original Couchroot app-user launcher prototype. SPDX-License-Identifier: 0BSD */
+/* Original Couchroot app-user launcher. SPDX-License-Identifier: 0BSD */
 #define _GNU_SOURCE
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
@@ -14,6 +15,22 @@ static int fail(const char *step) {
     return 77;
 }
 
+static int close_inherited_fds(void) {
+    DIR *directory = opendir("/proc/self/fd");
+    if (!directory) return -1;
+    int scan_fd = dirfd(directory), error = 0;
+    struct dirent *entry;
+    for (;;) {
+        errno = 0; entry = readdir(directory);
+        if (!entry) { error = errno; break; }
+        char *end; long fd = strtol(entry->d_name, &end, 10);
+        if (*end || fd <= 2 || fd == scan_fd || fd > 2147483647) continue;
+        if (close((int)fd) != 0) { error = errno; break; }
+    }
+    if (closedir(directory) != 0 && !error) error = errno;
+    errno = error; return error ? -1 : 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 3 || strcmp(argv[1], "--command")) {
         fputs("usage: app-launcher --command SHELL_COMMAND\n", stderr);
@@ -21,6 +38,7 @@ int main(int argc, char **argv) {
     }
     /* Never install setuid. Only the already authenticated root worker calls this. */
     if (getuid() != 0 || geteuid() != 0) { errno = EPERM; return fail("requires root"); }
+    if (close_inherited_fds()) return fail("close inherited descriptors");
     int fd = open("/proc/self/attr/current", O_WRONLY | O_CLOEXEC);
     if (fd < 0) return fail("open Smack label");
     ssize_t n = write(fd, "User", 4);
@@ -38,18 +56,16 @@ int main(int argc, char **argv) {
     if (n < 0) { errno = saved; return fail("read Smack label"); }
     if (n != 4 || memcmp(label, "User", 4)) { errno = EPERM; return fail("verify Smack label"); }
     struct stat st;
-    const char *system_bus = stat("/sys/fs/kdbus/0-system", &st) == 0 && S_ISDIR(st.st_mode)
-        ? "kernel:path=/sys/fs/kdbus/0-system/bus" : "unix:path=/run/dbus/system_bus_socket";
-    const char *env[][2] = {
-        {"HOME", "/home/owner"}, {"USER", "owner"}, {"LOGNAME", "owner"},
-        {"XDG_RUNTIME_DIR", "/run/user/5001"}, {"WAYLAND_DISPLAY", "wayland-0"},
-        {"DBUS_SESSION_BUS_ADDRESS", "kernel:path=/sys/fs/kdbus/5001-user/bus"},
-        {"DBUS_SYSTEM_BUS_ADDRESS", system_bus}, {"PATH", "/usr/bin:/bin:/usr/sbin:/sbin"}
+    char *system_bus = stat("/sys/fs/kdbus/0-system", &st) == 0 && S_ISDIR(st.st_mode)
+        ? "DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus" : "DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket";
+    char *environment[] = {
+        "HOME=/home/owner", "USER=owner", "LOGNAME=owner",
+        "XDG_RUNTIME_DIR=/run/user/5001", "WAYLAND_DISPLAY=wayland-0",
+        "DBUS_SESSION_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/5001-user/bus",
+        system_bus, "PATH=/usr/bin:/bin:/usr/sbin:/sbin", "LANG=en_US.UTF-8", NULL
     };
-    /* Match the managed profile's environment overrides for this comparison. */
-    for (size_t i = 0; i < sizeof(env) / sizeof(env[0]); i++)
-        if (setenv(env[i][0], env[i][1], 1)) return fail("set environment");
     if (chdir("/home/owner")) return fail("set working directory");
-    execl("/bin/sh", "sh", "-c", argv[2], (char *)NULL);
+    char *command[] = {"sh", "-c", argv[2], NULL};
+    execve("/bin/sh", command, environment);
     return fail("exec shell");
 }
