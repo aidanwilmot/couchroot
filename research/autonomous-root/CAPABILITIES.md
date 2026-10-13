@@ -219,3 +219,7 @@ after S90D rejected the generic systemd reboot target.
 
 The large-file check used an 8 MiB payload, not the 88 MiB Chromium library.
 No power-loss, firmware-upgrade or long-duration stress acceptance is claimed.
+
+The separate [native app-user launcher prototype](native-launcher/README.md)
+compares measured command startup, worker memory, reacquisition and transfer costs
+on both TVs. It does not change the installed worker or the APIs described here.

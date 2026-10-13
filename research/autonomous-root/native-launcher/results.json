@@ -1,0 +1,171 @@
+{
+  "date": "2026-10-13",
+  "scope": "prototype; managed worker remains installed",
+  "local_pairs": 30,
+  "warmup_pairs": 3,
+  "api_pairs": 20,
+  "devices": {
+    "qn90a": {
+      "local_launch": {
+        "dotnet": {
+          "cpu_ms": {
+            "max": 172.0,
+            "median": 144.0,
+            "min": 136.0,
+            "p95": 164.0
+          },
+          "elapsed_ms": {
+            "max": 263.537,
+            "median": 149.73399999999998,
+            "min": 135.653,
+            "p95": 170.1
+          },
+          "maxrss_kib": {
+            "max": 15620,
+            "median": 15560.0,
+            "min": 14072,
+            "p95": 15616
+          }
+        },
+        "native": {
+          "cpu_ms": {
+            "max": 8.0,
+            "median": 4.0,
+            "min": 4.0,
+            "p95": 4.0
+          },
+          "elapsed_ms": {
+            "max": 9.71,
+            "median": 5.948,
+            "min": 5.119,
+            "p95": 8.732
+          },
+          "maxrss_kib": {
+            "max": 1172,
+            "median": 1172.0,
+            "min": 1172,
+            "p95": 1172
+          }
+        }
+      },
+      "transfer": {
+        "bytes": 8388608,
+        "download_mib_s": 1.0676860576897194,
+        "download_seconds": 7.4928392502479255,
+        "upload_mib_s": 0.20752385451812852,
+        "upload_seconds": 38.54978512506932
+      },
+      "reacquisition": [
+        {
+          "attempts": 1,
+          "same_boot": true,
+          "seconds": 1.381373958196491
+        },
+        {
+          "attempts": 1,
+          "same_boot": true,
+          "seconds": 2.7992857079952955
+        }
+      ],
+      "api_median_ms": {
+        "dotnet": 303.2400624360889,
+        "native": 135.4395414236933
+      },
+      "initial_memory": {
+        "VmRSS": 18988,
+        "VmSwap": 2172,
+        "Threads": 14,
+        "Pss_kB": 6293,
+        "USS_kB": 3536
+      },
+      "fresh_memory": {
+        "VmRSS": 16404,
+        "VmSwap": 2372,
+        "Threads": 11,
+        "Pss_kB": 4829,
+        "USS_kB": 2364
+      }
+    },
+    "s90d": {
+      "local_launch": {
+        "dotnet": {
+          "cpu_ms": {
+            "max": 431.234,
+            "median": 322.62199999999996,
+            "min": 255.708,
+            "p95": 389.835
+          },
+          "elapsed_ms": {
+            "max": 524.381,
+            "median": 372.295,
+            "min": 297.348,
+            "p95": 496.452
+          },
+          "maxrss_kib": {
+            "max": 16816,
+            "median": 16786.0,
+            "min": 15932,
+            "p95": 16800
+          }
+        },
+        "native": {
+          "cpu_ms": {
+            "max": 10.156,
+            "median": 8.129999999999999,
+            "min": 5.668,
+            "p95": 9.28
+          },
+          "elapsed_ms": {
+            "max": 10.999,
+            "median": 8.872,
+            "min": 6.146,
+            "p95": 10.91
+          },
+          "maxrss_kib": {
+            "max": 1156,
+            "median": 1156.0,
+            "min": 1156,
+            "p95": 1156
+          }
+        }
+      },
+      "transfer": {
+        "bytes": 8388608,
+        "download_mib_s": 1.159697805040876,
+        "download_seconds": 6.8983488329686224,
+        "upload_mib_s": 0.18138005640321705,
+        "upload_seconds": 44.106282458174974
+      },
+      "reacquisition": [
+        {
+          "attempts": 1,
+          "same_boot": true,
+          "seconds": 1.8853173749521375
+        },
+        {
+          "attempts": 1,
+          "same_boot": true,
+          "seconds": 2.2241447498090565
+        }
+      ],
+      "api_median_ms": {
+        "dotnet": 454.78885411284864,
+        "native": 104.51731248758733
+      },
+      "initial_memory": {
+        "VmRSS": 19892,
+        "VmSwap": 4340,
+        "Threads": 14,
+        "Pss_kB": 4788,
+        "USS_kB": 3568
+      },
+      "fresh_memory": {
+        "VmRSS": 18140,
+        "VmSwap": 2268,
+        "Threads": 14,
+        "Pss_kB": 4521,
+        "USS_kB": 3536
+      }
+    }
+  }
+}
