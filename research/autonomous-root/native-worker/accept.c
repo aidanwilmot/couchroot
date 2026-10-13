@@ -82,6 +82,7 @@ static void launch(void) {
     fatal("native mount namespace not isolated");
 }
 static void finish(int disconnect) {
+  double stop_started = stamp();
   if (disconnect == 3 || disconnect == 4)
     kill(worker_pid, disconnect == 3 ? SIGKILL : SIGSEGV);
   else if (disconnect == 2)
@@ -110,6 +111,9 @@ static void finish(int disconnect) {
   if (got != child)
     fatal("native did not stop");
   child = 0;
+  if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+    fprintf(stderr, "prototype: controller stop mode=%d %.0f ms\n", disconnect,
+            stamp() - stop_started);
   if ((disconnect == 3 || disconnect == 4) &&
       (!WIFEXITED(status) ||
        WEXITSTATUS(status) != 128 + (disconnect == 3 ? SIGKILL : SIGSEGV)))

@@ -120,8 +120,10 @@ static int guardian_recover_records(void) {
   return good;
 }
 static int guardian_children(int terminate) {
-  /* A direct child cannot have its PID reused until this single-threaded parent
-   * reaps it. Scan only our own children; never kill a PID from a saved record.
+  /* waitid(P_PID, WNOWAIT) proves direct-child ownership atomically, including
+   * a live child for which WNOHANG returns no exit event. This single-threaded
+   * parent does not reap while iterating, so confirmed PIDs cannot be reused.
+   * Avoid reading every TV process's status: cold /proc reads delay recovery.
    */
   DIR *proc = opendir("/proc");
   if (!proc)
@@ -133,21 +135,14 @@ static int guardian_children(int terminate) {
     long pid = strtol(entry->d_name, &end, 10);
     if (*end || pid < 1 || pid > INT_MAX)
       continue;
-    char path[64], bytes[4096];
-    snprintf(path, sizeof path, "/proc/%ld/stat", pid);
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0)
-      continue;
-    ssize_t n = read(fd, bytes, sizeof bytes - 1);
-    close(fd);
-    if (n <= 0)
-      continue;
-    bytes[n] = 0;
-    char *p = strrchr(bytes, ')'), state;
-    long parent;
-    if (!p || sscanf(p + 2, "%c %ld", &state, &parent) != 2 ||
-        parent != getpid())
-      continue;
+    siginfo_t info;
+    memset(&info, 0, sizeof info);
+    if (waitid(P_PID, (id_t)pid, &info, WEXITED | WNOHANG | WNOWAIT)) {
+      if (errno == ECHILD || errno == ESRCH || errno == EINTR)
+        continue;
+      closedir(proc);
+      return -1;
+    }
     count++;
     if (terminate && kill((pid_t)pid, SIGKILL) && errno != ESRCH) {
       closedir(proc);
@@ -257,7 +252,12 @@ static void guardian_start(void) {
   alarm(0);
   /* Do not release ownership or publish interruption while any descendant can
    * still run. Unexpected retention leaves the durable journal fail-closed. */
-  if (!guardian_drain() || !guardian_recover_records() || !runtime_sweep()) {
+  double recovery_started = stamp();
+  int drained = guardian_drain();
+  if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+    fprintf(stderr, "prototype: guardian drain %.0f ms\n",
+            stamp() - recovery_started);
+  if (!drained || !guardian_recover_records() || !runtime_sweep()) {
     fputs("prototype: guardian recovery incomplete; journal retained\n",
           stderr);
     _exit(125);
