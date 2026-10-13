@@ -7,8 +7,8 @@ const vm = require('node:vm');
 const bridgeSource = fs.readFileSync(path.join(__dirname, '../../../web/bridge.js'), 'utf8');
 const shimSource = fs.readFileSync(path.join(__dirname, '../native-shim.js'), 'utf8');
 
-function load({ search = '?host=native-webview', tizen, hash = '', storage = {} } = {}) {
-  const titles = [], timers = new Map(), replaced = [];
+function load({ search = '?host=native-webview', tizen, hash = '', storage = {}, HubBridge = true } = {}) {
+  const titles = [], timers = new Map(), replaced = [], classes = new Set();
   let nextTimer = 0;
   const window = {
     location: { search, hash, pathname: '/opt/hub/index.html' },
@@ -17,17 +17,18 @@ function load({ search = '?host=native-webview', tizen, hash = '', storage = {} 
       setItem: (key, value) => { storage[key] = String(value); }
     },
     history: { replaceState: (state, title, url) => replaced.push(url) },
-    document: { set title(value) { titles.push(value); }, get title() { return titles[titles.length - 1] || ''; } },
+    document: { set title(value) { titles.push(value); }, get title() { return titles[titles.length - 1] || ''; },
+      documentElement: { classList: { add: name => classes.add(name) } } },
     setTimeout: (fn, ms) => { timers.set(++nextTimer, { fn, ms }); return nextTimer; },
     clearTimeout: id => timers.delete(id),
     tizen
   };
   window.window = window;
   const context = vm.createContext(Object.assign(window, { Object, Error, Array, String, JSON }));
-  vm.runInContext(bridgeSource, context);
+  if (HubBridge) { vm.runInContext(bridgeSource, context); }
   vm.runInContext(shimSource, context);
   const fire = () => { const [id, timer] = [...timers][0]; timers.delete(id); timer.fn(); };
-  return { window, titles, timers, fire, storage, replaced };
+  return { window, titles, timers, fire, storage, replaced, classes };
 }
 function capture() {
   const calls = [];
@@ -161,3 +162,41 @@ console.log('Native shim: inactive outside host, discovery/launch through bridge
   assert.deepEqual(titles, ['hubbridge:1:r1:discover', 'hubbridge:1:r2:ready']);
   window.HubNativePlatform.receive({ v: 1, id: 'r2', ok: true });
 }
+
+// The rendered Home is revealed by ready(); 'painted' follows its presented
+// first contentful paint, or a bounded fallback without paint timing.
+{
+  const { window, titles, timers, classes } = load();
+  let observed, observing;
+  window.PerformanceObserver = function (callback) { observed = callback; this.observe = options => { observing = options; }; this.disconnect = () => { observed = null; }; };
+  window.requestAnimationFrame = fn => fn();
+  assert.equal(classes.size, 0); // The static markup stays transparent until the Hub has rendered.
+  window.HubNativePlatform.ready();
+  assert.deepEqual([...classes], ['native-hub-rendered']);
+  assert.deepEqual(JSON.parse(JSON.stringify(observing)), { type: 'paint', buffered: true });
+  assert.deepEqual(titles, ['hubbridge:1:r1:ready']);
+  observed({ getEntriesByName: name => name === 'first-paint' ? [{}] : [] }); // Not contentful: keep waiting.
+  window.HubNativePlatform.receive({ v: 1, id: 'r1', ok: true });
+  assert.deepEqual(titles, ['hubbridge:1:r1:ready']);
+  observed({ getEntriesByName: name => name === 'first-contentful-paint' ? [{}] : [] });
+  assert.deepEqual(titles, ['hubbridge:1:r1:ready', 'hubbridge:1:r2:painted']);
+  window.HubNativePlatform.receive({ v: 1, id: 'r2', ok: true });
+  const [fallback] = [...timers.values()].filter(timer => timer.ms === 3000);
+  fallback.fn(); // Already sent once: no duplicate.
+  assert.equal(titles.length, 2);
+}
+{
+  const { window, titles, fire, timers } = load(); // No paint timing support at all.
+  window.requestAnimationFrame = fn => fn();
+  window.HubNativePlatform.ready();
+  assert.deepEqual(titles, ['hubbridge:1:r1:ready']);
+  window.HubNativePlatform.receive({ v: 1, id: 'r1', ok: true });
+  const id = [...timers].find(([, timer]) => timer.ms === 3000)[0];
+  timers.get(id).fn();
+  assert.equal(titles[titles.length - 1], 'hubbridge:1:r2:painted');
+}
+// Where the shim stays inactive, nothing may remain hidden.
+for (const options of [{ tizen: { application: {} } }, { search: '' }, { HubBridge: false }]) {
+  assert.deepEqual([...load(options).classes], ['native-hub-rendered']);
+}
+console.log('Native shim: rendered-Home reveal, presented-paint confirmation and fallbacks passed');

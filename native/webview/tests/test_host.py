@@ -320,11 +320,20 @@ class HostTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("page-present", result.stdout)
         self.assertLess(result.stdout.index("hub-ui-ready"), result.stdout.index("page-frame"))
-        self.assertLess(result.stdout.index("page-frame"), result.stdout.index("page-present"))
+        self.assertLess(result.stdout.index("page-frame"), result.stdout.index("hub-ui-painted"))
+        self.assertLess(result.stdout.index("hub-ui-painted"), result.stdout.index("page-present"))
 
     def test_hidden_launcher_does_not_present_background_without_ui_ready(self):
         result = self.launcher(mode="no-ui-ready", COUCHROOT_WEBVIEW_DEFER_SHOW="1", FAKE_WAIT_MS="100")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("page-present", result.stdout)
+        self.assertNotIn("mock window-show", result.stdout)
+
+    def test_hidden_launcher_waits_for_presented_rendered_home(self):
+        # A frame after 'ready' can be stale static markup under boot load.
+        result = self.launcher(mode="no-ui-painted", COUCHROOT_WEBVIEW_DEFER_SHOW="1", FAKE_WAIT_MS="100")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("page-frame", result.stdout)
         self.assertNotIn("page-present", result.stdout)
         self.assertNotIn("mock window-show", result.stdout)
 

@@ -3,6 +3,8 @@
  * Page -> host: the trusted page sets document.title to
  *   hubbridge:1:<request-id>:discover
  *   hubbridge:1:<request-id>:launch:<app-id>
+ *   hubbridge:1:<request-id>:ready     initial UI rendered (before its frame)
+ *   hubbridge:1:<request-id>:painted   that rendered UI has been presented
  * Host -> page: ewk_view_script_execute calls HubNativePlatform.receive(json).
  *
  * Requests are accepted only while the view still shows the URL the host
@@ -225,6 +227,9 @@ static int bridge_message(const char *title) {
     }
     if (parts == 3 && !strcmp(part[2], "ready")) {
         page_ready(); bridge_reply(part[1], "\"ok\":true");
+    }
+    else if (parts == 3 && !strcmp(part[2], "painted")) {
+        page_painted(); bridge_reply(part[1], "\"ok\":true");
     }
     else if (parts == 3 && !strcmp(part[2], "discover")) bridge_start(0, part[1], NULL);
     else if (parts == 4 && !strcmp(part[2], "launch") && bridge_app_id(part[3])) bridge_start(1, part[1], part[3]);

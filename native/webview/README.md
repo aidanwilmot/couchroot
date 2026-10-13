@@ -16,7 +16,8 @@ journals or compiled TV binaries are included. S90D has not been tested.
 ## Behavior
 
 - **Shared interface:** the build copies the signed package's web file list,
-  excluding its manifest, and inserts `native-shim.js` after `bridge.js`.
+  excluding its manifest, inserts `native-shim.js` after `bridge.js` and appends
+  `native-shim.css` to the bundle's copy of `style.css`.
   There is no second UI implementation or change to the signed WGT.
 - **Engine:** `--engine=default|upgrade` chooses the EWK implementation before
   initialization, then verifies the loaded library in `/proc/self/maps`.
@@ -29,8 +30,12 @@ journals or compiled TV binaries are included. S90D has not been tested.
 - **Rendering:** an Ecore/Evas `wayland_egl` window first draws a native loading
   screen in diagnostic mode. With `COUCHROOT_WEBVIEW_DEFER_SHOW=1`, the launcher
   instead lays out the hidden view at 1920×1080 and keeps its window unmapped
-  until the Hub signals initial DOM/font readiness and EWK reports a subsequent
-  `frame,rendered` signal. Page load or a background-only paint is insufficient. Chromium starts directly from the event loop, so hidden
+  until the Hub signals initial DOM/font readiness, EWK reports a subsequent
+  `frame,rendered` signal and the page confirms that its rendered Home was
+  presented (first contentful paint). Page load or a background-only paint is
+  insufficient. The native bundle's `native-shim.css` rule keeps the static default
+  markup transparent until `hub.js` has rendered, so a frame of that markup that
+  finishes late under boot load cannot pass for the Hub. Chromium starts directly from the event loop, so hidden
   startup does not depend on a visible loading frame. Normal boot leaves the
   signed Hub visible during this wait; no native loading screen is shown. A
   bounded worker rechecks source, ISP owner, display and foreground before
@@ -110,7 +115,9 @@ other TVs or weaken firmware checks.
 
 The page sends serialized requests through `document.title`:
 `hubbridge:1:<request-id>:discover`, `hubbridge:1:<request-id>:launch:<app-id>`,
-or `hubbridge:1:<request-id>:ready` (initial UI readiness).
+`hubbridge:1:<request-id>:ready` (initial UI rendered) or
+`hubbridge:1:<request-id>:painted` (that UI's first contentful paint was
+presented; a 3-second fallback covers engines without paint timing).
 The host replies with `HubNativePlatform.receive(...)` using
 `ewk_view_script_execute`. IDs, operations, app IDs, sizes and URL identity are
 validated; late, duplicate and unknown replies are ignored. No shell, filesystem,
@@ -308,16 +315,19 @@ CPU time (`cpu_ms`, all threads of this process only), its kernel part
 wrapper loads the implementation here), `ewk-init-done` (after the
 loaded-engine check), `view-created`,
 `navigation-start`, `load-finished`, `hub-ui-ready`, `page-frame`,
-`page-present`, `native-first-render`. Only compositor frames prove that Hub
+`hub-ui-painted`, `page-present`, `native-first-render`. Only compositor frames prove that Hub
 content was visible; `page-present` is a show request.
 
 `minimal-hub-procsample OUT_DIR EXE_PREFIX SECONDS INTERVAL_MS [SNAPSHOTS]`
 runs as root during a private test boot. It follows processes whose executable
 lies under the install prefix and their descendants, which includes Chromium's
 `efl_webprocess` children but not other web apps' processes. It records
-per-thread CPU, state and faults. Snapshots split PSS, private and shared memory
-into the engine library, other files, anonymous memory and device mappings.
-Keep its output private.
+per-thread CPU, state and faults, plus a once-a-second system view (`/proc/stat`
+and every process's CPU) that shows competing boot work. Snapshots split PSS,
+private, shared and swapped memory into the engine library, other files,
+anonymous memory and device mappings. QN90A refuses to execute it directly from
+`/tmp` or `/opt` (even as root); run it from a systemd unit that read-only
+binds its directory, as the launcher unit does. Keep its output private.
 
 ## Boot frame capture
 

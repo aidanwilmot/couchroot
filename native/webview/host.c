@@ -91,8 +91,9 @@ static int engine_request = ENGINE_DEFAULT;
 static Obj *window, *elm_window, *canvas, *view, *background, *label, *defer_timer, *watch_timer;
 static void *elm_library, *ewk_library;
 static int ewk_started, failed, loaded, first_frame, focused;
-static int defer_show, page_frame, presented, presentation_pending, ui_ready;
+static int defer_show, page_frame, presented, presentation_pending, ui_ready, ui_painted;
 static void page_ready(void);
+static void page_painted(void);
 static void presentation_result(int safe);
 static int lifetime = 60;
 static double start, load_start;
@@ -197,9 +198,13 @@ static void focus_out(void *data, Obj *obj, void *info) {
     bridge_visibility(0);
 }
 /* EWK can paint while the Wayland window is unmapped. The Hub readiness
- * handshake excludes early background-only frames; require a later paint. */
+ * handshake excludes early background-only frames; require a later paint.
+ * Under boot load a frame of the static markup can still complete after
+ * 'ready' and pass for that paint, so the page also confirms that its rendered
+ * Home has been presented ('painted', first contentful paint). */
 static void present_page(void) {
-    if (!defer_show || presented || failed || stopping || !loaded || !page_frame || (bridge_enabled && !ui_ready)) return;
+    if (!defer_show || presented || failed || stopping || !loaded || !page_frame ||
+        (bridge_enabled && (!ui_ready || !ui_painted))) return;
     if (launcher_mode) { presentation_pending = 1; return; }
     presentation_result(1);
 }
@@ -217,6 +222,12 @@ static void page_ready(void) {
     if (ui_ready || failed || stopping) return;
     ui_ready = 1; page_frame = 0;
     stamp("hub-ui-ready");
+}
+static void page_painted(void) {
+    if (ui_painted || failed || stopping) return;
+    ui_painted = 1;
+    stamp("hub-ui-painted");
+    present_page();
 }
 static void page_rendered(void *data, Obj *obj, void *info) {
     (void)data; (void)obj; (void)info;

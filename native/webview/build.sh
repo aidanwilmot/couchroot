@@ -47,8 +47,15 @@ for name in files:
     if name != 'config.xml':
         shutil.copyfile(repo / 'web' / name, out / name)
 shutil.copyfile(source / 'native-shim.js', out / 'native-shim.js')
-anchor = '<script src="bridge.js" defer></script>'
+# native-shim.css must block the first paint: it keeps the static default tiles
+# transparent until the shim reveals the rendered Home. Appending it to the
+# bundle's copy of style.css avoids another request while Chromium is starved.
 page = (out / 'index.html').read_text()
+if page.count('<link rel="stylesheet" href="style.css">') != 1:
+    raise SystemExit('index.html no longer has exactly one style.css link')
+with open(out / 'style.css', 'a') as css:
+    css.write('\n' + (source / 'native-shim.css').read_text())
+anchor = '<script src="bridge.js" defer></script>'
 if page.count(anchor) != 1:
     raise SystemExit('index.html no longer has exactly one bridge.js script tag')
 (out / 'index.html').write_text(page.replace(anchor, anchor + '\n  <script src="native-shim.js" defer></script>'))
