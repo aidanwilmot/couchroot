@@ -2,6 +2,13 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Autonomous root agent: remove nested base64/JSON upload payload encoding with
+  authenticated binary chunks to the retained .NET worker. Agent 0.7.0 reduced
+  median 8 MiB upload time by 37% on QN90A and 46% on S90D, preserving digest,
+  resume, conditional replacement and no-retry behavior. Both TVs passed live
+  acceptance without reboots, as requested; reboot persistence is untested for
+  this version. See [benchmark and validation](research/autonomous-root/CAPABILITIES.md#binary-upload-benchmark--2026-10-13).
+
 - Autonomous root agent: reuse bounded, certificate-pinned HTTPS connections
   within file transfers, without changing the .NET worker or replaying failed
   requests. Agent 0.6.0 passed both-TV and post-reboot acceptance. Paired 8 MiB

@@ -524,3 +524,48 @@ timeouts, truncated/invalid responses, failed-session closure and no replay.
 Both embedded TV builds and all 42 native assemblies plus the unsigned Hub package
 reproduced across build paths. Public-tree and outgoing-commit privacy/secret scans
 passed; raw device data, credentials and signed packages were excluded.
+
+## Binary upload benchmark — 2026-10-13
+
+Agent 0.7.0, built from source commit `54f2182`, removes nested base64/JSON
+encoding of upload chunk bodies between the HTTPS service and the .NET worker.
+The worker remains .NET; the native app-user launcher is unchanged. A full 1 MiB
+chunk now travels as raw bytes plus a small authenticated header, eliminating
+approximately 44% of the previous loopback request bytes.
+
+The same client uploaded an 8 MiB random file three times per TV before and after
+the update, with 1 MiB chunks, durable flushes, complete-file SHA-256 verification
+and one pinned TLS connection per transfer. Each upload was downloaded and verified.
+Numbers include setup, chunks and commit; they are medians of complete transfers.
+
+| TV | 0.6.0 upload | 0.7.0 upload | Less time | Throughput change |
+| --- | ---: | ---: | ---: | ---: |
+| QN90A | 4.22 s | 2.68 s | 37% | 1.58× |
+| S90D | 5.28 s | 2.84 s | 46% | 1.86× |
+
+These are small before/after samples on a live wireless network, not an isolated
+CPU benchmark or a throughput guarantee. Individual upload times varied:
+QN90A 4.14–5.30 s before and 2.39–4.04 s after; S90D 3.80–6.59 s before and
+1.95–4.44 s after. Downloads were unchanged in code; their median timings were
+2.64 → 2.73 s on QN90A and 1.18 → 1.24 s on S90D.
+
+Both installed packages passed file inventory and enrollment checks, retained the
+protected system-file hashes, restored SDK loopback access, and preserved existing
+boot settings. Live acceptance covered maximum-sized binary chunks, unknown
+transfers, wrong/replayed offsets, digest rejection without offset advancement,
+resume, byte ranges, EOF, final hashes and conditional replacement. It also covered
+app UID 5001 and Smack `User`, quoted commands, runtime environment, native launcher
+integrity/read-only mounting, unsigned helper staging/execution/release, nonzero
+results, long jobs, cancellation, timeouts and bounded logs. HTTPS reuse, idle/count
+rotation and certificate-pin rejection passed on both TVs.
+
+**Neither TV was rebooted, at the owner's request.** Both boot IDs remained
+unchanged through acceptance. Reboot persistence was not tested for this version.
+
+Local validation passed 226 Python tests, 118 Node tests, 20 telemetry tests,
+the legacy protocol checks, the .NET harness on macOS and Linux (including process
+supervision on Linux), reproducible ARM launcher/embedded-worker checks and
+cross-path source-only builds. Upload protocol tests cover authenticated metadata,
+raw byte preservation, fragmented/coalesced reads, bounds, truncation, digest and
+offset failures, channel alignment and no replay after disconnect. Private device
+identities, signed artifacts and raw evidence remain outside the repository.
