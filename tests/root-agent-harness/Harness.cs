@@ -11,6 +11,19 @@ internal static partial class SamsungTvRootAgent
     private static void Reject(Action action,string message){try{action();}catch(ArgumentException){return;}catch(IOException){return;}throw new Exception(message);}
     private static void TestJobs(string root)
     {
+        // Exercise the actual process boundary, including nested launcher quoting.
+        string expected="apostrophe's \"double\" and \\backslash\nnext line";
+        string command="printf '%s' "+ShellQuote(expected);
+        var direct=Execute(command,5000);
+        Check(direct.ExitCode==0 && System.Text.Encoding.UTF8.GetString(direct.StandardOutput)==expected,"root command argument corruption");
+        string launcher=root+"argument-launcher";
+        File.WriteAllText(launcher,"#!/bin/sh\n[ \"$#\" -eq 2 ] && [ \"$1\" = --command ] || exit 64\nexec /bin/sh -c \"$2\"\n");
+        Check(chmod(launcher,320)==0,"cannot protect test launcher");
+        AppLauncherPath=launcher;AppLauncherDigest=DigestPath(launcher);
+        try {
+            var launched=Execute(AppCommand(command),5000);
+            Check(launched.ExitCode==0 && System.Text.Encoding.UTF8.GetString(launched.StandardOutput)==expected,"native launcher argument corruption");
+        } finally {AppLauncherPath=AppLauncherDigest=null;File.Delete(launcher);}
         string id=Guid.NewGuid().ToString("N");
         Call(new{op="job.start",id,command="printf hello; printf error >&2; exit 7",profile="root",timeout_ms=5000},root);
         JsonElement status=default;
