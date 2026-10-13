@@ -178,7 +178,13 @@ static int guardian_drain(void) {
  * only the independent guardian performs cleanup. Use an alternate stack so
  * this path also works when the protocol thread exhausts its normal stack. */
 static unsigned char fatal_stack[65536];
-static void worker_fatal_signal(int sig) { _exit(128 + sig); }
+static void worker_fatal_signal(int sig) {
+  /* Nonblocking, async-signal-safe evidence that userspace received the fault.
+   */
+  ssize_t sent = write(pulse_pipe[1], "F", 1);
+  (void)sent;
+  _exit(128 + sig);
+}
 static void worker_fault_handlers(void) {
   stack_t stack = {.ss_sp = fatal_stack, .ss_size = sizeof fatal_stack};
   if (sigaltstack(&stack, NULL))
@@ -186,7 +192,7 @@ static void worker_fault_handlers(void) {
   struct sigaction action;
   memset(&action, 0, sizeof action);
   action.sa_handler = worker_fatal_signal;
-  action.sa_flags = SA_ONSTACK | SA_RESETHAND;
+  action.sa_flags = SA_ONSTACK;
   sigfillset(&action.sa_mask);
   const int signals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT};
   for (size_t i = 0; i < sizeof signals / sizeof *signals; i++)
@@ -242,6 +248,9 @@ static void guardian_start(void) {
     while ((n = read(pulse_pipe[0], pulses, sizeof pulses)) > 0) {
       last_pulse = stamp();
       pulse_seen = 1;
+      if (memchr(pulses, 'F', (size_t)n) &&
+          getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+        fputs("prototype: fatal handler notification received\n", stderr);
     }
     if (n < 0 && errno != EAGAIN && errno != EINTR)
       _exit(125);
