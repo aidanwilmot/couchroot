@@ -2,6 +2,13 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Autonomous root agent: reuse bounded, certificate-pinned HTTPS connections
+  within file transfers, without changing the .NET worker or replaying failed
+  requests. Agent 0.6.0 passed both-TV and post-reboot acceptance. Paired 8 MiB
+  trials used one TLS connection instead of ten and reduced median download time
+  by 13% on QN90A and 36% on S90D; upload timings showed no consistent gain. See
+  [benchmark and validation](research/autonomous-root/CAPABILITIES.md#https-reuse-benchmark--2026-10-13).
+
 - Autonomous root agent: send bounded, authenticated binary download responses
   from the retained .NET worker, removing nested base64/JSON chunk encoding.
   Signed agent 0.5.0 passed both-TV and post-reboot acceptance; measured median

@@ -40,6 +40,30 @@ python3 research/autonomous-root/client.py --config /private/client.json \
 This requires a different boot ID, a root identity, and worker readiness. It never
 requests a reboot itself.
 
+## HTTPS connection reuse
+
+Agent service 0.6.0 honors an explicit `Connection: keep-alive` on successful
+responses. JSON and binary responses carry exact content lengths. Each socket
+serves at most 128 requests and has a five-second idle timeout; errors close the
+connection. Mutual TLS enrollment and browser-origin checks still run on every
+request. The existing eight-connection bound and serialized administrative
+operations remain in force.
+
+The Python client's `upload` and `download` each own a sequential `Session`.
+They reuse one TLS connection across transfer setup, chunks and completion,
+rotating before a new request after 128 requests or four seconds idle. The session
+closes when the transfer scope exits. Every new socket undergoes certificate-pin
+verification before submission, and implicit HTTP-library reconnection is disabled.
+One-off `request`/`operation` calls still close their connections unless given an
+explicit session; sessions must not be shared concurrently or across configurations.
+
+A transport failure, invalid response, HTTP error or digest mismatch closes and
+invalidates the session. No request is automatically replayed, including a request
+that encounters a stale keep-alive socket. Diagnose the outcome before explicitly
+resuming an upload. A successful response that explicitly closes the socket permits
+a new, re-pinned connection for the next request; this also supports older services.
+The .NET worker and native app-user launcher are unchanged.
+
 ## File transfer
 
 ```sh
@@ -426,3 +450,65 @@ TLS tests verify raw HTTP response bytes/headers and reject a bad worker digest.
 Both embedded TV builds and all 42 source-only native assemblies plus the unsigned
 Hub package reproduced across build paths. Public-tree and outgoing-commit
 privacy/secret scans passed.
+
+## HTTPS reuse benchmark — 2026-10-13
+
+Signed agent 0.6.0 was built from `105d020`. Both TV builds contain a .NET worker
+byte-for-byte identical to 0.5.0; this change is confined to the HTTPS service and
+Python client. The native app-user launcher remains in place.
+
+After collecting three 0.5.0 baseline trials per TV, the 0.6.0 comparison alternated
+fresh connections and reuse on the same installed version. Each mode ran three
+8 MiB uploads/downloads per TV using the same random payload and 1 MiB chunks.
+Every download matched the original SHA-256. Timings include transfer controls,
+chunk requests, hashing and local publication; actual TLS connects were counted.
+
+| TV | Download median, fresh → reuse | Download time reduction | Upload median, fresh → reuse | TLS connections per transfer, fresh → reuse |
+| --- | ---: | ---: | ---: | ---: |
+| QN90A | 2.85 → 2.48 s | 13% | 4.57 → 5.17 s | 10 → 1 |
+| S90D | 2.19 → 1.39 s | 36% | 4.96 → 4.90 s | 10 → 1 |
+
+Download trial ranges were 2.78–2.86 s fresh versus 2.45–2.77 s reused on QN90A,
+and 2.07–2.46 s fresh versus 1.28–2.54 s reused on S90D. Upload timings varied
+substantially: QN90A reuse ranged from 3.62–5.62 s and S90D from 3.37–4.91 s.
+These small samples demonstrate fewer TLS connections and lower median download
+times; they do not establish a consistent upload speedup or a throughput guarantee.
+Network, runtime and storage load were not isolated.
+
+The earlier 0.5.0 baseline medians were 3.10 s download / 4.03 s upload on QN90A
+and 3.12 s download / 3.94 s upload on S90D, also with ten connections per transfer.
+Those baselines ran concurrently across TVs. The reported reuse gains above use
+the stronger alternating, same-version comparison instead of attributing all
+before/after variation to this change.
+
+### HTTPS reuse hardware acceptance
+
+Both signed 0.6.0 updates completed through the shared setup engine after software
+reboot and post-boot acceptance. All 22 installed inventory entries, existing
+enrollment certificates, protected file hashes, enabled boot flags and restored
+loopback SDK setting verified. Prior signed packages and raw evidence remain private.
+
+Both TVs passed resumed transfers, complete-file digests, arbitrary ranges, EOF,
+corrupt-chunk rejection and conditional replacement. App-user identity, native
+launcher protections, unsigned helper staging/execution/release, nonzero results,
+long jobs, bounded output, cancellation, timeouts and stopped descendants passed.
+Root readiness with a new boot ID was observed around 46 seconds uptime on QN90A
+and 93 seconds on S90D, followed by another SHA-256-verified multi-chunk transfer.
+These are software reboot observations, not physical power-loss tests.
+
+Post-boot connection tests on each TV confirmed three status requests on one TLS
+connection, rotation after 4.2 seconds idle, two connections across 129 sequential
+requests, closure at scope exit, and rejection of an incorrect server pin before
+an HTTP request could be sent. All deployment journals were finalized afterward.
+Before S90D's update, the new client also verified safe compatibility with its
+older service: two successful requests used two connections as instructed by the
+service's close responses.
+
+Local validation passed: 226 Python tests, 116 Node tests and 20 telemetry tests.
+The Python and Node service were tested together over real local mutual TLS for
+reused JSON and binary requests. Tests cover server request-limit closure, origin
+checks on a reused socket, per-connection pinning, client rotation, stale sockets,
+timeouts, truncated/invalid responses, failed-session closure and no replay.
+Both embedded TV builds and all 42 native assemblies plus the unsigned Hub package
+reproduced across build paths. Public-tree and outgoing-commit privacy/secret scans
+passed; raw device data, credentials and signed packages were excluded.
