@@ -2,6 +2,12 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Autonomous root agent: send bounded, authenticated binary download responses
+  from the retained .NET worker, removing nested base64/JSON chunk encoding.
+  Signed agent 0.5.0 passed both-TV and post-reboot acceptance; measured median
+  8 MiB downloads improved by 1.61× on QN90A and 2.46× on S90D. See the
+  [benchmark and validation](research/autonomous-root/CAPABILITIES.md#binary-download-benchmark--2026-10-13).
+
 - Autonomous root agent: buffer protocol input in the retained .NET worker,
   preserving binary read-ahead and existing frame limits. Agent 0.4.0 reduced
   measured median 8 MiB upload time by 7.7× on QN90A and 8.8× on S90D; both

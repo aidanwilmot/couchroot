@@ -53,7 +53,16 @@ python3 research/autonomous-root/client.py --config /private/client.json \
 ```
 
 Transfers use 1 MiB binary HTTPS chunks, authenticated bounded loopback frames,
-per-chunk SHA-256 and a complete-file digest. The worker holds at most eight
+per-chunk SHA-256 and a complete-file digest. Agent 0.5.0 adds
+`binary-download-v1`: the .NET worker sends a small HMAC-authenticated `OPDATA`
+header binding the request sequence, offset, byte length and SHA-256, followed by
+at most 1 MiB of raw bytes. The service verifies the pending read, range and digest
+before returning any bytes over HTTPS. It rejects malformed, oversized, truncated
+or corrupted responses by closing the worker channel; it never retries the request.
+The worker and service must be upgraded together. HTTPS clients are unchanged,
+and the new service still accepts the earlier JSON/base64 worker responses.
+
+The worker holds at most eight
 transfers, each limited to 2 GiB. Downloads support arbitrary byte offsets and
 lengths up to 1 MiB. The client verifies the complete download before publishing
 it and refuses to overwrite a local destination. In-place source changes fail
@@ -354,3 +363,66 @@ the buffered-reader harness and Linux root job/transfer harness, both embedded
 TV build reproducibility checks, and all 42 source-only native assemblies plus
 the unsigned Hub package across build paths. Public-tree and outgoing-commit
 privacy/secret scans were clean.
+
+## Binary download benchmark — 2026-10-13
+
+Owner-authorized trials compared agent 0.4.0 with signed 0.5.0 built from
+`faaa6e2`, retaining the .NET worker and native app-user launcher. Each TV ran
+three uploads/downloads of the same 8 MiB random payload per version, using the
+unchanged client, 1 MiB chunks and complete SHA-256 verification. Download times
+include opening/hashing the source, HTTPS requests, local file synchronization,
+publication and transfer close.
+
+| TV | Median download before | Median download after | Observed speedup | Download after | Median chunk read before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| QN90A | 5.84 s | 3.64 s | 1.61× | 2.20 MiB/s | 656 → 346 ms |
+| S90D | 4.99 s | 2.03 s | 2.46× | 3.94 MiB/s | 558 → 228 ms |
+
+QN90A download trials ranged from 5.76–5.89 s before and 3.03–3.65 s after;
+S90D ranged from 4.78–5.26 s before and 2.01–2.22 s after. Per-chunk medians use
+all 24 full-size reads in each set. Both TVs collected baselines concurrently;
+updated-TV trials ran separately. These are small samples over the owner's
+network, without isolated CPU/load controls, and are not throughput guarantees.
+
+Upload medians in those same trials were 4.75 → 5.17 s on QN90A and
+4.05 → 4.93 s on S90D. Upload framing was unchanged; these samples do not
+establish an upload improvement or a cause for that variation. Fresh TLS
+connections per request remain part of both versions' measured cost.
+
+The download change removes both base64 layers and JSON serialization for chunk
+responses on the local worker connection. Its receiver accumulates text frames
+with bounded geometric buffer growth and copies binary bodies into a buffer
+sized only after authenticating and validating their header. Other operations
+retain authenticated text responses, including known failures; a partial binary
+write cannot be followed by a misleading success or failure frame.
+
+### Binary download hardware acceptance
+
+Both signed 0.5.0 deployments completed through the shared setup engine after
+full software reboot and post-boot verification. All 22 installed inventory
+entries, enrollment certificates, protected file hashes, enabled boot flags and
+restored loopback SDK setting verified. Previous signed recovery packages and
+raw evidence remain private.
+
+Both TVs passed resumed 8 MiB + 123 byte transfers, complete-file digests,
+unaligned ranges, bad-chunk rejection, and conditional replacement with wrong
+and matching current hashes. App-user commands, native launcher protections,
+unsigned helper staging/execution/release, nonzero results, bounded logs, long
+jobs, timeouts, cancellation and stopped descendants also passed.
+
+After reboot, the new binary-download capability and root readiness were observed
+with different boot IDs at approximately 51 seconds uptime on QN90A and 88 seconds
+on S90D. A fresh 1 MiB + 17 byte upload/download matched its digest on each TV;
+a direct read at EOF returned a valid zero-byte binary response. Post-boot app,
+quoting, timeout, digest rejection and native-view checks passed. Both deployment
+journals were then finalized. This does not claim physical power-loss testing.
+
+Local validation passed: 220 Python tests, 116 Node tests, 20 telemetry tests,
+the production .NET wire-format/transfer harness and Linux root job harness.
+Protocol tests cover fragmented headers/bodies, adjacent text responses, zero
+and maximum-length bodies, authentication/digest failures, wrong sequences and
+ranges, oversized input, truncation, and legacy JSON/base64 compatibility. Mutual
+TLS tests verify raw HTTP response bytes/headers and reject a bad worker digest.
+Both embedded TV builds and all 42 source-only native assemblies plus the unsigned
+Hub package reproduced across build paths. Public-tree and outgoing-commit
+privacy/secret scans passed.
