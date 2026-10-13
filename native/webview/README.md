@@ -60,6 +60,14 @@ journals or compiled TV binaries are included. S90D has not been tested.
   Page failures exit the child so supervision can recover it.
 - **Home and return:** optional Home grab, tracked Live-TV → web Hub detour,
   saved-source re-arm about every 15 seconds, and return after app exit.
+- **Wake from standby:** the remote's power button often leaves the system
+  running with the screen off. On wake, Samsung shows Live TV and saves it as the
+  boot source. A once-a-second worker check reads `memory/pm/state` (1 = screen
+  on), the saved source and the foreground app, with no D-Bus call. A readable off
+  state followed by screen-on opens a 20 s window. If Live TV is in front during
+  it, the launcher takes the Home path: signed Hub handoff, re-arm, native Hub.
+  Live TV opened while the screen stays on is left alone. A saved source that
+  leaves the Hub is re-armed at once instead of up to 15 s later.
   Compositor focus can restore controls even when Samsung's foreground key is
   stale. `--source-rearm-wait` supplies the existing bounded normal-boot role.
 - **Preferences:** one-time import of old native shortcuts/order, selection,
@@ -337,6 +345,19 @@ boots differ by up to 0.8 s in that segment. Startup time did not improve.
   candidate boots showed the saved tiles from the first content frame, including
   one where confirmation followed the frame by 0.33 s. No boot had a white frame
   or a return to black after content. In fast boots the confirmation adds 3–5 ms.
+
+**Remote power button (2026-10-12).** Depending on the press, the power button
+either fully reboots the TV or puts it in standby with the system running.
+`app-boot-manager` (decompiled from this firmware) treats the power key as
+wakeup reason 1. On that full boot it starts Live TV hidden only while
+`db/boot/last_service` is a service source (`isp-service` maps to 1); otherwise
+Live TV is shown. A software reboot reports reason 0x32/0x34 and is always quiet.
+With the wake return installed:
+- A remote full reboot came up quiet with the Hub at 17.6 s and no Live TV.
+- A quick standby cycle went from display state 4 to 1. Live TV was detected
+  1 s later, and the native Hub was active 5.6 s after the screen turned on.
+- Idle CPU rose from 0.21–0.31 % to 0.37 % of one core, from the
+  once-a-second check.
 
 The final candidate passed the injected-key checks after a single Chromium
 start: arrows, OK launching Plex, Home back to Hub, and `app_launcher -k`
