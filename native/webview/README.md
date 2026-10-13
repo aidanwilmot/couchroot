@@ -16,7 +16,8 @@ journals or compiled TV binaries are included. S90D has not been tested.
 ## Behavior
 
 - **Shared interface:** the build copies the signed package's web file list,
-  excluding its manifest, and inserts `native-shim.js` after `bridge.js`.
+  excluding its manifest, inserts `native-shim.js` after `bridge.js` and appends
+  `native-shim.css` to the bundle's copy of `style.css`.
   There is no second UI implementation or change to the signed WGT.
 - **Engine:** `--engine=default|upgrade` chooses the EWK implementation before
   initialization, then verifies the loaded library in `/proc/self/maps`.
@@ -29,8 +30,12 @@ journals or compiled TV binaries are included. S90D has not been tested.
 - **Rendering:** an Ecore/Evas `wayland_egl` window first draws a native loading
   screen in diagnostic mode. With `COUCHROOT_WEBVIEW_DEFER_SHOW=1`, the launcher
   instead lays out the hidden view at 1920×1080 and keeps its window unmapped
-  until the Hub signals initial DOM/font readiness and EWK reports a subsequent
-  `frame,rendered` signal. Page load or a background-only paint is insufficient. Chromium starts directly from the event loop, so hidden
+  until the Hub signals initial DOM/font readiness, EWK reports a subsequent
+  `frame,rendered` signal and the page confirms that its rendered Home was
+  presented (first contentful paint). Page load or a background-only paint is
+  insufficient. The native bundle's `native-shim.css` rule keeps the static default
+  markup transparent until `hub.js` has rendered, so a frame of that markup that
+  finishes late under boot load cannot pass for the Hub. Chromium starts directly from the event loop, so hidden
   startup does not depend on a visible loading frame. Normal boot leaves the
   signed Hub visible during this wait; no native loading screen is shown. A
   bounded worker rechecks source, ISP owner, display and foreground before
@@ -84,6 +89,8 @@ npm test
 
 The build uses Docker with networking disabled, produces ARMv7 softfp code and
 rejects GLIBC requirements above 2.17. Output stays outside the repository.
+It also produces `minimal-hub-procsample`, a measurement tool that is never
+installed with the launcher (see [startup measurement](#startup-measurement)).
 The bundle comes from the working tree, including uncommitted web edits.
 The C tests use fake EFL/EWK/app-manager libraries; they do not simulate firmware,
 security policy, rendering performance or physical panel behavior. Browser tests
@@ -108,7 +115,9 @@ other TVs or weaken firmware checks.
 
 The page sends serialized requests through `document.title`:
 `hubbridge:1:<request-id>:discover`, `hubbridge:1:<request-id>:launch:<app-id>`,
-or `hubbridge:1:<request-id>:ready` (initial UI readiness).
+`hubbridge:1:<request-id>:ready` (initial UI rendered) or
+`hubbridge:1:<request-id>:painted` (that UI's first contentful paint was
+presented; a 3-second fallback covers engines without paint timing).
 The host replies with `HubNativePlatform.receive(...)` using
 `ewk_view_script_execute`. IDs, operations, app IDs, sizes and URL identity are
 validated; late, duplicate and unknown replies are ignored. No shell, filesystem,
@@ -264,6 +273,77 @@ unknown. The later early-boot upgrade trial also aborted during view creation,
 as recorded above. Supervision
 bounds recovery attempts but does not prove long-term stability.
 
+### Startup and memory profile (2026-10-12)
+
+Thirteen further background software reboots ran instrumented builds with the
+compositor capture and `minimal-hub-procsample`. Measurement candidates were
+rolled back. The final candidate was later installed and accepted after another
+verification boot: one Chromium start, Hub content at 15.6 seconds, saved tiles
+in the first content frame, and the injected-key checks below. Child-relative seconds,
+from readable engine files to the first presented frame:
+
+| Segment | `main` behavior (3 clean boots) | Final candidate (5 clean boots)¹ |
+| --- | ---: | ---: |
+| EFL load, `elm_init`, window | 0.93–1.13 | 0.81–1.08 |
+| Engine load in `ewk_set_version_policy` | 4.40–4.88 | 4.71–5.18 |
+| View creation | 0.36–0.66 | 0.30–0.39 |
+| Navigation to presented window | 1.98–2.67 | 2.42–3.07 |
+| Total | 8.36–8.60 | 8.83–9.21 |
+| Hub content (compositor, uptime) | 16.99–17.86 | 17.98–19.70 |
+| Processes after startup | 5 | 5 |
+| Hub-tree CPU until content | 4.44–4.70 s | 4.45–4.54 s |
+| Idle CPU (50 s, Hub in front)² | 0.21–0.30 % of one core | 0.21–0.31 % |
+| PSS / private, 20 s after start | 91.5–91.8 / 60.2–60.3 MB | 91.4–92.5 / 60.1–60.4 MB |
+| PSS / private / swap, settled² | 57.4–58.0 / 30.2–30.8 / 7.9–8.9 MB | 56.8–59.0 / 29.6–31.8 / 6.6–10.2 MB |
+
+¹ Same host binary; three of these boots used the rule as a separate stylesheet.
+² Measurement boots only; verification boots launched apps during that window.
+
+The five processes are the supervisor, Chromium host, zygote, renderer and
+platform worker. Of the settled PSS, about 25 MB is the shared engine library.
+The final candidate's slower engine segment comes before any changed code runs;
+boots differ by up to 0.8 s in that segment. Startup time did not improve.
+
+- **Engine load dominates.** `ewk_set_version_policy(1)` makes the wrapper load
+  the 88 MB Chromium 120 implementation from its zlib squashfs image: 4.4–5.2
+  seconds, about 1.75 s of it CPU (1.5 s kernel), with no major faults. The same
+  load in a restarted child later in the boot took 0.55 s. All four cores were
+  99.7–99.9 % busy, mainly with Samsung Home, `slive-provider` and preloaded web
+  apps. Those apps use the default engine image; the processes found mapping the
+  upgrade engine afterwards all started later.
+- **Rejected after measurement.** Each of these was built, measured on device and
+  removed:
+  - Starting the platform worker before EWK left the presentation check
+    unchanged at 0.11–0.20 s.
+  - A read-ahead helper shortened the engine segment by about 0.5 s but slowed
+    EFL by about 0.5 s and used 103 MB of page cache.
+  - Lowering the Hub session's autogroup nice to −10 did not change the
+    engine's CPU share.
+  - On Chromium 120, `ewk_process_model_set` and
+    `ewk_memory_optimization_mode_enable` only log, and
+    `ewk_context_memory_saving_mode_set` and
+    `ewk_chromium_append_command_line_flag` are empty stubs.
+- **Intermittent crash.** Two of these boots (one with `main` behavior) aborted
+  in `ewk_view_add` with glibc `double free or corruption (fasttop)`.
+  Samsung's kernel then waits 100 × 0.204 s for `get_coredump_config` and writes
+  no core. That wait does not change with `RLIMIT_CORE` or `PR_SET_DUMPABLE`,
+  and signal handlers are not invoked. Restart cost about 23 s: Hub content
+  arrived at 40.6 and 43.1 seconds. The cause remains open.
+- **Stale default tiles (fixed).** Under boot load a compositor frame takes about
+  one second. A frame of the static `index.html` markup could therefore finish
+  after `ready` and pass for the Hub. 3 of 9 captured boots, `main` included,
+  showed the default Plex/YouTube tiles for 70–180 ms before the saved
+  shortcuts. With the transparent markup and the `painted` confirmation, 6
+  candidate boots showed the saved tiles from the first content frame, including
+  one where confirmation followed the frame by 0.33 s. No boot had a white frame
+  or a return to black after content. In fast boots the confirmation adds 3–5 ms.
+
+The final candidate passed the injected-key checks after a single Chromium
+start: arrows, OK launching Plex, Home back to Hub, and `app_launcher -k`
+returning focus (`native-return-focused`). It also passed them after the crash
+recovery above. These are background software reboots, not physical-panel
+recordings, handheld-remote normal-mode boots or a crash-rate estimate.
+
 ## ABI and evidence
 
 The EFL and EWK view APIs follow the
@@ -295,6 +375,30 @@ comes from the QN90A 2301.1 captured binaries.
     76.0.3809.146 and 120.0.6099.5.
 - **Runtime confirmation.** On the TV, mapped libraries and child argv
   confirmed the upgrade selection.
+
+## Startup measurement
+
+Each `webview event=` line records child-relative wall time, cumulative process
+CPU time (`cpu_ms`, all threads of this process only), its kernel part
+(`sys_ms`) and, on Linux, major page faults (`majflt`). The startup sequence is:
+`main`, `engine-files-ready`, `efl-loaded`, `elm-init-done`, `window-created`,
+`ewk-init-start`, `ewk-wrapper-loaded`, `engine-policy-set` (upgrade only; the
+wrapper loads the implementation here), `ewk-init-done` (after the
+loaded-engine check), `view-created`,
+`navigation-start`, `load-finished`, `hub-ui-ready`, `page-frame`,
+`hub-ui-painted`, `page-present`, `native-first-render`. Only compositor frames prove that Hub
+content was visible; `page-present` is a show request.
+
+`minimal-hub-procsample OUT_DIR EXE_PREFIX SECONDS INTERVAL_MS [SNAPSHOTS]`
+runs as root during a private test boot. It follows processes whose executable
+lies under the install prefix and their descendants, which includes Chromium's
+`efl_webprocess` children but not other web apps' processes. It records
+per-thread CPU, state and faults, plus a once-a-second system view (`/proc/stat`
+and every process's CPU) that shows competing boot work. Snapshots split PSS,
+private, shared and swapped memory into the engine library, other files,
+anonymous memory and device mappings. QN90A refuses to execute it directly from
+`/tmp` or `/opt` (even as root); run it from a systemd unit that read-only
+binds its directory, as the launcher unit does. Keep its output private.
 
 ## Boot frame capture
 

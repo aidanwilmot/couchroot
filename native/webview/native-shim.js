@@ -8,7 +8,12 @@
 (function (root) {
   'use strict';
   var search = root.location && typeof root.location.search === 'string' ? root.location.search : '';
-  if (root.tizen || !/[?&]host=native-webview(&|$)/.test(search) || !root.HubBridge) { return; }
+  // native-shim.css keeps <main> transparent until the saved Home is rendered.
+  function reveal() {
+    var html = root.document && root.document.documentElement;
+    if (html && html.classList) { html.classList.add('native-hub-rendered'); }
+  }
+  if (root.tizen || !/[?&]host=native-webview(&|$)/.test(search) || !root.HubBridge) { reveal(); return; }
 
   // One-time import of the native launcher's preferences, offered by the host in
   // the URL fragment. Applied only when this WebView has no saved shortcuts, and
@@ -88,16 +93,34 @@
   };
   var create = root.HubBridge.create;
   root.HubBridge.create = function (given) { return create(given || platform); };
-  var readySent = false;
+  var readySent = false, paintedSent = false, PAINT_FALLBACK = 3000;
+  function noop() {}
+  function painted() {
+    if (paintedSent) { return; }
+    paintedSent = true;
+    request('painted', '', noop, noop);
+  }
   root.HubNativePlatform = { receive: receive, ready: function () {
     if (readySent) { return; }
     readySent = true;
+    reveal();
+    // With the default markup transparent, the first contentful paint is the
+    // rendered Home; Chromium reports it once that frame has been presented.
+    // A frame painted earlier can still finish after 'ready' under boot load,
+    // so the host waits for both. Without paint timing, a bounded fallback.
+    try {
+      var observer = new root.PerformanceObserver(function (list) {
+        if (list.getEntriesByName('first-contentful-paint').length) { observer.disconnect(); painted(); }
+      });
+      observer.observe({ type: 'paint', buffered: true });
+    } catch (_) { /* Fallback below. */ }
+    root.setTimeout(painted, PAINT_FALLBACK);
     // Wait for layout/fonts, then signal before the next paint. The host still
     // requires EWK's subsequent rendered-frame callback before mapping.
-    function painted() {
-      root.requestAnimationFrame(function () { request('ready', '', function () {}, function () {}); });
+    function frame() {
+      root.requestAnimationFrame(function () { request('ready', '', noop, noop); });
     }
-    if (root.document.fonts && root.document.fonts.ready) { root.document.fonts.ready.then(painted, painted); }
-    else { painted(); }
+    if (root.document.fonts && root.document.fonts.ready) { root.document.fonts.ready.then(frame, frame); }
+    else { frame(); }
   } };
 }(typeof window !== 'undefined' ? window : globalThis));

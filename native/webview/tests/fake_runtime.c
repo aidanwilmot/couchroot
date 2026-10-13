@@ -120,14 +120,19 @@ void ecore_main_loop_begin(void) {
                         char *copy = saved ? strdup(saved) : NULL;
                         setenv("FAKE_TITLE", "hubbridge:1:ready1:ready", 1);
                         title(NULL, &web, NULL);
-                        if (copy) { setenv("FAKE_TITLE", copy, 1); free(copy); }
-                        else unsetenv("FAKE_TITLE");
                         assert(!shown);
                         frame(NULL, &web, NULL);
+                        if (!mode("no-ui-painted")) {
+                            assert(!shown); /* A frame after 'ready' alone may still be stale markup. */
+                            setenv("FAKE_TITLE", "hubbridge:1:painted1:painted", 1);
+                            title(NULL, &web, NULL);
+                        }
+                        if (copy) { setenv("FAKE_TITLE", copy, 1); free(copy); }
+                        else unsetenv("FAKE_TITLE");
                     }
                 }
                 if (!shown) drive(has_shown);
-                if (mode("no-ui-ready")) { assert(!shown); close_request(NULL, &fake_win, NULL); }
+                if (mode("no-ui-ready") || mode("no-ui-painted")) { assert(!shown); close_request(NULL, &fake_win, NULL); }
                 if (quit) return;
                 assert(shown); rendered = 1; post_render(&win);
             }

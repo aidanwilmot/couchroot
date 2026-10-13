@@ -1,6 +1,7 @@
 """Application-only tests; no TV, network, repository setup, or vendor binaries."""
 import json
 import os
+import re
 import shutil
 import socket
 import urllib.parse
@@ -135,6 +136,19 @@ class HostTests(unittest.TestCase):
         self.assertIn("engine requested=default observed=default", output)
         self.assertNotIn("version-policy", output)
         self.assertIn("page-title=diag ready?ok", output)  # Control byte sanitized.
+
+    def test_startup_milestones_split_efl_engine_and_view_costs(self):
+        result = self.run_host(args=["--engine=upgrade", "--defer-show", str(self.page)], mapped=self.UPGRADE)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        events = re.findall(r"^webview event=([a-z-]+) elapsed_ms=[0-9.]+ cpu_ms=[0-9]+ sys_ms=[0-9]+ majflt=-?[0-9]+$",
+                            result.stdout, re.M)
+        order = ["main", "engine-files-ready", "efl-loaded", "elm-init-done", "window-created", "ewk-init-start",
+                 "ewk-wrapper-loaded", "engine-policy-set", "ewk-init-done", "view-created", "navigation-start",
+                 "load-finished", "page-frame", "page-present"]
+        self.assertEqual([e for e in events if e in order], order)
+        self.assertLess(result.stdout.index("mock ewk-init"), result.stdout.index("event=ewk-init-done"))
+        self.assertLess(result.stdout.index("observed=upgrade"), result.stdout.index("event=ewk-init-done"))
+        self.assertLess(result.stdout.index("event=engine-policy-set"), result.stdout.index("mock ewk-init"))
 
     def test_deferred_window_requires_loaded_page_and_rendered_frame(self):
         result = self.run_host(args=["--defer-show", str(self.page)])
@@ -306,11 +320,20 @@ class HostTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("page-present", result.stdout)
         self.assertLess(result.stdout.index("hub-ui-ready"), result.stdout.index("page-frame"))
-        self.assertLess(result.stdout.index("page-frame"), result.stdout.index("page-present"))
+        self.assertLess(result.stdout.index("page-frame"), result.stdout.index("hub-ui-painted"))
+        self.assertLess(result.stdout.index("hub-ui-painted"), result.stdout.index("page-present"))
 
     def test_hidden_launcher_does_not_present_background_without_ui_ready(self):
         result = self.launcher(mode="no-ui-ready", COUCHROOT_WEBVIEW_DEFER_SHOW="1", FAKE_WAIT_MS="100")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("page-present", result.stdout)
+        self.assertNotIn("mock window-show", result.stdout)
+
+    def test_hidden_launcher_waits_for_presented_rendered_home(self):
+        # A frame after 'ready' can be stale static markup under boot load.
+        result = self.launcher(mode="no-ui-painted", COUCHROOT_WEBVIEW_DEFER_SHOW="1", FAKE_WAIT_MS="100")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("page-frame", result.stdout)
         self.assertNotIn("page-present", result.stdout)
         self.assertNotIn("mock window-show", result.stdout)
 

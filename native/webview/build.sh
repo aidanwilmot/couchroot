@@ -13,20 +13,24 @@ if out == repo or repo in out.parents or out in repo.parents:
     raise SystemExit('Output must be outside the repository, not one of its ancestors')
 PYCHECK
 mkdir -p "$WEBVIEW_OUTPUT_DIR"
+# minimal-hub-procsample is a diagnostic sampler for private measurement runs;
+# it is never part of the installed launcher.
+for program in host:minimal-hub-webview procsample:minimal-hub-procsample; do
 docker run --rm --platform linux/amd64 --network none \
   -v "$source_dir:/src:ro" -v "$WEBVIEW_OUTPUT_DIR:/out" samsung-native-collector:bullseye \
   arm-linux-gnueabi-gcc -std=c99 -O2 -Wall -Wextra -Werror \
   -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp \
-  /src/host.c -ldl -o /out/minimal-hub-webview
+  "/src/${program%%:*}.c" -ldl -o "/out/${program#*:}"
 docker run --rm --platform linux/amd64 --network none \
   -v "$WEBVIEW_OUTPUT_DIR:/out:ro" samsung-native-collector:bullseye \
-  arm-linux-gnueabi-readelf -V /out/minimal-hub-webview | python3 -c '
+  arm-linux-gnueabi-readelf -V "/out/${program#*:}" | python3 -c '
 import re, sys
 versions = set(re.findall(r"GLIBC_(\d+)\.(\d+)", sys.stdin.read()))
 if not versions or any(tuple(map(int, v)) > (2, 17) for v in versions):
     raise SystemExit("Missing or incompatible GLIBC requirements: " + repr(versions))
-print("ARM build: GLIBC requirements <= 2.17")
-'
+print("ARM build: GLIBC requirements <= 2.17 (" + sys.argv[1] + ")")
+' "${program#*:}"
+done
 rm -rf "$WEBVIEW_OUTPUT_DIR/diagnostic" "$WEBVIEW_OUTPUT_DIR/hub"
 cp -R "$source_dir/diagnostic" "$WEBVIEW_OUTPUT_DIR/"
 # Native bundle: the WGT's own file list (package.py) minus its manifest, plus
@@ -43,8 +47,15 @@ for name in files:
     if name != 'config.xml':
         shutil.copyfile(repo / 'web' / name, out / name)
 shutil.copyfile(source / 'native-shim.js', out / 'native-shim.js')
-anchor = '<script src="bridge.js" defer></script>'
+# native-shim.css must block the first paint: it keeps the static default tiles
+# transparent until the shim reveals the rendered Home. Appending it to the
+# bundle's copy of style.css avoids another request while Chromium is starved.
 page = (out / 'index.html').read_text()
+if page.count('<link rel="stylesheet" href="style.css">') != 1:
+    raise SystemExit('index.html no longer has exactly one style.css link')
+with open(out / 'style.css', 'a') as css:
+    css.write('\n' + (source / 'native-shim.css').read_text())
+anchor = '<script src="bridge.js" defer></script>'
 if page.count(anchor) != 1:
     raise SystemExit('index.html no longer has exactly one bridge.js script tag')
 (out / 'index.html').write_text(page.replace(anchor, anchor + '\n  <script src="native-shim.js" defer></script>'))
