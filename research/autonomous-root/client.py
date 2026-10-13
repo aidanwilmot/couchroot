@@ -19,37 +19,99 @@ class OperationError(RuntimeError):
         super().__init__(json.dumps(value))
 
 
-def request(config, method, route, body=None, *, binary=None, raw_response=False, timeout=40):
-    context=ssl.create_default_context(cafile=config['server_certificate'])
-    context.check_hostname=False # Exact certificate pin below is the identity.
-    context.minimum_version=ssl.TLSVersion.TLSv1_2
-    context.load_cert_chain(config['client_certificate'],config['client_key'])
-    connection=http.client.HTTPSConnection(config['host'],config['port'],context=context,timeout=timeout)
-    try:
-        connection.connect()
-        if hashlib.sha256(connection.sock.getpeercert(binary_form=True)).hexdigest()!=config['server_sha256']:
-            raise RuntimeError('Server certificate pin mismatch; no command submitted')
-        headers={'Content-Type':'application/json','Connection':'close'}
-        payload=json.dumps(body) if body is not None else None
-        if binary is not None:
-            headers.update({'Content-Type':'application/octet-stream','X-Operation':json.dumps(body)})
-            payload=binary
-        connection.request(method,route,body=payload,headers=headers)
-        response=connection.getresponse();raw=response.read(4*1024*1024+1)
-        if len(raw)>4*1024*1024:raise RuntimeError('Oversized response')
-        if response.status!=200:raise OperationError(json.loads(raw))
-        if raw_response:
-            if len(raw)>1024*1024 or hashlib.sha256(raw).hexdigest()!=response.getheader('X-SHA256'):
-                raise RuntimeError('Download chunk digest mismatch')
-            return raw
-        return json.loads(raw)
-    finally:connection.close()
+class Session:
+    """One sequential, pinned connection; never replay a failed request.
+
+    A transfer owns its session. It closes on exit, error, explicit peer close,
+    or before a new request after the idle/request-count limit.
+    """
+    MAX_REQUESTS = 128
+    MAX_IDLE_SECONDS = 4
+
+    def __init__(self, config, *, keep_alive=True):
+        self.config = dict(config)
+        self.keep_alive = keep_alive
+        self.context = None
+        self.connection = None
+        self.requests = 0
+        self.last_response = 0
+        self.failed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+    def close(self):
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
+
+    def request(self, method, route, body=None, *, binary=None, raw_response=False, timeout=40):
+        if self.failed:
+            raise RuntimeError('Session failed; inspect the outcome before starting another operation')
+        try:
+            if self.connection is not None and (self.connection.sock is None
+                    or self.requests >= self.MAX_REQUESTS
+                    or time.monotonic() - self.last_response >= self.MAX_IDLE_SECONDS):
+                self.close()
+            if self.context is None:
+                self.context = ssl.create_default_context(cafile=self.config['server_certificate'])
+                self.context.check_hostname = False  # Exact pin is checked on every new socket.
+                self.context.minimum_version = ssl.TLSVersion.TLSv1_2
+                self.context.load_cert_chain(self.config['client_certificate'], self.config['client_key'])
+            if self.connection is None:
+                self.connection = http.client.HTTPSConnection(self.config['host'], self.config['port'], context=self.context, timeout=timeout)
+                # Prevent http.client from silently creating an unpinned socket in send().
+                self.connection.auto_open = 0
+                self.connection.connect()
+                if hashlib.sha256(self.connection.sock.getpeercert(binary_form=True)).hexdigest() != self.config['server_sha256']:
+                    raise RuntimeError('Server certificate pin mismatch; no command submitted')
+                self.requests = 0
+            self.connection.sock.settimeout(timeout)
+            headers = {'Content-Type': 'application/json', 'Connection': 'keep-alive' if self.keep_alive else 'close'}
+            payload = json.dumps(body) if body is not None else None
+            if binary is not None:
+                headers.update({'Content-Type': 'application/octet-stream', 'X-Operation': json.dumps(body)})
+                payload = binary
+            self.connection.request(method, route, body=payload, headers=headers)
+            response = self.connection.getresponse()
+            raw = response.read(4 * 1024 * 1024 + 1)
+            if len(raw) > 4 * 1024 * 1024:
+                raise RuntimeError('Oversized response')
+            if response.status != 200:
+                raise OperationError(json.loads(raw))
+            if raw_response:
+                if len(raw) > 1024 * 1024 or hashlib.sha256(raw).hexdigest() != response.getheader('X-SHA256'):
+                    raise RuntimeError('Download chunk digest mismatch')
+                result = raw
+            else:
+                result = json.loads(raw)
+            self.requests += 1
+            self.last_response = time.monotonic()
+            if response.will_close or not self.keep_alive:
+                self.close()
+            return result
+        except Exception:
+            self.failed = True
+            self.close()
+            raise
 
 
-def operation(config, value, *, binary=None):
+def request(config, method, route, body=None, *, binary=None, raw_response=False, timeout=40, session=None):
+    if session is not None:
+        if config != session.config:
+            raise ValueError('Session destination or credentials differ')
+        return session.request(method, route, body, binary=binary, raw_response=raw_response, timeout=timeout)
+    with Session(config, keep_alive=False) as transport:
+        return transport.request(method, route, body, binary=binary, raw_response=raw_response, timeout=timeout)
+
+
+def operation(config, value, *, binary=None, session=None):
     envelope=dict(id=str(uuid.uuid4()), operation=value)
     route='/v1/files/write' if binary is not None else '/v1/files/read' if value['op']=='file.read' else '/v1/op'
-    return request(config,'POST',route,envelope,binary=binary,raw_response=value['op']=='file.read')
+    return request(config,'POST',route,envelope,binary=binary,raw_response=value['op']=='file.read',session=session)
 
 
 def file_digest(stream):
@@ -63,50 +125,52 @@ def file_digest(stream):
 
 
 def upload(config, source, target, expected_sha256='absent', transfer_id=None):
-    with Path(source).open('rb') as stream:
-        digest=file_digest(stream);size=os.fstat(stream.fileno()).st_size
-        if transfer_id:
-            session=operation(config,dict(op='file.status',transfer_id=transfer_id))
-            if not session.get('upload') or any(session.get(k)!=v for k,v in dict(path=target,size=size,sha256=digest,expected_sha256=expected_sha256).items()):
-                raise RuntimeError('Resume source or precondition differs from the existing upload')
-        else:session=operation(config,dict(op='file.begin',path=target,size=size,sha256=digest,expected_sha256=expected_sha256))
-        transfer=session['transfer_id'];offset=session.get('offset',0)
-        if offset<0 or offset>size:raise RuntimeError('Invalid resume offset')
-        stream.seek(offset)
-        print('Upload transfer: '+transfer,file=sys.stderr)
-        while True:
-            data=stream.read(session['chunk_bytes'])
-            if not data:break
-            result=operation(config,dict(op='file.write',transfer_id=transfer,offset=offset,sha256=hashlib.sha256(data).hexdigest()),binary=data)
-            offset+=len(data)
-            if result.get('offset')!=offset:raise RuntimeError('Upload offset mismatch; inspect transfer status')
-        return operation(config,dict(op='file.commit',transfer_id=transfer))
+    with Session(config) as transport:
+        with Path(source).open('rb') as stream:
+            digest=file_digest(stream);size=os.fstat(stream.fileno()).st_size
+            if transfer_id:
+                session=operation(config,dict(op='file.status',transfer_id=transfer_id),session=transport)
+                if not session.get('upload') or any(session.get(k)!=v for k,v in dict(path=target,size=size,sha256=digest,expected_sha256=expected_sha256).items()):
+                    raise RuntimeError('Resume source or precondition differs from the existing upload')
+            else:session=operation(config,dict(op='file.begin',path=target,size=size,sha256=digest,expected_sha256=expected_sha256),session=transport)
+            transfer=session['transfer_id'];offset=session.get('offset',0)
+            if offset<0 or offset>size:raise RuntimeError('Invalid resume offset')
+            stream.seek(offset)
+            print('Upload transfer: '+transfer,file=sys.stderr)
+            while True:
+                data=stream.read(session['chunk_bytes'])
+                if not data:break
+                result=operation(config,dict(op='file.write',transfer_id=transfer,offset=offset,sha256=hashlib.sha256(data).hexdigest()),binary=data,session=transport)
+                offset+=len(data)
+                if result.get('offset')!=offset:raise RuntimeError('Upload offset mismatch; inspect transfer status')
+            return operation(config,dict(op='file.commit',transfer_id=transfer),session=transport)
 
 
 def download(config, source, target):
-    target=Path(target)
-    if target.exists():raise FileExistsError(target)
-    session=operation(config,dict(op='file.open',path=source));transfer=session['transfer_id']
-    temporary=target.with_name(target.name+'.part-'+uuid.uuid4().hex)
-    print('Download transfer: '+transfer,file=sys.stderr)
-    try:
-        digest=hashlib.sha256();offset=0
-        with temporary.open('xb') as stream:
-            os.chmod(temporary,0o600)
-            while offset<session['size']:
-                data=operation(config,dict(op='file.read',transfer_id=transfer,offset=offset,length=min(session['chunk_bytes'],session['size']-offset)))
-                if not data or offset+len(data)>session['size']:raise RuntimeError('Invalid download length')
-                stream.write(data);digest.update(data);offset+=len(data)
-            stream.flush();os.fsync(stream.fileno())
-        if digest.hexdigest()!=session['sha256']:raise RuntimeError('Downloaded file changed or digest mismatch')
-        os.link(temporary,target)  # Atomic publication without overwriting a local file.
-        temporary.unlink()
-    except Exception:
-        # Preserve partial bytes and transfer ID for explicit diagnosis/resumption.
-        print('Partial download: '+str(temporary),file=sys.stderr)
-        raise
-    operation(config,dict(op='file.close',transfer_id=transfer))
-    return dict(path=str(target),size=offset,sha256=digest.hexdigest())
+    with Session(config) as transport:
+        target=Path(target)
+        if target.exists():raise FileExistsError(target)
+        session=operation(config,dict(op='file.open',path=source),session=transport);transfer=session['transfer_id']
+        temporary=target.with_name(target.name+'.part-'+uuid.uuid4().hex)
+        print('Download transfer: '+transfer,file=sys.stderr)
+        try:
+            digest=hashlib.sha256();offset=0
+            with temporary.open('xb') as stream:
+                os.chmod(temporary,0o600)
+                while offset<session['size']:
+                    data=operation(config,dict(op='file.read',transfer_id=transfer,offset=offset,length=min(session['chunk_bytes'],session['size']-offset)),session=transport)
+                    if not data or offset+len(data)>session['size']:raise RuntimeError('Invalid download length')
+                    stream.write(data);digest.update(data);offset+=len(data)
+                stream.flush();os.fsync(stream.fileno())
+            if digest.hexdigest()!=session['sha256']:raise RuntimeError('Downloaded file changed or digest mismatch')
+            os.link(temporary,target)  # Atomic publication without overwriting a local file.
+            temporary.unlink()
+        except Exception:
+            # Preserve partial bytes and transfer ID for explicit diagnosis/resumption.
+            print('Partial download: '+str(temporary),file=sys.stderr)
+            raise
+        operation(config,dict(op='file.close',transfer_id=transfer),session=transport)
+        return dict(path=str(target),size=offset,sha256=digest.hexdigest())
 
 
 def wait_ready(config, previous_boot_id=None, timeout=180):

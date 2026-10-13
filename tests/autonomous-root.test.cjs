@@ -1,4 +1,4 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),https=require('https'),crypto=require('crypto'),{execFileSync}=require('child_process');
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),https=require('https'),crypto=require('crypto'),{execFileSync,execFile}=require('child_process');
 const {Journal,config,validateRequest,hash,sdkRuntimeGuard}=require('../research/autonomous-root/service/policy');
 const {createApi}=require('../research/autonomous-root/service/api');
 const {createAgent,launchRequest}=require('../research/autonomous-root/service/agent');
@@ -37,7 +37,7 @@ test('permission failures retain the acquisition step and file path',async()=>{
  finally {a.stop();}
 });
 test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',async()=>{
- const dir=tmp();let server;
+ const dir=tmp();let server;const pool=new https.Agent({keepAlive:true,maxSockets:1});
  try{
   function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
   const serverCert=cert('server'),clientCert=cert('client'),foreign=cert('foreign');
@@ -48,7 +48,34 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   const journal=new Journal(dir+'/requests.json');
   server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
-  function request(route,body,credentials=clientCert,extra={}){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:false,headers:{'Content-Type':'application/json',...extra}},res=>{let parts=[];res.on('data',d=>parts.push(d));res.on('end',()=>{const data=Buffer.concat(parts);resolve({status:res.statusCode,headers:res.headers,body:res.headers['content-type']==='application/octet-stream'?data:JSON.parse(data)});});});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
+  function request(route,body,credentials=clientCert,extra={},reuse=false){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:reuse?pool:false,headers:{'Content-Type':'application/json',...extra}},res=>{const socket=res.socket;let parts=[];res.on('data',d=>parts.push(d));res.on('end',()=>{const data=Buffer.concat(parts);resolve({socket,status:res.statusCode,headers:res.headers,body:res.headers['content-type']==='application/octet-stream'?data:JSON.parse(data)});});});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
+  let connections=0;server.on('secureConnection',()=>connections++);
+  const clientConfig={host:'127.0.0.1',port,server_certificate:dir+'/server.pem',client_certificate:dir+'/client.pem',client_key:dir+'/client-key.pem',server_sha256:hash(new crypto.X509Certificate(serverCert.cert).raw)};
+  fs.writeFileSync(dir+'/client.json',JSON.stringify(clientConfig),{mode:0o600});
+  const script=`import importlib.util,json,sys
+spec=importlib.util.spec_from_file_location('client',sys.argv[1]);api=importlib.util.module_from_spec(spec);spec.loader.exec_module(api)
+c=json.load(open(sys.argv[2]))
+with api.Session(c) as session:
+ assert api.request(c,'GET','/v1/status',session=session)['connected']
+ assert api.operation(c,dict(op='file.write',offset=0),binary=b'chunk',session=session)['offset']==5
+ assert api.operation(c,dict(op='file.read',offset=7,length=5),session=session)==bytes([0,10,13,128,255])
+ assert api.request(c,'GET','/v1/status',session=session)['connected']
+`;
+  await new Promise((resolve,reject)=>execFile('python3',['-c',script,path.resolve(__dirname,'../research/autonomous-root/client.py'),dir+'/client.json'],{timeout:10000},(err,out,stderr)=>err?reject(Error(stderr||err.message)):resolve(out)));
+  assert.equal(connections,1,'Python JSON and binary requests must share one pinned TLS socket');
+  let prior;
+  for(let i=1;i<=129;i++){
+   const r=await request('/v1/status',undefined,clientCert,{'Connection':'keep-alive'},true);
+   assert.equal(r.status,200);assert.ok(Number(r.headers['content-length'])>0);
+   if(i>1&&i<=128)assert.equal(r.socket,prior);
+   if(i===128)assert.equal(r.headers.connection,'close');
+   if(i===129)assert.notEqual(r.socket,prior);
+   prior=r.socket;
+  }
+  const rejected=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive',Origin:'https://example.invalid'},true);
+  assert.equal(rejected.status,403);assert.equal(rejected.socket,prior);assert.equal(rejected.headers.connection,'close');
+  const next=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive'},true);assert.notEqual(next.socket,prior);
+  assert.equal(server.keepAliveTimeout,5000);
   await assert.rejects(request('/v1/status',undefined,{}));await assert.rejects(request('/v1/status',undefined,foreign));
   assert.equal((await request('/v1/status')).status,200);
   assert.equal((await request('/v1/status',undefined,clientCert,{Origin:'https://example.invalid'})).status,403);
@@ -72,5 +99,5 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   assert.equal((await request('/v1/journal/archive',{expected_sha256:journal.digest()},clientCert,{Origin:'https://example.invalid'})).status,403);
   assert.equal((await request('/v1/journal/archive',{expected_sha256:journal.digest()})).status,200);assert.equal(calls,2);
   assert.equal((await request('/v1/enable',{})).status,200);assert.equal((await request('/unknown')).status,404);
- }finally{if(server)await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
+ }finally{pool.destroy();if(server)await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
 });

@@ -4,11 +4,20 @@ const {hash,validateRequest}=require('./policy');
 function createApi(options){
  const {credentials,clientPin,agent,journal,setEnabled}=options;
  let busy=false;
+ const requestsPerSocket=new WeakMap();
  const server=https.createServer(Object.assign({},credentials,{requestCert:true,rejectUnauthorized:true,minVersion:'TLSv1.2'}),async(req,res)=>{
+  const count=(requestsPerSocket.get(req.socket)||0)+1;requestsPerSocket.set(req.socket,count);
+  const reuse=String(req.headers.connection||'').toLowerCase()==='keep-alive'&&count<128;
+  const responseHeaders=(status,type,length)=>({
+   'Content-Type':type,'Content-Length':length,'Cache-Control':'no-store',
+   'Connection':status===200&&reuse?'keep-alive':'close',
+   ...(status===200&&reuse?{'Keep-Alive':'timeout=5, max='+(128-count)}:{})
+  });
   const cert=req.socket.getPeerCertificate();
-  const reply=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','Connection':'close'});res.end(JSON.stringify(value));};
+  const reply=(status,value)=>{const data=JSON.stringify(value);res.writeHead(status,responseHeaders(status,'application/json',Buffer.byteLength(data)));res.end(data);};
   if(!req.socket.authorized||!cert.raw||!crypto.timingSafeEqual(Buffer.from(hash(cert.raw),'hex'),Buffer.from(clientPin,'hex'))){reply(403,{error:'Client not enrolled'});return;}
   if(req.headers.origin){reply(403,{error:'Browser access is disabled'});return;}
+  if(count>128){reply(429,{error:'Connection request limit reached'});return;}
   if(req.method==='GET'&&req.url==='/v1/status'){reply(200,agent.status());return;}
   if(req.method==='GET'&&req.url==='/v1/requests'){reply(200,{requests:journal.rows,sha256:journal.digest()});return;}
   if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable','/v1/journal/archive','/v1/op','/v1/files/read','/v1/files/write'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
@@ -38,7 +47,7 @@ function createApi(options){
     if(operation.op==='file.read'){
      const data=Buffer.isBuffer(result.data)?result.data:Buffer.from(result.data,'base64');
      if(data.length>1048576||hash(data)!==result.sha256)throw Error('Invalid worker chunk digest');
-     res.writeHead(200,{'Content-Type':'application/octet-stream','Cache-Control':'no-store','Connection':'close','X-SHA256':result.sha256,'X-Offset':String(result.offset)});res.end(data);
+     res.writeHead(200,{...responseHeaders(200,'application/octet-stream',data.length),'X-SHA256':result.sha256,'X-Offset':String(result.offset)});res.end(data);
     }else reply(200,{id:value.id,...result});
     return;
    }
@@ -63,7 +72,7 @@ function createApi(options){
   }
   finally{busy=false;}
  });
- server.timeout=35000;server.headersTimeout=10000;server.maxHeadersCount=20;server.maxConnections=8;
+ server.keepAliveTimeout=5000;server.timeout=35000;server.headersTimeout=10000;server.maxHeadersCount=20;server.maxConnections=8;
  server.on('clientError',(_,socket)=>socket.destroy());server.on('tlsClientError',()=>{});
  return server;
 }
