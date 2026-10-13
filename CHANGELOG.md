@@ -2,6 +2,13 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Autonomous root agent: retain the .NET worker and use a signed, embedded native
+  launcher for app commands and jobs. Verify its private read-only view, drop app
+  credentials, clean the child environment/descriptors, and preserve quoted
+  commands with structured arguments. Agent package 0.3.1 passed deployment,
+  command/job supervision and reboot acceptance on QN90A and S90D; see
+  [hardware results](research/autonomous-root/CAPABILITIES.md#native-launcher-acceptance--2026-10-13).
+
 - Native WebView: fix the intermittent QN90A startup crash (glibc heap
   corruption while Chromium created its first browser context; about 24 s lost
   per affected boot). The host now loads libpthread at startup instead of

@@ -54,6 +54,8 @@ jobs:
           global-json-file: global.json
       - run: docker build -t samsung-native-collector:bullseye research/native-telemetry/collector
       - run: python3 scripts/check-root-launcher.py
+      - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release
+      - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble dotnet /app/Harness.dll
   qn90a-web-saver:
     runs-on: ubuntu-24.04
     container: emscripten/emsdk:3.1.64

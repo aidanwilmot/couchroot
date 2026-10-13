@@ -101,9 +101,11 @@ views and test files were removed, benchmark jobs forgotten, and both existing
 workers were ready after reacquisition.
 
 The local failure-injection harness checks that failed label writes, identity or
-group transitions, label verification, environment setup and directory changes
-prevent shell execution. It also checks exact shell argument forwarding and exec
-failure handling. This complements, but cannot replace, hardware Smack checks.
+group transitions, label verification, descriptor cleanup and directory changes
+prevent shell execution. It checks the explicit child environment, exact shell
+arguments and exec failure handling. The Linux worker harness also exercises
+nested single/double quotes, backslashes and newlines across the actual process
+boundary. These checks complement, but cannot replace, hardware Smack checks.
 
 The integration preserves digest-verified staging and root-only invocation.
 Separately profiling incoming protocol reads remains a useful next step. The

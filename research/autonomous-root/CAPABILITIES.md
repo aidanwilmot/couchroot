@@ -154,7 +154,7 @@ mounts can leave directories for inspection; at 64 retained directories acquisit
 refuses further staging. No arbitrary external launcher path is accepted.
 
 `native-app-launcher-v1` in the ready worker's capabilities identifies this path.
-The worker `status` operation also returns the embedded launcher's SHA-256.
+The internal worker readiness handshake also returns the embedded launcher's SHA-256.
 Build the toolchain image from `research/native-telemetry/collector/Dockerfile`
 before preparing signed autonomous-root packages. The shared builder compiles from
 source and embeds the result in the worker DLL for each TV framework. Ordinary
@@ -244,3 +244,49 @@ No power-loss, firmware-upgrade or long-duration stress acceptance is claimed.
 The [native app-user launcher measurements](native-launcher/README.md)
 compares measured command startup, worker memory, reacquisition and transfer costs
 on both TVs motivated this implementation. The public app APIs remain unchanged.
+
+## Native launcher acceptance — 2026-10-13
+
+Signed autonomous-agent version **0.3.1**, built from `8df7949`, passed
+owner-authorized deployment and hardware acceptance on both existing TV profiles.
+The .NET worker remains installed; app commands and app-profile jobs now use its
+embedded native launcher. Both shared deployment journals completed only after
+post-reboot verification. Prior signed packages and private enrollment remain retained.
+
+Both TVs passed:
+
+- Verification of the signed build's native digest against the staged executable,
+  root ownership, mode 0500 and a private read-only mount. App-user attempts to
+  invoke this root-only path were denied before their command could execute.
+- UID/EUID/saved UID 5001, GID/EGID/saved GID 100, no supplementary groups, zero
+  effective capabilities and Smack `User`. The expected runtime environment was
+  present; an injected environment marker and extra descriptor did not reach the shell.
+- Exact single/double quotes, apostrophes, backslashes, newlines and post-reboot
+  Unicode command output. Stdout, stderr and nonzero exit codes were preserved.
+- A 31-second app job with output and exit code 7, app-command timeout, app-job
+  timeout, and cancellation. Delayed descendant writes did not survive either
+  timeout or cancellation. Unsigned helper upload, preparation, app execution and
+  release also passed through the integrated launcher.
+- Graceful worker reacquisition with the old launcher directory removed and a
+  new native-capable worker ready, followed by quoted app execution.
+- Full software reboot and autonomous root readiness with a new boot ID, then
+  repeated app, timeout, digest-rejection, quoting and native-view checks. Readiness
+  was first observed around 74.5 seconds of uptime on QN90A and 111 seconds on S90D;
+  these are individual observations, not startup guarantees.
+
+All 22 installed package inventory entries, enrollment certificates, protected
+file hashes, enabled boot flags and restored loopback SDK host verified afterward.
+Twenty short `app.exec` calls had median client round trips of 122 ms on QN90A and
+110 ms on S90D. Earlier managed-launcher measurements were 303 ms and 455 ms;
+these separate runs are indicative, not a paired performance guarantee.
+
+The first QN90A 0.3.0 trial exposed an argument-quoting bug in the old command
+runner. That trial's acceptance was cancelled, its evidence and signed package
+retained, and 0.3.1 installed as a guarded forward correction. S90D received only
+the corrected build. Structured process arguments now preserve the nested command;
+the Linux harness covers that exact process boundary.
+
+Local validation: 220 Python tests, 104 Node tests, 20 telemetry tests, native
+failure-path tests on macOS and Linux, and the Linux root job/transfer harness
+passed. Both embedded TV builds and the source-only cross-path native/unsigned
+package builds reproduced. Public-source privacy and secret scans passed.
