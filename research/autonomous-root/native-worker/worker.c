@@ -21,6 +21,7 @@ static void release(Transfer *t) {
 static void jobs_cleanup(void);
 static void helpers_cleanup(void);
 static void runtime_cleanup(void);
+static void containment_worker_stop(void);
 static void cleanup(void) {
   if (active_child > 0) {
     pid_t pid = active_child;
@@ -32,6 +33,7 @@ static void cleanup(void) {
   }
   runtime_cleanup();
   jobs_cleanup();
+  containment_worker_stop();
   for (int i = 0; i < 8; i++)
     release(&transfers[i]);
   if (directory >= 0)
@@ -267,9 +269,12 @@ static int verified_launcher(void) {
 #include "runtime.h"
 
 static void stop_signal(int sig);
+#include "containment.h"
+
 #include "guardian.h"
 static void runtime_cleanup(void) {
-  if (runtime_owned && runtime_sweep() && guardian_journal_owned) {
+  if (runtime_owned && runtime_sweep() && containment_cleanup() &&
+      guardian_journal_owned) {
     unlinkat(jobs_dir, "guardian", 0);
     fsync(jobs_dir);
     guardian_journal_owned = 0;
@@ -306,6 +311,8 @@ static J *operation(J *request, Wire *w, const char *seq) {
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
     num(j, "worker_dumpable", prctl(PR_GET_DUMPABLE));
+    str(j, "freezer_group", freezer_name);
+    num(j, "heartbeat_timeout_ms", 1000);
     J *app = obj();
     str(app, "path", launcher);
     str(app, "sha256", launcher_sha);
@@ -512,6 +519,7 @@ int main(int argc, char **argv) {
   guardian_journal();
   helpers_init();
   launcher_stage(argv[5]);
+  containment_prepare();
   guardian_start();
   jobs_init();
   Wire w = {0};

@@ -1,0 +1,93 @@
+/* Prototype-only freezer membership and independent liveness watchdog.
+ * Original Couchroot code. SPDX-License-Identifier: 0BSD */
+static int freezer_root = -1, freezer_dir = -1;
+static char freezer_name[64];
+static int pulse_pipe[2] = {-1, -1}, pulse_started, pulse_stop;
+static pthread_t pulse_thread;
+static int guardian_watchdog, containment_failed;
+static int freezer_write(const char *file, const char *value) {
+#ifdef NATIVE_WORKER_TEST
+  (void)file;
+  (void)value;
+  return 1;
+#else
+  int fd = openat(freezer_dir, file, O_WRONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0)
+    return 0;
+  int good = job_write(fd, value, strlen(value));
+  close(fd);
+  return good;
+#endif
+}
+static void containment_prepare(void) {
+#ifndef NATIVE_WORKER_TEST
+  freezer_root = open("/sys/fs/cgroup/freezer",
+                      O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (freezer_root < 0)
+    fatal("prototype freezer controller unavailable");
+  snprintf(freezer_name, sizeof freezer_name, "couchroot-native-%s", worker_id);
+  if (mkdirat(freezer_root, freezer_name, 0700))
+    fatal("exclusive prototype freezer group");
+  freezer_dir = openat(freezer_root, freezer_name,
+                       O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (freezer_dir < 0)
+    fatal("prototype freezer group");
+#endif
+  if (pipe2(pulse_pipe, O_CLOEXEC | O_NONBLOCK))
+    fatal("guardian heartbeat pipe");
+}
+static int containment_cleanup(void) {
+  if (freezer_dir >= 0) {
+    close(freezer_dir);
+    freezer_dir = -1;
+  }
+  int good = 1;
+  if (freezer_root >= 0) {
+    if (freezer_name[0] && unlinkat(freezer_root, freezer_name, AT_REMOVEDIR) &&
+        errno != ENOENT)
+      good = 0;
+    close(freezer_root);
+    freezer_root = -1;
+  }
+  return good;
+}
+static void *pulse_main(void *unused) {
+  (void)unused;
+  while (!__atomic_load_n(&pulse_stop, __ATOMIC_RELAXED)) {
+    ssize_t n = write(pulse_pipe[1], "1", 1);
+    (void)n;
+    usleep(100000);
+  }
+  return NULL;
+}
+static void containment_enter(void) {
+  char pid[32];
+  snprintf(pid, sizeof pid, "%d", getpid());
+  if (!freezer_write("cgroup.procs", pid))
+    fatal("join prototype freezer group");
+  close(pulse_pipe[0]);
+  pulse_pipe[0] = -1;
+  sigset_t mask, old;
+  sigemptyset(&mask);
+  sigaddset(&mask, SIGTERM);
+  sigaddset(&mask, SIGINT);
+  sigaddset(&mask, SIGALRM);
+  if (pthread_sigmask(SIG_BLOCK, &mask, &old))
+    fatal("heartbeat signal mask");
+  int error = pthread_create(&pulse_thread, NULL, pulse_main, NULL);
+  if (!error)
+    pulse_started = 1;
+  if (pthread_sigmask(SIG_SETMASK, &old, NULL) || error)
+    fatal("guardian heartbeat thread");
+}
+static void containment_worker_stop(void) {
+  if (pulse_started) {
+    __atomic_store_n(&pulse_stop, 1, __ATOMIC_RELAXED);
+    pthread_join(pulse_thread, NULL);
+    pulse_started = 0;
+  }
+}
+static void containment_freeze(void) {
+  if (!freezer_write("freezer.state", "FROZEN"))
+    containment_failed = 1;
+}

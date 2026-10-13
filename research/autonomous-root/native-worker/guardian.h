@@ -97,6 +97,9 @@ static int guardian_recover_records(void) {
     }
     str(r, "state", "interrupted");
     str(r, "recovery", "guardian-reaped-descendants");
+    boolean(r, "watchdog_triggered", guardian_watchdog);
+    boolean(r, "watchdog_froze_group",
+            guardian_watchdog && freezer_dir >= 0 && !containment_failed);
     boolean(r, "output_available", 0);
     json_object_object_add(r, "exit_code", NULL);
     boolean(r, "timed_out", 0);
@@ -218,6 +221,7 @@ static void guardian_start(void) {
     if (sigprocmask(SIG_SETMASK, &previous, NULL))
       _exit(125);
     worker_fault_handlers();
+    containment_enter();
     alarm(300);
     return;
   }
@@ -228,15 +232,19 @@ static void guardian_start(void) {
     _exit(125);
   alarm(310);
   int status = 0, worker_status = 0, worker_done = 0;
-  double stopping_at = 0;
+  close(pulse_pipe[1]);
+  pulse_pipe[1] = -1;
+  double stopping_at = 0, last_pulse = stamp();
+  int pulse_seen = 0;
   while (!worker_done) {
-    if (guardian_stop) {
-      if (!stopping_at) {
-        kill(pid, SIGTERM);
-        stopping_at = stamp();
-      } else if (stamp() - stopping_at > 3000)
-        kill(pid, SIGKILL);
+    unsigned char pulses[128];
+    ssize_t n;
+    while ((n = read(pulse_pipe[0], pulses, sizeof pulses)) > 0) {
+      last_pulse = stamp();
+      pulse_seen = 1;
     }
+    if (n < 0 && errno != EAGAIN && errno != EINTR)
+      _exit(125);
     pid_t got;
     while ((got = waitpid(-1, &status, WNOHANG)) > 0)
       if (got == pid) {
@@ -246,9 +254,30 @@ static void guardian_start(void) {
     if (got < 0 && ((!worker_done && errno == ECHILD) ||
                     (errno != ECHILD && errno != EINTR)))
       _exit(125);
-    if (!worker_done)
-      usleep(10000);
+    if (worker_done)
+      break;
+    if (!guardian_watchdog &&
+        stamp() - last_pulse > (pulse_seen ? 1000 : 5000)) {
+      guardian_watchdog = 1;
+      containment_freeze();
+      kill(pid, SIGKILL);
+      fputs("prototype: guardian watchdog froze experiment and killed "
+            "unresponsive worker\n",
+            stderr);
+    }
+    if (guardian_stop) {
+      if (!stopping_at) {
+        kill(pid, SIGTERM);
+        stopping_at = stamp();
+      } else if (stamp() - stopping_at > 3000) {
+        containment_freeze();
+        kill(pid, SIGKILL);
+      }
+    }
+    usleep(10000);
   }
+  close(pulse_pipe[0]);
+  pulse_pipe[0] = -1;
   alarm(0);
   /* Do not release ownership or publish interruption while any descendant can
    * still run. Unexpected retention leaves the durable journal fail-closed. */
@@ -257,7 +286,8 @@ static void guardian_start(void) {
   if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
     fprintf(stderr, "prototype: guardian drain %.0f ms\n",
             stamp() - recovery_started);
-  if (!drained || !guardian_recover_records() || !runtime_sweep()) {
+  if (!drained || !guardian_recover_records() || !runtime_sweep() ||
+      !containment_cleanup() || containment_failed) {
     fputs("prototype: guardian recovery incomplete; journal retained\n",
           stderr);
     _exit(125);

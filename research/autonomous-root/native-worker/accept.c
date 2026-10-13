@@ -83,7 +83,9 @@ static void launch(void) {
 }
 static void finish(int disconnect) {
   double stop_started = stamp();
-  if (disconnect == 3 || disconnect == 4)
+  if (disconnect == 5)
+    kill(worker_pid, SIGSTOP);
+  else if (disconnect == 3 || disconnect == 4)
     kill(worker_pid, disconnect == 3 ? SIGKILL : SIGSEGV);
   else if (disconnect == 2)
     kill(child, SIGTERM);
@@ -114,9 +116,9 @@ static void finish(int disconnect) {
   if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
     fprintf(stderr, "prototype: controller stop mode=%d %.0f ms\n", disconnect,
             stamp() - stop_started);
-  if ((disconnect == 3 || disconnect == 4) &&
-      (!WIFEXITED(status) ||
-       WEXITSTATUS(status) != 128 + (disconnect == 3 ? SIGKILL : SIGSEGV)))
+  if ((disconnect == 3 || disconnect == 4 || disconnect == 5) &&
+      (!WIFEXITED(status) || (WEXITSTATUS(status) != 137 &&
+                              (disconnect != 4 || WEXITSTATUS(status) != 139))))
     fatal("guardian crash status");
   if (!disconnect && (!WIFEXITED(status) || WEXITSTATUS(status)))
     fatal("native shutdown failed");
@@ -262,6 +264,22 @@ int main(int argc, char **argv) {
                        staged, appsha, staged);
   command(check, 5000, 0, 0);
   free(check);
+  const char *group = textval(get(initial, "result"), "freezer_group");
+  if (!group ||
+      strncmp(group, "couchroot-native-", strlen("couchroot-native-")))
+    fatal("private freezer group missing");
+  char *membership_command =
+      format("grep -F ':freezer:/%s' /proc/self/cgroup", group);
+  command(membership_command, 5000, 0, 0);
+  J *membership = req("app.exec");
+  str(membership, "command", membership_command);
+  num(membership, "timeout_ms", 5000);
+  J *checked = call(membership);
+  if (number(get(checked, "result"), "exit_code") ||
+      !strstr(textval(get(checked, "result"), "stdout"), group))
+    fatal("app freezer inheritance");
+  discard(checked);
+  free(membership_command);
   discard(initial);
   mark("independent_launcher_digest_and_readonly_view");
   char *helper_id, *helper_path = stage_helper(&helper_id);
@@ -436,7 +454,7 @@ int main(int argc, char **argv) {
     mark(mode == 0 ? "graceful_stop_cleans_active_job_and_helper"
                    : "signal_stop_cleans_active_job_and_helper");
   }
-  for (int mode = 3; mode <= 4; mode++) {
+  for (int mode = 3; mode <= 5; mode++) {
     j = req("helper.prepare");
     str(j, "path", source);
     str(j, "sha256", sha);
@@ -484,6 +502,9 @@ int main(int argc, char **argv) {
         strcmp(textval(record, "recovery"), "guardian-reaped-descendants") ||
         get(record, "exit_code") != NULL)
       fatal("crash recovery record");
+    if (mode == 5 &&
+        !json_object_get_boolean(get(record, "watchdog_froze_group")))
+      fatal("watchdog containment not used");
     discard(r);
     j = job_req("job.start", "native-crash-job-01");
     str(j, "command", ":");
@@ -500,7 +521,9 @@ int main(int argc, char **argv) {
     discard(call(job_req("job.forget", "native-after-crash-01")));
     mark(mode == 3
              ? "sigkill_recovery_reaps_detached_children_and_restages_launcher"
-             : "sigsegv_recovery_no_replay_and_app_execution");
+         : mode == 4
+             ? "sigsegv_recovery_no_replay_and_app_execution"
+             : "stopped_worker_watchdog_freezes_owned_group_and_recovers");
   }
   finish(0);
   if (unlink(app))

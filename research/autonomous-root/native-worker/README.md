@@ -55,7 +55,24 @@ its own nonterminal job records to `interrupted` and deleting owned execution vi
 It never signals a PID from a saved job file. Completed records remain unchanged;
 crash records have an unknown exit code and unavailable in-memory output. A new
 worker invocation reads those records and refuses duplicate starts. It does not
-automatically restart or replay commands.
+automatically restart or replay commands. The protocol worker is non-dumpable
+and handles fatal signals with an alternate-stack, async-signal-safe `_exit`.
+That path deliberately bypasses worker cleanup; the guardian owns recovery. It
+limits work performed in a damaged process. Fatal signal teardown on the TVs can
+still take seconds, so the guardian also uses a heartbeat watchdog and an isolated
+freezer cgroup to stop descendants during that delay. The controller waits for
+recovery and does not force-kill a guardian merely because its wait expires.
+
+Each native run exclusively creates `/sys/fs/cgroup/freezer/couchroot-native-ID`.
+Only the protocol worker joins it before spawning threads or commands; its root
+and app descendants inherit membership. The guardian and deployed .NET processes
+stay outside. A dedicated worker thread sends a heartbeat every 100 ms. After a
+one-second heartbeat gap, the guardian requests freezing of only that group and
+kills its own unreaped worker. Once that worker exits, the guardian proves child
+ownership with `waitid(..., WNOWAIT)` before killing/reaping adopted descendants.
+It removes the empty cgroup along with owned runtime views. It never changes the
+state of an existing system cgroup. Host tests bypass unavailable freezer support;
+actual membership, freezing and removal require TV validation.
 
 Failure to finish recovery retains the ownership journal and blocks replacement.
 Loss of both worker and guardian, storage corruption, power loss and uninterruptible

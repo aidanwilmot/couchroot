@@ -230,6 +230,14 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertEqual(record['recovery'],'guardian-reaped-descendants')
         time.sleep(.6);self.assertFalse(marker.exists())
         self.restart();self.assertEqual(self.job('job.status')['result']['state'],'interrupted')
+    def test_stopped_worker_watchdog_recovers(self):
+        self.start_job('sleep 30',timeout=60000)
+        os.kill(self.worker_pid,signal.SIGSTOP)
+        self.proc.wait(timeout=5);self.assertEqual(self.proc.returncode,137)
+        record=json.loads((self.root/'.jobs/native-test-job-01.json').read_text())
+        self.assertEqual(record['state'],'interrupted');self.assertTrue(record['watchdog_triggered'])
+        self.assertFalse(record['watchdog_froze_group']) # Host mode has no freezer controller.
+        self.restart();self.assertEqual(self.job('job.status')['result']['state'],'interrupted')
     def test_scope_lock_and_unresolved_guardian_refuse_replacement(self):
         other=subprocess.run(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
         self.assertNotEqual(other.returncode,0);self.assertIn(b'exclusive job ownership',other.stderr)
