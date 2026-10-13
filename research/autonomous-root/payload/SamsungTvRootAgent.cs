@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
-internal static class SamsungTvRootAgent
+internal static partial class SamsungTvRootAgent
 {
     private const string ProtocolVersion = "SAMSUNG-TV-ROOT/1";
     private const string AllowedStagingRoot =
@@ -29,6 +29,7 @@ internal static class SamsungTvRootAgent
         string runtimeDirectory = null;
         try
         {
+            if (arguments.Length == 2 && arguments[0] == "--app-exec") return AppExec(arguments[1]);
             if (arguments.Length != 4)
             {
                 throw new ArgumentException(
@@ -86,6 +87,9 @@ internal static class SamsungTvRootAgent
         }
         finally
         {
+            StopJobs();
+            CloseTransfers();
+            CloseHelpers();
             DeleteRuntimeDirectory(runtimeDirectory);
             if (secret != null)
             {
@@ -162,6 +166,22 @@ internal static class SamsungTvRootAgent
                             "root-agent command sequence is not increasing");
                     }
                     previousSequence = sequence;
+
+                    if (fields[0] == "OP" && fields.Length == 3)
+                    {
+                        string response;
+                        try
+                        {
+                            using (var document = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(fields[2])))
+                                response = System.Text.Json.JsonSerializer.Serialize(new { ok = true, result = Operation(document.RootElement, readableDirectory, runtimeDirectory) });
+                        }
+                        catch (Exception error)
+                        {
+                            response = System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = error.Message, outcome = "failed" });
+                        }
+                        WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + fields[1] + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(response)));
+                        continue;
+                    }
 
                     if (fields[0] == "PING" && fields.Length == 2)
                     {

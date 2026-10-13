@@ -22,11 +22,12 @@ class AgentTransport(Transport):
         spec = importlib.util.spec_from_file_location('enrolled_agent_client', REPO/'research/autonomous-root/client.py')
         self.api = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.api)
         status = self.api.request(self.credentials, 'GET', '/v1/status')
-        if status.get('device') != profile['id'] or not status.get('connected') or status.get('identity', {}).get('uid') != 0:
+        if status.get('device') != profile['id'] or not status.get('connected') or status.get('worker_ready') is False or status.get('identity', {}).get('uid') != 0:
             raise Refused('Enrolled root worker is not ready')
         self._execute(guard(profile), 20)
 
-    def _execute(self, script, timeout=20):
+    def execute_result(self, script, timeout=20):
+        """Return a completed command result, including nonzero exits."""
         encoded=base64.b64encode(script.encode()).decode()
         command='printf %s '+encoded+' | base64 -d | /bin/sh'
         if len(command.encode()) > 16384:
@@ -36,8 +37,16 @@ class AgentTransport(Transport):
         atomic_json(path, dict(state='submitted', request=request))
         result = self.api.request(self.credentials, 'POST', '/v1/exec', request)
         atomic_json(path, dict(state='completed', request=request, result=result))
-        if result.get('id') != request['id'] or result.get('exit_code') != 0 or result.get('timed_out'):
-            raise Refused('Agent command failed or uncertain; inspect private evidence: '+str(path))
+        if result.get('id') != request['id'] or not isinstance(result.get('exit_code'), int):
+            raise Refused('Invalid agent response; outcome unknown; inspect private evidence: '+str(path))
+        return result
+
+    def _execute(self, script, timeout=20, check=True):
+        result = self.execute_result(script, timeout)
+        if check and (result['exit_code'] != 0 or result.get('timed_out')):
+            raise Refused('Agent command completed with exit code '+str(result['exit_code'])
+                          + (' (timed out)' if result.get('timed_out') else '')
+                          + '; inspect private evidence in '+str(self.evidence))
         return result.get('stdout', '')
 
     def sdk(self, script, timeout=30):
@@ -45,7 +54,7 @@ class AgentTransport(Transport):
         # not evidence of SDK UID permissions. Never attach an SDB client.
         if len(script.encode()) <= 12000:
             return self._execute(script, timeout)
-        stage='/tmp/couchroot-inspect-'+uuid.uuid4().hex
+        stage='/home/owner/share/tmp/sdk_tools/couchroot-inspect-'+uuid.uuid4().hex
         self._execute('umask 077\nmkdir '+Q(stage)+'\n')
         self._upload(script.encode(), stage+'/command.sh')
         return self._execute('sh -c "$(cat '+Q(stage+'/command.sh')+')"; result=$?; rm -f '+Q(stage+'/command.sh')+'; rmdir '+Q(stage)+'; exit "$result"\n', timeout)
@@ -56,13 +65,21 @@ class AgentTransport(Transport):
         return self.sdk(guard(self.profile)+script, 25)
 
     def _upload(self, data, target):
-        # Exclusive staging file. Uncertain submissions are never replayed.
-        temporary=target+'.agent-'+uuid.uuid4().hex
-        self._execute('set -eu\numask 077\nset -C\n: > '+Q(temporary)+'\n')
-        for offset in range(0,len(data),6000):
-            encoded=base64.b64encode(data[offset:offset+6000]).decode()
-            self._execute('set -eu\nprintf %s '+Q(encoded)+' | base64 -d >> '+Q(temporary)+'\n')
-        self._execute('set -eu\ntest ! -L '+Q(target)+'\ntest ! -e '+Q(target)+'\ntest "$(sha256sum '+Q(temporary)+' | cut -d " " -f 1)" = '+Q(sha(data))+'\nmv '+Q(temporary)+' '+Q(target)+'\n')
+        digest=sha(data)
+        evidence=self.evidence/('agent-upload-'+uuid.uuid4().hex+'.json')
+        record=dict(state='begin-submitted',target=target,size=len(data),sha256=digest)
+        atomic_json(evidence,record)
+        session=self.api.operation(self.credentials,dict(op='file.begin',path=target,size=len(data),sha256=digest,expected_sha256='absent'))
+        transfer=session['transfer_id']
+        record.update(state='uploading',transfer_id=transfer,offset=0);atomic_json(evidence,record)
+        for offset in range(0,len(data),session['chunk_bytes']):
+            chunk=data[offset:offset+session['chunk_bytes']]
+            record.update(state='chunk-submitted',offset=offset);atomic_json(evidence,record)
+            result=self.api.operation(self.credentials,dict(op='file.write',transfer_id=transfer,offset=offset,sha256=sha(chunk)),binary=chunk)
+            if result.get('offset') != offset+len(chunk):raise Refused('Upload offset mismatch; inspect transfer '+transfer)
+        record.update(state='commit-submitted',offset=len(data));atomic_json(evidence,record)
+        result=self.api.operation(self.credentials,dict(op='file.commit',transfer_id=transfer))
+        record.update(state='completed',result=result);atomic_json(evidence,record)
 
     def push(self, source, target):
         if not str(target).startswith('/home/owner/share/tmp/sdk_tools/tv-setup-') or not str(target).endswith('-control.dll'):

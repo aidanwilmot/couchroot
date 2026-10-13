@@ -12,11 +12,11 @@ function launchRequest(stage,gate){
  return request;
 }
 function createAgent(config,options={}){
- let running=false,connected=false,launching=false,timer=null,channel=null,client=null,stage=null,attempts=0,generation=0,lastError=null,identity=null;
+ let running=false,connected=false,launching=false,timer=null,channel=null,client=null,stage=null,attempts=0,generation=0,lastError=null,identity=null,lastAcquired=null,workerReady=false,workerStatus=null,workerStatusAt=0;
  const firmware=options.verifyFirmware||verifyFirmware;
  const payload=options.payload||path.join(__dirname,'../payload');
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){return {schema:1,device:config.device,enabled:running,connected,phase:connected?'ready':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -55,7 +55,7 @@ function createAgent(config,options={}){
    firmware(config);
    const secret=crypto.randomBytes(32);
    if(channel)channel.close();
-   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation){conn._socket.destroy();return;}connected=true;identity=conn.identity;lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;identity=null;schedule();}});
+   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation)return;if(!info.boot_id||!Number.isFinite(info.uptime_seconds))throw Error('Invalid worker readiness');workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();}).catch(error=>{if(gen===generation){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;schedule();}});
    await new Promise((resolve,reject)=>{channel.start(resolve);channel._server.once('error',reject);});
    if(!running||gen!==generation)return;
    step='loopback connection';
@@ -74,7 +74,7 @@ function createAgent(config,options={}){
   finally{if(gen===generation){launching=false;if(client){sdb.close(client);client=null;}if(!connected)schedule();}}
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
- function stop(){running=false;connected=false;identity=null;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
- return {status,start,stop,execute:(command,timeout)=>{if(!running||!connected||!channel)return Promise.reject(Error('Root agent unavailable'));return channel.execute(command,timeout);}};
+ function stop(){running=false;connected=false;workerReady=false;identity=null;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
+ return {status,start,stop,operation:value=>{if(!running||!connected||!channel)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value);},execute:(command,timeout)=>{if(!running||!connected||!channel)return Promise.reject(Error('Root agent unavailable'));return channel.execute(command,timeout);}};
 }
 module.exports={createAgent,launchRequest};

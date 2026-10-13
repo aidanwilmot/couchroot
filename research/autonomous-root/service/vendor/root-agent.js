@@ -202,6 +202,17 @@ RootAgentConnection.prototype._onFrame = function (payload) {
                 stderr: Buffer.from(f[5], 'base64').toString('utf8')
             });
         }
+    } else if (f[0] === 'OPRESULT' && f.length === 3) {
+        var op = this._pending[f[1]];
+        if (op) {
+            delete this._pending[f[1]]; clearTimeout(op.timer);
+            try {
+                var value = JSON.parse(Buffer.from(f[2], 'base64').toString('utf8'));
+                if (typeof value.ok !== 'boolean') throw Error('Invalid operation response');
+                if (value.ok) op.resolve(value.result);
+                else op.reject(Object.assign(Error(value.error), {outcome:value.outcome || 'rejected'}));
+            } catch (e) { op.reject(e); }
+        }
     } else if (f[0] === 'PONG') {
         var s = f[1], pr = this._pending[s];
         if (pr) { delete this._pending[s]; clearTimeout(pr.timer); pr.resolve(f); }
@@ -252,3 +263,21 @@ RootAgentConnection.prototype.execute = function (command, timeoutMs) {
 };
 
 module.exports = { RootAgentServer };
+// Bounded, authenticated administrative operations. Binary chunks are base64 only
+// on this loopback framing layer; the HTTPS data endpoints carry raw bytes.
+RootAgentServer.prototype.operation = function (value) {
+    if (!this._conn) return Promise.reject(Object.assign(Error('Root worker unavailable'), {outcome:'rejected'}));
+    return this._conn.operation(value);
+};
+RootAgentConnection.prototype.operation = function (value) {
+    var self=this, bytes=Buffer.from(JSON.stringify(value));
+    if (bytes.length>1500000 || self._socket.destroyed || Object.keys(self._pending).length>=MAX_PENDING)
+        return Promise.reject(Object.assign(Error('Operation unavailable or oversized'), {outcome:'rejected'}));
+    return new Promise(function(resolve,reject) {
+        var seq=++self._sequence;
+        var timer=setTimeout(function(){delete self._pending[seq];reject(Error('Operation outcome unknown'));self._socket.destroy();},30000);
+        self._pending[seq]={resolve:resolve,reject:reject,timer:timer};
+        try {self._send('OP\t'+seq+'\t'+bytes.toString('base64'));}
+        catch(e){clearTimeout(timer);delete self._pending[seq];reject(e);self._socket.destroy();}
+    });
+};

@@ -9,6 +9,8 @@ import tempfile
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root))
 projects=[
+ 'research/autonomous-root/payload/SamsungTvRootAgent.csproj',
+ 'research/autonomous-root/payload/SamsungTvArchiveRoot.csproj',
  'tvsetup/native/Control.csproj',
  'research/namespace-root-probe/NamespaceRootProbe.csproj',
  'research/qn90a-root-probe/NamespaceRootProbe.csproj',
@@ -25,7 +27,7 @@ subprocess.run([sys.executable,str(root/'research/s90d-telemetry/build.py')],cwd
 manifest={}
 for base in [root/'tvsetup/native',root/'research']:
  for path in sorted(base.rglob('*.dll')):
-  if 'bin' in path.parts and 'obj' not in path.parts:manifest[str(path.relative_to(root))]=hashlib.sha256(path.read_bytes()).hexdigest()
+  if 'bin' in path.parts and 'Release' in path.parts and 'obj' not in path.parts:manifest[str(path.relative_to(root))]=hashlib.sha256(path.read_bytes()).hexdigest()
 from tvsetup.root import build
 from tvsetup.config import profile
 for device in ('qn90a','s90d'):
