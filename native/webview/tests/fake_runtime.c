@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 typedef void Obj;
 typedef unsigned char Bool;
 static int win, canvas, fake_win, rectangle, text, web;
@@ -236,7 +237,48 @@ int ewk_shutdown(void) {
     assert(initialized && (mode("view-fail") || mode("sigterm-in-init") || mode("engine-mismatch") || web_deleted));
     initialized = 0; puts("mock ewk-shutdown"); return 0;
 }
-Obj *ewk_view_add(Obj *c) { assert(initialized && c == &canvas); return mode("view-fail") ? NULL : &web; }
+/* Like QN90A's crash handling: the dying process stays readable (PF_SIGNALED,
+ * one thread not yet exiting) for a while, then exits. Only the first child. */
+static void fake_held_crash(void) {
+    char marker[1024], path[1200], cmd[2600]; const char *root = getenv("FAKE_PROC");
+    snprintf(marker, sizeof marker, "%s/crashed", getenv("FAKE_STATE"));
+    FILE *f = fopen(marker, "r");
+    if (f) { fclose(f); return; }
+    f = fopen(marker, "w"); assert(f); fclose(f);
+    int pid = (int)getpid();
+    snprintf(cmd, sizeof cmd, "mkdir -p '%s/%d/task/%d' '%s/%d/task/%d'", root, pid, pid, root, pid, pid + 1);
+    assert(!system(cmd));
+    snprintf(path, sizeof path, "%s/%d/task/%d/stat", root, pid, pid + 1);
+    f = fopen(path, "w"); fprintf(f, "%d (ThreadPoolForeg) D 1 1 1 0 -1 4195328 0 0\n", pid + 1); fclose(f);
+    snprintf(path, sizeof path, "%s/%d/task/%d/stat", root, pid, pid);
+    f = fopen(path, "w"); fprintf(f, "%d (exe) D 1 1 1 0 -1 4195332 0 0\n", pid); fclose(f);
+    snprintf(path, sizeof path, "%s/%d/stat", root, pid);
+    f = fopen(path, "w"); fprintf(f, "%d (exe) D 1 1 1 0 -1 4195332 0 0\n", pid); fclose(f);
+    snprintf(path, sizeof path, "%s/%d/task/%d/syscall", root, pid, pid + 1);
+    f = fopen(path, "w"); fputs("-1 0x100ff0 0xb5fe2200\n", f); fclose(f);
+    snprintf(path, sizeof path, "%s/%d/task/%d/syscall", root, pid, pid);
+    f = fopen(path, "w"); fputs("running\n", f); fclose(f);
+    snprintf(path, sizeof path, "%s/%d/maps", root, pid);
+    f = fopen(path, "w");
+    /* More mappings than a fixed table would hold, all before the stack (like the Hub's ~1450). */
+    for (unsigned long i = 0; i < 2100; i++) fprintf(f, "%08lx-%08lx rw-p 00000000 00:00 0 \n", 0x10000000 + i * 0x2000, 0x10001000 + i * 0x2000);
+    fputs("00100000-00101000 rw-p 00000000 00:00 0          [stack]\n"
+          "a4979000-a5c5a000 r-xp 011d5000 b3:15 42 /usr/share/chromium-efl/upgrade/lib/libchromium-impl.so\n"
+          "a5c5a000-a5ea0000 rw-p 0517b000 b3:15 42 /usr/share/chromium-efl/upgrade/lib/libchromium-impl.so\n"
+          "b5fe2000-b6100000 r-xp 00000000 b3:15 7 /usr/lib/libc-2.30.so\n", f);
+    fclose(f);
+    /* Sparse memory image: the faulting thread's 16 stack bytes up to the end of [stack]. */
+    uint32_t stack[4] = { 0xb5fe2101, 0x12345678, 0xa497a235, 0x00100004 };
+    snprintf(path, sizeof path, "%s/%d/mem", root, pid);
+    f = fopen(path, "wb"); assert(f && !fseek(f, 0x100ff0, SEEK_SET) && fwrite(stack, sizeof stack, 1, f) == 1); fclose(f);
+    struct timespec held = { 1, 200000000 }; nanosleep(&held, NULL);
+    _exit(134);
+}
+Obj *ewk_view_add(Obj *c) {
+    assert(initialized && c == &canvas);
+    if (mode("held-crash-once")) fake_held_crash();
+    return mode("view-fail") ? NULL : &web;
+}
 Bool ewk_view_url_set(Obj *o, const char *url) {
     assert(o == &web); printf("mock url=%s\n", url);
     snprintf(loaded_url, sizeof loaded_url, "%s", url);

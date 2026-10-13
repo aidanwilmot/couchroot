@@ -336,7 +336,7 @@ boots differ by up to 0.8 s in that segment. Startup time did not improve.
   Samsung's kernel then waits 100 × 0.204 s for `get_coredump_config` and writes
   no core. That wait does not change with `RLIMIT_CORE` or `PR_SET_DUMPABLE`,
   and signal handlers are not invoked. Restart cost about 23 s: Hub content
-  arrived at 40.6 and 43.1 seconds. The cause remains open.
+  arrived at 40.6 and 43.1 seconds. Fixed; see "Startup crash" below.
 - **Stale default tiles (fixed).** Under boot load a compositor frame takes about
   one second. A frame of the static `index.html` markup could therefore finish
   after `ready` and pass for the Hub. 3 of 9 captured boots, `main` included,
@@ -364,6 +364,50 @@ start: arrows, OK launching Plex, Home back to Hub, and `app_launcher -k`
 returning focus (`native-return-focused`). It also passed them after the crash
 recovery above. These are background software reboots, not physical-panel
 recordings, handheld-remote normal-mode boots or a crash-rate estimate.
+
+### Startup crash (2026-10-13)
+
+The supervisor records each crash during Samsung's ~20 s hold (`crash.h`): every
+thread's `sp`/`pc` from `/proc/<pid>/task/<tid>/syscall`, a bounded scan of its
+stack for return addresses (as library+offset), and the executable mappings.
+Fatal-signal handlers never run on this firmware, so this is the only in-field
+record. Lines start with `launcher-child-crashing`, `launcher-crash-thread`,
+`launcher-crash-stack` and `launcher-crash-map`.
+
+The crash reproduces without rebooting. A hidden standalone host
+(`--native-bridge --defer-show` with a page that never reports ready, so it is
+never shown) was started repeatedly beside the running Hub under a separate
+`HOME`. Built as before (`-ldl` only), it crashed in 21 of 170 cold starts,
+always during the first browser context creation inside `ewk_view_add`, when
+Chromium starts its GPU, IO and ThreadPool threads. glibc reported `double free
+or corruption` (`fasttop`, `!prev`, `out`) or `corrupted size vs. prev_size`
+on whichever thread noticed (main, `Chrome_InProcGpuThread` or a
+`ThreadPoolForeground` worker); one start faulted in `ld.so`.
+
+**Fix.** The host executable did not link libpthread: it arrived only later,
+as a dependency of the EFL and Chromium libraries the host `dlopen`s, while the
+process had started single-threaded. QN90A runs glibc 2.30, before libpthread
+was merged into libc (2.34). Linked with `-lpthread` (loaded at startup) and no
+other change, the same host did not crash in 100 starts; every libpthread-linked
+build in the investigation was clean (0 of 503), every build without it crashed.
+`build.sh` links it with `--no-as-needed` and fails if `libpthread.so.0` is not
+`NEEDED`. Paired runs of the final build against the unfixed one:
+
+| Condition | Without | With libpthread |
+|---|---|---|
+| Upgrade engine, idle | 21 / 170 | 0 / 100 (0 / 503 all variants) |
+| Upgrade engine, 3 busy-loop processes | 6 / 60 | 0 / 200 |
+| Default engine | 24 / 60 | 0 / 150 |
+
+Boot batches with the fix installed (software reboots): 20 boots, no crash,
+Hub content median 17.0 s (control 16.7 s, 15 boots).
+
+Ruled out on the way, each still crashing without libpthread at startup:
+never unloading libraries (6 of 119), preloading the license-manager Cynara
+plugin, initializing EGL on the main thread first, and Samsung's reference EWK
+call order. Forwarding Chromium's Cynara calls through the host first looked
+like a fix (0 of 303), but those builds also linked libpthread; without it the
+forwarders crashed 2 of 17.
 
 ## ABI and evidence
 

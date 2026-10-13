@@ -16,11 +16,16 @@ mkdir -p "$WEBVIEW_OUTPUT_DIR"
 # minimal-hub-procsample is a diagnostic sampler for private measurement runs;
 # it is never part of the installed launcher.
 for program in host:minimal-hub-webview procsample:minimal-hub-procsample; do
+# The host must load libpthread at startup, not later through EFL/Chromium's
+# dlopen: without it Chromium's first browser context corrupted the heap in
+# about 1 in 8 cold starts on QN90A's glibc 2.30 (README, "Startup crash").
+threads=
+[ "${program%%:*}" = host ] && threads="-Wl,--no-as-needed -lpthread -Wl,--as-needed"
 docker run --rm --platform linux/amd64 --network none \
   -v "$source_dir:/src:ro" -v "$WEBVIEW_OUTPUT_DIR:/out" samsung-native-collector:bullseye \
   arm-linux-gnueabi-gcc -std=c99 -O2 -Wall -Wextra -Werror \
   -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp \
-  "/src/${program%%:*}.c" -ldl -o "/out/${program#*:}"
+  "/src/${program%%:*}.c" -ldl $threads -o "/out/${program#*:}"
 docker run --rm --platform linux/amd64 --network none \
   -v "$WEBVIEW_OUTPUT_DIR:/out:ro" samsung-native-collector:bullseye \
   arm-linux-gnueabi-readelf -V "/out/${program#*:}" | python3 -c '
@@ -30,6 +35,16 @@ if not versions or any(tuple(map(int, v)) > (2, 17) for v in versions):
     raise SystemExit("Missing or incompatible GLIBC requirements: " + repr(versions))
 print("ARM build: GLIBC requirements <= 2.17 (" + sys.argv[1] + ")")
 ' "${program#*:}"
+if [ "${program%%:*}" = host ]; then
+docker run --rm --platform linux/amd64 --network none \
+  -v "$WEBVIEW_OUTPUT_DIR:/out:ro" samsung-native-collector:bullseye \
+  arm-linux-gnueabi-readelf -d "/out/${program#*:}" | python3 -c '
+import sys
+if "[libpthread.so.0]" not in sys.stdin.read():
+    raise SystemExit("Host does not load libpthread at startup (see README, Startup crash)")
+print("ARM build: libpthread loaded at startup")
+'
+fi
 done
 rm -rf "$WEBVIEW_OUTPUT_DIR/diagnostic" "$WEBVIEW_OUTPUT_DIR/hub"
 cp -R "$source_dir/diagnostic" "$WEBVIEW_OUTPUT_DIR/"

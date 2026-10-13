@@ -320,6 +320,9 @@ static int launcher_worker(void) {
     return 0;
 }
 
+/* ---- Crash capture (crash.h) ---- */
+#include "crash.h"
+
 /* ---- Supervisor: admission once, then run and restart the Hub process ---- */
 static volatile sig_atomic_t supervisor_stop; static volatile pid_t supervisor_child;
 static void supervisor_signal(int sig) { supervisor_stop = 1; if (supervisor_child > 0) kill(supervisor_child, sig); }
@@ -336,8 +339,13 @@ static int launcher_supervise(void) {
         if (posix_spawn(&pid, SELF_EXE, NULL, NULL, args, environ)) { ng_stamp("launcher-spawn-failed"); return 1; }
         supervisor_child = pid;
         if (supervisor_stop) kill(pid, SIGTERM);
-        int status = 0; pid_t r;
-        do { r = waitpid(pid, &status, 0); } while (r < 0 && errno == EINTR);
+        int status = 0, crashing = 0; pid_t r;
+        for (;;) { /* Poll so a dying child can be inspected before it exits. */
+            r = waitpid(pid, &status, WNOHANG);
+            if (r == pid || (r < 0 && errno != EINTR)) break;
+            if (r == 0 && !crashing && crash_detected(pid)) { crashing = 1; crash_snapshot(pid); }
+            struct timespec pause = { 0, 250000000 }; nanosleep(&pause, NULL);
+        }
         supervisor_child = 0;
         if (supervisor_stop) { ng_stamp("launcher-stopped"); return 0; }
         if (r == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0) { ng_stamp("launcher-exited"); return 0; }
