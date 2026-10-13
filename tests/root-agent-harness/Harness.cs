@@ -51,6 +51,7 @@ internal static partial class SamsungTvRootAgent
     }
     public static void TestOperations()
     {
+        TestProtocolReader();
         Reject(()=>AppCommand("echo should-not-run"),"unprepared native launcher accepted");
         string root=Path.GetTempPath()+"couchroot-operations-"+Guid.NewGuid().ToString("N")+"/";
         if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX) && root.StartsWith("/var/"))root="/private"+root;

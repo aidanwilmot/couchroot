@@ -117,7 +117,8 @@ internal static partial class SamsungTvRootAgent
             client.NoDelay = true;
             using (NetworkStream stream = client.GetStream())
             {
-                string hello = ReadLine(stream);
+                var input = new ProtocolReader(stream);
+                string hello = input.ReadLine();
                 string[] helloFields = hello.Split('\t');
                 if (helloFields.Length != 2
                     || helloFields[0] != ProtocolVersion)
@@ -152,7 +153,7 @@ internal static partial class SamsungTvRootAgent
                 long previousSequence = 0;
                 while (true)
                 {
-                    string line = ReadLine(stream);
+                    string line = input.ReadLine();
                     string payload = VerifyAuthenticated(line, nonce, secret);
                     string[] fields = payload.Split('\t');
                     if (fields.Length < 2)
@@ -278,7 +279,7 @@ internal static partial class SamsungTvRootAgent
                             throw new InvalidDataException(
                                 "WRITEFILE path is outside the allowed directories");
                         }
-                        byte[] data = ReadExact(stream, length);
+                        byte[] data = input.ReadExact(length);
                         string digest;
                         using (SHA256 sha256 = SHA256.Create())
                         {
@@ -503,41 +504,62 @@ internal static partial class SamsungTvRootAgent
         }
     }
 
-    private static string ReadLine(Stream stream)
+    // One reader per connection: line parsing and legacy binary payloads must
+    // consume the same read-ahead buffer. Writes use the original duplex stream.
+    private sealed class ProtocolReader
     {
-        using (MemoryStream buffer = new MemoryStream())
-        {
-            while (buffer.Length <= MaximumLineBytes)
-            {
-                int value = stream.ReadByte();
-                if (value < 0)
-                {
-                    throw new EndOfStreamException("root-agent peer disconnected");
-                }
-                if (value == '\n')
-                {
-                    return Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd('\r');
-                }
-                buffer.WriteByte((byte)value);
-            }
-        }
-        throw new InvalidDataException("root-agent frame exceeds size limit");
-    }
+        private readonly Stream stream;
+        private readonly byte[] bytes = new byte[64 * 1024];
+        private int offset;
+        private int end;
 
-    private static byte[] ReadExact(Stream stream, int length)
-    {
-        byte[] data = new byte[length];
-        int offset = 0;
-        while (offset < length)
+        public ProtocolReader(Stream stream) { this.stream = stream; }
+
+        private bool Fill()
         {
-            int count = stream.Read(data, offset, length - offset);
-            if (count <= 0)
-            {
-                throw new EndOfStreamException("root-agent payload was truncated");
-            }
-            offset += count;
+            if (offset < end) return true;
+            offset = 0;
+            end = stream.Read(bytes, 0, bytes.Length);
+            return end > 0;
         }
-        return data;
+
+        public string ReadLine()
+        {
+            using (var line = new MemoryStream())
+            {
+                while (Fill())
+                {
+                    int newline = Array.IndexOf(bytes, (byte)'\n', offset, end - offset);
+                    int count = (newline < 0 ? end : newline) - offset;
+                    if (count > MaximumLineBytes - line.Length)
+                        throw new InvalidDataException("root-agent frame exceeds size limit");
+                    line.Write(bytes, offset, count);
+                    offset += count;
+                    if (newline >= 0)
+                    {
+                        offset++;
+                        return Encoding.UTF8.GetString(line.GetBuffer(), 0, (int)line.Length).TrimEnd('\r');
+                    }
+                }
+            }
+            throw new EndOfStreamException("root-agent peer disconnected");
+        }
+
+        public byte[] ReadExact(int length)
+        {
+            byte[] data = new byte[length];
+            int copied = 0;
+            while (copied < length)
+            {
+                if (!Fill())
+                    throw new EndOfStreamException("root-agent payload was truncated");
+                int count = Math.Min(length - copied, end - offset);
+                Buffer.BlockCopy(bytes, offset, data, copied, count);
+                offset += count;
+                copied += count;
+            }
+            return data;
+        }
     }
 
     private static byte[] ReadAndRemoveSecret(string path)
