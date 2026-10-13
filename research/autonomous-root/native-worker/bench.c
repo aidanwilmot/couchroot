@@ -385,12 +385,31 @@ static void sample(const char *dll, const char *binary, const char *app,
     json_object_object_add(report, "parity", parity(native));
     json_object_object_add(report, "transfer", workload());
     json_object_object_add(report, "loaded_memory", memory(child));
-    double idlecpu = worker_cpu(child), idle = stamp();
-    usleep(1000000);
+    int64_t seconds = 1;
+    const char *setting = getenv("COUCHROOT_BENCH_IDLE_SECONDS");
+    if (setting && (!decimal(setting, &seconds) || seconds < 1 || seconds > 30))
+      fatal("idle window");
+    double idlecpu = worker_cpu(child), idle = stamp(), prior = idlecpu;
+    J *series = json_object_new_array();
+    for (int64_t i = 0; i < seconds; i++) {
+      usleep(1000000);
+      double now = worker_cpu(child);
+      json_object_array_add(series, json_object_new_double(now - prior));
+      prior = now;
+    }
     json_object_object_add(report, "idle_cpu_ms",
-                           json_object_new_double(worker_cpu(child) - idlecpu));
+                           json_object_new_double(prior - idlecpu));
     json_object_object_add(report, "idle_elapsed_ms",
                            json_object_new_double(stamp() - idle));
+    json_object_object_add(report, "idle_cpu_series_ms", series);
+    json_object_object_add(report, "settled_memory", memory(child));
+    if (seconds > 1) {
+      J *warm = json_object_new_array();
+      for (int i = 0; i < 3; i++)
+        json_object_array_add(warm, workload());
+      json_object_object_add(report, "warm_transfers", warm);
+      json_object_object_add(report, "warm_memory", memory(child));
+    }
   }
   char *bye = format("SHUTDOWN\t%d", ++sequence);
   sendframe(&w, bye);

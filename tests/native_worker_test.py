@@ -27,8 +27,9 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertTrue(self.receive().startswith('AUTH\t'))
     def tearDown(self):
         self.stream.close();self.sock.close();self.listener.close()
-        try:self.proc.communicate(timeout=3)
-        except subprocess.TimeoutExpired:self.proc.kill();self.proc.communicate()
+        try:_,stderr=self.proc.communicate(timeout=3)
+        except subprocess.TimeoutExpired:self.proc.kill();_,stderr=self.proc.communicate()
+        self.assertNotRegex(stderr.decode(errors='replace'), r'ERROR: AddressSanitizer|runtime error:|SUMMARY:')
         self.tmp.cleanup()
     def authenticated(self,payload):
         raw=payload.encode();return raw+b'\t'+hmac.new(self.secret,self.nonce+b'\0'+raw,hashlib.sha256).hexdigest().encode()+b'\n'
