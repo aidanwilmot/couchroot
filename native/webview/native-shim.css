@@ -1,0 +1,5 @@
+/* Native WebView bundle only. Until hub.js has rendered the saved Home, the
+ * static default markup stays transparent (still focusable): frames painted
+ * while the window is hidden can complete after readiness and must not show
+ * the default tiles. native-shim.js adds the class after the initial render. */
+html:not(.native-hub-rendered) main { opacity: 0; }

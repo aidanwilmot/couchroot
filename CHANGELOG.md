@@ -2,6 +2,51 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Native WebView: fix the intermittent QN90A startup crash (glibc heap
+  corruption while Chromium created its first browser context; about 24 s lost
+  per affected boot). The host now loads libpthread at startup instead of
+  receiving it later through EFL/Chromium's `dlopen` on glibc 2.30. Stress runs
+  on the TV: 0 crashes in 853 starts with it (idle, CPU-loaded, default engine),
+  51 in 290 without. The supervisor also records
+  every thread's stack while the firmware holds a crashing child.
+
+- Native WebView: return to the Hub when the TV wakes from standby on Live TV.
+  A cheap once-a-second display-state check detects screen-on and runs the Home
+  path (signed Hub handoff, re-arm, native Hub). Live TV opened deliberately with
+  the screen on is untouched. A changed saved source is re-armed immediately so a
+  quick power-off does not boot on Live TV. On QN90A, Hub was back about 5.6 s
+  after wake.
+
+- Native WebView: never present the static default tiles. Under QN90A boot load
+  a frame of the pre-script markup could finish after the Hub's readiness
+  message; 3 of 9 captured boots showed the default tiles for 70–180 ms. The
+  native bundle keeps that markup transparent until the saved Home renders, and
+  the host also waits for the page's presented first contentful paint.
+- Add WebView startup instrumentation (EFL, engine load, view, page milestones
+  with CPU, kernel time and page faults) and `minimal-hub-procsample` for private
+  process, memory and contention profiles. Profiling showed the 4.4–5.2 s cold
+  load of Samsung's Chromium 120 engine under saturated boot CPU dominates;
+  tested launcher-side changes did not reduce it and were not kept.
+
+- Keep the native WebView window hidden until page load and a subsequent rendered
+  frame, leaving the signed Hub visible during normal boot. Recheck the source,
+  foreground and display before showing it; do not interrupt a newly opened app.
+  The journaled launcher enables `COUCHROOT_WEBVIEW_DEFER_SHOW=1`.
+
+- Add the experimental QN90A native WebView launcher (`native/webview/`): shared
+  web UI on Chromium/EWK, verified engine selection, native app discovery/launch,
+  one-time native preference import, Home/source handling and bounded crash
+  supervision. The signed web package and S90D install path are unchanged.
+- Admit both normal and background boot modes to the native dispatch and its
+  monitor, fixing a normal-mode gap that suppressed web autostart but never
+  started native. On normal boot, wait for the display and hand the TV viewer
+  to the signed Hub before admitting WebView; cancel for another app or source.
+- Add first-boot recovery commands and fault tests. Dispatch watcher command text
+  through `sh -c` because this firmware rejects unsigned shell-script filenames;
+  serialize acceptance with hash-checked rollback. Deployment remains private
+  and journaled, not a new public setup default. See the WebView README for
+  hardware evidence and limitations.
+
 - Add the experimental native Hub (`native-hub/`, QN90A only). It is an Ecore/Evas
   launcher started from the earliest boot hook. QN90A software time to a rendered Hub
   is 8.8–10.1 s across five reboots; the best web path was about 37–47 s.
