@@ -290,3 +290,67 @@ Local validation: 220 Python tests, 104 Node tests, 20 telemetry tests, native
 failure-path tests on macOS and Linux, and the Linux root job/transfer harness
 passed. Both embedded TV builds and the source-only cross-path native/unsigned
 package builds reproduced. Public-source privacy and secret scans passed.
+
+## Buffered protocol reads
+
+The .NET worker uses one 64 KiB input buffer per connection for both protocol
+lines and legacy binary payloads. It scans each block for newlines and retains
+read-ahead bytes for the next frame or payload. Responses still write directly
+to the duplex socket. The 4 MiB line limit, authentication, transfer chunk size,
+digest checks and conditional-replacement rules are unchanged.
+
+The local harness covers single-byte fragmentation, coalesced frames, split UTF-8,
+CRLF, empty lines, exact-limit and oversized lines, truncated input, and binary
+payloads spanning multiple buffers between text frames. An instrumented stream
+rejects unbuffered byte reads and checks the number of block reads.
+
+### Upload benchmark — 2026-10-13
+
+Owner-authorized measurements compare agent 0.3.1 with buffered-reader 0.4.0
+(source `1a89d14`) on the existing QN90A and S90D profiles. Each version ran three
+8 MiB random-file uploads per TV using the existing client and 1 MiB chunks,
+followed by downloads whose SHA-256 matched the source. Timings include the full
+client operation, including transfer setup and commit; the same local payload was
+reused before and after each TV's update.
+
+| TV | Median upload before | Median upload after | Observed speedup | Upload after | Median download before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| QN90A | 37.93 s | 4.92 s | 7.72× | 1.63 MiB/s | 6.36 → 6.00 s |
+| S90D | 41.20 s | 4.70 s | 8.77× | 1.70 MiB/s | 5.05 → 5.64 s |
+
+Upload trial ranges were 35.79–39.05 s before and 4.44–6.05 s after on QN90A.
+S90D ranges were 39.44–41.58 s before and 4.00–6.53 s after.
+These are small before/after samples over the owner's network, not
+isolated CPU measurements or a throughput guarantee. Both TVs collected their
+baseline trials concurrently; updated-TV trials ran separately. Downloads did
+not show a consistent improvement. No client protocol, chunk-size or native-worker
+rewrite was required; the .NET worker and native app-user launcher are retained.
+
+### Buffered-reader hardware acceptance
+
+Signed version 0.4.0 passed the shared deployment and acceptance workflow on both
+TVs. All 22 installed package inventory entries, existing enrollment certificates,
+protected file hashes, enabled boot flags and restored loopback SDK setting were
+verified after full software reboots. Both journals were finalized only after
+these checks. Prior signed packages and raw evidence remain in private storage.
+
+Both TVs passed an 8 MiB + 123 byte transfer resumed after its first chunk,
+SHA-256-verified download, unaligned byte ranges, corrupt-chunk rejection, and
+conditional replacement with both wrong and matching current hashes. Root and
+app commands preserved quotes, Unicode, stdout, stderr and nonzero results.
+App execution and unsigned helper staging/release retained UID 5001, GID 100 and
+Smack `User`. Long jobs, bounded logs, cancellation, timeouts and stopped
+descendants also passed.
+
+After reboot, a different boot ID and ready root worker were observed at about
+70 seconds uptime on QN90A and 108 seconds on S90D. Post-boot checks repeated
+app execution, quoting, timeout and digest rejection, verified the protected
+native launcher, and completed another 1 MiB + 17 byte upload/download with a
+matching SHA-256. These are software reboot observations, not physical power-loss
+or firmware-upgrade acceptance.
+
+Local validation passed: 220 Python tests, 104 Node tests, 20 telemetry tests,
+the buffered-reader harness and Linux root job/transfer harness, both embedded
+TV build reproducibility checks, and all 42 source-only native assemblies plus
+the unsigned Hub package across build paths. Public-tree and outgoing-commit
+privacy/secret scans were clean.

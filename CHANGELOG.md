@@ -2,6 +2,12 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Autonomous root agent: buffer protocol input in the retained .NET worker,
+  preserving binary read-ahead and existing frame limits. Agent 0.4.0 reduced
+  measured median 8 MiB upload time by 7.7× on QN90A and 8.8× on S90D; both
+  passed transfer, app/helper, job and post-reboot acceptance. See
+  [benchmark and validation](research/autonomous-root/CAPABILITIES.md#buffered-protocol-reads).
+
 - Autonomous root agent: retain the .NET worker and use a signed, embedded native
   launcher for app commands and jobs. Verify its private read-only view, drop app
   credentials, clean the child environment/descriptors, and preserve quoted
