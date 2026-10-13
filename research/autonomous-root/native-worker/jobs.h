@@ -22,7 +22,6 @@ static pthread_t jobs_thread;
 static pthread_mutex_t jobs_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t jobs_changed = PTHREAD_COND_INITIALIZER;
 static char current_boot[80];
-static volatile sig_atomic_t stopping;
 static int job_identity(pid_t pid, char result[32]) {
   char path[64], buf[4096];
   snprintf(path, sizeof path, "/proc/%d/stat", pid);
@@ -155,7 +154,7 @@ static void *job_monitor(void *unused) {
   (void)unused;
   for (;;) {
     pthread_mutex_lock(&jobs_mutex);
-    int stop = jobs_stop || stopping;
+    int stop = jobs_stop;
     for (int i = 0; i < 16; i++) {
       Job *j = &jobs[i];
       if (!j->id[0] || j->finished)
@@ -256,9 +255,20 @@ static void jobs_init(void) {
     fatal("exclusive job ownership");
   readtext("/proc/sys/kernel/random/boot_id", current_boot,
            sizeof current_boot);
-  if (pthread_create(&jobs_thread, NULL, job_monitor, NULL))
+  /* Deliver lifecycle signals on the protocol thread only. Its foreground PID
+   * cannot be reaped concurrently with a signal handler targeting that PID. */
+  sigset_t blocked, previous;
+  sigemptyset(&blocked);
+  sigaddset(&blocked, SIGTERM);
+  sigaddset(&blocked, SIGINT);
+  sigaddset(&blocked, SIGALRM);
+  if (pthread_sigmask(SIG_BLOCK, &blocked, &previous))
+    fatal("supervisor signal mask");
+  int error = pthread_create(&jobs_thread, NULL, job_monitor, NULL);
+  if (!error)
+    jobs_started = 1;
+  if (pthread_sigmask(SIG_SETMASK, &previous, NULL) || error)
     fatal("job supervisor");
-  jobs_started = 1;
 }
 static void jobs_cleanup(void) {
   if (jobs_started) {

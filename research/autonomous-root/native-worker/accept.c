@@ -75,7 +75,9 @@ static void launch(void) {
     fatal("native mount namespace not isolated");
 }
 static void finish(int disconnect) {
-  if (disconnect)
+  if (disconnect == 2)
+    kill(child, SIGTERM);
+  else if (disconnect)
     shutdown(w.fd, SHUT_RDWR);
   else {
     char *bye = format("SHUTDOWN\t%d", ++sequence);
@@ -262,6 +264,14 @@ int main(int argc, char **argv) {
   cmd = format("test ! -e '%s/survivor'", filescope);
   command(cmd, 5000, 0, 0);
   free(cmd);
+  cmd =
+      format("(sleep .5; touch '%s/foreground-survivor') & exit 0", filescope);
+  command(cmd, 100, 124, 1);
+  free(cmd);
+  usleep(600000);
+  cmd = format("test ! -e '%s/foreground-survivor'", filescope);
+  command(cmd, 5000, 0, 0);
+  free(cmd);
   mark("timeout_cancel_during_foreground_and_no_survivor");
   discard(start_job(
       "native-output-001",
@@ -375,6 +385,27 @@ int main(int argc, char **argv) {
   for (size_t i = 0; i < sizeof jobs / sizeof *jobs; i++)
     discard(call(job_req("job.forget", jobs[i])));
   mark("restart_saved_status_no_replay_and_forget");
+  for (int mode = 0; mode <= 2; mode += 2) {
+    j = req("helper.prepare");
+    str(j, "path", source);
+    str(j, "sha256", sha);
+    r = call(j);
+    helper_path = strdup(textval(get(r, "result"), "path"));
+    discard(r);
+    discard(start_job("native-stop-job-01", "sleep 30", 60000, "root"));
+    finish(mode);
+    if (access(helper_path, F_OK) == 0)
+      fatal("helper survived worker stop");
+    free(helper_path);
+    launch();
+    r = call(job_req("job.status", "native-stop-job-01"));
+    if (strcmp(textval(get(r, "result"), "state"), "interrupted"))
+      fatal("job survived worker stop");
+    discard(r);
+    discard(call(job_req("job.forget", "native-stop-job-01")));
+    mark(mode == 0 ? "graceful_stop_cleans_active_job_and_helper"
+                   : "signal_stop_cleans_active_job_and_helper");
+  }
   finish(0);
   if (unlink(source))
     fatal("remove helper source");

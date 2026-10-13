@@ -168,6 +168,12 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertFalse(result['ok']);self.assertIn('unavailable',result['error'])
         self.assertEqual(path.read_bytes(),b'not executable')
         self.assertFalse(self.op('helper.prepare',path='/bin/true',sha256='0'*64)['ok'])
+    def test_foreground_exited_leader_keeps_group_owned(self):
+        marker=self.root/'escaped-child'
+        cmd=f'(sleep .5; touch {marker}) & exit 0'
+        self.seq+=1;self.send(f'EXEC\t{self.seq}\t100\t'+base64.b64encode(cmd.encode()).decode())
+        fields=self.receive().split('\t');self.assertEqual(fields[:4],['RESULT',str(self.seq),'124','1'])
+        time.sleep(.6);self.assertFalse(marker.exists())
     def test_truncated_upload_cannot_publish(self):
         id=self.begin(b'abc');self.seq+=1;self.send(f'OPWRITE\t{self.seq}\t{id}\t0\t3\t'+hashlib.sha256(b'abc').hexdigest(),b'a');self.sock.shutdown(socket.SHUT_WR)
         self.assertEqual(self.stream.read(),b'');self.proc.wait(timeout=3);self.assertNotEqual(self.proc.returncode,0);self.assertFalse((self.root/'file').exists());self.assertEqual(list(self.root.glob('.upload-*')),[])

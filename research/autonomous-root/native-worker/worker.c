@@ -9,7 +9,7 @@ typedef struct {
 static Transfer transfers[8];
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
-static pid_t active_child = 0;
+static volatile sig_atomic_t active_child = 0;
 static void release(Transfer *t) {
   if (t->fd >= 0)
     close(t->fd);
@@ -21,13 +21,16 @@ static void release(Transfer *t) {
 static void jobs_cleanup(void);
 static void helpers_cleanup(void);
 static void cleanup(void) {
+  if (active_child > 0) {
+    pid_t pid = active_child;
+    kill(-pid, SIGKILL);
+    kill(pid, SIGKILL);
+    active_child = 0;
+    while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {
+    }
+  }
   jobs_cleanup();
   helpers_cleanup();
-  if (active_child > 0) {
-    kill(-active_child, SIGKILL);
-    kill(active_child, SIGKILL);
-    waitpid(active_child, NULL, 0);
-  }
   for (int i = 0; i < 8; i++)
     release(&transfers[i]);
   if (directory >= 0)
@@ -173,11 +176,15 @@ static Result execute(const char *command, int timeout, int app) {
       kill(pid, SIGKILL);
     }
     if (!finished) {
-      pid_t w = waitpid(pid, &status, WNOHANG);
-      if (w == pid)
+      siginfo_t info;
+      memset(&info, 0, sizeof info);
+      if (waitid(P_PID, pid, &info, WEXITED | WNOHANG | WNOWAIT) < 0) {
+        if (errno != EINTR) {
+          active_child = 0;
+          fatal("waitid");
+        }
+      } else if (info.si_pid)
         finished = 1;
-      else if (w < 0 && errno != EINTR)
-        fatal("waitpid");
     }
     if (r.timed && stamp() > deadline + 2000)
       break;
@@ -207,11 +214,14 @@ static Result execute(const char *command, int timeout, int app) {
         fatal("pipe read");
     }
   }
-  if (!finished) {
-    while (waitpid(pid, &status, 0) < 0)
-      if (errno != EINTR)
-        fatal("wait");
-  }
+  /* Keep the leader waitable until its process group is killed; a reaped PID
+   * must never remain a cancellation target while descendants hold pipes. */
+  kill(-pid, SIGKILL);
+  kill(pid, SIGKILL);
+  active_child = 0;
+  while (waitpid(pid, &status, 0) < 0)
+    if (errno != EINTR)
+      fatal("wait");
   for (int i = 0; i < 2; i++)
     if (f[i].fd >= 0)
       close(f[i].fd);
@@ -251,15 +261,15 @@ static int verified_launcher(void) {
 #include "jobs.h"
 
 #include "helpers.h"
-static int signal_socket = -1;
+static volatile sig_atomic_t signal_socket = -1;
 static void stop_signal(int sig) {
   (void)sig;
-  stopping = 1;
   if (signal_socket >= 0)
     shutdown(signal_socket, SHUT_RDWR);
-  if (active_child > 0) {
-    kill(-active_child, SIGKILL);
-    kill(active_child, SIGKILL);
+  pid_t pid = active_child;
+  if (pid > 0) {
+    kill(-pid, SIGKILL);
+    kill(pid, SIGKILL);
   }
 }
 static J *operation(J *request, Wire *w, const char *seq) {
