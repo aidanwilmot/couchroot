@@ -88,6 +88,48 @@ static void containment_worker_stop(void) {
   }
 }
 static void containment_freeze(void) {
-  if (!freezer_write("freezer.state", "FROZEN"))
+  if (!freezer_write("freezer.state", "FROZEN")) {
     containment_failed = 1;
+    return;
+  }
+#ifndef NATIVE_WORKER_TEST
+  /* Older TV kernels retain killed tasks in a frozen cgroup. Wait until no
+   * member can fork, queue SIGKILL to every member, then thaw so exit can run.
+   * The exclusive private leaf, not persisted PIDs, establishes ownership. */
+  double deadline = stamp() + 2000;
+  for (;;) {
+    char state[32] = {0};
+    int fd = openat(freezer_dir, "freezer.state", O_RDONLY | O_CLOEXEC);
+    ssize_t n = fd < 0 ? -1 : read(fd, state, sizeof state - 1);
+    if (fd >= 0)
+      close(fd);
+    if (n > 0 && !strncmp(state, "FROZEN", 6))
+      break;
+    if (n < 0 || stamp() > deadline) {
+      containment_failed = 1;
+      return;
+    }
+    usleep(1000);
+  }
+  int fd = openat(freezer_dir, "cgroup.procs", O_RDONLY | O_CLOEXEC);
+  FILE *members = fd < 0 ? NULL : fdopen(fd, "r");
+  if (!members) {
+    if (fd >= 0)
+      close(fd);
+    containment_failed = 1;
+    return;
+  }
+  long member;
+  int good = 1;
+  while (fscanf(members, "%ld", &member) == 1) {
+    if (member < 1 || member > INT_MAX ||
+        (kill((pid_t)member, SIGKILL) && errno != ESRCH))
+      good = 0;
+  }
+  if (ferror(members) || !feof(members))
+    good = 0;
+  fclose(members);
+  if (!good || !freezer_write("freezer.state", "THAWED"))
+    containment_failed = 1;
+#endif
 }
