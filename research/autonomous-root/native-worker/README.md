@@ -224,6 +224,33 @@ stages its own launcher and reports `stale_guardian_reconciled: true`. Duplicate
 job IDs still cannot replay commands. This is recovery on the next explicit
 launch, not a new service restart mechanism or a replacement for .NET.
 
+## Startup-checkpoint validation — 2026-10-13
+
+Revision `1f5d770` passed 38 distinct extended acceptance checks (42 rows) on
+both QN90A and S90D. Eleven new scenarios exit abruptly before opening a command
+channel: namespace and runtime checkpoints; empty, first-write and fully copied
+launcher files; staged launcher; contained and ready checkpoints; and each of the
+three complete journal updates before rename. The next launch recovered each
+case, removed the old runtime/freezer resources and successfully ran an app-user
+job. The ordinary build excludes the startup fault-control environment variable.
+
+All 34 native host tests passed under AddressSanitizer and
+UndefinedBehaviorSanitizer on Linux ARM64, including schema-2 compatibility and
+rejection of mismatched successor identities and bindings. The repository suite
+passed 226 tests with 34 native tests skipped by that runner. The native source
+manifest matches the on-TV builds. Both observed kernel windows had zero
+crash-collector wait or worker executable dump lines. Final cleanup verified the
+original .NET workers, boot identities, protected files, mounts and cgroup
+memberships unchanged, with all owned test resources removed. Neither TV was
+rebooted. Sanitized evidence is in
+[startup-recovery-results.json](startup-recovery-results.json).
+
+This covers durable checkpoints and complete interrupted journal updates.
+Creation-before-binding windows and truncated journals still require inspection;
+production integration, storage-failure qualification, longer endurance runs,
+compatibility decisions and updated whole-process performance measurements remain
+open. Cross-boot testing remains deferred under the no-reboot constraint.
+
 ## Guardian-loss validation — 2026-10-13
 
 The worker and acceptance harness from `5a4f69c` passed on QN90A and S90D.
