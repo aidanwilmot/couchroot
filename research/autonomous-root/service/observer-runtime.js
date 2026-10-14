@@ -72,7 +72,7 @@ async function prepareRuntimeObserver({directory,requestId,staged,bound,confirm,
  if(!bound||!bound.processes||bound.processes.guardian)throw Error('Managed observer probe requires a single worker');
  const credentials=await serviceCredentials(execute,bound.boot_id);
  const journal=journalDirectory(directory);
- const unitOptions=unit=>({unit,bootId:bound.boot_id,execute});
+ const unitOptions=unit=>({unit,bootId:bound.boot_id,execute,sha256:staged.sha256});
  return prepareSupervisedExit({device:'s90d',id,directory,journalDirectory:journal,credentials,
   binary:staged.binary,sha256:staged.sha256,manifestSha256:staged.manifest_sha256,bound,execute,
   confirm:async()=>{

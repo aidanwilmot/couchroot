@@ -6,6 +6,7 @@ async function fixture(fn){const journalDirectory=fs.mkdtempSync('/tmp/cr-launch
 test('launch plan restricts identity artifact and transport and parses as shell',()=>{
  const plan=launchPlan(options());assert.equal(plan.unit,'couchroot-observer-'+'a'.repeat(32)+'.service');
  assert.match(plan.command,/--service-supervise/);assert.doesNotMatch(plan.command,/\/proc\/self\//);assert.match(plan.command,/NoNewPrivileges=yes/);assert.match(plan.command,/User=0/);assert.match(plan.command,/SmackProcessLabel=System/);assert.doesNotMatch(plan.command,/SupplementaryGroups=/);assert.doesNotMatch(plan.command,/\/bin\/sh -c/);assert.match(plan.command,/AmbientCapabilities=/);assert.match(plan.command,/201:1:755/);
+ assert.match(plan.command,/PrivateMounts=yes/);assert.match(plan.command,/BindReadOnlyPaths=\/opt\/couchroot-observer-/);assert.equal(plan.executionDirectory,'/opt/couchroot-observer-'+'a'.repeat(32));
  assert.deepEqual(plan.credentials.groups,[29,100,201]);
  const parsed=spawnSync('/bin/sh',['-n'],{input:plan.command,encoding:'utf8'});assert.equal(parsed.status,0,parsed.stderr);
  for(const patch of [{device:'qn90a'},{id:'a'.repeat(32)+'\n'},{sha256:'b'.repeat(64)+'\n'},{manifestSha256:'c'.repeat(64)+'\n'},{binary:'/tmp/observer'},{credentials:{...options().credentials,uid:0}},{credentials:{...options().credentials,label:'System'}},{credentials:{...options().credentials,groups:[0,100]}}])assert.throws(()=>launchPlan({...options(),...patch}));

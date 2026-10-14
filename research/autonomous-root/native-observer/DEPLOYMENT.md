@@ -349,3 +349,61 @@ change across capture. It requires the package label and zero capabilities for
 both controller and supervisor. Tests distinguish process and task IDs, reject
 privileged broker records, and reject thread changes. All 62 focused Linux tests
 pass; installed qualification of this thread-bound correction remains open.
+
+## Independent execution view — 2026-10-14
+
+The 0.7.8 S90D probe passed the thread credential gate, but systemd returned
+`203/EXEC`. Kernel evidence identifies a packaged-ELF signature rejection before
+native code execution. A separate copied-artifact diagnostic, with the same
+SHA-256, successfully entered the observer argument parser using a unit-owned
+`PrivateMounts=yes` / `BindReadOnlyPaths=` view. This distinguishes an execution
+path failure from a native observer crash.
+
+Submission now records the deterministic execution directory before mutation,
+creates an exclusive root-owned copy, verifies its digest and permissions, and
+lets the systemd unit own its read-only view. It does not depend on the observed
+worker's mount namespace. Retirement verifies successful supervisor completion,
+stops the unit, verifies termination, and removes only the expected digest-bound
+copy and empty directory. Unknown submissions retain the journal and staging for
+reconciliation. The failed 0.7.8 launch and diagnostic were explicitly retired;
+owned temporary files were removed, and original request evidence was retained.
+The broader controller, launch, runtime, socket and retirement suite passes all
+40 cases in Linux, with no skips.
+
+On 0.7.9 the service validated the external supervisor credentials, reached
+readiness, cancelled the observer, and archived its native termination receipt.
+The retirement command stopped the unit but rejected its response before removing
+staging. Independent inspection confirmed the unit absent with MainPID zero;
+checkpoint-bound files were then reconciled and removed. The exact failing check
+was not captured, and isolated on-device retirement diagnostics passed. Retirement
+now checks all stopped-unit properties in one snapshot and reports a bounded
+failure-stage identifier. A transient state-read race remains a hypothesis, not
+an established cause. Installed qualification of that correction is pending.
+
+The first 0.7.10 probe completed the entire external lifecycle with the managed
+worker and boot unchanged. Its repeat identified the retirement failure as a
+command timeout (exit 124). After that timeout, independent inspection found the
+unit absent with MainPID zero and the checkpoint still at `cleanup-verified`.
+A separate synchronous recovery-timer stop also timed out although both timers
+were inactive afterward. The lower-level reason the synchronous systemctl wait
+stalls is not established; the command must not be replayed on that evidence.
+
+Retirement now submits one `systemctl stop --no-block` and performs bounded,
+read-only stopped-state observations before deleting the hash-bound staging.
+Three fresh on-device unit-retirement diagnostics completed successfully with
+this path. Unknown acknowledgement, invalid evidence, or a unit that remains
+active still retains the transaction for reconciliation. This changes neither
+worker selection nor the successful-termination requirement. The 40 Linux tests
+pass without skips, including shell execution against complete, incomplete,
+duplicate and still-active unit snapshots.
+
+Version 0.7.11 was installed on S90D without reboot. Two consecutive full service
+probes passed with the same managed worker and boot: package-thread credential
+capture, copied execution view, exact supervisor profile, authenticated observer
+binding, cancellation receipt, non-blocking unit retirement, listener/staging
+removal, and pending-marker release. The repeat completed in 1.083 seconds.
+Recovery timers were independently verified inactive and the SDK host restored.
+QN90A remained on its established managed fallback; its proc-stat probe passed in
+0.156 seconds with worker and boot unchanged. These results qualify the
+non-stopping observer path only. Post-worker-exit execution and full native
+selection/migration remain separate gates; .NET is still the deployed fallback.

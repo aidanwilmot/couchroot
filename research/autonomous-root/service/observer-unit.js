@@ -22,17 +22,33 @@ async function inspectObserverUnit({unit,bootId,execute}){
  return {unit,boot_id:bootId,active_state:values.ActiveState,sub_state:values.SubState,main_pid:pid,exec_code:code,exec_status:status,started_monotonic:values.ExecMainStartTimestampMonotonic};
 }
 async function retireObserverUnit(options){
- const {unit,bootId,execute}=options;
+ const {unit,bootId,execute,sha256}=options;
+ if(typeof sha256!=='string'||sha256.length!==64||!/^[a-f0-9]+$/.test(sha256))throw Error('Invalid observer staged artifact digest');
+ const directory='/opt/'+unit.slice(0,-8),binary=directory+'/observer';
  const evidence=await inspectObserverUnit(options);
  require('./observer-controller').terminationEvidence(evidence,{unit,boot_id:bootId});
  const guard='test "$(cat /proc/sys/kernel/random/boot_id)" = '+bootId+'\n';
  const command='set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+guard+
-  'systemctl stop '+unit+'\n'+
-  'state=$(systemctl show -p LoadState '+unit+')\n'+
-  'if test "$state" = LoadState=loaded; then test "$(systemctl show -p ActiveState '+unit+')" = ActiveState=inactive; test "$(systemctl show -p MainPID '+unit+')" = MainPID=0; else test "$state" = LoadState=not-found; fi\n'+guard+
+  'step=stop\ntrap \'result=$?; if test "$result" -ne 0; then printf "OBSERVER-RETIRE-FAILED:%s\\n" "$step" >&2; fi\' EXIT\n'+
+  'systemctl stop --no-block '+unit+'\nstep=state\nretired=0\n'+
+  'for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do\n'+
+  'state=$(systemctl show -p LoadState -p ActiveState -p MainPID '+unit+')\n'+
+  'test "$(printf "%s\\n" "$state" | wc -l)" -eq 3\n'+
+  'printf "%s\\n" "$state" | grep -qx "LoadState=\\(loaded\\|not-found\\)"\n'+
+  'if printf "%s\\n" "$state" | grep -qx ActiveState=inactive && printf "%s\\n" "$state" | grep -qx MainPID=0; then retired=1; break; fi\n'+
+  'sleep 0.1\ndone\ntest "$retired" = 1\n'+guard+
+  'step=artifact\n'+
+  'test -d '+directory+'; test ! -L '+directory+'\n'+
+  'test "$(stat -c "%u:%a" '+directory+')" = 0:700\n'+
+  'test -f '+binary+'; test ! -L '+binary+'\n'+
+  'test "$(stat -c "%u:%h:%a" '+binary+')" = 0:1:500\n'+
+  'test "$(sha256sum '+binary+' | cut -d " " -f 1)" = '+sha256+'\n'+
+  'test "$(find '+directory+' -mindepth 1 -maxdepth 1 | wc -l)" -eq 1\n'+
+  'step=remove\n'+
+  'rm '+binary+'\nrmdir '+directory+'\n'+guard+
   'printf "OBSERVER-UNIT-RETIRED\\n"\n';
  const r=await execute(command,5000);
- if(!r||r.exit_code!==0||r.timed_out||r.stdout!=='OBSERVER-UNIT-RETIRED\n')throw Error('Observer unit retirement requires reconciliation');
+ if(!r||r.exit_code!==0||r.timed_out||r.stdout!=='OBSERVER-UNIT-RETIRED\n')throw Error('Observer unit retirement requires reconciliation: '+(r&&r.timed_out?'timeout':r&&typeof r.stderr==='string'&&r.stderr.match(/OBSERVER-RETIRE-FAILED:([a-z]+)/)?r.stderr.match(/OBSERVER-RETIRE-FAILED:([a-z]+)/)[1]:'response')+' (exit '+(r?r.exit_code:'missing')+')');
  return {unit,boot_id:bootId,retired:true};
 }
 module.exports={inspectObserverUnit,retireObserverUnit};
