@@ -3,6 +3,7 @@
 #include "common.h"
 #include "fault-events.h"
 #include "progress.h"
+#include "request-io.h"
 #include <dirent.h>
 #include <pthread.h>
 typedef struct {
@@ -184,14 +185,14 @@ static J *writechunk(const char *id, int64_t offset, const unsigned char *data,
     return failure("Offset conflict");
   size_t at = 0;
   while (at < length) {
-    ssize_t n = pwrite(t->fd, data + at, length - at, offset + at);
+    ssize_t n = request_pwrite(t->fd, data + at, length - at, offset + at);
     if (n < 0 && errno == EINTR)
       continue;
     if (n <= 0)
       return failure("Chunk write failed; inspect offset");
     at += n;
   }
-  if (fsync(t->fd))
+  if (request_sync(t->fd))
     return failure("Chunk flush failed; inspect offset");
   J *j = obj();
   num(j, "offset", offset + length);
@@ -333,7 +334,7 @@ static int verified_launcher(void) {
   struct stat s;
   char actual[65];
   int good = !fstat(fd, &s) && S_ISREG(s.st_mode) && s.st_uid == 0 &&
-             !(s.st_mode & 022) && filedigest(fd, actual) &&
+             !(s.st_mode & 022) && request_filedigest(fd, actual) &&
              !strcmp(actual, launcher_sha);
   close(fd);
   return good;
@@ -563,7 +564,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
       release(t);
       return failure("Cannot open transfer");
     }
-    if (!regular(t->fd, &size) || (!upload && !filedigest(t->fd, t->sha))) {
+    if (!regular(t->fd, &size) || (!upload && !request_filedigest(t->fd, t->sha))) {
       release(t);
       return failure("Not a bounded regular file");
     }
@@ -616,7 +617,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     unsigned char *data = allocate((size_t)length);
     size_t at = 0;
     while (at < (size_t)length) {
-      ssize_t n = pread(t->fd, data + at, (size_t)length - at, offset + at);
+      ssize_t n = request_pread(t->fd, data + at, (size_t)length - at, offset + at);
       if (n < 0 && errno == EINTR)
         continue;
       if (n <= 0) {
@@ -639,7 +640,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     int64_t size;
     char actual[65];
     if (!t->upload || !regular(t->fd, &size) || size != t->size ||
-        !filedigest(t->fd, actual) || strcmp(actual, t->sha))
+        !request_filedigest(t->fd, actual) || strcmp(actual, t->sha))
       return failure("Upload digest or size mismatch");
     if (!file_parent_unchanged(t))
       return failure("Upload parent changed; retained for inspection");
@@ -650,7 +651,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     } else {
       int fd = openat(parent, t->name,
                       O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
-      int good = fd >= 0 && regular(fd, &size) && filedigest(fd, actual) &&
+      int good = fd >= 0 && regular(fd, &size) && request_filedigest(fd, actual) &&
                  !strcmp(actual, t->expected);
       if (fd >= 0)
         close(fd);

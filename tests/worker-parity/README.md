@@ -76,3 +76,29 @@ above. An ordinary host build needs only `-DNATIVE_WORKER_TEST` for host platfor
 substitutions; these checks need no fault controls. The 315-second check crosses
 the old worker and guardian expiry thresholds; accepting a 24-hour job timeout
 and cancelling it is not a completed 24-hour job qualification.
+
+## Slow-storage checks
+
+`native_io_progress_test.py` runs the ordinary host worker with a separate
+`LD_PRELOAD` fixture that delays selected local-file syscalls. It exercises slow
+hashing and range reads, partial upload writes, blocked reads/flushes, repeated
+EINTR, concurrent file-size changes, and a sparse file at the 2 GiB limit. Delays
+cross the real 30-second grace; the suite takes several minutes. The fixture is
+only in `tests/native-io/delay.c` and is never part of the TV build.
+
+Inside the isolated container described above, build and run:
+
+```sh
+cc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function \
+  -DNATIVE_WORKER_TEST /repo/research/autonomous-root/native-worker/worker.c \
+  -ldl -pthread -o /out/worker-io
+cc -std=c99 -O2 -Wall -Wextra -Werror -shared -fPIC \
+  /repo/tests/native-io/delay.c -ldl -o /out/delay.so
+NATIVE_WORKER=/out/worker-io NATIVE_IO_DELAY=/out/delay.so \
+  COUCHROOT_PARITY_CONTAINER=1 python3 -m unittest discover \
+  -s tests -p native_io_progress_test.py -v
+```
+
+These checks do not reproduce TV storage or Smack helper staging. Startup before
+guardian activation and durable job-record writes retain their existing bounds;
+this is request-side storage progress, not a new storage or startup supervisor.

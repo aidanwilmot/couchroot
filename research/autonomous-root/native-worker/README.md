@@ -115,8 +115,13 @@ frame is idle. Bounded experiments retain their socket/lifetime limits. Producti
 mode waits indefinitely for the first byte of a request, then applies the active
 progress lease; individual socket reads/writes and the initial handshake have a
 30-second timeout. Buffered frames are processed without another socket wait.
-File operations and
-blocked writes must complete within the progress grace. The job monitor wakes
+Completed storage reads, writes, digest blocks and flushes refresh the request
+lease. Hashing, transfer I/O and helper/launcher copies can therefore exceed the
+grace while making progress. EOF, failures and interrupted calls do not refresh
+it; a blocked syscall remains subject to the grace. Hashing is bounded by the
+initial regular-file size and refuses a size change, so a growing file cannot
+extend it indefinitely. Same-size concurrent writes still require external
+writers to be quiesced. Wire parsing does not use storage progress notifications. The job monitor wakes
 periodically even with an empty queue. A stalled lease triggers the same isolated
 cleanup, recording `active-request-stalled` or `job-monitor-stalled`; a missing
 pulse records `heartbeat-lost`. This does not supervise a stalled guardian.

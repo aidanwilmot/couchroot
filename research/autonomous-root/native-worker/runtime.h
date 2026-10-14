@@ -109,7 +109,7 @@ static void launcher_stage(const char *source) {
   if (fd < 0 || fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
       (st.st_mode & 022) || st.st_size < 52 || st.st_size > CHUNK ||
       pread(fd, header, sizeof header, 0) != (ssize_t)sizeof header ||
-      !filedigest(fd, digest_value) || strcmp(digest_value, launcher_sha))
+      !request_filedigest(fd, digest_value) || strcmp(digest_value, launcher_sha))
     fatal("launcher source integrity");
   if (memcmp(header, "\177ELF", 4))
     fatal("launcher source ELF");
@@ -131,19 +131,19 @@ static void launcher_stage(const char *source) {
   unsigned char bytes[65536];
   off_t copied = 0;
   while (copied < st.st_size) {
-    ssize_t n = read(fd, bytes, sizeof bytes);
+    ssize_t n = request_read(fd, bytes, sizeof bytes);
     if (n < 0 && errno == EINTR)
       continue;
-    if (n <= 0 || copied + n > st.st_size || !job_write(target, bytes, n))
+    if (n <= 0 || copied + n > st.st_size || !request_write(target, bytes, n))
       fatal("launcher copy");
     copied += n;
     startup_fault("launcher-partial-copy");
   }
   startup_fault("launcher-copy");
   close(fd);
-  if (!filedigest(target, digest_value) || strcmp(digest_value, launcher_sha) ||
-      fchmod(target, 0500) || helper_label(target) || fsync(target) ||
-      fsync(dir))
+  if (!request_filedigest(target, digest_value) || strcmp(digest_value, launcher_sha) ||
+      fchmod(target, 0500) || helper_label(target) || request_sync(target) ||
+      request_sync(dir))
     fatal("launcher staging integrity");
   close(target);
   close(dir);

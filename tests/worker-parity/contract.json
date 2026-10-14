@@ -136,7 +136,8 @@
     "legacy_unknown_records": "Imported same-boot uncertain jobs stay unknown. Import is not evidence that descendants were reaped.",
     "extra_fields": "Native diagnostics are additive; only documented generated fields and per-operation additions may be normalized.",
     "special_upload_destination": "Native rejects existing non-regular upload destinations at begin rather than allowing a staging file first.",
-    "interrupted_forget": "Native permits forgetting a terminal interrupted record on the same boot; managed permits fewer same-boot terminal states."
+    "interrupted_forget": "Native permits forgetting a terminal interrupted record on the same boot; managed permits fewer same-boot terminal states.",
+    "hash_size_change": "Native hashes only the initial regular-file size and refuses a changed size instead of following a growing file to EOF. Same-size external writes still require writer quiescence."
   },
   "remaining_integration_gates": [
     "production capability advertisement",

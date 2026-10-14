@@ -180,26 +180,42 @@ static void digest(const void *p, size_t n, char out[65]) {
     fatal("digest update");
   digest_finish(m, out);
 }
-static int filedigest(int fd, char out[65]) {
+static int filedigest_progress(int fd, char out[65], void (*progress)(void)) {
   unsigned char b[65536];
+  struct stat before, after;
+  if (fstat(fd, &before) || !S_ISREG(before.st_mode) || before.st_size < 0 ||
+      before.st_size > LIMIT)
+    return 0;
   off_t at = 0;
   void *m = digest_start();
-  for (;;) {
-    ssize_t n = pread(fd, b, sizeof b, at);
+  /* Bound work to the initial file size. A growing file must not turn progress
+   * notifications into an unbounded request. In-place edits still require the
+   * caller to quiesce external writers; this is not a snapshot guarantee. */
+  while (at < before.st_size) {
+    size_t wanted = before.st_size - at > (off_t)sizeof b
+                        ? sizeof b : (size_t)(before.st_size - at);
+    ssize_t n = pread(fd, b, wanted, at);
     if (n < 0 && errno == EINTR)
       continue;
-    if (n < 0) {
+    if (n <= 0) {
       md_free(m);
       return 0;
     }
-    if (!n)
-      break;
     if (!md_update(m, b, n))
       fatal("digest update");
     at += n;
+    if (progress)
+      progress();
+  }
+  if (fstat(fd, &after) || after.st_size != before.st_size) {
+    md_free(m);
+    return 0;
   }
   digest_finish(m, out);
   return 1;
+}
+static int filedigest(int fd, char out[65]) {
+  return filedigest_progress(fd, out, NULL);
 }
 static char *base64(const void *v, size_t n) {
   static const char a[] =

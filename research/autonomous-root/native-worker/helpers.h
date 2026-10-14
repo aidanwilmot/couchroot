@@ -237,10 +237,10 @@ static J *helper_operation(J *request, const char *op) {
     size_t wanted = st.st_size - copied > (off_t)sizeof buf
                         ? sizeof buf
                         : (size_t)(st.st_size - copied);
-    ssize_t n = read(source, buf, wanted);
+    ssize_t n = request_read(source, buf, wanted);
     if (n < 0 && errno == EINTR)
       continue;
-    if (n <= 0 || !job_write(target, buf, n)) {
+    if (n <= 0 || !request_write(target, buf, n)) {
       ok = 0;
       break;
     }
@@ -248,9 +248,9 @@ static J *helper_operation(J *request, const char *op) {
   }
   char actual[65];
   if (ok)
-    ok = filedigest(target, actual) && !strcmp(actual, sha) &&
-         !fchmod(target, 0555) && !helper_label(target) && !fsync(target) &&
-         !fsync(dir);
+    ok = request_filedigest(target, actual) && !strcmp(actual, sha) &&
+         !fchmod(target, 0555) && !helper_label(target) && !request_sync(target) &&
+         !request_sync(dir);
   close(source);
   if (target >= 0)
     close(target);

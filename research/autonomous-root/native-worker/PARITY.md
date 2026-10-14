@@ -140,3 +140,35 @@ A 24-hour job deadline was accepted and the job explicitly cancelled; no claim i
 made that a job completed 24 hours of execution. Slow-storage progress, integrated
 service selection, both-TV lifetime/endurance checks and power lifecycle remain
 open. No TV was contacted, restarted or switched during this follow-up.
+
+## Subsequent local storage-progress validation — 2026-10-14
+
+Successful request-side storage reads, writes, digest blocks and flushes refresh
+the main-thread progress lease. Transfers and helper/launcher copy paths use
+these notifications; the monitor and guardian never refresh the main lease on
+behalf of blocked I/O. Failed operations, EOF and repeated EINTR do not count as
+progress. A single blocked syscall still expires under the existing watchdog.
+Hashing stops at the initial regular-file size (at most 2 GiB) and refuses changed
+sizes, rather than following a growing file indefinitely. This does not detect
+all same-size external writes or provide a filesystem snapshot; writers still
+must be quiesced. The contract records the size-change behavior explicitly.
+
+The final ordinary host build passed seven isolated storage tests in 197.639
+seconds: slow hashing and byte-range download, partial slow upload followed by
+exact publication, blocked hash read, blocked flush without publication,
+repeated EINTR, file growth/shrink during hashing, and sparse 2 GiB hashing plus
+boundary range reads and oversize refusal. Slow successful operations crossed
+30 seconds; stalled cases terminated the worker and its owned job within the
+38-second test bound. The delay fixture is a separate host-only shared library,
+not compiled into any TV artifact.
+
+The final source also passed all 61 existing native/file/differential tests under
+ASAN/UBSAN and ordinary/fault-test ARMv7 builds. Four short lifetime checks passed
+during this change; the earlier 315-second lifetime qualification was not repeated.
+No TV was contacted or modified, and .NET remains deployed.
+
+This closes the worker-side file progress gap, not integrated storage qualification.
+The service's 30-second OP response budget, client deadlines, job-record flush
+latency under its mutex, startup before guardian activation, actual TV storage,
+Smack helper staging and long-running endurance remain separate integration and
+qualification work. No request is automatically replayed after a timeout.

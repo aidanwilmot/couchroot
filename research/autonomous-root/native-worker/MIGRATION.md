@@ -121,7 +121,12 @@ error classification and side effects. Additional native diagnostics may be addi
 Phase-one implementation status is recorded in [PARITY.md](PARITY.md): the
 contract and differential harness, opt-in production file access and offline
 retained-job import/export are implemented. Live state installation and worker
-selection are still gated on the later packaging/rollback work below.
+selection are still gated on the later packaging/rollback work below. Local follow-ups
+add explicit production lifetime and request-side storage progress. The service's
+current 30-second OP response timeout remains a separate integration constraint;
+worker-only slow-I/O success does not establish end-to-end large-operation support.
+Reconcile service/client deadlines and unknown-outcome handling in the integrated
+contract tests before advertising that support.
 
 ### 1 Freeze the compatibility contract
 
