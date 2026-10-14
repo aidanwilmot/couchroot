@@ -901,3 +901,35 @@ It labels both TV profiles as candidates, sets `device_qualified=false`, and
 records managed selection. Preparing a candidate does not establish that device
 libraries, source staging, live migration or rollback work. Those remain the
 service-selection and device-qualification gates in `MIGRATION.md`.
+
+## Focused handoff observation qualification
+
+`COUCHROOT_NATIVE_HANDOFF_ONLY=1` selects a short ordinary-worker acceptance run
+in explicit production lifetime mode. Supply `COUCHROOT_TEST_OBSERVER_PID` for the
+installed agent service; the controller verifies its executable path, stable
+process identity, UID/GID, groups, label and expected effective capabilities before
+forking a matching observer. It never changes the installed service. The probe
+closes its inherited authenticated socket and clears the key before dropping
+credentials. Only the test controller contains this identity-matching code.
+
+The default probe reads boot and process start ticks with `O_NOFOLLOW`. On S90D,
+this correctly fails with EACCES. `COUCHROOT_TEST_OBSERVER_MODE=pidfd` instead
+binds kernel process handles while both processes are alive, obtains a fresh
+worker reply and checks that the controller still owns the live guardian child,
+then waits for both handles to report exit. No unreadable stat file is treated as
+process absence. This is a test of a production-backend prerequisite, not an
+already integrated service pidfd bridge. The probe is bounded and never signals
+the observed processes.
+
+The run covers initial/upload/helper/running/drained inventories, app helper
+identity and release, exact BYE plus disconnect, worker/guardian exit, retained
+outcomes, and owned runtime/journal/freezer cleanup. The deployed .NET worker stays
+active. Use the existing enrolled APIs, per-device locks, firmware guards, private
+intent/results, unique scopes and explicit cleanup described above. Do not run a
+controller directly against an installed worker or its live state directory.
+
+Both TVs passed six focused checks and five inventory phases using the ordinary
+worker from `cced593`. QN90A used proc-stat observations; S90D used pidfds after two
+known-failed, fully cleaned diagnostic trials. One final shutdown sample per TV
+was 112 ms and 32 ms respectively, not a timing distribution or an endurance gate.
+See [handoff results](handoff-results.json) for scope and evidence limitations.

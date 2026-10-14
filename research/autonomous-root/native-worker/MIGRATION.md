@@ -188,8 +188,17 @@ acknowledgement/disconnect and independently observes original process identitie
 exiting. It leaves selection pending and admission held. Detached work, retained
 resources and state installation still require reconciliation; process exit alone
 does not establish the full transition gate.
-The runtime controller, live
-state installation/rollback and real-device candidate acceptance are still required; this is not phase-three completion.
+Focused ordinary-sidecar checks now pass on both TVs, with a discovered integration
+constraint: S90D's service identity receives EACCES reading root process stat files.
+The direct observer must remain fail-closed there. A matching service-identity
+probe successfully bound and polled pidfds across shutdown on S90D; QN90A's older
+kernel passed the existing proc-stat approach. See `handoff-results.json` and
+`PARITY.md`. Package and integrate the pidfd bridge before enabling S90D handoff.
+Bind handles before a fresh authenticated identity confirmation; the test controller
+owns the guardian child, while a production bridge needs an equivalent fresh
+guardian-identity check. A bare PID or an unreadable stat file is insufficient.
+The runtime controller, live state installation/rollback and actual service
+integration remain required; this is not phase-three completion.
 
 Package ordinary worker, guardian functionality and app launcher from reproducible
 source builds. Do not ship fault-control operations or depend on a copied binary

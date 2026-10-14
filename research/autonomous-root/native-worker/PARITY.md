@@ -438,3 +438,53 @@ or install live state, commit native selection, or reconcile arbitrary detached
 managed descendants, mounts or ambiguous saved outcomes. Process disappearance
 alone is insufficient for those gates. TV service `/proc` access and the complete
 journal-bound stop path need qualification on both devices before live use.
+
+## Ordinary candidate handoff probes on both TVs — 2026-10-14
+
+The exact ordinary candidate worker from `cced593` (SHA-256
+`e17dee11cd459ce51e0f3f742b27cef624d352d4cf4c9232500f5553d7714009`)
+ran as an isolated sidecar on both TVs. The final controller passed six checks
+and five inventory phases on each: initial empty resources, an open upload,
+a staged helper, a running job, and completed jobs with transfers/helpers released.
+The app helper reported UID/EUID 5001, GID 100 and User label. Both completed job
+outcomes survived shutdown; the controller then removed only its owned fixtures.
+No pre-existing managed jobs were migrated. Owned test jobs were created through
+the existing managed API and explicitly forgotten after private evidence capture.
+
+A new prerequisite was discovered rather than waived. QN90A's service uses User
+with additional effective capabilities and can read native process stat files.
+S90D's service uses its package label without those capabilities and gets EACCES
+(errno 13). Two known-failed diagnostic trials confirmed the denial, then verified
+that their native processes and resources had been cleaned. The production
+JavaScript direct observer already rejects this failure before submitting shutdown;
+it must remain disabled for S90D handoff until an appropriate backend is integrated.
+
+S90D's 5.4 kernel permits pidfd_open and exit polling from a process matching its
+service UID/GID, supplementary groups, label and effective capabilities. The final
+probe bound both live native process handles, confirmed identity with a fresh
+worker reply and the controller's owned guardian child, and observed both handles
+signal exit after shutdown. QN90A's 4.1 kernel used the original stat observations.
+These are separate probes matching the service's credentials, not new JavaScript
+running in the installed wrt-service instance. Production pidfd packaging, launch,
+identity binding and service integration remain open. In particular, the service
+cannot borrow the controller's waitpid ownership of the guardian; it needs an
+equivalent fresh identity check before trusting a bound handle.
+
+The final ordinary controller waited for exact BYE plus disconnect, successful
+guardian termination, and removal of the staged launcher, guardian journal and
+private freezer group. The single final shutdown/cleanup samples were 112 ms on
+QN90A and 32 ms on S90D. These are warm sidecar samples, not acquisition timings,
+a recovery-tail distribution, 24-hour job coverage or an endurance qualification.
+
+Final verification on both TVs confirmed unchanged deployed .NET worker/PID/boot,
+launcher bytes, protected files, execution mounts and original cgroup membership.
+All uploaded test artifacts, helper views, private scopes and test jobs were
+cleaned. Neither TV was rebooted, and no installed package or service configuration
+was changed. Raw logs and identities remain private. The sanitized evidence is
+[handoff-results.json](handoff-results.json).
+
+Full before/after kernel ring snapshots retained exact overlaps of 5668 lines on
+QN90A and 6015 on S90D. Their new tails had no matching panic/BUG/Oops/segfault/
+file_open_checker patterns. This avoids the earlier suspend-clock filtering error,
+but remains retained-interval evidence rather than continuous collection. Long-run
+qualification still needs continuous bounded capture and explicit gap reporting.

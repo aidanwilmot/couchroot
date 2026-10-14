@@ -38,6 +38,7 @@ static void launch(void) {
     fatal("fork");
   if (!child) {
     execl(binary, binary, "127.0.0.1", port, token, filescope, app, appsha,
+          getenv("COUCHROOT_NATIVE_HANDOFF_ONLY") ? "--production" :
           getenv("COUCHROOT_NATIVE_PARITY_ONLY") ? "--production-files"
                                                  : (char *)NULL,
           (char *)NULL);
@@ -115,9 +116,17 @@ static void finish(int disconnect) {
     sendframe(&w, bye);
     free(bye);
     char *s = receive(&w);
-    if (strncmp(s, "BYE\t", 4))
+    char *expected = format("BYE\t%d", sequence);
+    if (strcmp(s, expected))
       fatal("shutdown");
+    free(expected);
     free(s);
+    if (getenv("COUCHROOT_NATIVE_HANDOFF_ONLY")) {
+      struct pollfd eof = {w.fd, POLLIN, 0};
+      char extra;
+      if (w.at != w.end || poll(&eof, 1, 10000) != 1 || read(w.fd, &extra, 1) != 0)
+        fatal("shutdown disconnect not confirmed");
+    }
   }
   close(w.fd);
   w.fd = -1;
@@ -418,6 +427,7 @@ static void soak(int seconds) {
 #include "parity-accept.h"
 #include "resource-accept.h"
 #include "storage-accept.h"
+#include "handoff-accept.h"
 int main(int argc, char **argv) {
   if (argc != 7) {
     fprintf(stderr,
@@ -456,6 +466,10 @@ int main(int argc, char **argv) {
     fatal("parent namespace");
   namespace_before[ns] = 0;
   launch();
+  if (getenv("COUCHROOT_NATIVE_HANDOFF_ONLY")) {
+    handoff_checks();
+    return 0;
+  }
   if (getenv("COUCHROOT_NATIVE_PARITY_ONLY")) {
     parity_checks();
     return 0;

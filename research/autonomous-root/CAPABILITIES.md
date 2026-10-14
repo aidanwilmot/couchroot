@@ -679,5 +679,11 @@ released after submission, including an uncertain result.
 The result binds transaction ID, source manifest, inventory hash, acknowledgement
 and process-exit observations. It does not advance selection, install data or prove
 that every detached managed descendant, mount or retained record is reconciled.
-Those are separate gates before state installation. `/proc` visibility from the
-TV service identity and both-TV shutdown behavior still need live qualification.
+Those are separate gates before state installation. Focused hardware probes found
+that QN90A's service identity can read the required proc-stat fields, whereas
+S90D's package-labelled identity receives EACCES. The direct observer remains
+unavailable on S90D; permission denial must never count as absence. S90D's kernel
+supports unprivileged pidfd binding and exit polling, verified across an ordinary
+native sidecar's shutdown. A production pidfd bridge and actual wrt-service
+integration remain required. The probes match service credentials in separate
+processes; they do not update or exercise new code inside the installed service.
