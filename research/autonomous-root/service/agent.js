@@ -9,6 +9,7 @@ const {processIdentities,observeProcesses,waitForProcessExit}=require('./worker-
 const {preparePidfdExit,probeExecutable}=require('./pidfd-observer');
 const {stageObserver}=require('./observer-stage');
 const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime');
+const {openRetirementSession}=require('./retirement-session');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -139,16 +140,24 @@ function createAgent(config,options={}){
     current();if(token.preparingStop||token.stopping||token.observerStaging||token.observerProbe)throw Error('Observer probe already pending');
     if(config.device==='s90d'&&options.observerChildProcess===false&&!options.externalObserverDirectory)throw Object.assign(Error('Process observer requires an external launch transport'),{outcome:'rejected'});
     if(typeof expectedManifest!=='string'||expectedManifest.length!==64||!/^[a-f0-9]{64}$/.test(expectedManifest))throw Error('Candidate manifest digest required');
-    if(config.device==='s90d'&&options.externalObserverDirectory)observerTransactionId(requestId);
+    if(options.retirementProbeDirectory)observerTransactionId(requestId,'provider-probe');
+    else if(config.device==='s90d'&&options.externalObserverDirectory)observerTransactionId(requestId);
     token.preparingStop=true;
+    let retirementSession=null;
     try{
      const bound=await snapshot();current();
      const staged=await stageObserver({payload,device:config.device,bootId:boot,expectedManifest,execute:async(command,timeout)=>{
       current();token.observerStaging=true;const result=await owner.execute(command,timeout);current();return result;
      }});
      token.observerStaging=false;token.observerProbe=true;
+     const executeHeld=async(command,timeout)=>{current();const result=await owner.execute(command,timeout);current();return result;};
+     if(options.retirementProbeDirectory){
+      retirementSession=await openRetirementSession({device:config.device,id:observerTransactionId(requestId,'provider-probe'),payload,manifestSha256:expectedManifest,
+       source:{boot_id:bound.boot_id,worker_id:bound.worker_id,processes:bound.processes},journalDirectory:options.retirementProbeDirectory,execute:executeHeld,confirmSource:()=>snapshot(true)});
+      current();
+     }
      if(config.device==='s90d'&&options.externalObserverDirectory){
-      const observer=await prepareRuntimeObserver({directory:options.externalObserverDirectory,requestId,staged,bound,confirm:()=>snapshot(true),execute:async(command,timeout)=>{
+      const observer=await prepareRuntimeObserver({...(retirementSession?{purpose:'provider-probe',retirement:retirementSession.provider}:{}),directory:options.externalObserverDirectory,requestId,staged,bound,confirm:()=>snapshot(true),execute:async(command,timeout)=>{
        current();const result=await owner.execute(command,timeout);current();return result;
       }});
       try{observer.assertReady();}finally{await observer.cancel();}
@@ -163,11 +172,12 @@ function createAgent(config,options={}){
       const result=observeProcesses(bound,options.readProcessFile);
       if(Object.values(result.processes).some(p=>p&&p.observation!=='present'))throw Error('Worker identity changed during observer probe');
      }
+     if(retirementSession){const retired=await retirementSession.retire({execute:executeHeld,confirmExecutor:()=>snapshot(true),executorPid:peer.identity.pid});current();if(!retired||retired.phase!=='complete')throw Error('Provider retirement incomplete');}
      const final=await snapshot();current();
      if(hash(JSON.stringify({boot_id:final.boot_id,worker_id:final.worker_id,processes:final.processes}))!==hash(JSON.stringify({boot_id:bound.boot_id,worker_id:bound.worker_id,processes:bound.processes})))throw Error('Worker changed during observer probe');
      token.observerProbe=false;
-     return {verified:true,method:config.device==='s90d'?(options.externalObserverDirectory?'pidfd-external-bind-cancel':'pidfd-bind-cancel'):'proc-stat',manifest_sha256:staged.manifest_sha256,observer_sha256:staged.sha256,boot_id:boot,worker_id:worker,worker_stopped:false};
-    }finally{token.preparingStop=false;}
+     return {verified:true,method:config.device==='s90d'?(options.externalObserverDirectory?'pidfd-external-bind-cancel':'pidfd-bind-cancel'):'proc-stat',manifest_sha256:staged.manifest_sha256,observer_sha256:staged.sha256,boot_id:boot,worker_id:worker,worker_stopped:false,...(retirementSession?{retirement_provider_verified:true,retirement_provider_retired:true}:{})};
+    }finally{if(retirementSession)retirementSession.closeTransport();token.preparingStop=false;}
    },
    shutdown:async transactionId=>{
     current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Worker shutdown or observer staging requires reconciliation');

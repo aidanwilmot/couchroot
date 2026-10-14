@@ -456,3 +456,30 @@ state. Unit state is simulated in reconciliation tests. Uncertain launch/readine
 before a verified provider record, installed-service orchestration and both-TV
 handoff validation remain open. No device update or reboot was performed for this
 change; the managed fallback remains deployed.
+
+### Installed non-stopping provider integration — 2026-10-14
+
+Both TVs now run service 0.7.13 with managed selection. The service holds admission,
+opens a journaled native retirement session, verifies the original managed process,
+performs its model-specific observer probe, then shuts down and retires the provider
+before releasing admission. Provider probes have a distinct transaction namespace.
+Uncertain launch, observation or cleanup retains admission and durable ownership;
+WRT child-process execution remains disabled. S90D's independent provider performs
+observer unit inspection/retirement; QN90A uses its qualified proc-stat path.
+
+Two probes per TV passed with unchanged source-worker and boot identities; all 45
+installed package members and provider cleanup were independently verified. The
+initial S90D pilot exposed an immediate guardian-completion assumption after BYE;
+the forward update adds bounded observation and passed both repeated probes. See
+the observer deployment record for the failed-pilot limits and recovery evidence.
+
+The final Linux rerun passed 109 tests without skips; seven API tests also passed.
+An earlier combined run intermittently failed the existing managed retained-job
+fixture while reading `/proc/<pid>/stat` for a short-lived job. Its five-test isolated
+rerun and the final combined rerun passed. This remains an open short-job identity
+capture investigation, not a proved fix or evidence of native parity.
+
+This integration does not enable stopping handoff. Uncertain launch/readiness
+reconciliation before provider identity is durably established, production native
+startup/state transfer, managed rollback, and the broader lifecycle/sunset gates
+remain required. The deployed .NET worker remains the fallback; no reboot was used.

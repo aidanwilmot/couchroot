@@ -61,11 +61,23 @@ function cleanupCommand(record){
   'if printf "%s\\n" "$state" | grep -qx ActiveState=inactive && printf "%s\\n" "$state" | grep -qx MainPID=0; then stopped=1; break; fi\nsleep 0.1\ndone\ntest "$stopped" = 1\n'+guard+absent+
   'rm '+d+'/code/worker '+s+'/launcher '+s+'/.jobs/lock\nrmdir '+s+'/.jobs '+s+' '+d+'/code '+d+'\n'+guard+'printf "RETIREMENT-CLEANED\\n"\n';
 }
+async function waitRetirementCompletion(record,execute){
+ const started=process.hrtime();
+ for(;;){
+  const unit=await inspectRetirementUnit({unit:record.unit,bootId:record.boot_id,execute});
+  check(unit.started_monotonic===record.unit_started_monotonic&&unit.exec_status===0);
+  if(unit.active_state==='active'&&unit.sub_state==='exited'&&unit.main_pid===0&&unit.exec_code===1)return unit;
+  // BYE belongs to the worker. Its guardian and systemd can still be finishing
+  // after that socket closes; observe this known running identity, never signal it.
+  check(unit.active_state==='active'&&unit.sub_state==='running'&&unit.main_pid===record.provider_identity.processes.guardian.pid&&unit.exec_code===0);
+  const elapsed=process.hrtime(started);check(elapsed[0]*1000+elapsed[1]/1000000<5000);
+  await new Promise(resolve=>setTimeout(resolve,100));
+ }
+}
 async function cleanupRetirement({record,journalDirectory,execute,confirmExecutor,executorPid}){
  const j=journal(record,journalDirectory);check(['shutdown-acknowledged','shutdown-observed'].includes(record.phase)&&typeof execute==='function'&&typeof confirmExecutor==='function');
  const confirm=async()=>{const p=processIdentities(await confirmExecutor(),executorPid);check(p.boot_id===record.boot_id&&p.worker_id!==record.provider_identity.worker_id&&Object.values(p.processes).every(v=>!v||!Object.values(record.provider_identity.processes).some(x=>x.pid===v.pid)));return JSON.stringify(p);};
- const executor=await confirm(),unit=await inspectRetirementUnit({unit:record.unit,bootId:record.boot_id,execute});
- check(unit.active_state==='active'&&unit.sub_state==='exited'&&unit.main_pid===0&&unit.exec_code===1&&unit.exec_status===0&&unit.started_monotonic===record.unit_started_monotonic);
+ const executor=await confirm();await waitRetirementCompletion(record,execute);
  check(await confirm()===executor);const intent=j.intent('cleanup');
  try{
   const result=await execute(cleanupCommand(record),5000);

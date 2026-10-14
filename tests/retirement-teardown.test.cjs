@@ -84,3 +84,11 @@ esac
   }finally{fs.rmSync(root,{recursive:true,force:true});}
  }
 });
+test('shutdown acknowledgement can precede guardian and systemd completion',()=>fixture(async f=>{
+ f.r.phase='shutdown-acknowledged';f.save();let inspections=0,cleanups=0;
+ const next=await cleanupRetirement({...f.options,executorPid:42,confirmExecutor:async()=>({...source,capabilities:['worker-process-identity-v1']}),execute:async command=>{
+  if(command.includes('--property=Id,')){inspections++;return {exit_code:0,stdout:inspections<3?f.unit.replace('SubState=exited','SubState=running').replace('MainPID=0','MainPID=76').replace('ExecMainCode=1','ExecMainCode=0'):f.unit};}
+  cleanups++;assert.equal(inspections,3);return {exit_code:0,stdout:'RETIREMENT-CLEANED\n'};
+ }});
+ assert.equal(next.phase,'staging-retired');assert.equal(cleanups,1);
+}));

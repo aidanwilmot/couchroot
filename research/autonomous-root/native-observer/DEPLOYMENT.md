@@ -438,3 +438,42 @@ All failed test units and their known staging files were reconciled and removed.
 Remaining work is the service-owned, journaled provider launch/teardown lifecycle
 and stopping handoff qualification on both TVs. The adapter's per-instance
 no-retry state does not replace a durable transition journal after service restart.
+
+## Service-owned native provider probe — 2026-10-14
+
+The signed 0.7.13 service is installed on both supported TVs with the managed
+worker still selected. The existing non-stopping observer probe now creates a
+private bounded native retirement session. S90D uses that session to inspect and
+retire its external observer; QN90A retains proc-stat observation and verifies the
+provider's launch, readiness and teardown. Each TV passed two separately journaled
+probes with the same managed worker and boot throughout those probes. Repeat
+end-to-end times were about 3.86 seconds on S90D and 1.35 seconds on QN90A.
+
+Readback verified all 45 package members on each TV, enrollment, protected files,
+startup flags and the loopback SDK setting. Independent checks found completed
+provider journals, absent provider units, removed root staging and service tokens,
+and released pending markers. S90D additionally has the cancelled external-observer
+receipt and verified observer cleanup. This qualifies a non-stopping service
+provider probe, not source-worker shutdown, native production selection, retained
+state migration or rollback. Neither TV was rebooted.
+
+The first S90D 0.7.12 pilot failed after native shutdown was acknowledged but before
+cleanup intent was created. A later independent snapshot showed successful unit
+exit with the original monotonic start identity. The first failing unit snapshot
+was not retained, so its exact intermediate state is unproven. The implementation
+had assumed worker socket closure implied guardian/systemd completion. It now
+polls the same known running guardian for up to five seconds before cleanup,
+rejecting changed identity or failure. A host regression exercises running-to-exited
+unit observations after shutdown acknowledgement.
+
+Managed access was restored on the same boot, and the failed pilot's provider,
+token and journal were reconciled using separately retained host evidence. Its
+unknown API request remains preserved, and that pilot is recorded as failed rather
+than reclassified as a successful service teardown. The forward 0.7.13 probes above
+completed through the service coordinator without host reconstruction.
+
+Both bounded diagnostic collectors subsequently completed. Their archives were
+verified before removing owned temporary files, recovery timers were independently
+confirmed inactive, and both shared update journals were completed only for the
+managed-fallback/provider-probe scope above. Raw evidence and signed packages remain
+private. No merge or publication is implied by this qualification.

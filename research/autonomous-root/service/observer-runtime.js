@@ -6,7 +6,7 @@ const {prepareSupervisedExit}=require('./observer-controller');
 const {inspectObserverUnit,retireObserverUnit}=require('./observer-unit');
 const STATE='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state';
 function observerTransactionId(requestId,purpose='probe'){
- if(!['probe','handoff'].includes(purpose))throw Error('Invalid observer transaction purpose');
+ if(!['probe','provider-probe','handoff'].includes(purpose))throw Error('Invalid observer transaction purpose');
  if(typeof requestId!=='string'||requestId.length<16||requestId.length>64||!/^[-a-zA-Z0-9]+$/.test(requestId))throw Error('Persistent observer request identity required');
  return crypto.createHash('sha256').update('observer-'+purpose+':'+requestId).digest('hex').slice(0,32);
 }
@@ -71,8 +71,8 @@ function journalDirectory(directory){
 async function prepareRuntimeObserver({directory,requestId,staged,bound,confirm,execute,purpose='probe',retirement}){
  // Validate before reading credentials or publishing any launch intent. A
  // handoff must never silently fall back to its departing worker for cleanup.
- if(!['probe','handoff'].includes(purpose))throw Error('Invalid observer runtime purpose');
- if(purpose==='handoff'&&(!retirement||typeof retirement.inspectUnit!=='function'||typeof retirement.retireUnit!=='function'))throw Error('Independent observer retirement required before handoff');
+ if(!['probe','provider-probe','handoff'].includes(purpose))throw Error('Invalid observer runtime purpose');
+ if(purpose!=='probe'&&(!retirement||typeof retirement.inspectUnit!=='function'||typeof retirement.retireUnit!=='function'))throw Error('Independent observer retirement required before handoff');
  if(purpose==='probe'&&retirement!==undefined)throw Error('Probe retirement must use its held worker');
  const id=observerTransactionId(requestId,purpose);
  if(!bound||!bound.processes||bound.processes.guardian)throw Error('Managed observer probe requires a single worker');
@@ -82,8 +82,8 @@ async function prepareRuntimeObserver({directory,requestId,staged,bound,confirm,
  const unitOptions=unit=>({...identity(unit),execute});
  // Capture trusted callbacks before submission. No departing-worker executor is
  // passed to them; they must establish their own authenticated execution path.
- const inspect=purpose==='handoff'?retirement.inspectUnit.bind(retirement):unit=>inspectObserverUnit(unitOptions(unit.unit));
- const retire=purpose==='handoff'?retirement.retireUnit.bind(retirement):unit=>retireObserverUnit(unitOptions(unit.unit));
+ const inspect=purpose!=='probe'?retirement.inspectUnit.bind(retirement):unit=>inspectObserverUnit(unitOptions(unit.unit));
+ const retire=purpose!=='probe'?retirement.retireUnit.bind(retirement):unit=>retireObserverUnit(unitOptions(unit.unit));
  return prepareSupervisedExit({device:'s90d',id,directory,journalDirectory:journal,credentials,
   binary:staged.binary,sha256:staged.sha256,manifestSha256:staged.manifest_sha256,bound,execute,
   confirm:async()=>{
@@ -91,7 +91,7 @@ async function prepareRuntimeObserver({directory,requestId,staged,bound,confirm,
    if(unit.active_state!=='active'||unit.sub_state!=='running'||unit.main_pid<=1)throw Error('Observer supervisor not running');
    const actual=await readCredentials(execute,unit.main_pid,bound.boot_id);
    if(JSON.stringify(actual)!==JSON.stringify(credentials))throw Error('Observer supervisor credentials changed');
-   if(purpose==='handoff'){
+   if(purpose!=='probe'){
     const independent=await inspect(identity(unit.unit));
     if(!independent||['unit','boot_id','active_state','sub_state','main_pid','started_monotonic'].some(key=>independent[key]!==unit[key]))throw Error('Independent observer retirement readiness changed');
    }

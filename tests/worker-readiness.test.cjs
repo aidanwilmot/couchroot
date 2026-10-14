@@ -383,3 +383,35 @@ test('external handoff uses independent cleanup after disconnect and retains pen
   }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
  }
 });
+
+test('service provider probe uses independent observer retirement then tears down without stopping source',async()=>{
+ for(const device of ['qn90a','s90d'])for(const failure of [false,'launch','observer','retire','missing-id']){
+  const events=[],runtime=require('../research/autonomous-root/service/observer-runtime'),provider={inspectUnit(){},retireUnit(){}};
+  const modules={
+   './observer-stage':{stageObserver:async input=>{events.push('stage');await input.execute('stage',1000);return {manifest_sha256:DIGEST,sha256:'d'.repeat(64)};}},
+   './pidfd-observer':{probeExecutable:()=>{throw Error('Forbidden WRT launch');},preparePidfdExit:()=>{throw Error('Forbidden WRT launch');}},
+   './retirement-session':{openRetirementSession:async input=>{
+    events.push('provider-launch');assert.equal(input.device,device);assert.equal(input.id,runtime.observerTransactionId('provider-probe-request','provider-probe'));assert.equal(input.manifestSha256,DIGEST);assert.equal(input.journalDirectory,'/fixture');
+    const fresh=await input.confirmSource();assert.equal(fresh.worker_id,input.source.worker_id);await input.execute('provider-launch',1000);
+    if(failure==='launch')throw Error('Provider launch uncertain');
+    return {provider,closeTransport:()=>events.push('provider-close'),retire:async executor=>{events.push('provider-retire');assert.equal(executor.executorPid,42);assert.equal((await executor.confirmExecutor()).worker_id,fresh.worker_id);await executor.execute('provider-cleanup',1000);if(failure==='retire')throw Error('Provider retirement uncertain');return {phase:'complete'};}};
+   }},
+   './observer-runtime':{observerTransactionId:runtime.observerTransactionId,prepareRuntimeObserver:async input=>{
+    events.push('observer');assert.equal(input.purpose,'provider-probe');assert.equal(input.retirement,provider);assert.equal(input.requestId,'provider-probe-request');await input.confirm();
+    if(failure==='observer')throw Error('Observer uncertain');return {assertReady(){},cancel:async()=>events.push('observer-retire')};
+   }}
+  };
+  const readProcessFile=p=>p.endsWith('boot_id')?BOOT:'42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';
+  const {agent,channels}=fixture({readProcessFile,observerChildProcess:false,stagePackagedObserver:device==='s90d',retirementProbeDirectory:'/fixture',externalObserverDirectory:device==='s90d'?'/fixture':undefined},modules,device);
+  agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();channel.operation=async()=>inventoried();channel.execute=async()=>({exit_code:0});channel.shutdown=async()=>{throw Error('Source must remain running');};
+   const failed=failure&&!(failure==='observer'&&device==='qn90a');
+   if(failed){await assert.rejects(agent.probeObserver(DIGEST,failure==='missing-id'?undefined:'provider-probe-request'));assert.equal(agent.status().admission_held,failure!=='missing-id');if(failure==='missing-id')assert.deepEqual(events,[]);}
+   else{const result=await agent.probeObserver(DIGEST,'provider-probe-request');assert.equal(result.worker_stopped,false);assert.equal(result.retirement_provider_verified,true);assert.equal(result.retirement_provider_retired,true);assert.equal(agent.status().admission_held,false);assert.deepEqual(events,['stage','provider-launch',...(device==='s90d'?['observer','observer-retire']:[]),'provider-retire','provider-close']);}
+   assert.equal(agent.status().connected,true);
+   if(failure==='observer'&&device==='s90d'){assert.equal(events.includes('provider-retire'),false);assert.equal(events.at(-1),'provider-close');}
+   if(failure==='retire')assert.equal(events.at(-1),'provider-close');
+  }finally{agent.stop();}
+ }
+});
