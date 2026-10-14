@@ -10,6 +10,7 @@ const {preparePidfdExit,probeExecutable}=require('./pidfd-observer');
 const {stageObserver}=require('./observer-stage');
 const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime');
 const {openRetirementSession}=require('./retirement-session');
+const {validateLaunch}=require('./production-readiness');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -184,7 +185,7 @@ function createAgent(config,options={}){
     const externalHandoff=config.device==='s90d'&&options.externalObserverDirectory&&options.externalObserverRetirement&&typeof options.externalObserverRetirement.inspectUnit==='function'&&typeof options.externalObserverRetirement.retireUnit==='function';
     if(options.observerChildProcess===false&&(options.processObserver||options.stagePackagedObserver)&&!externalHandoff)throw Object.assign(Error('Process observer requires an external launch transport with independent retirement'),{outcome:'rejected'});
     token.preparingStop=true;
-    let observer=null,stagedObserver=null;
+    let observer=null,stagedObserver=null,completed=null;
     try{
     const inventory=await snapshot();current();if(token.stopping)throw Error('Worker shutdown already submitted');
     const r=inventory.resources;
@@ -231,8 +232,36 @@ function createAgent(config,options={}){
     const exited=await (observer?observer.waitForExit():waitForProcessExit(inventory,{read:options.readProcessFile}));
     if(admissionHold!==token||generation!==gen||channel!==owner||!running)throw Error('Handoff ownership changed during shutdown');
     prepared(transactionId,digest);
-    return {transaction_id:transactionId,source_manifest_sha256:sourceVersion,inventory_sha256:digest,shutdown,exited,...(stagedObserver?{observer_stage:stagedObserver}:{})};
-    }finally{try{if(observer)await observer.cancel();}finally{token.preparingStop=false;}}
+    completed={transaction_id:transactionId,source_manifest_sha256:sourceVersion,inventory_sha256:digest,shutdown,exited,...(stagedObserver?{observer_stage:stagedObserver}:{})};
+    token.source={boot_id:inventory.boot_id,worker_id:inventory.worker_id,processes:inventory.processes};return completed;
+    }finally{try{if(observer)await observer.cancel();if(completed)token.stopped=JSON.parse(JSON.stringify(completed));}finally{token.preparingStop=false;}}
+   },
+   adoptProduction:async session=>{
+    const bound=()=>{if(admissionHold!==token||generation!==gen||channel!==owner||!running||!token.stopped||token.preparingStop)throw Error('Stopped handoff ownership required for native adoption');};
+    bound();if(token.adopting)throw Error('Native adoption requires reconciliation');
+    if(!session||typeof session.takeChannel!=='function'||typeof session.closeTransport!=='function'||!session.record||session.record.phase!=='ready'||hash(JSON.stringify(session.record))!==session.readiness_sha256)throw Error('Verified production session required');
+    const readinessDigest=session.readiness_sha256,readyRecord=JSON.parse(JSON.stringify(session.record));
+    const {worker_identity,unit_started_monotonic,...launch}=readyRecord;validateLaunch({...launch,phase:'submitted'});
+    if(!/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic)||launch.id!==token.stopped.transaction_id||launch.boot_id!==boot||JSON.stringify(launch.source)!==JSON.stringify(token.source))throw Error('Production session does not match stopped source');
+    const committed=()=>{const s=selectionStatus(options.selectionFile),h=s.history&&s.history[s.history.length-1];if(s.phase!=='stable'||s.selected_implementation!=='native-prototype'||s.selected_manifest_sha256!==launch.manifest_sha256||!h||h.id!==launch.id||h.outcome!=='committed'||h.state_sha256!==launch.state_receipt_sha256||h.readiness_sha256!==readinessDigest||h.quiescence_sha256!==token.stopped.inventory_sha256)throw Error('Committed production trial required');return JSON.stringify(s);};
+    const selected=committed();token.adopting=true;let next;
+    try{
+     next=await session.takeChannel();bound();if(committed()!==selected||!next||next===owner||!next._conn)throw Error('Production channel ownership changed');
+     const peer=next._conn,info=await next.operation({op:'status'});bound();
+     if(committed()!==selected||next._conn!==peer||currentBoot()!==boot||!['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)||peer.identity.smack!=='System')throw Error('Production peer changed during adoption');
+     validateReadiness(info,{implementation:'native-prototype',bootId:boot,launcherSha256:launch.launcher_sha256});
+     const nativeIdentity=processIdentities(info,peer.identity.pid),resources=validateResourceInventory(info);
+     if(JSON.stringify(nativeIdentity)!==JSON.stringify(worker_identity)||resources.jobs.length||resources.transfers.length||resources.helpers.length)throw Error('Production identity or resources changed');
+     // Invalidate old callbacks before closing the stopped source listener.
+     const adoptedGeneration=++generation,previousClose=next.onClose;
+     channel=next;connected=true;workerReady=true;workerStatus=info;workerStatusAt=process.uptime();identity=peer.identity;launching=false;lastError=null;
+     if(timer){clearTimeout(timer);timer=null;}
+     next.onClose=error=>{try{if(previousClose)previousClose(error);}finally{if(generation===adoptedGeneration&&channel===next){connected=false;workerReady=false;workerStatus=null;identity=null;workerStatusAt=0;lastError='Native worker disconnected; reconciliation required';}}};
+     owner.close();token.adopted={generation:adoptedGeneration,channel:next,record:readyRecord};
+     // Admission stays held until provider retirement and transition completion
+     // are independently verified by the controller.
+     return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
+    }catch(error){session.closeTransport();throw Object.assign(Error('Production channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
    },
    release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
   };

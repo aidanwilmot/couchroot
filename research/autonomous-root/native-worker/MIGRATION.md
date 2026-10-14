@@ -655,3 +655,27 @@ drift, duplicate adoption and disconnects are covered separately.
 Installed-controller adoption, interrupted-session recovery, rollback and both-TV
 stopping-handoff validation remain open. The TV packages and boots are unchanged;
 .NET remains deployed. The host-harness commit is not a native-default rollout.
+
+### Agent ownership transfer — local follow-up
+
+The held agent can now adopt a production session only after its source shutdown
+and observer cleanup completed, the exact source inventory matches the committed
+trial, and fresh native status confirms the recorded worker/guardian identity,
+production capabilities, launcher and empty owned-resource inventory. Source-exit
+and readiness receipts are copied before use so later caller mutation cannot
+change the held evidence.
+
+The agent advances its generation before closing the stopped managed listener.
+Late source callbacks therefore cannot overwrite native state. The adopted
+channel has a disconnect handler that retains the hold and requests reconciliation
+without scheduling managed reacquisition. Adoption is one-shot, and uncertainty
+closes the supplied session. Public admission remains held; this change does not
+yet enable serving requests from the adopted native peer or native cold startup.
+Provider retirement and final transition completion must precede admission release.
+
+The combined Linux suite passes 148 tests without skips. Agent ownership-swap
+unit tests cover pre-shutdown/precommit refusal, identity/selection drift, stale
+callbacks, duplicate adoption, retained admission and disconnect behavior. The
+separate real-process session/readiness integration remains passing. Installed
+controller orchestration, admission release, rollback/recovery and both-TV handoff
+remain open. Deployed packages and TV boots are unchanged.

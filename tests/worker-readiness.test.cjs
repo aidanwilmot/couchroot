@@ -415,3 +415,32 @@ test('service provider probe uses independent observer retirement then tears dow
   }finally{agent.stop();}
  }
 });
+
+test('stopped handoff adopts matching native channel while retaining admission and ignoring stale callbacks',async()=>{
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ for(const mode of ['ok','identity-drift','selection-drift']){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handoff-adoption-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,taken=0,closed=0;
+  const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(!live)throw Object.assign(Error('gone'),{code:'ENOENT'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';};
+  const {agent,channels,timers}=fixture({selectionFile:file,managedVersion:()=>DIGEST,readProcessFile});agent.start();const old=channels[0],ready=old.connect();
+  try{
+   ready.resolve(managed());await flush();old.operation=async()=>inventoried();const hold=agent.holdAdmission(),inventory=await hold.snapshot();
+   const transition=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},digest(inventory));
+   const info={...native(),worker_id:'f'.repeat(32),guardian_pid:51,processes:{worker:{pid:52,start_ticks:'200'},guardian:{pid:51,start_ticks:'199'}},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]}};info.capabilities.push('worker-process-identity-v1','resource-inventory-v1');
+   const identity={boot_id:BOOT,worker_id:info.worker_id,processes:info.processes},source={boot_id:BOOT,worker_id:inventory.worker_id,processes:inventory.processes};
+   const record={schema:1,id:transition.pending.id,phase:'ready',device:'qn90a',manifest_sha256:'c'.repeat(64),state_receipt_sha256:'d'.repeat(64),worker_sha256:'e'.repeat(64),launcher_sha256:DIGEST,source,boot_id:BOOT,unit:'couchroot-worker-'+transition.pending.id+'.service',directory:'/opt/couchroot-worker-'+transition.pending.id,scope:'/opt/couchroot-worker-'+transition.pending.id+'/state',port:12345,token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/production-ABC123/token',token_sha256:'e'.repeat(64),worker_identity:identity,unit_started_monotonic:'123'};
+   const next={_conn:{identity:{pid:52,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async()=>mode==='identity-drift'?{...info,worker_id:'0'.repeat(32)}:info,close(){this._conn=null;if(this.onClose)this.onClose();}};
+   const session={record,readiness_sha256:digest(record),takeChannel:async()=>{taken++;if(mode==='selection-drift')journal.begin(5,{implementation:'managed',manifest_sha256:DIGEST},'a'.repeat(64));return next;},closeTransport:()=>{closed++;next.close();}};
+   await assert.rejects(hold.adoptProduction(session),/Stopped handoff/);assert.equal(taken,0);
+   old.shutdown=async()=>{live=false;ready.conn._socket.destroy();return {acknowledged:true,disconnected:true};};await hold.shutdown(transition.pending.id);
+   journal.advance(2,transition.pending.id,'state-ready',record.state_receipt_sha256);journal.advance(3,transition.pending.id,'trial-ready',session.readiness_sha256);
+   await assert.rejects(hold.adoptProduction(session),/Committed production/);assert.equal(taken,0);journal.commit(4,transition.pending.id);
+   if(mode==='ok'){
+    const adopted=await hold.adoptProduction(session);assert.equal(adopted.worker_id,info.worker_id);assert.equal(adopted.admission_held,true);assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_id,info.worker_id);assert.equal(agent.status().identity.pid,52);
+    old.options.onClose();assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_id,info.worker_id);
+    await assert.rejects(agent.execute('not admitted',100),e=>e.outcome==='rejected');await assert.rejects(hold.adoptProduction(session));assert.throws(()=>hold.release());assert.equal(taken,1);assert.equal(timers.length,0);
+    next.close();assert.equal(agent.status().connected,false);assert.match(agent.status().last_error,/reconciliation required/);assert.equal(timers.length,0);
+   }else{await assert.rejects(hold.adoptProduction(session),e=>e.outcome==='unknown');assert.equal(closed,1);assert.equal(agent.status().admission_held,true);await assert.rejects(hold.adoptProduction(session));assert.equal(taken,1);}
+  }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
+});
