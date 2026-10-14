@@ -28,6 +28,6 @@ int main(int argc,char **argv) {
  errno=0;assert(fcntl(sentinel,F_GETFD)==-1&&errno==EBADF);
  errno=0;assert(fcntl(123,F_GETFD)==-1&&errno==EBADF);
  assert(setuid(0)==-1&&setgroups(0,NULL)==-1);
- puts("Real credential drop and inherited descriptor cleanup passed (Smack write stubbed)");
+ puts("host-test-without-Smack: real credential drop and inherited descriptor cleanup passed");
  return 0;
 }

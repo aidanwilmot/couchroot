@@ -99,7 +99,7 @@ test('schema two binds observer bytes and provenance while preserving managed de
  }finally{f.close();}
 });
 test('schema two refuses missing changed incompatible or unbound observers',()=>{
- for(const kind of ['missing','changed','source','glibc','large','downgrade','schema']){
+ for(const kind of ['missing','changed','source','glibc','large','downgrade','schema','profile-test']){
   const f=fixture(2);try{
    if(kind==='missing')fs.unlinkSync(path.join(f.dir,'native-process-observer'));
    if(kind==='changed')fs.appendFileSync(path.join(f.dir,'native-process-observer'),'changed');
@@ -108,6 +108,7 @@ test('schema two refuses missing changed incompatible or unbound observers',()=>
    if(kind==='large')f.m.artifacts['native-process-observer'].size=128*1024+1;
    if(kind==='downgrade')f.m.schema=1;
    if(kind==='schema')f.m.schema=3;
+   if(kind==='profile-test'){const bytes=Buffer.concat([artifact(),Buffer.from('host-test-without-Smack')]);fs.writeFileSync(path.join(f.dir,'native-process-observer'),bytes);Object.assign(f.m.artifacts['native-process-observer'],{sha256:hash(bytes),size:bytes.length});}
    f.seal();assert.throws(()=>loadCandidate(f.dir,'s90d'));
   }finally{f.close();}
  }
