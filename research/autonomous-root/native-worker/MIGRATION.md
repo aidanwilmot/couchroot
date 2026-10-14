@@ -203,8 +203,10 @@ left running, not installed-service handoffs. See the observer deployment record
 
 Durable provider submission is now implemented locally: exclusive launch and
 pending records precede root mutation, candidate/token/source identities are
-bound, and uncertain results block all replacement IDs. Listener/readiness
-coordination and journal-driven teardown remain unintegrated.
+bound, and uncertain results block all replacement IDs. Readiness publication is also implemented locally: it binds the native guardian
+to the running unit, rechecks source/native identities, and publishes a ready
+record under an exclusive intent. Real-wire host tests include that transition.
+Listener/token coordination and journal-driven teardown remain unintegrated.
 
 Next, integrate the provider listener, submission and teardown into the service, then
 exercise the real external observer across managed shutdown with retained records, followed by

@@ -1,10 +1,10 @@
 'use strict';
 // Read-only, single-attempt query. Caller chooses a live, authenticated executor;
 // a disconnected worker cannot establish its former supervisor's unit state.
-const UNIT=/^couchroot-observer-[a-f0-9]{32}\.service$/;
+const UNITS={observer:/^couchroot-observer-[a-f0-9]{32}\.service$/,retirement:/^couchroot-retirement-[a-f0-9]{32}\.service$/};
 const BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
-async function inspectObserverUnit({unit,bootId,execute}){
- if(typeof unit!=='string'||unit.length!==59||!UNIT.test(unit)||typeof bootId!=='string'||bootId.length!==36||!BOOT.test(bootId)||typeof execute!=='function')throw Error('Invalid observer unit inspection');
+async function inspectOwnedUnit({unit,bootId,execute},kind){
+ if(typeof unit!=='string'||unit.length!==('couchroot-'+kind+'-').length+40||!UNITS[kind].test(unit)||typeof bootId!=='string'||bootId.length!==36||!BOOT.test(bootId)||typeof execute!=='function')throw Error('Invalid observer unit inspection');
  const guard='test "$(cat /proc/sys/kernel/random/boot_id)" = '+bootId+'\n';
  const command='set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+guard+
   'systemctl show --property=Id,LoadState,ActiveState,SubState,MainPID,ExecMainCode,ExecMainStatus,ExecMainStartTimestampMonotonic '+unit+'\n'+guard;
@@ -21,6 +21,8 @@ async function inspectObserverUnit({unit,bootId,execute}){
  if(!Number.isSafeInteger(pid)||pid>2147483647||code>3||status>255)throw Error('Observer unit counter exceeds limits');
  return {unit,boot_id:bootId,active_state:values.ActiveState,sub_state:values.SubState,main_pid:pid,exec_code:code,exec_status:status,started_monotonic:values.ExecMainStartTimestampMonotonic};
 }
+const inspectObserverUnit=options=>inspectOwnedUnit(options,'observer');
+const inspectRetirementUnit=options=>inspectOwnedUnit(options,'retirement');
 async function retireObserverUnit(options){
  const {unit,bootId,execute,sha256}=options;
  if(typeof sha256!=='string'||sha256.length!==64||!/^[a-f0-9]+$/.test(sha256))throw Error('Invalid observer staged artifact digest');
@@ -51,4 +53,4 @@ async function retireObserverUnit(options){
  if(!r||r.exit_code!==0||r.timed_out||r.stdout!=='OBSERVER-UNIT-RETIRED\n')throw Error('Observer unit retirement requires reconciliation: '+(r&&r.timed_out?'timeout':r&&typeof r.stderr==='string'&&r.stderr.match(/OBSERVER-RETIRE-FAILED:([a-z]+)/)?r.stderr.match(/OBSERVER-RETIRE-FAILED:([a-z]+)/)[1]:'response')+' (exit '+(r?r.exit_code:'missing')+')');
  return {unit,boot_id:bootId,retired:true};
 }
-module.exports={inspectObserverUnit,retireObserverUnit};
+module.exports={inspectObserverUnit,inspectRetirementUnit,retireObserverUnit};

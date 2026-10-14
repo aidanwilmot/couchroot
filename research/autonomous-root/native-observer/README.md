@@ -372,3 +372,25 @@ Partial local intent publication also blocks retry. No age-based cleanup or
 automatic relaunch is permitted. The caller still needs to coordinate the
 listener, verify the native peer, and reconcile teardown against this record.
 The installed service does not yet call this submission module.
+
+### Readiness publication
+
+`retirement-readiness.js` consumes the exact acknowledged launch record and an
+already authenticated native channel. It creates and flushes an exclusive
+readiness intent, validates the scoped provider, binds its guardian to the
+recorded systemd unit's running main process, then rechecks the native identity
+and source worker. Only then does it publish `ready`, including provider process
+identities and the unit's monotonic start timestamp. The launch pending marker
+remains until teardown is independently verified.
+
+Connection or identity changes, source replacement, journal changes, late
+responses and publication failure return no provider and retain ownership for
+reconciliation. An unfinished readiness intent cannot be retried or adopted.
+The transition uses the live source executor only to inspect the maintenance
+unit before source shutdown; later observer retirement uses the native adapter.
+
+The host integration exercises this publication with real managed/native wire
+peers, then stops the managed source and continues native retirement commands.
+Smack/mount setup and systemd observations remain host-test substitutions. The
+service still needs listener/token coordination and provider teardown integration;
+this module alone does not enable a deployed stopping handoff.

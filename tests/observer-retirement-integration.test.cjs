@@ -29,7 +29,13 @@ test('native retirement channel remains usable after the real managed source exi
    retireObserverUnit:async o=>{commands++;const r=await o.execute('printf retired',1000);assert.equal(r.stdout,'retired');return {unit:o.unit,boot_id:o.bootId,retired:true};}
   };
   vm.runInNewContext(fs.readFileSync(sourceFile,'utf8'),{module,process,require:name=>name==='./observer-unit'?unitOperations:real(name)});
-  const provider=await module.exports.createObserverRetirement({channel:native.server,source,bound,launcherSha256:native.sha});
+  const id='a'.repeat(32),record={schema:1,id,phase:'submitted',device:'s90d',manifest_sha256:'b'.repeat(64),worker_sha256:'b'.repeat(64),launcher_sha256:native.sha,observer_sha256:bound.sha256,boot_id:source.boot_id,source,unit:'couchroot-retirement-'+id+'.service',directory:'/opt/couchroot-retirement-'+id,scope:'/opt/couchroot-retirement-'+id+'/state',token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/retirement-ABC123/token',token_sha256:'b'.repeat(64),port:12345};
+  const journalDirectory=path.join(root,'journal');fs.mkdirSync(journalDirectory,{mode:0o700});
+  fs.writeFileSync(path.join(journalDirectory,id+'.retirement.json'),JSON.stringify(record),{mode:0o600});fs.writeFileSync(path.join(journalDirectory,'retirement-launch.pending'),id+'\n',{mode:0o600});
+  const readinessFile=path.resolve(__dirname,'../research/autonomous-root/service/retirement-readiness.js'),readinessRequire=createRequire(readinessFile),readinessModule={exports:{}};
+  vm.runInNewContext(fs.readFileSync(readinessFile,'utf8'),{module:readinessModule,process,Buffer,require:name=>name==='./observer-retirement'?{...readinessRequire(name),createObserverRetirement:module.exports.createObserverRetirement}:readinessRequire(name)});
+  const {provider}=await readinessModule.exports.readyRetirement({record,journalDirectory,channel:native.server,confirmSource:()=>managed.server.operation({op:'status'}),execute:async()=>({exit_code:0,stdout:`Id=${record.unit}\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=${native.child.pid}\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n`})});
+  assert.equal(JSON.parse(fs.readFileSync(path.join(journalDirectory,id+'.retirement.json'))).phase,'ready');
   assert.notEqual(provider.identity.worker_id,source.worker_id);
   assert.deepEqual(await managed.server.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await managed.ended,[0,null],managed.stderr());
   await assert.rejects(managed.server.execute('must not execute',1000));
