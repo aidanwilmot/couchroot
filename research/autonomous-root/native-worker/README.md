@@ -328,8 +328,9 @@ both original .NET worker identities, boot IDs, protected file hashes, launcher
 hashes, execution mounts and cgroup memberships. Neither observed kernel window
 contained crash-collector waits or worker executable dumps. No TV was rebooted.
 [Sanitized evidence](endurance-results.json) records both the successful exercise
-and the failed S90D gate. The later startup, orphan-intent, diagnostic and JSON
-upload changes remain separate, pending device qualification.
+and the failed S90D gate. Later startup/orphan-intent checks and focused
+diagnostic/JSON checks passed separately on both TVs; they do not extend this
+one-hour result to the newer revision.
 
 ## Startup-checkpoint validation — 2026-10-13
 
@@ -440,47 +441,63 @@ private freezer groups were removed. The original .NET process/worker and boot
 identities, launcher hashes, protected files, cgroup membership and execution
 mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 
+## Descriptor-abort diagnosis and focused validation — 2026-10-13
+
+Both earlier failing device logs show Samsung's kernel file-open checker reporting
+exhaustion and forcing SIGABRT. A focused QN90A reproduction localized it to the
+second launch-pipe allocation. Calling `SYS_pipe2` directly produced the same
+kernel abort, ruling out the libc wrapper as a sufficient workaround.
+
+Revision `4e40d47` checks descriptor capacity with a bounded `fcntl(F_GETFD)` scan
+under the job mutex. It requires a free slot before retention/intent operations
+and six before allocating the output pipes and launch gate. This check allocates
+no descriptors. When an intent has already been published, rejection preserves
+it, prevents reuse and allows restart reconciliation without command replay.
+The mutex excludes the job monitor's record opens; the heartbeat opens no files.
+This fixes job-start admission under the tested limits, not every worker operation
+or a concurrent external limit change. No kernel setting or signal policy changed.
+
+Set `COUCHROOT_NATIVE_RESOURCE_ONLY=1` on the acceptance controller for the
+focused five-check run. QN90A and S90D both exited zero: saved-record capacity and
+app-user recovery, descriptor rejection and intent reconciliation, 70 command
+faults with bounded history/reset, mixed JSON/binary uploads and final cleanup.
+The descriptor probe leaves three free slots below the native child's limit;
+the controller, guardian and deployed .NET fallback keep their original limits.
+Neither final kernel window contained a file-open-checker event, crash-collector
+wait or worker executable dump. Both original .NET process/worker identities,
+boot IDs, launcher/protected-file hashes, mounts and cgroups were preserved.
+All temporary helpers, jobs and files were removed. Neither TV was rebooted.
+
+All 47 native tests passed under ASAN/UBSAN, including sparse inherited descriptors,
+zero/one/three/five free slots, unchanged descriptor sets after rejection, no
+command execution and restart reconciliation. The repository runner passed 226
+tests and skipped those 47 native tests. See
+[focused validation evidence](descriptor-recovery-results.json). The earlier
+[failure evidence](resource-failure-results.json) remains as a historical record.
+
 ## Remaining production work
 
-- Validate the schema-4 initial-journal, resource-reservation and partial-update
-  recovery and owner-tagged orphan job-intent recovery on both TVs. All 47 native
-  sanitizer host tests and ARM builds pass; the repository suite passes 226 tests
-  with the 47 native tests skipped by that runner. The expanded device suite is
-  prepared. The prior build completed its one-hour exercise on both TVs, but
-  S90D's subsequent 2,188 ms stopped-worker recovery exceeded the two-second gate.
-  Cross-boot, reboot and power-loss recovery remain unqualified.
+- Rerun the complete expanded suite on the fixed revision. Earlier runs passed
+  schema-4 initial-journal, resource-reservation, partial-update and orphan-intent
+  checks on both TVs before the descriptor abort. The focused run closes that
+  abort and the subsequent fault-history/JSON checks; it is not a new full-suite
+  or endurance result. Investigate S90D's earlier 2,188 ms post-endurance stopped
+  worker recovery against the unchanged two-second gate. Cross-boot, reboot and
+  power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
-- Qualify resource exhaustion, further storage failures and substantially longer
-  runs. Host tests now cover the 64-record saved-job limit, explicit-forget
-  capacity recovery, and launch-pipe descriptor exhaustion. The latter preserves
-  the unlaunched intent, refuses reuse, keeps the worker responsive and reconciles
-  the record as interrupted after restart. Matching device probes are now included
-  in the acceptance controller but remain unqualified until both TVs pass. The
-  A first expanded run on both TVs reached the descriptor probe, where the old
-  highest-descriptor heuristic failed to induce exhaustion. Sparse-descriptor
-  host regression coverage now reproduces that flaw; the corrected probe counts
-  exactly three free slots below its soft limit. Both failed fixtures were cleaned
-  with original fallback invariants verified. The corrected device run then
-  exposed a real worker abort (SIGABRT) on both TVs. No command witness was
-  created; guardians retained interrupted records and cleaned owned resources.
-  Both complete fixture cleanups and fallback invariants passed. The abort remains
-  unresolved, and the expanded suite is not qualified. See
-  [resource-failure-results.json](resource-failure-results.json).
-  The descriptor probe uses `prlimit64` on its live authenticated native child only;
-  the controller, guardian and deployed fallback retain their original limits. Preserve bounded, in-memory output as the public contract, matching the
-  deployed .NET implementation; durable output is not required for parity.
-  Job outcomes remain durable metadata and must recover after transient failures.
-- Decide command signal-handler compatibility. The current strict policy is now
-  explicit in native status. Original command-fault diagnostics are exposed
-  separately from actual termination status and pass host tests; the matching
-  device probe remains pending.
+- Extend resource-exhaustion qualification beyond job-start admission, storage
+  failures and longer runs. Preserve bounded in-memory output as the public
+  contract, matching .NET; durable output is not required for parity. Job outcomes
+  remain durable metadata and must recover after transient failures.
+- Decide command signal-handler compatibility. The strict policy is explicit in
+  status. Original command-fault diagnostics are separate from actual termination
+  status and now pass the focused device checks on both TVs.
 - Reconcile the narrower file policy with the current public API, then repeat
-  whole-process CPU/memory/startup comparisons. The current service and enrolled
-  client do not expose legacy READFILE/WRITEFILE frames; supporting those frames
-  is outside the replacement contract. Worker-protocol JSON uploads now pass
-  host tests; their device probe is pending.
-  The guardian's polling and the job monitor's periodic wakeups need measurement.
+  whole-process CPU/memory/startup comparisons. Legacy READFILE/WRITEFILE frames
+  are outside the current public replacement contract. Worker-protocol JSON
+  uploads now pass host and focused device checks. Measure guardian polling and
+  job-monitor wakeups in the final comparison.
 
 ## Historical crash delay and test-mount cleanup fix — 2026-10-13
 
