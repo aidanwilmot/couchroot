@@ -282,12 +282,12 @@ function createAgent(config,options={}){
      return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
     }catch(error){session.closeTransport();throw Object.assign(Error('Production channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
    },
-   completeProduction:async retirementSession=>{
+   completeProduction:async (retirementSession,{resume=false}={})=>{
     const adopted=token.adopted;
     const bound=()=>{if(!adopted||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted production ownership required');};
-    bound();if(token.completing)throw Error('Production completion requires reconciliation');
+    bound();if(typeof resume!=='boolean'||token.completionBusy||(!resume&&token.completing)||(resume&&(!token.completing||!token.retired)))throw Error('Production completion requires reconciliation');
     if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching retirement session required');
-    token.completing=true;const peer=channel._conn;
+    token.completing=true;token.completionBusy=true;const peer=channel._conn;
     const confirm=async()=>{
      bound();const info=await adopted.channel.operation({op:'status'});bound();if(adopted.channel._conn!==peer)throw Error('Production peer changed');
      validateReadiness(info,{implementation:'native-prototype',bootId:boot,launcherSha256:adopted.record.launcher_sha256});
@@ -296,12 +296,12 @@ function createAgent(config,options={}){
     };
     const execute=async(command,timeout)=>{await confirm();const result=await adopted.channel.execute(command,timeout);await confirm();return result;};
     try{
-     const retired=await retirementSession.retire({execute,confirmExecutor:confirm,executorPid:peer.identity.pid});bound();
-     const activation=await activateProduction({record:adopted.record,retired,journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile,execute,confirmNative:async()=>processIdentities(await confirm(),peer.identity.pid)});
+     if(!resume)token.retired=JSON.parse(JSON.stringify(await retirementSession.retire({execute,confirmExecutor:confirm,executorPid:peer.identity.pid})));bound();const retired=token.retired;
+     const activation=await activateProduction({resume,record:adopted.record,retired,journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile,execute,confirmNative:async()=>processIdentities(await confirm(),peer.identity.pid)});
      const info=await confirm();bound();nativeRuntime={...adopted,activation,selection:JSON.stringify(selectionStatus(options.selectionFile))};workerStatus=info;workerStatusAt=process.uptime();
      if(!runtimeAllowed(selection()))throw Error('Native selection changed before admission');admissionHold=null;
      return {transaction_id:adopted.record.id,worker_id:info.worker_id,admission_held:false,activation_sha256:activation.receipt_sha256};
-    }catch(error){nativeRuntime=null;throw Object.assign(Error('Production completion requires reconciliation'),{outcome:'unknown',cause:error});}
+    }catch(error){nativeRuntime=null;throw Object.assign(Error('Production completion requires reconciliation'),{outcome:'unknown',cause:error});}finally{token.completionBusy=false;}
    },
    release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe||token.retirementPreparing||token.retirementSession)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
   };
@@ -311,6 +311,6 @@ function createAgent(config,options={}){
   try{const result=await hold.probeObserver(expectedManifest,requestId);hold.release();return result;}
   catch(error){try{hold.release();}catch(_){}throw error;}
  }
- const api={status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
+ const api={status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
 }
 module.exports={createAgent,launchRequest};

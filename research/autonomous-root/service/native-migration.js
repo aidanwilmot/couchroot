@@ -7,7 +7,7 @@ const {SelectionJournal,managedVersion}=require('./worker-selection');
 const {openProductionSession}=require('./production-session');
 function check(ok){if(!ok)throw Error('Native migration prerequisites unavailable');}
 function createNativeMigration({agent,device,payload,selectionFile}){
- let entered=false,closed=false,phase='idle',id=null,hold=null,retirement=null,production=null,begun=false;
+ let entered=false,closed=false,phase='idle',failedPhase=null,resuming=false,id=null,hold=null,retirement=null,production=null,begun=false;
  const status=()=>({phase,transaction_id:id});
  const closeTransport=()=>{closed=true;if(production)production.closeTransport();if(retirement)retirement.closeTransport();};
  const move=next=>{check(!closed);phase=next;};
@@ -40,12 +40,18 @@ function createNativeMigration({agent,device,payload,selectionFile}){
   }catch(cause){
    if(closed)closeTransport();
    if(!begun&&hold){try{hold.release();}catch(_){begun=true;}}
-   phase=begun?'reconciliation-required':'rejected';
+   failedPhase=phase;phase=begun?'reconciliation-required':'rejected';
    // Keep live session references for explicit recovery. Closing a connection
    // here would destroy useful recovery access without proving remote cleanup.
    throw Object.assign(Error(begun?'Native migration requires reconciliation':'Native migration rejected before handoff'),{outcome:begun?'unknown':'rejected',cause});
   }
  }
- return Object.freeze({run,status,closeTransport});
+ async function resumeActivation(){
+  check(!closed&&!resuming&&phase==='reconciliation-required'&&failedPhase==='activating'&&hold&&retirement&&production);resuming=true;
+  try{move('resuming-activation');const activated=await hold.completeProduction(retirement,{resume:true});check(activated.transaction_id===id&&activated.admission_held===false);move('active');return {...activated,selected_implementation:'native-prototype'};}
+  catch(cause){phase='reconciliation-required';throw Object.assign(Error('Native activation resume requires reconciliation'),{outcome:'unknown',cause});}
+  finally{resuming=false;}
+ }
+ return Object.freeze({run,resumeActivation,status,closeTransport});
 }
 module.exports={createNativeMigration};

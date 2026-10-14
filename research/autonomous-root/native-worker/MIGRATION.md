@@ -733,3 +733,29 @@ is not yet a full installed controller run on a TV. No public migration endpoint
 is enabled by this change; rollback and interrupted-transition recovery remain
 required before on-TV cutover. Native cold startup and broader sunset gates also
 remain open. Deployed packages and TV boots are unchanged.
+
+### Live-channel activation reconciliation — local follow-up
+
+Activation now has an explicit resume mode for the ordered local cleanup windows:
+a removed token, an empty/removed token directory, each marker removal, published
+activation with a remaining intent, and a fully published receipt whose return
+was lost. Partial cleanup requires the exact durable intent. A completed receipt
+without an intent is accepted only with the fully cleaned layout. Every resume
+rechecks the native identity, committed selection, original receipts and remote
+provider absence; it neither launches a worker nor repeats provider shutdown.
+
+The held agent retains the completed retirement receipt before activation begins.
+Its explicit completion retry reuses that receipt, excludes concurrent completion,
+and keeps admission held on failure. The migration controller exposes this retry
+only after its activation phase failed; earlier handoff failures cannot skip ahead.
+
+The combined Linux suite passes 163 tests without skips. Fault tests interrupt
+after every cleanup/publication boundary, then verify matching resume and repeated
+receipt readback. Missing/changed intents, foreign directory entries, changed
+markers and changed native identity refuse recovery. Agent/controller tests prove
+provider retirement and earlier handoff phases are not replayed.
+
+This recovery requires the verified production channel to remain alive. Service
+restart/provider reacquisition, earlier launch/readiness reconciliation, rollback,
+native cold startup and both-TV qualification remain open. Deployed packages and
+TV boots are unchanged; .NET remains deployed as fallback.

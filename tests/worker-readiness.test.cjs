@@ -422,7 +422,7 @@ test('stopped handoff adopts matching native channel while retaining admission a
  for(const mode of ['ok','activation-failure','identity-drift','selection-drift']){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handoff-adoption-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,taken=0,closed=0;
   const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(!live)throw Object.assign(Error('gone'),{code:'ENOENT'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';};
-  const activationModule={activateProduction:async o=>{await o.confirmNative();await o.execute('activation check',1000);if(mode==='activation-failure')throw Error('activation publication lost');return {readiness_sha256:digest(o.record),receipt_sha256:'9'.repeat(64)};}};
+  const activationModule={activateProduction:async o=>{await o.confirmNative();await o.execute('activation check',1000);if(mode==='activation-failure'&&!o.resume)throw Error('activation publication lost');return {readiness_sha256:digest(o.record),receipt_sha256:'9'.repeat(64)};}};
   const {agent,channels,timers}=fixture({selectionFile:file,managedVersion:()=>DIGEST,readProcessFile},{'./production-activation':activationModule});agent.start();const old=channels[0],ready=old.connect();
   try{
    ready.resolve(managed());await flush();old.operation=async()=>inventoried();const hold=agent.holdAdmission(),inventory=await hold.snapshot();
@@ -441,7 +441,7 @@ test('stopped handoff adopts matching native channel while retaining admission a
     old.options.onClose();assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_id,info.worker_id);
     await assert.rejects(agent.execute('not admitted',100),e=>e.outcome==='rejected');await assert.rejects(hold.adoptProduction(session));assert.throws(()=>hold.release());assert.equal(taken,1);assert.equal(timers.length,0);
     const retirementSession={record:{source,manifest_sha256:record.manifest_sha256},retire:async o=>{assert.equal(o.executorPid,52);assert.equal((await o.confirmExecutor()).worker_id,info.worker_id);await o.execute('retire provider',1000);return {phase:'complete'};}};
-    if(mode==='activation-failure'){await assert.rejects(hold.completeProduction(retirementSession),e=>e.outcome==='unknown');assert.equal(agent.status().admission_held,true);await assert.rejects(agent.execute('not admitted',100));}
+    if(mode==='activation-failure'){await assert.rejects(hold.completeProduction(retirementSession),e=>e.outcome==='unknown');assert.equal(agent.status().admission_held,true);await assert.rejects(agent.execute('not admitted',100));retirementSession.retire=async()=>{throw Error('Must not repeat retirement');};const resumed=await hold.completeProduction(retirementSession,{resume:true});assert.equal(resumed.admission_held,false);assert.equal(agent.status().worker_ready,true);}
     else{const active=await hold.completeProduction(retirementSession);assert.equal(active.admission_held,false);assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().phase,'ready');assert.equal((await agent.execute('public request',100)).stdout,'native');old.options.onClose();assert.equal(agent.status().worker_ready,true);}
     await assert.rejects(hold.completeProduction(retirementSession));
     next.close();assert.equal(agent.status().connected,false);assert.match(agent.status().last_error,/reconciliation required/);assert.equal(timers.length,0);

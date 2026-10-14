@@ -46,3 +46,28 @@ test('lost activation publication keeps reconciliation intent after token cleanu
  await assert.rejects(module.exports.activateProduction(f.options),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(f.file)).phase,'active');assert.equal(fs.existsSync(f.intent),true);assert.equal(fs.existsSync(f.record.token_file),false);assert.equal(fs.existsSync(f.dir+'/production-launch.pending'),false);
  await assert.rejects(activateProduction(f.options));
 }));
+
+test('explicit activation resume handles each ordered cleanup window without restarting work',linux,async()=>{
+ for(const boundary of ['token','directory','state-marker','launch-marker','publication','intent'])await fixture(async f=>{
+  const vm=require('node:vm'),{createRequire}=require('node:module'),source=path.resolve(__dirname,'../research/autonomous-root/service/production-activation.js'),real=createRequire(source),module={exports:{}};let interrupted=false;
+  const target=boundary==='token'?f.record.token_file:boundary==='directory'?path.dirname(f.record.token_file):boundary==='state-marker'?f.dir+'/state-install.pending':boundary==='launch-marker'?f.dir+'/production-launch.pending':f.intent;
+  const wrapped={...fs,unlinkSync:p=>{fs.unlinkSync(p);if(!interrupted&&boundary!=='directory'&&boundary!=='publication'&&p===target){interrupted=true;throw Error('interrupted after unlink');}},rmdirSync:p=>{fs.rmdirSync(p);if(!interrupted&&boundary==='directory'&&p===target){interrupted=true;throw Error('interrupted after rmdir');}}};
+  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process,require:name=>name==='fs'?wrapped:name==='./policy'?{...real(name),atomic:(file,value)=>{real(name).atomic(file,value);if(!interrupted&&boundary==='publication'){interrupted=true;throw Error('interrupted publication');}}}:real(name)});
+  await assert.rejects(module.exports.activateProduction(f.options),e=>e.outcome==='unknown');assert.equal(interrupted,true);const count=f.calls();
+  const result=await activateProduction({...f.options,resume:true});assert.equal(result.phase,'active');assert.equal(f.calls(),count+2);assert.equal(fs.existsSync(f.intent),false);assert.equal(fs.existsSync(path.dirname(f.record.token_file)),false);
+  const again=await activateProduction({...f.options,resume:true});assert.equal(again.receipt_sha256,result.receipt_sha256);assert.equal(f.calls(),count+4);
+ });
+});
+test('resume refuses incomplete ownership, foreign entries and changed native identity',linux,async()=>{
+ for(const mode of ['missing-intent','wrong-intent','foreign-token','marker','native'])await fixture(async f=>{
+  // Fail after durable intent, before any local cleanup.
+  await assert.rejects(activateProduction({...f.options,execute:async()=>{throw Error('unavailable');}}));
+  fs.unlinkSync(f.record.token_file);
+  if(mode==='missing-intent')fs.unlinkSync(f.intent);
+  if(mode==='wrong-intent')fs.writeFileSync(f.intent,'{}');
+  if(mode==='foreign-token')fs.writeFileSync(path.dirname(f.record.token_file)+'/foreign','keep');
+  if(mode==='marker')fs.writeFileSync(f.dir+'/state-install.pending','foreign');
+  const options={...f.options,resume:true};if(mode==='native')options.confirmNative=async()=>({...f.record.worker_identity,worker_id:'0'.repeat(32)});
+  await assert.rejects(activateProduction(options));assert.equal(fs.existsSync(f.file),false);assert.equal(fs.existsSync(f.dir+'/production-launch.pending'),true);
+ });
+});
