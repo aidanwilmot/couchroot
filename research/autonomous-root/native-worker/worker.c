@@ -38,6 +38,25 @@ static DIR *scan_directory(int dir) {
     close(scan);
   return d;
 }
+/* The supported TV kernels force SIGABRT on descriptor exhaustion instead
+ * of returning EMFILE. Check without allocating a descriptor. Bound the scan
+ * and fail closed if capacity cannot be established. */
+static int descriptor_capacity(int needed) {
+  struct rlimit limit;
+  if (getrlimit(RLIMIT_NOFILE, &limit))
+    return 0;
+  rlim_t bound = limit.rlim_cur < 4096 ? limit.rlim_cur : 4096;
+  int available = 0;
+  for (int fd = 0; (rlim_t)fd < bound; fd++) {
+    if (fcntl(fd, F_GETFD) < 0) {
+      if (errno != EBADF)
+        return 0;
+      if (++available == needed)
+        return 1;
+    }
+  }
+  return 0;
+}
 /* Lifecycle signals are delivered only to the protocol thread or guardian. */
 static void lifecycle_signals(sigset_t *set) {
   sigemptyset(set);
@@ -361,10 +380,33 @@ static void stop_signal(int sig) {
     kill_group(pid);
 }
 #include "fault-test.h"
+/* Protocol-thread allocations outside the job operations. Under the job mutex
+ * the monitor holds no descriptor; afterwards it opens at most one record at a
+ * time, so admission keeps one slot in reserve for it. */
+static int descriptor_admission(int needed) {
+  pthread_mutex_lock(&jobs_mutex);
+  int good = descriptor_capacity(needed + 1);
+  pthread_mutex_unlock(&jobs_mutex);
+  return good;
+}
+/* Peak descriptors each operation holds at once. A command needs both pipes
+ * plus its child's /dev/null; helper staging holds source, directory and
+ * target. Transfers keep one descriptor until closed. */
+static int operation_descriptors(const char *op) {
+  if (!strcmp(op, "app.exec"))
+    return 5;
+  if (!strcmp(op, "helper.prepare"))
+    return 3;
+  return !strcmp(op, "file.begin") || !strcmp(op, "file.open") ||
+         !strcmp(op, "file.commit") || !strcmp(op, "helper.release");
+}
 static J *operation(J *request, Wire *w, const char *seq) {
   const char *op = textval(request, "op");
   if (!op)
     return failure("Invalid operation");
+  int needed = operation_descriptors(op);
+  if (needed && !descriptor_admission(needed))
+    return failure("Insufficient descriptors; operation not started");
 #ifdef NATIVE_WORKER_FAULT_TEST
   if (!strcmp(op, "test.stall")) {
     int64_t thread = number(request, "thread");
@@ -387,11 +429,14 @@ static J *operation(J *request, Wire *w, const char *seq) {
     return helper_operation(request, op);
   if (!strcmp(op, "status")) {
     J *j = obj(), *caps = json_object_new_array();
-    char b[128];
     str(j, "boot_id", current_boot); /* Read once at startup; fixed per boot. */
-    readtext("/proc/uptime", b, sizeof b);
-    json_object_object_add(j, "uptime_seconds",
-                           json_object_new_double(strtod(b, NULL)));
+    /* /proc/uptime reports this clock in centiseconds; reading it needs no
+     * descriptor. */
+    struct timespec up;
+    if (clock_gettime(CLOCK_BOOTTIME, &up))
+      fatal("uptime");
+    double uptime = (double)up.tv_sec + up.tv_nsec / 10000000 / 100.0;
+    json_object_object_add(j, "uptime_seconds", json_object_new_double(uptime));
     str(j, "worker_id", worker_id);
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
@@ -781,6 +826,12 @@ int main(int argc, char **argv) {
       if (!decimal(f[2], &timeout) || timeout < 100 || timeout > 300000 ||
           !command || !len || len > 65536 || strlen((char *)command) != len)
         fatal("exec input");
+      /* Like a managed worker that cannot start a process, end the session
+       * without running the command; never reach the kernel abort path. */
+      if (!descriptor_admission(5)) {
+        errno = EMFILE;
+        fatal("insufficient descriptors; command not run");
+      }
       Result r = execute((char *)command, (int)timeout, 0);
       char *out = base64(r.out, r.outlen), *err = base64(r.err, r.errlen),
            *p = format("RESULT\t%s\t%d\t%d\t%s\t%s", f[1], r.code, r.timed, out,

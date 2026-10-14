@@ -319,7 +319,7 @@ static void *job_monitor(void *unused) {
         wake = now + 100;
       if (!strcmp(j->state, "running") && j->deadline < wake)
         wake = j->deadline;
-      /* A passed drain deadline waits for the leader's exit without spinning. */
+      /* A passed drain deadline waits for the leader's exit; never spin. */
       if (j->drain_deadline > now && j->drain_deadline < wake)
         wake = j->drain_deadline;
       if (j->pipes[0] < 0 && j->pipes[1] < 0)
@@ -409,6 +409,8 @@ static void jobs_cleanup(void) {
   }
 }
 static J *saved_job(J *request, const char *op, const char *id) {
+  if (!descriptor_capacity(1))
+    return failure("Insufficient descriptors; saved job not read");
   char name[80], bytes[2048];
   snprintf(name, sizeof name, "%s.json", id);
   switch (job_record_read(name, bytes)) {
@@ -455,29 +457,10 @@ static J *saved_job(J *request, const char *op, const char *id) {
   json_object_put(record);
   return failure("Operation unavailable for saved job; inspect status");
 }
-/* The supported TV kernels force SIGABRT on descriptor exhaustion instead
- * of simply returning EMFILE. Check without allocating a descriptor. The job
- * mutex excludes the monitor's record opens; its poll and the heartbeat
- * allocate none.
- * Six slots cover both output pipes and the launch gate. Closing their child
- * ends leaves room for identity reads and running-record persistence.
- * Bound the scan and fail closed if capacity cannot be established. */
-static int job_descriptor_capacity(int needed) {
-  struct rlimit limit;
-  if (getrlimit(RLIMIT_NOFILE, &limit))
-    return 0;
-  rlim_t bound = limit.rlim_cur < 4096 ? limit.rlim_cur : 4096;
-  int available = 0;
-  for (int fd = 0; (rlim_t)fd < bound; fd++) {
-    if (fcntl(fd, F_GETFD) < 0) {
-      if (errno != EBADF)
-        return 0;
-      if (++available == needed)
-        return 1;
-    }
-  }
-  return 0;
-}
+/* Job checks run under the job mutex, which excludes the monitor's record
+ * opens; its poll and the heartbeat allocate none. Six slots cover both output
+ * pipes and the launch gate. Closing their child ends leaves room for
+ * identity reads and running-record persistence. */
 static J *job_operation_locked(J *request, const char *op) {
   const char *id = textval(request, "id");
   if (!job_valid_id(id))
@@ -499,7 +482,7 @@ static J *job_operation_locked(J *request, const char *op) {
         (strcmp(profile, "root") && strcmp(profile, "app")))
       return failure("Invalid job request");
     int app = !strcmp(profile, "app");
-    if (!job_descriptor_capacity(1))
+    if (!descriptor_capacity(1))
       return failure("Insufficient descriptors; job not launched");
     if (app && !verified_launcher())
       return failure("Verified app launcher unavailable");
@@ -536,7 +519,7 @@ static J *job_operation_locked(J *request, const char *op) {
     int pipes[2][2] = {{-1, -1}, {-1, -1}}, gate[2] = {-1, -1};
     const char *why =
         "Insufficient descriptors; job intent retained, not launched";
-    if (!job_descriptor_capacity(6))
+    if (!descriptor_capacity(6))
       goto launch_failed;
     why = "Insufficient memory; job intent retained, not launched";
     for (int s = 0; s < 2; s++)

@@ -326,6 +326,61 @@ class NativeWorkerTests(unittest.TestCase):
             self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
             self.assertFalse(marker.exists());self.assertTrue(self.job('job.forget',id)['ok'])
 
+    def test_operation_descriptor_admission_boundaries(self):
+        import resource
+        original=resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE)
+        def fds():return {int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir()}
+        def limited(slots,action):
+            occupied=fds();limit=0;available=0
+            while available<slots:
+                if limit not in occupied:available+=1
+                limit+=1
+            try:
+                resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(limit,original[1]))
+                return action()
+            finally:
+                try:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)
+                except ProcessLookupError:pass  # The rejected legacy EXEC ends the worker.
+        def rejected(slots,op,**kwargs):
+            before=fds();r=limited(slots,lambda:self.op(op,**kwargs))
+            self.assertFalse(r['ok']);self.assertIn('Insufficient descriptors',r['error']);self.assertEqual(fds(),before)
+        boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        saved=self.root/'.jobs/native-admission-saved.json'
+        saved.write_text(json.dumps(dict(id='native-admission-saved',worker_id='f'*32,boot_id=boot,state='completed',exit_code=0)));saved.chmod(0o600)
+        (self.root/'readable').write_bytes(b'read');(self.root/'helper-source').write_bytes(b'helper');(self.root/'helper-source').chmod(0o600)
+        # Status needs no descriptor, even with none free.
+        self.assertTrue(limited(0,lambda:self.op('status'))['ok'])
+        rejected(0,'job.status',id='native-admission-saved')
+        self.assertTrue(limited(1,lambda:self.op('job.status',id='native-admission-saved'))['ok'])
+        rejected(1,'file.open',path=str(self.root/'readable'))
+        opened=limited(2,lambda:self.op('file.open',path=str(self.root/'readable')))
+        self.assertTrue(opened['ok']);self.assertTrue(self.op('file.close',transfer_id=opened['result']['transfer_id'])['ok'])
+        data=b'admitted';meta=dict(path=str(self.root/'admitted'),size=len(data),sha256=hashlib.sha256(data).hexdigest(),expected_sha256='absent')
+        rejected(1,'file.begin',**meta)
+        id=limited(2,lambda:self.op('file.begin',**meta))['result']['transfer_id']
+        self.assertTrue(self.upload(id,data)['ok'])
+        rejected(1,'file.commit',transfer_id=id);self.assertFalse((self.root/'admitted').exists())
+        self.assertTrue(limited(2,lambda:self.op('file.commit',transfer_id=id))['ok'])
+        self.assertEqual((self.root/'admitted').read_bytes(),data)
+        helper=dict(path=str(self.root/'helper-source'),sha256=hashlib.sha256(b'helper').hexdigest())
+        rejected(3,'helper.prepare',**helper)
+        # Host tests lack Smack staging: admission passes, staging then refuses.
+        self.assertNotIn('descriptors',limited(4,lambda:self.op('helper.prepare',**helper))['error'])
+        rejected(1,'helper.release',helper_id='0'*32)
+        self.assertEqual(limited(2,lambda:self.op('helper.release',helper_id='0'*32))['error'],'Unknown helper')
+        marker=self.root/'admission-command'
+        rejected(5,'app.exec',command='touch '+str(marker),timeout_ms=1000)
+        self.assertTrue(limited(6,lambda:self.op('app.exec',command='true',timeout_ms=1000))['ok'])
+        def exec_frame():
+            self.seq+=1;self.send(f'EXEC\t{self.seq}\t1000\t'+base64.b64encode(f'touch {marker}'.encode()).decode())
+        limited(6,lambda:(exec_frame(),self.receive()));self.assertTrue(marker.exists());marker.unlink()
+        # A legacy EXEC frame has no failure result: end the session unrun.
+        self.assertEqual(limited(5,lambda:(exec_frame(),self.stream.readline()))[1],b'')
+        self.assertEqual(self.proc.wait(timeout=5),1)
+        self.assertIn('insufficient descriptors; command not run',self.proc.stderr.read().decode())
+        self.assertFalse(marker.exists());self.assertFalse((self.root/'.jobs/guardian').exists())
+        self.restart();self.assertTrue(self.op('status')['ok'])
+
     def test_descriptor_sets_stable_across_command_and_job_lifecycles(self):
         fds=lambda pid:{p.name for p in Path(f'/proc/{pid}/fd').iterdir()}
         def cycle(n):
