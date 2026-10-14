@@ -461,7 +461,12 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
   highest-descriptor heuristic failed to induce exhaustion. Sparse-descriptor
   host regression coverage now reproduces that flaw; the corrected probe counts
   exactly three free slots below its soft limit. Both failed fixtures were cleaned
-  with original fallback invariants verified. The corrected device run is pending.
+  with original fallback invariants verified. The corrected device run then
+  exposed a real worker abort (SIGABRT) on both TVs. No command witness was
+  created; guardians retained interrupted records and cleaned owned resources.
+  Both complete fixture cleanups and fallback invariants passed. The abort remains
+  unresolved, and the expanded suite is not qualified. See
+  [resource-failure-results.json](resource-failure-results.json).
   The descriptor probe uses `prlimit64` on its live authenticated native child only;
   the controller, guardian and deployed fallback retain their original limits. Preserve bounded, in-memory output as the public contract, matching the
   deployed .NET implementation; durable output is not required for parity.
