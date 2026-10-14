@@ -70,13 +70,9 @@ static int helper_storage(void) {
     return 1;
   if (helper_owner_path[0] || !helper_parent_storage())
     return 0;
-  int scan = openat(helper_parent, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  DIR *entries = scan < 0 ? NULL : fdopendir(scan);
-  if (!entries) {
-    if (scan >= 0)
-      close(scan);
+  DIR *entries = scan_directory(helper_parent);
+  if (!entries)
     return 0;
-  }
   int retained = 0;
   struct dirent *entry;
   while ((entry = readdir(entries)))
@@ -241,8 +237,7 @@ static J *helper_operation(J *request, const char *op) {
   char actual[65];
   if (ok)
     ok = filedigest(target, actual) && !strcmp(actual, sha) &&
-         !fchmod(target, 0555) &&
-         !fsetxattr(target, "security.SMACK64", "User", 4, 0) &&
+         !fchmod(target, 0555) && !helper_label(target) &&
          !fsync(target) && !fsync(dir);
   close(source);
   if (target >= 0)

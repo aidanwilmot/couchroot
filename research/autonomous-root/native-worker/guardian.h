@@ -11,6 +11,8 @@ static void guardian_signal(int sig) {
   (void)sig;
   guardian_stop = 1;
 }
+/* Interrupts ppoll() only; waitpid() reports the actual event. */
+static void guardian_child_event(int sig) { (void)sig; }
 static void guardian_journal(const char *phase) {
   int prepared = !strcmp(phase, "ready");
   char identity[32];
@@ -150,13 +152,9 @@ static int guardian_remove_temporary(const char *name,
   return !unlinkat(jobs_dir, name, 0);
 }
 static int guardian_recover_intents(void) {
-  int scan = openat(jobs_dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  DIR *d = scan < 0 ? NULL : fdopendir(scan);
-  if (!d) {
-    if (scan >= 0)
-      close(scan);
+  DIR *d = scan_directory(jobs_dir);
+  if (!d)
     return 0;
-  }
   char prefix[48];
   snprintf(prefix, sizeof prefix, ".intent-%s-", worker_id);
   size_t length = strlen(prefix);
@@ -221,13 +219,9 @@ static int guardian_recover_intents(void) {
 static int guardian_recover_records(void) {
   if (!guardian_recover_intents())
     return 0;
-  int scan = openat(jobs_dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  DIR *d = scan < 0 ? NULL : fdopendir(scan);
-  if (!d) {
-    if (scan >= 0)
-      close(scan);
+  DIR *d = scan_directory(jobs_dir);
+  if (!d)
     return 0;
-  }
   struct dirent *entry;
   int good = 1;
   while ((entry = readdir(d))) {
@@ -239,27 +233,11 @@ static int guardian_recover_records(void) {
     id[len - 5] = 0;
     if (!job_valid_id(id))
       continue;
-    int fd = openat(jobs_dir, entry->d_name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-    struct stat st;
     char bytes[2048];
-    if (fd < 0) {
+    if (job_record_read(entry->d_name, bytes) != RECORD_READ) {
       good = 0;
       continue;
     }
-    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
-        (st.st_mode & 077) || st.st_size < 1 ||
-        st.st_size >= (off_t)sizeof bytes) {
-      close(fd);
-      good = 0;
-      continue;
-    }
-    ssize_t n = read(fd, bytes, sizeof bytes - 1);
-    close(fd);
-    if (n != st.st_size) {
-      good = 0;
-      continue;
-    }
-    bytes[n] = 0;
     J *r = parse(bytes);
     const char *owner = r ? textval(r, "worker_id") : NULL;
     if (!owner || strcmp(owner, worker_id)) {
@@ -282,8 +260,7 @@ static int guardian_recover_records(void) {
       good = 0;
       continue;
     }
-    if (!strcmp(state, "completed") || !strcmp(state, "cancelled") ||
-        !strcmp(state, "timed_out") || !strcmp(state, "interrupted")) {
+    if (job_terminal(state)) {
       json_object_put(r);
       continue;
     }
@@ -297,8 +274,8 @@ static int guardian_recover_records(void) {
     boolean(r, "output_available", 0);
     json_object_object_add(r, "exit_code", NULL);
     boolean(r, "timed_out", 0);
-    fd = openat(jobs_dir, next,
-                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    int fd = openat(jobs_dir, next,
+                    O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) {
       json_object_put(r);
       good = 0;
@@ -432,10 +409,7 @@ static void guardian_start(void) {
     fatal("native subreaper");
   guardian_pid = getpid();
   sigset_t blocked, previous;
-  sigemptyset(&blocked);
-  sigaddset(&blocked, SIGTERM);
-  sigaddset(&blocked, SIGINT);
-  sigaddset(&blocked, SIGALRM);
+  lifecycle_signals(&blocked);
   if (sigprocmask(SIG_BLOCK, &blocked, &previous))
     fatal("guardian signal mask");
   signal(SIGTERM, guardian_signal);
@@ -494,14 +468,23 @@ static void guardian_start(void) {
   signal(SIGTERM, guardian_signal);
   signal(SIGINT, guardian_signal);
   signal(SIGALRM, guardian_signal);
-  if (sigprocmask(SIG_SETMASK, &previous, NULL))
+  /* Trace stops pause supervised tasks until handled, so wait for events
+   * instead of sleeping. Lifecycle signals and SIGCHLD stay blocked except
+   * inside ppoll(), which closes the check-then-wait race. */
+  struct sigaction child_event = {.sa_handler = guardian_child_event};
+  sigset_t waiting = previous;
+  sigdelset(&waiting, SIGCHLD);
+  sigaddset(&blocked, SIGCHLD);
+  if (sigemptyset(&child_event.sa_mask) ||
+      sigaction(SIGCHLD, &child_event, NULL) ||
+      sigprocmask(SIG_BLOCK, &blocked, NULL))
     _exit(125);
   alarm(experiment_seconds + 10);
   int status = 0, worker_status = 0, worker_done = 0;
   close(pulse_pipe[1]);
   pulse_pipe[1] = -1;
   double stopping_at = 0, watchdog_started = 0, last_pulse = stamp();
-  int pulse_seen = 0, stalled = 0;
+  int pulse_seen = 0, pulse_open = 1, stalled = 0;
   while (!worker_done) {
     unsigned char pulses[128];
     ssize_t n;
@@ -512,6 +495,8 @@ static void guardian_start(void) {
         if (pulses[i] == 2 || pulses[i] == 3)
           stalled = pulses[i];
     }
+    if (!n)
+      pulse_open = 0; /* Every writer closed; stop polling its EOF. */
     if (n < 0 && errno != EAGAIN && errno != EINTR)
       _exit(125);
     pid_t got;
@@ -556,8 +541,24 @@ static void guardian_start(void) {
         kill(pid, SIGKILL);
       }
     }
-    usleep(10000);
+    /* Pulses, trace stops, exits and stop requests end the wait early. Timed
+     * wakes cover the heartbeat and stop deadlines; containment keeps the
+     * former 10 ms pass. */
+    int wait = 10;
+    if (!guardian_watchdog && !(stopping_at && stamp() - stopping_at > 3000)) {
+      double until = last_pulse + (pulse_seen ? 1000 : 5000) + 1;
+      if (stopping_at && stopping_at + 3001 < until)
+        until = stopping_at + 3001;
+      wait = wait_ms(until, 1000);
+    }
+    struct pollfd pulse = {pulse_open ? pulse_pipe[0] : -1, POLLIN, 0};
+    struct timespec limit = {wait / 1000, wait % 1000 * 1000000L};
+    if (ppoll(&pulse, 1, &limit, &waiting) < 0 && errno != EINTR)
+      usleep(10000); /* Degrade to the former fixed pass, never spin. */
   }
+  signal(SIGCHLD, SIG_DFL);
+  if (sigprocmask(SIG_SETMASK, &previous, NULL))
+    _exit(125);
   close(pulse_pipe[0]);
   pulse_pipe[0] = -1;
   alarm(0);
@@ -597,6 +598,5 @@ static void guardian_start(void) {
     close(directory);
   if (guardian_fault_signal)
     _exit(128 + guardian_fault_signal);
-  _exit(WIFEXITED(worker_status) ? WEXITSTATUS(worker_status)
-                                 : 128 + WTERMSIG(worker_status));
+  _exit(wait_code(worker_status));
 }

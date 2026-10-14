@@ -76,18 +76,8 @@ static void containment_enter(void) {
     fatal("join prototype freezer group");
   close(pulse_pipe[0]);
   pulse_pipe[0] = -1;
-  sigset_t mask, old;
-  sigemptyset(&mask);
-  sigaddset(&mask, SIGTERM);
-  sigaddset(&mask, SIGINT);
-  sigaddset(&mask, SIGALRM);
-  if (pthread_sigmask(SIG_BLOCK, &mask, &old))
-    fatal("heartbeat signal mask");
-  int error = pthread_create(&pulse_thread, NULL, pulse_main, NULL);
-  if (!error)
-    pulse_started = 1;
-  if (pthread_sigmask(SIG_SETMASK, &old, NULL) || error)
-    fatal("guardian heartbeat thread");
+  start_thread(&pulse_thread, pulse_main, &pulse_started,
+               "guardian heartbeat thread");
 }
 static void containment_worker_stop(void) {
   if (pulse_started) {

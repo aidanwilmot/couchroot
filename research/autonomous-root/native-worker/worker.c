@@ -1,6 +1,8 @@
 /* Experimental sidecar, not installed or selected by the production service.
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
 #include "common.h"
+#include <dirent.h>
+#include <pthread.h>
 #include "fault-events.h"
 #include "progress.h"
 typedef struct {
@@ -13,6 +15,48 @@ static unsigned experiment_seconds = 300;
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
 static volatile sig_atomic_t active_child = 0;
+/* Async-signal-safe. Callers keep the leader unreaped until after this group
+ * kill, so a recycled PID can never become the target. */
+static void kill_group(pid_t pid) {
+  kill(-pid, SIGKILL);
+  kill(pid, SIGKILL);
+}
+static int wait_code(int status) {
+  return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+}
+/* Milliseconds until a monotonic stamp, rounded up and bounded for poll(). */
+static int wait_ms(double until, int cap) {
+  double left = until - stamp();
+  return left <= 0 ? 0 : left >= cap ? cap : (int)left + 1;
+}
+/* Directory stream for an already-opened directory; the caller's descriptor
+ * stays open and owned by the caller. */
+static DIR *scan_directory(int dir) {
+  int scan = openat(dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  DIR *d = scan < 0 ? NULL : fdopendir(scan);
+  if (!d && scan >= 0)
+    close(scan);
+  return d;
+}
+/* Lifecycle signals are delivered only to the protocol thread or guardian. */
+static void lifecycle_signals(sigset_t *set) {
+  sigemptyset(set);
+  sigaddset(set, SIGTERM);
+  sigaddset(set, SIGINT);
+  sigaddset(set, SIGALRM);
+}
+static void start_thread(pthread_t *thread, void *(*body)(void *),
+                         int *started, const char *what) {
+  sigset_t blocked, previous;
+  lifecycle_signals(&blocked);
+  if (pthread_sigmask(SIG_BLOCK, &blocked, &previous))
+    fatal(what);
+  int error = pthread_create(thread, NULL, body, NULL);
+  if (!error)
+    *started = 1;
+  if (pthread_sigmask(SIG_SETMASK, &previous, NULL) || error)
+    fatal(what);
+}
 static void release(Transfer *t) {
   if (t->fd >= 0)
     close(t->fd);
@@ -28,8 +72,7 @@ static void containment_worker_stop(void);
 static void cleanup(void) {
   if (active_child > 0) {
     pid_t pid = active_child;
-    kill(-pid, SIGKILL);
-    kill(pid, SIGKILL);
+    kill_group(pid);
     active_child = 0;
     while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {
     }
@@ -175,13 +218,12 @@ static Result execute(const char *command, int timeout, int app) {
     if (ioctl(f[i].fd, FIONBIO, &(int){1}) < 0)
       fatal("nonblocking pipe");
   double deadline = stamp() + timeout;
-  int finished = 0, status = 0, openpipes = 2;
+  int finished = 0, status = 0, openpipes = 2, exit_wait = 1;
   while (!finished || openpipes) {
     progress_touch(&progress_main);
     if (stamp() >= deadline && !r.timed) {
       r.timed = 1;
-      kill(-pid, SIGKILL);
-      kill(pid, SIGKILL);
+      kill_group(pid);
     }
     if (!finished) {
       siginfo_t info;
@@ -196,7 +238,17 @@ static Result execute(const char *command, int timeout, int app) {
     }
     if (r.timed && stamp() > deadline + 2000)
       break;
-    int rc = poll(f, 2, 10);
+    /* Output and EOF wake poll directly. While a pipe is open, only the
+     * deadline, its post-kill drain bound and the progress lease need a timed
+     * wake. Once both pipes close, poll briefly for the exit status. */
+    int wait;
+    if (openpipes)
+      wait = wait_ms(r.timed ? deadline + 2001 : deadline, 1000);
+    else {
+      wait = exit_wait;
+      exit_wait = exit_wait < 8 ? exit_wait * 2 : 10;
+    }
+    int rc = poll(f, 2, wait);
     if (rc < 0 && errno != EINTR)
       fatal("poll");
     for (int i = 0; i < 2; i++) {
@@ -224,8 +276,7 @@ static Result execute(const char *command, int timeout, int app) {
   }
   /* Keep the leader waitable until its process group is killed; a reaped PID
    * must never remain a cancellation target while descendants hold pipes. */
-  kill(-pid, SIGKILL);
-  kill(pid, SIGKILL);
+  kill_group(pid);
   active_child = 0;
   while (waitpid(pid, &status, 0) < 0)
     if (errno != EINTR)
@@ -233,7 +284,6 @@ static Result execute(const char *command, int timeout, int app) {
   for (int i = 0; i < 2; i++)
     if (f[i].fd >= 0)
       close(f[i].fd);
-  active_child = 0;
   if (r.truncated) {
     const char *streams = r.truncated == 3   ? "stdout and stderr"
                           : r.truncated == 1 ? "stdout"
@@ -245,9 +295,7 @@ static Result execute(const char *command, int timeout, int app) {
       fatal("output notice");
     r.errlen += (size_t)n;
   }
-  r.code = r.timed             ? 124
-           : WIFEXITED(status) ? WEXITSTATUS(status)
-                               : 128 + WTERMSIG(status);
+  r.code = r.timed ? 124 : wait_code(status);
   return r;
 }
 static void result_free(Result *r) {
@@ -309,10 +357,8 @@ static void stop_signal(int sig) {
   if (signal_socket >= 0)
     shutdown(signal_socket, SHUT_RDWR);
   pid_t pid = active_child;
-  if (pid > 0) {
-    kill(-pid, SIGKILL);
-    kill(pid, SIGKILL);
-  }
+  if (pid > 0)
+    kill_group(pid);
 }
 #include "fault-test.h"
 static J *operation(J *request, Wire *w, const char *seq) {
@@ -342,8 +388,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
   if (!strcmp(op, "status")) {
     J *j = obj(), *caps = json_object_new_array();
     char b[128];
-    readtext("/proc/sys/kernel/random/boot_id", b, sizeof b);
-    str(j, "boot_id", b);
+    str(j, "boot_id", current_boot); /* Read once at startup; fixed per boot. */
     readtext("/proc/uptime", b, sizeof b);
     json_object_object_add(j, "uptime_seconds",
                            json_object_new_double(strtod(b, NULL)));

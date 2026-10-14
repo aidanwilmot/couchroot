@@ -16,6 +16,7 @@ static void fault_test_execute(void) {
     progress_test_stall(&progress_main);
   if (fault_test_requested == 4) {
     __atomic_store_n(&progress_test_jobs_stall, 1, __ATOMIC_RELAXED);
+    jobs_notify(); /* The idle monitor otherwise waits for its periodic wake. */
     fault_test_requested = 0;
   }
   if (fault_test_requested == 1)

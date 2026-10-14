@@ -188,13 +188,9 @@ static int reconcile_reservation(J *j, const char *phase) {
          !strcmp(actual, phase);
 }
 static int reconcile_empty_directory(int fd) {
-  int scan = openat(fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  DIR *d = scan < 0 ? NULL : fdopendir(scan);
-  if (!d) {
-    if (scan >= 0)
-      close(scan);
+  DIR *d = scan_directory(fd);
+  if (!d)
     return 0;
-  }
   struct dirent *e;
   int empty = 1;
   errno = 0;

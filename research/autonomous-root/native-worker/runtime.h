@@ -39,13 +39,10 @@ static int runtime_remove_view(const char *id, const char *binary_name) {
   struct stat st;
   int good = !fstat(fd, &st) && !st.st_uid && !(st.st_mode & 022);
   if (good) {
-    int scan = openat(fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    DIR *d = scan < 0 ? NULL : fdopendir(scan);
-    if (!d) {
-      if (scan >= 0)
-        close(scan);
+    DIR *d = scan_directory(fd);
+    if (!d)
       good = 0;
-    } else {
+    else {
       struct dirent *e;
       while ((e = readdir(d)))
         if (strcmp(e->d_name, ".") && strcmp(e->d_name, "..") &&
@@ -75,13 +72,9 @@ static int runtime_sweep(void) {
   }
   /* Called only after all worker descendants have been reaped. Never scan or
    * remove another worker's directory, even if it appears stale. */
-  int scan = openat(helper_owner, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  DIR *d = scan < 0 ? NULL : fdopendir(scan);
-  if (!d) {
-    if (scan >= 0)
-      close(scan);
+  DIR *d = scan_directory(helper_owner);
+  if (!d)
     return 0;
-  }
   struct dirent *e;
   int good = 1;
   while ((e = readdir(d))) {

@@ -1,7 +1,6 @@
 /* Prototype job supervision. Original Couchroot code. SPDX-License-Identifier:
  * 0BSD */
-#include <dirent.h>
-#include <pthread.h>
+#include <sys/eventfd.h>
 #include <sys/file.h>
 #include <sys/prctl.h>
 
@@ -17,11 +16,46 @@ typedef struct {
   JobLog logs[2];
 } Job;
 static Job jobs[16];
-static int jobs_dir = -1, jobs_lock = -1, jobs_started, jobs_stop;
+static int jobs_dir = -1, jobs_lock = -1, jobs_wake = -1, jobs_started,
+           jobs_stop;
 static pthread_t jobs_thread;
 static pthread_mutex_t jobs_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t jobs_changed;
 static char current_boot[80];
+/* Wake the monitor for a new, cancelled or stopping job. A saturated eventfd
+ * counter already has a wake pending. */
+static void jobs_notify(void) {
+  uint64_t one = 1;
+  ssize_t n = write(jobs_wake, &one, sizeof one);
+  (void)n;
+}
+static int job_terminal(const char *state) {
+  return !strcmp(state, "completed") || !strcmp(state, "cancelled") ||
+         !strcmp(state, "timed_out") || !strcmp(state, "interrupted");
+}
+static void job_clear(Job *j) {
+  for (int s = 0; s < 2; s++)
+    free(j->logs[s].bytes);
+  memset(j, 0, sizeof *j);
+}
+/* Bounded, private saved record. Callers parse the NUL-terminated bytes. */
+enum { RECORD_READ, RECORD_MISSING, RECORD_INVALID, RECORD_SHORT };
+static int job_record_read(const char *name, char bytes[2048]) {
+  int fd = openat(jobs_dir, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0)
+    return RECORD_MISSING;
+  struct stat st;
+  if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
+      (st.st_mode & 077) || st.st_size < 1 || st.st_size >= 2048) {
+    close(fd);
+    return RECORD_INVALID;
+  }
+  ssize_t n = read(fd, bytes, 2047);
+  close(fd);
+  if (n != st.st_size)
+    return RECORD_SHORT;
+  bytes[n] = 0;
+  return RECORD_READ;
+}
 static int job_identity(pid_t pid, char result[32]) {
   char path[64], buf[4096];
   snprintf(path, sizeof path, "/proc/%d/stat", pid);
@@ -149,12 +183,8 @@ static J *job_snapshot(Job *j) {
   return r;
 }
 static void job_kill(Job *j) {
-  /* Keep the leader unreaped until after the group kill, preventing PID reuse.
-   */
-  if (j->pid > 0 && !j->reaped) {
-    kill(-j->pid, SIGKILL);
-    kill(j->pid, SIGKILL);
-  }
+  if (j->pid > 0 && !j->reaped)
+    kill_group(j->pid);
 }
 static void log_add(JobLog *log, const unsigned char *p, size_t n) {
   size_t at = (size_t)(log->end % CHUNK),
@@ -184,6 +214,8 @@ static J *log_read(JobLog *log, int64_t cursor) {
 }
 static void *job_monitor(void *unused) {
   (void)unused;
+  struct pollfd ready[1 + 2 * 16];
+  int exit_wait = 1;
   for (;;) {
 #ifdef NATIVE_WORKER_FAULT_TEST
     if (__atomic_load_n(&progress_test_jobs_stall, __ATOMIC_RELAXED))
@@ -191,7 +223,11 @@ static void *job_monitor(void *unused) {
 #endif
     progress_touch(&progress_jobs);
     pthread_mutex_lock(&jobs_mutex);
-    int stop = jobs_stop;
+    int stop = jobs_stop, active = 0, exiting = 0, output = 0, watched = 1;
+    /* Periodic wake detects mutex/reacquisition stalls without treating an
+     * idle job queue as a deadlock. Active jobs are rechecked at least every
+     * 100 ms because a leader can exit while descendants hold its pipes. */
+    double wake = stamp() + 1000;
     for (int i = 0; i < 16; i++) {
       Job *j = &jobs[i];
       if (!j->id[0])
@@ -205,6 +241,8 @@ static void *job_monitor(void *unused) {
           j->save_failed = !job_save(j, 0);
           j->save_retry = now + 1000;
         }
+        if (j->save_failed && j->save_retry < wake)
+          wake = j->save_retry;
         continue;
       }
       if (stop || (now >= j->deadline && !strcmp(j->state, "running"))) {
@@ -221,9 +259,10 @@ static void *job_monitor(void *unused) {
            * siblings. */
           for (int batch = 0; batch < 32; batch++) {
             ssize_t n = read(j->pipes[stream], bytes, sizeof bytes);
-            if (n > 0)
+            if (n > 0) {
               log_add(&j->logs[stream], bytes, n);
-            else {
+              output = 1;
+            } else {
               if (!n || (errno != EAGAIN && errno != EINTR)) {
                 close(j->pipes[stream]);
                 j->pipes[stream] = -1;
@@ -256,9 +295,7 @@ static void *job_monitor(void *unused) {
           } while (got < 0 && errno == EINTR);
           j->reaped = 1;
           j->finished = 1;
-          j->code = got < 0             ? 125
-                    : WIFEXITED(status) ? WEXITSTATUS(status)
-                                        : 128 + WTERMSIG(status);
+          j->code = got < 0 ? 125 : wait_code(status);
           if (!strcmp(j->state, "running"))
             strcpy(j->state, "completed");
           if (!strcmp(j->state, "cancelling"))
@@ -273,29 +310,52 @@ static void *job_monitor(void *unused) {
           }
         j->save_failed = !job_save(j, 0);
         j->save_retry = now + 1000;
+        if (j->save_failed && j->save_retry < wake)
+          wake = j->save_retry;
+        continue;
       }
-    }
-    int active = 0;
-    for (int i = 0; i < 16; i++)
-      if (jobs[i].id[0] && !jobs[i].finished)
-        active = 1;
-    if (!stop && !active) {
-      /* Periodic wake detects mutex/reacquisition stalls without treating an
-       * idle job queue as a deadlock. Use monotonic time so wall-clock changes
-       * cannot turn an idle wait into a false progress timeout. */
-      struct timespec until;
-      clock_gettime(CLOCK_MONOTONIC, &until);
-      until.tv_nsec += 100000000;
-      if (until.tv_nsec >= 1000000000) {
-        until.tv_sec++;
-        until.tv_nsec -= 1000000000;
-      }
-      pthread_cond_timedwait(&jobs_changed, &jobs_mutex, &until);
+      active = 1;
+      if (now + 100 < wake)
+        wake = now + 100;
+      if (!strcmp(j->state, "running") && j->deadline < wake)
+        wake = j->deadline;
+      /* A passed drain deadline waits for the leader's exit without spinning. */
+      if (j->drain_deadline > now && j->drain_deadline < wake)
+        wake = j->drain_deadline;
+      if (j->pipes[0] < 0 && j->pipes[1] < 0)
+        exiting = 1;
+      for (int s = 0; s < 2; s++)
+        if (j->pipes[s] >= 0)
+          ready[watched++] = (struct pollfd){j->pipes[s], POLLIN, 0};
     }
     pthread_mutex_unlock(&jobs_mutex);
     if (stop && !active)
       break;
-    usleep(10000);
+    /* Only this thread closes job pipes, so the watched descriptors remain
+     * valid without the mutex. Output, EOF and jobs_notify() wake the poll.
+     * Once both pipes close, poll briefly for the leader's exit status. */
+    int timeout = wait_ms(wake, 1000);
+    if (exiting) {
+      if (timeout > exit_wait)
+        timeout = exit_wait;
+      exit_wait = exit_wait < 8 ? exit_wait * 2 : 10;
+    } else
+      exit_wait = 1;
+    if (stop && timeout > 10)
+      timeout = 10;
+    /* Batch a continuously writing job's output as the former fixed pass did,
+     * instead of taking the mutex for every small write. */
+    if (output)
+      usleep(10000);
+    ready[0] = (struct pollfd){jobs_wake, POLLIN, 0};
+    int events = poll(ready, watched, timeout);
+    if (events < 0 && errno != EINTR)
+      usleep(10000); /* Degrade to the former fixed pass, never spin. */
+    if (events > 0 && (ready[0].revents & POLLIN)) {
+      uint64_t pending;
+      ssize_t n = read(jobs_wake, &pending, sizeof pending);
+      (void)n;
+    }
   }
   progress_idle(&progress_jobs);
   return NULL;
@@ -317,41 +377,28 @@ static void jobs_storage(void) {
            sizeof current_boot);
 }
 static void jobs_init(void) {
-  pthread_condattr_t attr;
-  if (pthread_condattr_init(&attr) ||
-      pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) ||
-      pthread_cond_init(&jobs_changed, &attr))
-    fatal("job monitor monotonic condition");
-  pthread_condattr_destroy(&attr);
+  jobs_wake = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+  if (jobs_wake < 0)
+    fatal("job monitor wake");
   /* Deliver lifecycle signals on the protocol thread only. Its foreground PID
    * cannot be reaped concurrently with a signal handler targeting that PID. */
-  sigset_t blocked, previous;
-  sigemptyset(&blocked);
-  sigaddset(&blocked, SIGTERM);
-  sigaddset(&blocked, SIGINT);
-  sigaddset(&blocked, SIGALRM);
-  if (pthread_sigmask(SIG_BLOCK, &blocked, &previous))
-    fatal("supervisor signal mask");
-  int error = pthread_create(&jobs_thread, NULL, job_monitor, NULL);
-  if (!error)
-    jobs_started = 1;
-  if (pthread_sigmask(SIG_SETMASK, &previous, NULL) || error)
-    fatal("job supervisor");
+  start_thread(&jobs_thread, job_monitor, &jobs_started, "job supervisor");
 }
 static void jobs_cleanup(void) {
   if (jobs_started) {
     pthread_mutex_lock(&jobs_mutex);
     jobs_stop = 1;
-    pthread_cond_signal(&jobs_changed);
     pthread_mutex_unlock(&jobs_mutex);
+    jobs_notify();
     pthread_join(jobs_thread, NULL);
     jobs_started = 0;
   }
   for (int i = 0; i < 16; i++)
-    for (int s = 0; s < 2; s++) {
-      free(jobs[i].logs[s].bytes);
-      jobs[i].logs[s].bytes = NULL;
-    }
+    job_clear(&jobs[i]);
+  if (jobs_wake >= 0) {
+    close(jobs_wake);
+    jobs_wake = -1;
+  }
   if (jobs_lock >= 0) {
     close(jobs_lock);
     jobs_lock = -1;
@@ -364,21 +411,14 @@ static void jobs_cleanup(void) {
 static J *saved_job(J *request, const char *op, const char *id) {
   char name[80], bytes[2048];
   snprintf(name, sizeof name, "%s.json", id);
-  int fd = openat(jobs_dir, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-  struct stat st;
-  if (fd < 0)
+  switch (job_record_read(name, bytes)) {
+  case RECORD_MISSING:
     return failure("Unknown job");
-  if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
-      (st.st_mode & 077) || st.st_size < 1 ||
-      st.st_size >= (off_t)sizeof bytes) {
-    close(fd);
+  case RECORD_INVALID:
     return failure("Invalid job record");
-  }
-  ssize_t n = read(fd, bytes, sizeof bytes - 1);
-  close(fd);
-  if (n != st.st_size)
+  case RECORD_SHORT:
     return failure("Job record read failed");
-  bytes[n] = 0;
+  }
   J *record = parse(bytes);
   const char *state = record ? textval(record, "state") : NULL,
              *boot = record ? textval(record, "boot_id") : NULL;
@@ -387,8 +427,7 @@ static J *saved_job(J *request, const char *op, const char *id) {
       json_object_put(record);
     return failure("Invalid job record");
   }
-  int terminal = !strcmp(state, "completed") || !strcmp(state, "cancelled") ||
-                 !strcmp(state, "timed_out") || !strcmp(state, "interrupted");
+  int terminal = job_terminal(state);
   int rebooted = strcmp(boot, current_boot) != 0;
   J *r;
   if (!strcmp(op, "job.status")) {
@@ -418,7 +457,8 @@ static J *saved_job(J *request, const char *op, const char *id) {
 }
 /* The supported TV kernels force SIGABRT on descriptor exhaustion instead
  * of simply returning EMFILE. Check without allocating a descriptor. The job
- * mutex excludes the monitor's record opens; the heartbeat allocates none.
+ * mutex excludes the monitor's record opens; its poll and the heartbeat
+ * allocate none.
  * Six slots cover both output pipes and the launch gate. Closing their child
  * ends leaves room for identity reads and running-record persistence.
  * Bound the scan and fail closed if capacity cannot be established. */
@@ -465,14 +505,10 @@ static J *job_operation_locked(J *request, const char *op) {
       return failure("Verified app launcher unavailable");
     if (j || !empty)
       return failure("Job already exists or retention limit reached");
-    int count = 0,
-        scan = openat(jobs_dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    DIR *d = scan < 0 ? NULL : fdopendir(scan);
-    if (!d) {
-      if (scan >= 0)
-        close(scan);
+    int count = 0;
+    DIR *d = scan_directory(jobs_dir);
+    if (!d)
       return failure("Cannot inspect job retention");
-    }
     struct dirent *e;
     while ((e = readdir(d)))
       if (strstr(e->d_name, ".json"))
@@ -491,17 +527,25 @@ static J *job_operation_locked(J *request, const char *op) {
     gmtime_r(&now, &utc);
     strftime(j->started, sizeof j->started, "%Y-%m-%dT%H:%M:%SZ", &utc);
     if (!job_save(j, 1)) {
-      memset(j, 0, sizeof *j);
+      job_clear(j);
       return failure(
           "Job intent already exists or cannot be persisted; not launched");
     }
+    /* From here a published intent must never be reused or replayed. Every
+     * failure closes only descriptors this call allocated and keeps the ID. */
     int pipes[2][2] = {{-1, -1}, {-1, -1}}, gate[2] = {-1, -1};
+    const char *why =
+        "Insufficient descriptors; job intent retained, not launched";
     if (!job_descriptor_capacity(6))
       goto launch_failed;
+    why = "Insufficient memory; job intent retained, not launched";
     for (int s = 0; s < 2; s++)
       j->logs[s].bytes = calloc(1, CHUNK);
-    if (!j->logs[0].bytes || !j->logs[1].bytes || pipe2(pipes[0], O_CLOEXEC) ||
-        pipe2(pipes[1], O_CLOEXEC) || pipe2(gate, O_CLOEXEC))
+    if (!j->logs[0].bytes || !j->logs[1].bytes)
+      goto launch_failed;
+    why = "Job intent retained; launch failed";
+    if (pipe2(pipes[0], O_CLOEXEC) || pipe2(pipes[1], O_CLOEXEC) ||
+        pipe2(gate, O_CLOEXEC))
       goto launch_failed;
     for (int s = 0; s < 2; s++)
       if (ioctl(pipes[s][0], FIONBIO, &(int){1}))
@@ -558,27 +602,23 @@ static J *job_operation_locked(J *request, const char *op) {
         !job_write(gate[1], "1", 1)) {
       job_kill(j);
       close(gate[1]);
-      gate[1] = -1;
       strcpy(j->state, "cancelling");
-      pthread_cond_signal(&jobs_changed);
+      jobs_notify();
       return failure("Launch failed after intent; inspect job status");
     }
     close(gate[1]);
-    pthread_cond_signal(&jobs_changed);
+    jobs_notify();
     return success(job_snapshot(j));
   launch_failed:
-    for (int s = 0; s < 2; s++) {
+    for (int s = 0; s < 2; s++)
       for (int p = 0; p < 2; p++)
         if (pipes[s][p] >= 0)
           close(pipes[s][p]);
-      free(j->logs[s].bytes);
-      j->logs[s].bytes = NULL;
-    }
     for (int p = 0; p < 2; p++)
       if (gate[p] >= 0)
         close(gate[p]);
-    memset(j, 0, sizeof *j);
-    return failure("Job intent retained; launch failed");
+    job_clear(j);
+    return failure(why);
   }
   if (!j)
     return saved_job(request, op, id);
@@ -602,6 +642,7 @@ static J *job_operation_locked(J *request, const char *op) {
       strcpy(j->state, "cancelling");
       j->drain_deadline = stamp() + 2000;
       j->save_failed = !job_save(j, 0);
+      jobs_notify();
     }
     return success(job_snapshot(j));
   }
@@ -612,9 +653,7 @@ static J *job_operation_locked(J *request, const char *op) {
     snprintf(name, sizeof name, "%s.json", j->id);
     if (unlinkat(jobs_dir, name, 0) || fsync(jobs_dir))
       return failure("Cannot forget job record");
-    for (int s = 0; s < 2; s++)
-      free(j->logs[s].bytes);
-    memset(j, 0, sizeof *j);
+    job_clear(j);
     J *r = obj();
     boolean(r, "forgotten", 1);
     return success(r);

@@ -307,7 +307,7 @@ class NativeWorkerTests(unittest.TestCase):
                 try:
                     resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(limit,original[1]))
                     result=self.job('job.start',id,command='touch '+str(marker),timeout_ms=1000,profile='root')
-                    self.assertFalse(result['ok'])
+                    self.assertFalse(result['ok']);self.assertIn('Insufficient descriptors',result['error'])
                 finally:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)
                 self.assertFalse(marker.exists())
                 self.assertEqual({int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir()},occupied)
@@ -325,6 +325,32 @@ class NativeWorkerTests(unittest.TestCase):
             result=self.job('job.status',id)['result']
             self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
             self.assertFalse(marker.exists());self.assertTrue(self.job('job.forget',id)['ok'])
+
+    def test_descriptor_sets_stable_across_command_and_job_lifecycles(self):
+        fds=lambda pid:{p.name for p in Path(f'/proc/{pid}/fd').iterdir()}
+        def cycle(n):
+            self.seq+=1;self.send(f'EXEC\t{self.seq}\t5000\t'+base64.b64encode(b'i=0; while [ $i -lt 20 ]; do /bin/true; i=$((i+1)); done; exit 3').decode())
+            self.assertEqual(self.receive().split('\t')[2],'3')
+            for suffix,command,timeout,state,code in [('done','printf out; exit 4',5000,'completed',4),
+                    ('drain','sleep 30 & exit 5',5000,'completed',5),('timeout','sleep 30',300,'timed_out',137)]:
+                id=f'native-fd-{suffix}-{n}';self.start_job(command,timeout=timeout,id=id)
+                deadline=time.monotonic()+5
+                while (r:=self.job('job.status',id)['result'])['exit_code'] is None:
+                    self.assertLess(time.monotonic(),deadline);time.sleep(.02)
+                self.assertEqual((r['state'],r['exit_code']),(state,code))
+                self.assertFalse(self.job('job.start',id,command=':',timeout_ms=1000,profile='root')['ok'])
+                self.assertTrue(self.job('job.forget',id)['ok'])
+            id=f'native-fd-cancel-{n}';self.start_job('sleep 30',id=id)
+            self.assertTrue(self.job('job.cancel',id)['ok']);deadline=time.monotonic()+5
+            while (r:=self.job('job.status',id)['result'])['exit_code'] is None:
+                self.assertLess(time.monotonic(),deadline);time.sleep(.02)
+            self.assertEqual((r['state'],r['exit_code']),('cancelled',137));self.assertTrue(self.job('job.forget',id)['ok'])
+        cycle(0)
+        worker,guardian=fds(self.worker_pid),fds(self.proc.pid)
+        for n in range(1,3):
+            cycle(n)
+            self.assertEqual(fds(self.worker_pid),worker);self.assertEqual(fds(self.proc.pid),guardian)
+        self.assertEqual(sorted(p.name for p in (self.root/'.jobs').iterdir()),['guardian','lock'])
 
     def test_job_ring_cursors(self):
         self.start_job("head -c 1200000 /dev/zero; printf end; printf error >&2")
