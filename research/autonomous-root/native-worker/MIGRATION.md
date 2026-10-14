@@ -551,3 +551,27 @@ The deterministic test failed before the fix. The combined migration suite passe
 124 tests without skips. This is host validation; the deployed managed payloads
 on both TVs have not changed, and device qualification remains required before
 calling the repair deployed. No reboot was performed.
+
+### Retained-state receipt consumption — local follow-up
+
+The provider now binds acceptance to the receipt returned by its own installation
+operation. Acceptance reads the private durable receipt and saved snapshot,
+reconstructs the expected destination plan, checks transition identity/version,
+and rechecks both source inventory and installed content through the independent
+provider. Local ownership is checked around every remote await. Only then does
+it advance the selection journal from prepared to state-ready using the receipt
+digest. Managed remains selected, admission remains the controller's responsibility,
+and the installation ownership marker is retained for the launch/rollback phase.
+
+Repeating acceptance after a lost return is idempotent only for the same receipt
+and reverified remote state. Changed receipt, source, destination, saved snapshot,
+marker or selection refuses progress. An unfinished selection writer prevents
+remote work. This operation does not reacquire a provider after service restart.
+
+The combined Linux suite passes 128 tests without skips. The real managed-exit /
+independent-native-channel test now consumes the receipt before its host-fixture
+production launch, for both ordinary and BOM-prefixed JSON. Production launch in
+that test is still performed by the harness, not the installed service controller.
+Journaled production launch, readiness acceptance, rollback and both-TV stopping
+handoff therefore remain open. The deployed TV packages are unchanged; no reboot
+was performed.

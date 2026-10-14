@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
 const {snapshotManagedJobs}=require('../research/autonomous-root/service/retained-state');
-const {installRetainedState,planInstallation,validateSnapshot}=require('../research/autonomous-root/service/retained-install');
+const {installRetainedState,acceptRetainedState,planInstallation,validateSnapshot}=require('../research/autonomous-root/service/retained-install');
 const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
 const boot='00000000-0000-0000-0000-000000000001',source={boot_id:boot,worker_id:'a'.repeat(32),processes:{worker:{pid:42,start_ticks:'123'},guardian:null}},manifestSha256='b'.repeat(64),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 function snapshot(count=2){const records=Array.from({length:count},(_,i)=>{const name=('retained-job-'+String(i).padStart(4,'0')).padEnd(count===64?64:17,'x')+'.json',bytes=Buffer.from(JSON.stringify({id:name.slice(0,-5),boot_id:boot,state:i?'unknown':'completed',pid:0,exit_code:i?null:7}));return {name,size:bytes.length,sha256:hash(bytes),base64:bytes.toString('base64')};});const body={schema:1,implementation:'managed',source,records};return {...body,sha256:hash(Buffer.from(JSON.stringify(body)))};}
@@ -53,3 +53,41 @@ test('conflicting destination, unknown entries and changed selection refuse prog
 test('all 64 retained records install without reducing the retention contract',linux,()=>fixture(async f=>{
  const result=await installRetainedState(f.options);assert.equal(result.phase,'ready');for(const record of f.expected.records)assert.equal(hash(fs.readFileSync(f.target+'/state/.jobs/'+record.name)),record.sha256);
 },64));
+
+test('acceptance verifies durable state and advances only the pending state phase',linux,()=>fixture(async f=>{
+ const receipt=await installRetainedState(f.options),options={...f.options,receiptSha256:receipt.receipt_sha256};
+ const accepted=await acceptRetainedState(options);assert.equal(accepted.pending.phase,'state-ready');assert.equal(accepted.pending.state_sha256,receipt.receipt_sha256);assert.equal(accepted.selected.implementation,'managed');assert.equal(fs.existsSync(f.marker),true);
+ const again=await acceptRetainedState(options);assert.deepEqual(again,accepted);assert.equal(again.revision,3);
+}));
+test('acceptance refuses changed evidence without advancing selection',linux,async()=>{
+ for(const mode of ['receipt','source','destination','marker','journal','snapshot','selection','transport'])await fixture(async f=>{
+  const receipt=await installRetainedState(f.options),options={...f.options,receiptSha256:receipt.receipt_sha256};
+  if(mode==='receipt')options.receiptSha256='0'.repeat(64);
+  if(mode==='source')fs.writeFileSync(f.jobs+'/'+f.expected.records[0].name,'{}');
+  if(mode==='destination')fs.writeFileSync(f.target+'/state/.jobs/'+f.expected.records[0].name,'{}');
+  if(mode==='marker')fs.writeFileSync(f.marker,'f'.repeat(32)+'\n');
+  if(mode==='journal')fs.writeFileSync(f.file,fs.readFileSync(f.file,'utf8').replace('"ready"','"pending"'));
+  if(mode==='snapshot')fs.writeFileSync(f.saved,'{}');
+  if(mode==='selection')f.journal.advance(2,f.options.id,'rollback-required','f'.repeat(64));
+  if(mode==='transport')options.execute=async()=>{throw Error('transport unavailable');};
+  await assert.rejects(acceptRetainedState(options));assert.equal(f.journal.read().pending.phase,mode==='selection'?'rollback-required':'prepared');assert.equal(fs.existsSync(f.marker),true);
+ });
+});
+test('acceptance detects local ownership changes across remote awaits',linux,()=>fixture(async f=>{
+ const receipt=await installRetainedState(f.options);let changed=false;
+ await assert.rejects(acceptRetainedState({...f.options,receiptSha256:receipt.receipt_sha256,execute:async command=>{const r=await f.execute(command);if(!changed){changed=true;fs.writeFileSync(f.marker,'f'.repeat(32)+'\n');}return r;}}));
+ assert.equal(f.journal.read().pending.phase,'prepared');
+}));
+
+test('accepted state is reverified on repeat and unfinished selection publication blocks work',linux,async()=>{
+ for(const mode of ['repeat','writer'])await fixture(async f=>{
+  const receipt=await installRetainedState(f.options),options={...f.options,receiptSha256:receipt.receipt_sha256};
+  if(mode==='repeat'){
+   await acceptRetainedState(options);
+   fs.writeFileSync(f.target+'/state/.jobs/'+f.expected.records[0].name,'{}');
+  }else fs.writeFileSync(f.options.selectionFile+'.writer','incomplete',{mode:0o600});
+  const before=f.commands.length;await assert.rejects(acceptRetainedState(options));
+  assert.equal(f.journal.read().revision,mode==='repeat'?3:2);assert.equal(fs.existsSync(f.marker),true);
+  if(mode==='writer')assert.equal(f.commands.length,before);
+ });
+});

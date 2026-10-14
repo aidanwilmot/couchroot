@@ -5,7 +5,7 @@ const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {atomic}=require('./policy');
 const {privateRead}=require('./private-state');
 const {validateRecord,sourceExitGuard,snapshotManagedJobs}=require('./retained-state');
-const {selectionStatus}=require('./worker-selection');
+const {SelectionJournal,selectionStatus}=require('./worker-selection');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 function check(ok){if(!ok)throw Error('Retained state installation evidence unavailable');}
 function exact(value,keys){return value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===keys.slice().sort().join('|');}
@@ -80,4 +80,29 @@ async function installRetainedState(options){
   return Object.freeze({...ready,receipt_sha256:hash(Buffer.from(JSON.stringify(ready)))});
  }catch(cause){throw Object.assign(Error('Retained state installation requires reconciliation'),{outcome:'unknown',cause});}
 }
-module.exports={installRetainedState,planInstallation,validateSnapshot};
+// Consume a durable installation receipt only after independently reading both
+// inventories again. Selection remains pending; this is not launch readiness.
+async function acceptRetainedState({id,manifestSha256,receiptSha256,journalDirectory,selectionFile,execute}){
+ check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof selectionFile==='string'&&path.dirname(selectionFile)===journalDirectory);
+ const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ check(typeof id==='string'&&/^[a-f0-9]{32}$/.test(id)&&id.length===32&&typeof receiptSha256==='string'&&/^[a-f0-9]{64}$/.test(receiptSha256)&&receiptSha256.length===64);
+ const file=path.join(journalDirectory,id+'.state-install.json'),saved=path.join(journalDirectory,id+'.retained-snapshot.json'),marker=path.join(journalDirectory,'state-install.pending');
+ const snapshotText=privateRead(saved,262144),snapshot=validateSnapshot(JSON.parse(snapshotText));
+ const plan=planInstallation({snapshot,id,manifestSha256}),text=privateRead(file,16384),record=JSON.parse(text);
+ const expected={...plan.record,quiescence_sha256:record.quiescence_sha256,phase:'ready'};
+ check(text===JSON.stringify(expected)&&hash(Buffer.from(text))===receiptSha256);
+ const initial=selectionStatus(selectionFile),p=initial.pending;
+ check(initial.phase==='reconciliation-required'&&p&&p.id===id&&['prepared','state-ready'].includes(p.phase)&&p.from.implementation==='managed'&&p.to.implementation==='native-prototype'&&p.to.manifest_sha256===manifestSha256&&p.quiescence_sha256===record.quiescence_sha256);
+ if(p.phase==='state-ready')check(p.state_sha256===receiptSha256);
+ const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(initial)&&privateRead(marker,64)===id+'\n'&&privateRead(file,16384)===text&&privateRead(saved,262144)===snapshotText);};
+ owned();
+ const started=process.hrtime(),within=()=>{const elapsed=process.hrtime(started);check(elapsed[0]*1000+elapsed[1]/1000000<120000);};
+ const checkedExecute=async(command,timeout)=>{within();owned();const result=await execute(command,timeout);within();owned();return result;};
+ const before=await snapshotManagedJobs({source:snapshot.source,execute:checkedExecute});check(before.sha256===snapshot.sha256);
+ const installed=await checkedExecute(plan.inspect,25000);check(installed&&installed.exit_code===0&&!installed.timed_out&&!installed.stderr&&installed.stdout==='STATE-READY\n');
+ const after=await snapshotManagedJobs({source:snapshot.source,execute:checkedExecute});check(after.sha256===snapshot.sha256);owned();
+ if(p.phase==='state-ready')return new SelectionJournal(selectionFile).read();
+ try{return new SelectionJournal(selectionFile).advance(initial.revision,id,'state-ready',receiptSha256);}
+ catch(cause){throw Object.assign(Error('Retained state acceptance requires reconciliation'),{outcome:'unknown',cause});}
+}
+module.exports={installRetainedState,acceptRetainedState,planInstallation,validateSnapshot};

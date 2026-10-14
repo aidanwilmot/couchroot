@@ -4,7 +4,7 @@
 const {processIdentities}=require('./worker-processes');
 const {validateResourceInventory}=require('./worker-readiness');
 const {snapshotManagedJobs}=require('./retained-state');
-const {installRetainedState}=require('./retained-install');
+const {installRetainedState,acceptRetainedState}=require('./retained-install');
 const {inspectObserverUnit,retireObserverUnit}=require('./observer-unit');
 const HEX=/^[a-f0-9]{64}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const CAPS=['prototype-scoped-files-v1','worker-process-identity-v1','guardian-parent-identity-v1','resource-inventory-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1'];
@@ -36,7 +36,7 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
  const clock=()=>{const t=process.hrtime();return t[0]*1000+t[1]/1000000;};
  let expires=clock()+5000;
  const peer=channel._conn,expected={bootId:target.bootId,launcherSha256};
- let pinned=null,busy=false,failed=false,retirementEntered=false,retired=false,snapshotEntered=false,retainedSnapshot=null,installEntered=false;
+ let pinned=null,busy=false,failed=false,retirementEntered=false,retired=false,snapshotEntered=false,retainedSnapshot=null,installEntered=false,retainedInstallation=null,acceptEntered=false;
  function current(){requireValue(!failed&&channel._conn===peer&&peer&&clock()<expires);}
  async function verify(){
   current();const info=await channel.operation({op:'status'});current();
@@ -70,9 +70,15 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
+  acceptManagedState:async options=>{
+   requireValue(!busy&&!failed&&!acceptEntered&&retainedInstallation);busy=true;acceptEntered=true;expires=clock()+120000;
+   try{return await acceptRetainedState({...options,id:retainedInstallation.id,manifestSha256:retainedInstallation.manifest_sha256,receiptSha256:retainedInstallation.receipt_sha256,execute});}
+   catch(error){failed=true;throw error;}
+   finally{busy=false;}
+  },
   installManagedState:async options=>{
    requireValue(!busy&&!failed&&!installEntered&&retainedSnapshot);busy=true;installEntered=true;expires=clock()+120000;
-   try{return await installRetainedState({...options,snapshot:retainedSnapshot,execute});}
+   try{retainedInstallation=await installRetainedState({...options,snapshot:retainedSnapshot,execute});return retainedInstallation;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   }
