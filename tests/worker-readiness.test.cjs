@@ -27,7 +27,7 @@ test('native readiness requires pinned launcher and production lifetime',()=>{
  assert.throws(()=>validateReadiness(native(),{implementation:'native-prototype',bootId:BOOT}));
  assert.throws(()=>validateReadiness(managed(),expected));
 });
-function fixture(options={}){
+function fixture(options={},modules={}){
  const source=path.resolve(__dirname,'../research/autonomous-root/service/agent.js');
  const realRequire=createRequire(source),channels=[],timers=[];
  class Channel {
@@ -46,7 +46,7 @@ function fixture(options={}){
  const module={exports:{}};
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,__dirname:path.dirname(source),process,Buffer,
   setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},
-  require:name=>name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name)});
+  require:name=>modules[name]||(name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name))});
  const agent=module.exports.createAgent({device:'qn90a'},{verifyFirmware:()=>{},readBootId:()=>BOOT,...options});
  return {agent,channels,timers};
 }
@@ -213,6 +213,42 @@ test('shutdown refuses active resources changed inventory and unreadable process
    if(mode==='changed-inventory')info.resources.jobs.push({id:'completed-job-identity',state:'completed',monitor_finished:true});
    await assert.rejects(hold.shutdown(state.pending.id));assert.equal(stops,0);assert.equal(agent.status().admission_held,true);
    assert.equal(journal.read().pending.phase,'prepared');
+  }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
+});
+test('packaged observer staging binds target transaction and never retries uncertainty',async()=>{
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ for(const mode of ['success','lost','changed','target']){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'observer-stage-hold-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
+  journal.initialize({implementation:'managed',manifest_sha256:DIGEST});const events=[];
+  const modules={
+   './observer-stage':{stageObserver:async input=>{
+    events.push('stage');assert.equal(input.expectedManifest,'c'.repeat(64));assert.equal(input.bootId,BOOT);
+    await input.execute('stage fixture',25000);return {binary:'/fixture',sha256:'d'.repeat(64),manifest_sha256:input.expectedManifest};
+   }},
+   './pidfd-observer':{preparePidfdExit:async input=>{
+    events.push('bind');await input.confirm();events.push('confirm');
+    return {assertReady:()=>{},waitForExit:async()=>{events.push('exit');return {method:'pidfd'};},cancel:async()=>events.push('cancel')};
+   }}
+  };
+  const {agent,channels}=fixture({selectionFile:file,managedVersion:()=>DIGEST,stagePackagedObserver:true},modules);
+  agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();channel.operation=async()=>inventoried();
+   const hold=agent.holdAdmission(),inventory=await hold.snapshot();
+   await assert.rejects(hold.shutdown('missing'));assert.deepEqual(events,[]);
+   const digest=crypto.createHash('sha256').update(JSON.stringify(inventory)).digest('hex');
+   const state=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},digest);
+   channel.execute=async()=>{events.push('execute');if(mode==='lost')throw Error('lost stage reply');if(mode==='changed')journal.advance(2,state.pending.id,'state-ready','d'.repeat(64));if(mode==='target'){const altered=journal.read();altered.pending.to.manifest_sha256='e'.repeat(64);fs.writeFileSync(file,JSON.stringify(altered));}return {exit_code:0};};
+   channel.shutdown=async()=>{events.push('shutdown');ready.conn._socket.destroy();return {acknowledged:true,disconnected:true};};
+   if(mode==='success'){
+    const result=await hold.shutdown(state.pending.id);assert.equal(result.observer_stage.manifest_sha256,'c'.repeat(64));
+    assert.deepEqual(events,['stage','execute','bind','confirm','shutdown','exit','cancel']);
+   }else{
+    await assert.rejects(hold.shutdown(state.pending.id));assert.throws(()=>hold.release(),/unresolved observer staging/);
+    await assert.rejects(hold.shutdown(state.pending.id),/reconciliation/);assert.deepEqual(events,['stage','execute']);
+    assert.equal(agent.status().connected,true);
+   }
   }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
  }
 });

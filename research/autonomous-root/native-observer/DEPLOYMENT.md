@@ -1,6 +1,7 @@
 # Observer deployment gate
 
-The observer is packaged but not enabled by `service/main.js`. A successful host
+The observer is packaged; `service/main.js` now selects its staging path for an
+explicit internal S90D handoff. Startup alone does not stage or launch it. A successful host
 build or matching-credential probe is not evidence that the installed service can
 launch it. Both supported TVs still need actual service-side staging/launch and
 handoff validation. Keep the managed worker as the deployed fallback.
@@ -75,3 +76,30 @@ authoritative. Local state/selection/readiness tests passed (32 checks), and the
 seven bootstrap checks also passed under UID 5001/GID 100 in Linux. This does not
 qualify TV Smack behavior. The earlier signed candidates predate this new service
 module and must be rebuilt and inventory-reviewed before deployment.
+
+## Transaction-bound permission staging
+
+For S90D's internal handoff, the held service checks the prepared native target's
+manifest hash, validates the packaged observer, and asks the still-connected root
+worker to enable execute permission on that exact installed package member. Only
+the two known package layouts are accepted. The command checks boot, parent
+components, regular-file type, installer UID 201, single link, expected hash and
+mode 0644 or 0755 before changing the mode to 0755. It checks the same inode,
+ownership, length, digest, mode and boot afterward; the service revalidates the
+candidate manifest before binding pidfds. Bytes, labels and mounts are unchanged.
+The executable belongs to the installed package rather than a helper directory
+that worker shutdown would remove. Installer write permission is preserved.
+
+Staging runs only after a prepared transaction and drained inventory are bound to
+the held worker. Target/version changes, an uncertain command result or failed
+readback leave admission held and prevent staging retry. The prepared journal
+still blocks acquisition after service restart. This is not a public staging API
+or native selection activation. QN90A keeps its proc-stat observation path.
+
+Local tests cover real mode changes on an installer-owned, source-built candidate
+in an isolated container, refusal cases, no automatic retry, and transaction
+binding. The staging/readiness/state/candidate run passed 35 checks; the final
+handoff-target drift test passed in the 15-check readiness rerun. Twelve real-wire
+observer/shutdown checks also passed. The staged ARM binary was not executed in
+those staging tests; wire tests use the ordinary host build. TV service execution
+and its signature/label rules remain unqualified. No TV was contacted in this step.

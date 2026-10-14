@@ -71,8 +71,10 @@ all nine candidate-package tests passed; GLIBC remains capped at 2.17. This is
 local evidence only.
 
 Schema-2 candidate manifests now include the observer and its source/build hashes.
-Schema-1 candidates remain accepted without an observer. The observer is not
-enabled by `main.js`.
+Schema-1 candidates remain accepted without an observer. `main.js` selects the
+packaged permission-staging path for an explicit internal S90D handoff, with the
+prepared target manifest required. It does not stage at startup or select native.
+See [deployment details](DEPLOYMENT.md).
 Its launch from the actual installed TV service still needs qualification. Earlier
 TV pidfd probes establish kernel feasibility, not this executable's deployment.
 Do not enable production handoff based only on host tests. .NET remains deployed.

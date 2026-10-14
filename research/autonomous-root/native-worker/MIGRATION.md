@@ -224,6 +224,11 @@ The private-state bootstrap is now implemented locally, using
 Local tests include the unprivileged app UID. It is not yet deployed; rebuild the
 previously prepared signed candidates before installation. Observer executable
 staging and actual service-context validation remain open.
+The subsequent internal handoff now stages the exact manifest-bound installed
+observer's execute permission, verifies unchanged bytes/inode/owner, and binds
+pidfds only after readback. Unknown outcomes or target drift retain the admission
+hold and prepared journal. This is locally tested; actual TV service execution
+and native selection remain unqualified.
 
 Package ordinary worker, guardian functionality and app launcher from reproducible
 source builds. Do not ship fault-control operations or depend on a copied binary

@@ -7,6 +7,7 @@ const {validateReadiness,validateResourceInventory}=require('./worker-readiness'
 const {selectionStatus,managedVersion}=require('./worker-selection');
 const {processIdentities,observeProcesses,waitForProcessExit}=require('./worker-processes');
 const {preparePidfdExit}=require('./pidfd-observer');
+const {stageObserver}=require('./observer-stage');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -127,13 +128,16 @@ function createAgent(config,options={}){
    if(!options.selectionFile)throw Error('Durable selection required before shutdown');
    const state=selection(),p=state.pending;
    if(state.phase!=='reconciliation-required'||!p||p.id!==id||p.phase!=='prepared'||p.from.implementation!=='managed'||!sourceVersion||p.from.manifest_sha256!==sourceVersion||p.quiescence_sha256!==digest)throw Error('Selection does not bind this drained worker inventory');
+   const target=p.to.implementation+'|'+p.to.manifest_sha256;
+   if(token.targetVersion&&token.targetVersion!==target)throw Error('Selection target changed during handoff');
+   token.targetVersion=target;
   }
   return {
    snapshot:async()=>{if(token.preparingStop)throw Error('Worker shutdown preparation in progress');return snapshot();},
    shutdown:async transactionId=>{
-    current();if(token.stopping||token.preparingStop)throw Error('Worker shutdown already submitted');
+    current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Worker shutdown or observer staging requires reconciliation');
     token.preparingStop=true;
-    let observer=null;
+    let observer=null,stagedObserver=null;
     try{
     const inventory=await snapshot();current();if(token.stopping)throw Error('Worker shutdown already submitted');
     const r=inventory.resources;
@@ -141,8 +145,20 @@ function createAgent(config,options={}){
     const digest=hash(JSON.stringify(inventory));prepared(transactionId,digest);
     // Explicit trusted construction option only. Packaging/staging must provide
     // an immutable manifest-bound observer; never downgrade an EACCES to exit.
-    if(options.processObserver){
-     observer=await preparePidfdExit({...options.processObserver,bound:inventory,confirm:async()=>{
+    let observerOptions=options.processObserver;
+    if(!observerOptions&&options.stagePackagedObserver){
+     const target=selection().pending.to;
+     if(target.implementation!=='native-prototype')throw Error('Observer staging requires a native candidate target');
+     token.observerStaging=true;
+     stagedObserver=await stageObserver({payload,device:config.device,bootId:boot,expectedManifest:target.manifest_sha256,execute:async(command,timeout)=>{
+      current();prepared(transactionId,digest);
+      const result=await owner.execute(command,timeout);
+      current();prepared(transactionId,digest);return result;
+     }});
+     token.observerStaging=false;observerOptions=stagedObserver;
+    }
+    if(observerOptions){
+     observer=await preparePidfdExit({...observerOptions,bound:inventory,confirm:async()=>{
       const fresh=await snapshot();current();prepared(transactionId,digest);
       if(hash(JSON.stringify(fresh))!==digest)throw Error('Worker inventory changed after process handle binding');
       return fresh;
@@ -157,10 +173,10 @@ function createAgent(config,options={}){
     const exited=await (observer?observer.waitForExit():waitForProcessExit(inventory,{read:options.readProcessFile}));
     if(admissionHold!==token||generation!==gen||channel!==owner||!running)throw Error('Handoff ownership changed during shutdown');
     prepared(transactionId,digest);
-    return {transaction_id:transactionId,source_manifest_sha256:sourceVersion,inventory_sha256:digest,shutdown,exited};
+    return {transaction_id:transactionId,source_manifest_sha256:sourceVersion,inventory_sha256:digest,shutdown,exited,...(stagedObserver?{observer_stage:stagedObserver}:{})};
     }finally{try{if(observer)await observer.cancel();}finally{token.preparingStop=false;}}
    },
-   release:()=>{current();if(token.stopping||token.preparingStop)throw Error('Cannot release a pending shutdown');admissionHold=null;}
+   release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Cannot release a pending shutdown or unresolved observer staging');admissionHold=null;}
   };
  }
  return {status,start,stop,holdAdmission,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout))};
