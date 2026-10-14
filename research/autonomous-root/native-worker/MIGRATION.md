@@ -500,3 +500,37 @@ including integer types, escaped duplicate keys and UTF-8 BOM preservation. Thes
 are host results; both TVs remain on the previously qualified 0.7.13 packages.
 Destination staging, durable installation receipts, production native launch and
 rollback still need to consume this snapshot before stopping handoff is enabled.
+
+### Durable retained-state installation — local follow-up
+
+The independent provider can now install its own validated managed snapshot into
+an exclusive native state directory. A durable local intent and saved snapshot
+bind the selection transaction, source identity and target manifest before remote
+writes. A remote pending manifest prevents native startup during copying. Records
+are created without replacing differing content, checked against their hashes,
+and published with a synced import manifest only after source inventory is
+rechecked. The ready receipt retains transition ownership and does not change
+selection or launch the worker.
+
+Explicit resume requires the same saved snapshot, selection and remote ownership
+manifest. Tests cover lost begin/copy/commit replies, bounded scratch cleanup,
+source drift, conflicting destinations and all 64 records with maximum-length
+identifiers. Interruption before the remote ownership manifest exists remains a
+refusal requiring reconciliation; service restart/provider reacquisition is not
+implemented by this operation.
+
+A real native-channel host test now copies retained state after managed exit and
+starts a production-mode native worker against the installed directory. Both
+ordinary JSON and UTF-8 BOM records survive byte-for-byte through status readback
+and shutdown. This exposed and fixed a native saved-record parser discrepancy:
+the importer accepted BOM-prefixed JSON while the runtime rejected it. The fix
+is confined to saved job records, including guardian reads.
+
+The final combined Linux rerun passes 123 tests without skips, three targeted
+native retained-state/recovery tests pass, and the Python/JS importer contract
+comparison passes. An earlier combined run again exposed the existing managed
+short-job process-identity race; it remains unresolved. The test container also
+read an incomplete test source once; syntax validation and the complete rerun
+passed. These are host results, not on-TV installation qualification. Both TVs
+remain on service 0.7.13 with managed selection. Production launch orchestration,
+rollback and stopping-handoff qualification remain open; no reboot was performed.

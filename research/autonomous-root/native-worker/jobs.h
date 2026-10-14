@@ -57,6 +57,13 @@ static int job_record_read(const char *name, char bytes[2048]) {
   bytes[n] = 0;
   return RECORD_READ;
 }
+/* Managed retained JSON may begin with a UTF-8 BOM. Match the importer without
+ * rewriting the record or changing the protocol's JSON acceptance rules. */
+static J *job_record_parse(const char *bytes) {
+  if (strlen(bytes) >= 3 && !memcmp(bytes, "\xef\xbb\xbf", 3))
+    bytes += 3;
+  return parse(bytes);
+}
 static int job_identity(pid_t pid, char result[32]) {
   char path[64], buf[4096];
   snprintf(path, sizeof path, "/proc/%d/stat", pid);
@@ -462,7 +469,7 @@ static J *saved_job(J *request, const char *op, const char *id) {
   case RECORD_SHORT:
     return failure("Job record read failed");
   }
-  J *record = parse(bytes);
+  J *record = job_record_parse(bytes);
   const char *state = record ? textval(record, "state") : NULL,
              *boot = record ? textval(record, "boot_id") : NULL;
   const char *record_id = record ? textval(record, "id") : NULL;

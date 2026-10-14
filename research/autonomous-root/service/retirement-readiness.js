@@ -7,12 +7,7 @@ const {createObserverRetirement,validateProvider}=require('./observer-retirement
 const {inspectRetirementUnit}=require('./observer-unit');
 const {processIdentities}=require('./worker-processes');
 function check(ok){if(!ok)throw Error('Retirement readiness ownership unavailable');}
-function privateRead(file,limit){
- const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
- try{const st=fs.fstatSync(fd);check(st.isFile()&&st.uid===process.geteuid()&&st.nlink===1&&(st.mode&0o7777)===0o600&&st.size>0&&st.size<=limit);
-  const bytes=Buffer.alloc(st.size+1);let at=0;while(at<bytes.length){const n=fs.readSync(fd,bytes,at,bytes.length-at,null);if(!n)break;at+=n;}check(at===st.size);return bytes.subarray(0,at).toString();
- }finally{fs.closeSync(fd);}
-}
+const {privateRead}=require('./private-state');
 function validateRecord(record){
  check(record&&Object.keys(record).sort().join('|')==='boot_id|device|directory|id|launcher_sha256|manifest_sha256|observer_sha256|phase|port|schema|scope|source|token_file|token_sha256|unit|worker_sha256');
  check(record.schema===1&&record.phase==='submitted'&&typeof record.id==='string'&&record.id.length===32&&/^[a-f0-9]+$/.test(record.id)&&['s90d','qn90a'].includes(record.device));

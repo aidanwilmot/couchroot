@@ -1,15 +1,15 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{createRequire}=require('node:module'),{spawn}=require('node:child_process'),{once}=require('node:events');
 const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
 const {processIdentities}=require('../research/autonomous-root/service/worker-processes');
-test('native retirement channel remains usable after the real managed source exits',{
+for (const bom of [false,true]) test('native retirement channel migrates retained records after managed exit (BOM='+bom+')',{
  skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:20000
 },async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'independent-retirement-')),children=[],servers=[];
- async function start(name,native){
-  const dir=path.join(root,name);fs.mkdirSync(dir,{mode:0o700});const secret=crypto.randomBytes(32),token=path.join(dir,'token');fs.writeFileSync(token,secret.toString('base64'),{mode:0o600});
+ async function start(name,native,existing,production=false){
+  const dir=existing||path.join(root,name);if(!existing)fs.mkdirSync(dir,{mode:0o700});const secret=crypto.randomBytes(32),token=path.join(dir,'token');fs.writeFileSync(token,secret.toString('base64'),{mode:0o600});
   let accept;const ready=new Promise(resolve=>{accept=resolve;}),server=new RootAgentServer({secret,onConnect:accept});servers.push(server);await new Promise(resolve=>server.start(resolve));
   let command,args,sha;
-  if(native){const launcher=path.join(dir,'launcher');fs.copyFileSync('/bin/true',launcher);fs.chmodSync(launcher,0o600);sha=crypto.createHash('sha256').update(fs.readFileSync(launcher)).digest('hex');command=process.env.NATIVE_WORKER;args=['127.0.0.1',String(server.listeningPort()),token,dir,launcher,sha];}
+  if(native){const launcher=path.join(dir,'launcher');fs.copyFileSync('/bin/true',launcher);fs.chmodSync(launcher,0o600);sha=crypto.createHash('sha256').update(fs.readFileSync(launcher)).digest('hex');command=process.env.NATIVE_WORKER;args=['127.0.0.1',String(server.listeningPort()),token,dir,launcher,sha];if(production)args.push('--production');}
   else{command='dotnet';args=[process.env.MANAGED_PARITY,'--parity-wire',String(server.listeningPort()),dir];}
   const child=spawn(command,args,{stdio:['ignore','ignore','pipe']}),ended=once(child,'exit');let stderr='';child.stderr.on('data',data=>{stderr=(stderr+data).slice(-8192);});children.push({child,ended});
   const peer=await Promise.race([ready,ended.then(()=>{throw Error(name+' exited early: '+stderr);})]);
@@ -22,15 +22,15 @@ test('native retirement channel remains usable after the real managed source exi
   assert.equal(native.peer.identity.smack,'host-test-without-Smack');native.peer.identity.smack='System';
   const source=processIdentities(await managed.server.operation({op:'status'}),managed.peer.identity.pid);
   const unit='couchroot-observer-'+'a'.repeat(32)+'.service',bound={unit,bootId:source.boot_id,sha256:'b'.repeat(64)};
-  const retained=path.join(root,'retained'),jobs=path.join(retained,'jobs');fs.mkdirSync(retained,{mode:0o700});fs.mkdirSync(jobs,{mode:0o700});
-  const saved=Buffer.from(JSON.stringify({id:'retained-job-0001',boot_id:source.boot_id,state:'completed',pid:0,exit_code:7}));fs.writeFileSync(path.join(jobs,'retained-job-0001.json'),saved,{mode:0o600});
+  const installed=path.join(root,'installed'),retained=path.join(root,'retained'),jobs=path.join(retained,'jobs');fs.mkdirSync(retained,{mode:0o700});fs.mkdirSync(jobs,{mode:0o700});
+  const saved=Buffer.from((bom?'\uFEFF':'')+JSON.stringify({id:'retained-job-0001',boot_id:source.boot_id,state:'completed',pid:0,exit_code:7}));fs.writeFileSync(path.join(jobs,'retained-job-0001.json'),saved,{mode:0o600});
   const sourceFile=path.resolve(__dirname,'../research/autonomous-root/service/observer-retirement.js'),real=createRequire(sourceFile),module={exports:{}};
   let commands=0;
   const unitOperations={
    inspectObserverUnit:async o=>{commands++;const r=await o.execute('printf inspected',1000);assert.equal(r.stdout,'inspected');return {unit:o.unit};},
    retireObserverUnit:async o=>{commands++;const r=await o.execute('printf retired',1000);assert.equal(r.stdout,'retired');return {unit:o.unit,boot_id:o.bootId,retired:true};}
   };
-  vm.runInNewContext(fs.readFileSync(sourceFile,'utf8'),{module,process,require:name=>name==='./observer-unit'?unitOperations:name==='./retained-state'?{snapshotManagedJobs:options=>real(name).snapshotManagedJobs({...options,execute:(command,timeout)=>options.execute(command.replaceAll('/opt/couchroot-agent',retained),timeout)})}:real(name)});
+  vm.runInNewContext(fs.readFileSync(sourceFile,'utf8'),{module,process,require:name=>name==='./observer-unit'?unitOperations:name==='./retained-state'?{snapshotManagedJobs:options=>real(name).snapshotManagedJobs({...options,execute:(command,timeout)=>options.execute(command.replaceAll('/opt/couchroot-agent',retained),timeout)})}:name==='./retained-install'?{installRetainedState:options=>real(name).installRetainedState({...options,execute:(command,timeout)=>options.execute(command.replaceAll('/opt/couchroot-agent',retained).replaceAll('/opt/couchroot-worker-'+options.id,installed),timeout)})}:real(name)});
   const id='a'.repeat(32),record={schema:1,id,phase:'submitted',device:'s90d',manifest_sha256:'b'.repeat(64),worker_sha256:'b'.repeat(64),launcher_sha256:native.sha,observer_sha256:bound.sha256,boot_id:source.boot_id,source,unit:'couchroot-retirement-'+id+'.service',directory:'/opt/couchroot-retirement-'+id,scope:'/opt/couchroot-retirement-'+id+'/state',token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/retirement-ABC123/token',token_sha256:'b'.repeat(64),port:12345};
   const journalDirectory=path.join(root,'journal');fs.mkdirSync(journalDirectory,{mode:0o700});
   fs.writeFileSync(path.join(journalDirectory,id+'.retirement.json'),JSON.stringify(record),{mode:0o600});fs.writeFileSync(path.join(journalDirectory,'retirement-launch.pending'),id+'\n',{mode:0o600});
@@ -43,6 +43,13 @@ test('native retirement channel remains usable after the real managed source exi
   await assert.rejects(managed.server.execute('must not execute',1000));
   assert.equal((await provider.inspectUnit(bound)).unit,unit);assert.equal((await provider.retireUnit(bound)).retired,true);assert.equal(commands,2);
   const snapshot=await provider.snapshotManagedJobs();assert.equal(snapshot.records.length,1);assert.equal(Buffer.from(snapshot.records[0].base64,'base64').equals(saved),true);assert.equal(fs.readFileSync(path.join(jobs,'retained-job-0001.json')).equals(saved),true);
+  const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),selectionFile=path.join(journalDirectory,'worker-selection.json'),selection=new SelectionJournal(selectionFile);selection.initialize({implementation:'managed',manifest_sha256:'b'.repeat(64)});const transition=selection.begin(1,{implementation:'native-prototype',manifest_sha256:'b'.repeat(64)},'c'.repeat(64));
+  const installation=await provider.installManagedState({id:transition.pending.id,manifestSha256:'b'.repeat(64),journalDirectory,selectionFile});assert.equal(installation.phase,'ready');assert.equal(selection.read().pending.phase,'prepared');
+  assert.equal(fs.readFileSync(path.join(installed,'state','.jobs','retained-job-0001.json')).equals(saved),true);
+  const production=await start('production',true,path.join(installed,'state'),true);const productionInfo=await production.server.operation({op:'status'});assert.equal(productionInfo.lifetime_mode,'production');assert.equal(productionInfo.lifetime_seconds,0);
+  const retainedStatus=await production.server.operation({op:'job.status',id:'retained-job-0001'});assert.equal(retainedStatus.state,'completed');assert.equal(retainedStatus.record.exit_code,7);assert.equal(retainedStatus.output_available,false);
+  assert.deepEqual(await production.server.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await production.ended,[0,null],production.stderr());
+  assert.equal(fs.readFileSync(path.join(installed,'state','.jobs','retained-job-0001.json')).equals(saved),true);
   const stopped=await require('../research/autonomous-root/service/retirement-teardown').shutdownRetirement({record:readyRecord,journalDirectory,channel:native.server});assert.equal(stopped.phase,'shutdown-acknowledged');assert.deepEqual(await native.ended,[0,null],native.stderr());
   assert.equal(fs.existsSync(path.join(native.dir,'.jobs','guardian')),false);assert.equal(fs.existsSync(path.join(native.dir,'.views')),false);
   assert.doesNotMatch(native.stderr(),/AddressSanitizer|runtime error:|recovery incomplete/);

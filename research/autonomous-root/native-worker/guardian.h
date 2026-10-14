@@ -238,7 +238,7 @@ static int guardian_recover_records(void) {
       good = 0;
       continue;
     }
-    J *r = parse(bytes);
+    J *r = job_record_parse(bytes);
     const char *owner = r ? textval(r, "worker_id") : NULL;
     if (!owner || strcmp(owner, worker_id)) {
       if (r)

@@ -76,4 +76,4 @@ async function snapshotManagedJobs({source,execute}){
  const result={schema:1,implementation:'managed',source:JSON.parse(JSON.stringify(source)),records};
  return {...result,sha256:sha(Buffer.from(JSON.stringify(result)))};
 }
-module.exports={snapshotManagedJobs,validateRecord,manifestCommand};
+module.exports={snapshotManagedJobs,validateRecord,manifestCommand,sourceExitGuard:guard};
