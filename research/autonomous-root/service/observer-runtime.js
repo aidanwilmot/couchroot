@@ -91,6 +91,10 @@ async function prepareRuntimeObserver({directory,requestId,staged,bound,confirm,
    if(unit.active_state!=='active'||unit.sub_state!=='running'||unit.main_pid<=1)throw Error('Observer supervisor not running');
    const actual=await readCredentials(execute,unit.main_pid,bound.boot_id);
    if(JSON.stringify(actual)!==JSON.stringify(credentials))throw Error('Observer supervisor credentials changed');
+   if(purpose==='handoff'){
+    const independent=await inspect(identity(unit.unit));
+    if(!independent||['unit','boot_id','active_state','sub_state','main_pid','started_monotonic'].some(key=>independent[key]!==unit[key]))throw Error('Independent observer retirement readiness changed');
+   }
    return confirm();
   },
   inspectUnit:unit=>inspect(identity(unit)),retireUnit:unit=>retire(identity(unit))});

@@ -407,3 +407,34 @@ QN90A remained on its established managed fallback; its proc-stat probe passed i
 0.156 seconds with worker and boot unchanged. These results qualify the
 non-stopping observer path only. Post-worker-exit execution and full native
 selection/migration remain separate gates; .NET is still the deployed fallback.
+
+
+## Scoped native retirement adapter — 2026-10-14
+
+Both TVs passed the new retirement adapter using their ordinary packaged native
+worker/launcher artifacts, verified against the installed candidate manifest.
+Each test launched a distinct, 300-second bounded native instance with its own
+private experiment directory and guardian. Root/System authentication, launcher
+digest, empty resources and independent process identities were checked through
+the real wire protocol. The adapter inspected a deliberately empty completed
+observer-named test unit, stopped it without blocking, verified termination, and
+removed its hash-bound staged observer file. The actual external observer was
+not launched or used to stop the managed source in this test.
+
+Both native instances acknowledged shutdown. Follow-up inspection established
+successful unit completion, worker/guardian exit, removal of the guardian journal,
+and retirement of the provider unit and its owned files. Both deployed managed
+workers and boot identities were unchanged. The tests neither selected native
+production mode nor changed the installed service package.
+
+The initial S90D attempts exposed the scoped launcher's source-path requirement;
+its source now sits inside the experiment directory, while the worker executable
+has a separate read-only view. Host callback attempts then encountered the Mac's
+incoming Node restriction; a short-lived, TV-address-restricted Python relay
+carried the unchanged authenticated protocol to the loopback Node listener. No
+firewall settings were changed. The installed service will use loopback directly.
+All failed test units and their known staging files were reconciled and removed.
+
+Remaining work is the service-owned, journaled provider launch/teardown lifecycle
+and stopping handoff qualification on both TVs. The adapter's per-instance
+no-retry state does not replace a durable transition journal after service restart.

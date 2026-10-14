@@ -323,5 +323,33 @@ The service's internal shutdown path stages and binds the observer before
 shutdown, rechecks the journal-bound inventory, then uses that independent
 cleanup boundary after disconnect. Success still leaves selection prepared and
 admission held; it does not start a native worker or commit a migration. The
-installed service supplies no provider and keeps shutdown disabled. Current
-local tests use controlled provider fixtures, not a qualified on-TV replacement.
+installed service supplies no provider and keeps shutdown disabled. The
+shutdown bridge tests use controlled provider fixtures; the adapter validation
+below does not qualify installed-service handoff.
+
+
+### Native retirement provider
+
+`observer-retirement.js` adapts a separately launched native worker channel to
+only `inspectUnit` and `retireUnit`. It requires a 300-second bounded instance
+with scoped files, no retained resources, an independently staged pinned launcher,
+root/System authentication, and worker/guardian identities distinct from the
+source. Boot, connection, process identities and resources are rechecked around
+each command. Each adapter binds exactly one observer unit and digest; parallel
+operations, replacement peers, overdue replies and uncertain retries are refused.
+Handoff readiness also compares independent and source-worker unit observations
+before the source can be stopped.
+
+This reuses the ordinary native worker protocol and guardian. It does not create
+a new generic command endpoint or a managed maintenance dependency. Its caller
+must still stage the candidate, publish a durable launch intent, provide the
+private token, and own provider shutdown/staging reconciliation. Scoped mode
+requires the launcher source inside the experiment directory, separately from
+the read-only executable view. The service does not yet construct that lifecycle.
+
+Local integration stops a real managed wire peer and then executes adapter
+commands through a separate native wire peer. That host build stubs Smack/mount
+setup and unit operations. Independent tests on both TVs used ordinary packaged
+binaries, real System authentication, actual systemd unit inspection/retirement,
+and root-owned staging cleanup; their managed workers stayed running. Neither
+test substitutes for the installed-service stopping handoff gate.
