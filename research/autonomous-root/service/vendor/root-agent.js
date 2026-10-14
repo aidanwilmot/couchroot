@@ -17,6 +17,7 @@
 
 var net = require('net');
 var crypto = require('crypto');
+var operationDeadline = require('../operation-deadlines').operationDeadline;
 
 var PROTOCOL_VERSION = 'SAMSUNG-TV-ROOT/1';
 var MAX_FRAME_BYTES = 8 * 1024 * 1024;
@@ -323,7 +324,7 @@ RootAgentConnection.prototype.operation = function (value, data) {
         return Promise.reject(Object.assign(Error('Operation unavailable or oversized'), {outcome:'rejected'}));
     return new Promise(function(resolve,reject) {
         var seq=++self._sequence;
-        var timer=setTimeout(function(){delete self._pending[seq];reject(Error('Operation outcome unknown'));self._socket.destroy();},30000);
+        var timer=setTimeout(function(){delete self._pending[seq];reject(Object.assign(Error('Operation outcome unknown'),{outcome:'unknown'}));self._socket.destroy();},operationDeadline(value.op));
         self._pending[seq]={resolve:resolve,reject:reject,timer:timer,read:value.op==='file.read'?{offset:value.offset,length:value.length}:null};
         try {
             if (binary) {

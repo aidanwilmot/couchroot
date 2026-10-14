@@ -60,3 +60,15 @@ class RootAgentClientTests(unittest.TestCase):
                 self.assertEqual(operation.call_count,2)
 
 if __name__=='__main__':unittest.main()
+
+class OperationDeadlineTests(unittest.TestCase):
+    def test_client_budgets_match_contract_and_are_passed_per_operation(self):
+        import json
+        contract=json.loads((SOURCE.parent.parent.parent/'tests/worker-parity/contract.json').read_text())
+        deadlines=contract['response_deadlines']
+        for op in contract['operations']:
+            expected=(deadlines['operation_ms'].get(op,deadlines['default_ms'])+deadlines['client_margin_ms'])/1000
+            with self.subTest(op=op),patch.object(client,'request',return_value={}) as request:
+                self.assertEqual(client.operation_timeout(op),expected)
+                client.operation({},dict(op=op,timeout_ms=86400000))
+                self.assertEqual(request.call_args.kwargs['timeout'],expected)

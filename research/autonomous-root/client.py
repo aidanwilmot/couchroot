@@ -108,10 +108,22 @@ def request(config, method, route, body=None, *, binary=None, raw_response=False
         return transport.request(method, route, body, binary=binary, raw_response=raw_response, timeout=timeout)
 
 
+# Fixed budgets mirrored in service/operation-deadlines.js; the parity contract
+# checks both implementations. These do not extend command or job run deadlines.
+OPERATION_TIMEOUT_MS = {
+    'file.open': 120000, 'file.commit': 120000, 'helper.prepare': 120000,
+    'file.read': 60000, 'file.write': 60000,
+}
+
+
+def operation_timeout(op):
+    return (OPERATION_TIMEOUT_MS.get(op, 30000) + 10000) / 1000
+
+
 def operation(config, value, *, binary=None, session=None):
     envelope=dict(id=str(uuid.uuid4()), operation=value)
     route='/v1/files/write' if binary is not None else '/v1/files/read' if value['op']=='file.read' else '/v1/op'
-    return request(config,'POST',route,envelope,binary=binary,raw_response=value['op']=='file.read',session=session)
+    return request(config,'POST',route,envelope,binary=binary,raw_response=value['op']=='file.read',session=session,timeout=operation_timeout(value['op']))
 
 
 def file_digest(stream):

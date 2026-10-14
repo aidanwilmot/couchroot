@@ -172,3 +172,35 @@ The service's 30-second OP response budget, client deadlines, job-record flush
 latency under its mutex, startup before guardian activation, actual TV storage,
 Smack helper staging and long-running endurance remain separate integration and
 qualification work. No request is automatically replayed after a timeout.
+
+## Subsequent local transport-deadline validation — 2026-10-14
+
+The service and bundled client now use fixed, operation-specific response budgets:
+120 seconds for open/commit/helper preparation, 60 seconds for file chunks, and
+30 seconds otherwise. The API adds five seconds of transport margin and the client
+ten seconds. New requests reset the HTTPS inactivity budget so reused connections
+do not inherit a previous operation's allowance. Command/job execution deadlines,
+body admission and keep-alive limits are unchanged. A request field cannot extend
+its response budget. The operation journal keeps its existing admission envelope;
+response budgets are not job execution timeouts.
+
+Expiry explicitly reports an unknown outcome and closes the worker connection.
+A submitted mutation remains in the journal, and replay of its request ID is
+rejected before another worker submission. Confirmed responses clear their timer.
+Both JavaScript and Python budgets are checked against the parity contract.
+
+Four new Node tests passed, including a real 42-second request through the pinned
+Python client, mutual-TLS API and authenticated loopback protocol server. That
+check uses a scripted peer, not a native worker or TV, and crosses the old 30/35/40
+second wire/API/client limits. Twenty existing service/protocol tests also passed,
+including additional unknown-operation journal/no-replay assertions. Repository
+Python discovery passed 238 tests with 74 native fixture tests skipped. The client
+reuse test confirms per-operation socket budgets of 130, 70 and 40 seconds on the
+same pinned connection. No TV was contacted, rebooted or switched.
+
+These budgets are candidate defaults, not throughput guarantees. Qualification
+must still run the ordinary packaged native worker through this service on both
+TVs, reconcile observed operation tails, and verify deployment and rollback with
+retained state. Older separately copied clients need updating to use the longer
+budgets. Native packaging, implementation selection and later lifecycle gates in
+`MIGRATION.md` remain open.

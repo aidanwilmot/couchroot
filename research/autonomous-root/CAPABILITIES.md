@@ -20,6 +20,17 @@ confirmed. An operation failure does not imply rollback of its intermediate work
 The client never automatically replays commands or writes. Consult the request
 journal and operation status after a lost response.
 
+Operation response budgets in the migration candidate are 120 seconds for
+`file.open`, `file.commit` and `helper.prepare`, 60 seconds for `file.read` and
+`file.write`, and 30 seconds for other worker operations. HTTPS allows a further
+five seconds and the bundled client ten seconds for the response. These fixed
+budgets cannot be extended by request fields. They do not change command/job
+execution deadlines, the native progress watchdog, request-body admission, or the
+five-second keep-alive idle limit. Expiry closes the worker connection, returns an
+unknown outcome and leaves a submitted mutation in the journal; it never retries
+it. Older deployed clients retain their earlier timeout until updated. These
+budgets have local transport validation and are not yet deployed to either TV.
+
 `AgentTransport.execute_result()` returns the complete result. Existing setup
 callers retain checked execution; `_execute(..., check=False)` is available when
 only stdout is needed and a nonzero exit is expected.

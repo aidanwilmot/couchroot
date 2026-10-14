@@ -1,11 +1,14 @@
 'use strict';
 const https=require('https'),crypto=require('crypto');
 const {hash,validateRequest}=require('./policy');
+const {operationDeadline,HTTP_MARGIN_MS}=require('./operation-deadlines');
 function createApi(options){
  const {credentials,clientPin,agent,journal,setEnabled}=options;
  let busy=false;
  const requestsPerSocket=new WeakMap();
  const server=https.createServer(Object.assign({},credentials,{requestCert:true,rejectUnauthorized:true,minVersion:'TLSv1.2'}),async(req,res)=>{
+  // Reset on every request so keep-alive cannot inherit a longer prior budget.
+  req.setTimeout(35000);
   const count=(requestsPerSocket.get(req.socket)||0)+1;requestsPerSocket.set(req.socket,count);
   const reuse=String(req.headers.connection||'').toLowerCase()==='keep-alive'&&count<128;
   const responseHeaders=(status,type,length)=>({
@@ -43,6 +46,7 @@ function createApi(options){
     if(!agent.status().connected||agent.status().worker_ready===false){reply(503,{outcome:'rejected',error:'Root agent unavailable'});return;}
     const readOnly=['file.read','file.status','job.status','job.output'].includes(operation.op);
     if(!readOnly){journal.begin({id:value.id,command:'operation:'+hash(JSON.stringify(operation)),timeout_ms:25000});operationId=value.id;}
+    req.setTimeout(operationDeadline(operation.op)+HTTP_MARGIN_MS);
     submitted=true;
     const result=await agent.operation(operation,operation.op==='file.write'?raw:undefined);
     if(operationId)journal.finish(operationId,{exit_code:Number.isInteger(result.exit_code)?result.exit_code:0,timed_out:!!result.timed_out});

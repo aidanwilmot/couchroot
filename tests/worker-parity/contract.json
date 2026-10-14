@@ -151,5 +151,18 @@
   "legacy_frames": {
     "READFILE": "not in public replacement contract",
     "WRITEFILE": "not in public replacement contract"
+  },
+  "response_deadlines": {
+    "default_ms": 30000,
+    "operation_ms": {
+      "file.open": 120000,
+      "file.commit": 120000,
+      "helper.prepare": 120000,
+      "file.read": 60000,
+      "file.write": 60000
+    },
+    "http_margin_ms": 5000,
+    "client_margin_ms": 10000,
+    "on_expiry": "unknown; close connection; do not replay; retain submitted journal entry"
   }
 }

@@ -42,9 +42,9 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
   const serverCert=cert('server'),clientCert=cert('client'),foreign=cert('foreign');
   const pin=hash(new crypto.X509Certificate(clientCert.cert).raw);
-  let calls=0,enabled=true,uncertain=false,exitCode=0,badChunk=false;
+  let calls=0,enabled=true,uncertain=false,exitCode=0,badChunk=false,operationUncertain=false,operationCalls=0;
   const downloadBytes=Buffer.from([0,10,13,128,255]);
-  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async (op,data)=>{if(op.op==='file.read')return {data:downloadBytes,offset:7,sha256:badChunk?'0'.repeat(64):hash(downloadBytes)};if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(op.data,undefined);assert.equal(op.length,5);assert.ok(Buffer.isBuffer(data));assert.equal(data.toString(),'chunk');return {offset:5};}return {state:'running'};}};
+  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async (op,data)=>{operationCalls++;if(operationUncertain)throw Object.assign(Error('Operation outcome unknown'),{outcome:'unknown'});if(op.op==='file.read')return {data:downloadBytes,offset:7,sha256:badChunk?'0'.repeat(64):hash(downloadBytes)};if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(op.data,undefined);assert.equal(op.length,5);assert.ok(Buffer.isBuffer(data));assert.equal(data.toString(),'chunk');return {offset:5};}return {state:'running'};}};
   const journal=new Journal(dir+'/requests.json');
   server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
@@ -99,6 +99,13 @@ with api.Session(c) as session:
   const read=()=>request('/v1/files/read',{id:crypto.randomUUID(),operation:{op:'file.read',transfer_id:'example',offset:7,length:5}});
   const downloaded=await read();assert.equal(downloaded.status,200);assert.deepEqual(downloaded.body,downloadBytes);assert.equal(downloaded.headers['x-sha256'],hash(downloadBytes));assert.equal(downloaded.headers['x-offset'],'7');
   badChunk=true;assert.equal((await read()).status,409);
+  operationUncertain=true;const beforeUnknown=operationCalls,unknownId=crypto.randomUUID();
+  const unknownOperation={id:unknownId,operation:{op:'file.open',path:'/fixture'}};
+  assert.equal((await request('/v1/op',unknownOperation)).body.outcome,'unknown');
+  assert.equal(journal.rows.find(r=>r.id===unknownId).state,'submitted');
+  assert.equal((await request('/v1/op',unknownOperation)).body.outcome,'rejected');
+  assert.equal(operationCalls,beforeUnknown+1,'Unknown operation must not be replayed');
+  operationUncertain=false;
   uncertain=true;const lost=command();assert.equal((await request('/v1/exec',lost)).status,409);assert.equal((await request('/v1/exec',lost)).status,409);assert.equal(calls,2);assert.equal(journal.rows.find(r=>r.id===lost.id).state,'submitted');
   assert.equal((await request('/v1/disable',{})).status,200);assert.equal((await request('/v1/exec',command())).status,503);
   const snapshot=await request('/v1/requests');assert.equal(snapshot.body.sha256,journal.digest());
