@@ -12,6 +12,12 @@ static void *fault_test_memory(void *unused) {
   _exit(124);
 }
 static void fault_test_execute(void) {
+  if (fault_test_requested == 3)
+    progress_test_stall(&progress_main);
+  if (fault_test_requested == 4) {
+    __atomic_store_n(&progress_test_jobs_stall, 1, __ATOMIC_RELAXED);
+    fault_test_requested = 0;
+  }
   if (fault_test_requested == 1)
     fault_test_memory(NULL);
   if (fault_test_requested == 2) {

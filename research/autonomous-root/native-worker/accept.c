@@ -1,6 +1,7 @@
 /* On-TV native lifecycle acceptance; never replaces the deployed worker.
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
 #include "common.h"
+#include <dirent.h>
 
 #include "controller.h"
 static const char *binary, *app, *appsha, *source_helper;
@@ -69,7 +70,7 @@ static void launch(void) {
   if (number(get(r, "result"), "guardian_pid") != child ||
       number(get(r, "result"), "worker_dumpable") != 0 ||
       strcmp(textval(get(r, "result"), "fault_supervision"),
-             "ptrace-owned-worker-threads") ||
+             "ptrace-owned-descendants") ||
       !json_object_get_boolean(
           get(get(get(r, "result"), "app_launcher"), "independently_staged")))
     fatal("native guardian or launcher status");
@@ -86,7 +87,11 @@ static void launch(void) {
 static void finish(int disconnect) {
   double stop_started = stamp();
 #ifdef NATIVE_WORKER_FAULT_TEST
-  if (disconnect == 6 || disconnect == 7) {
+  if (disconnect == 8 || disconnect == 9) {
+    J *fault = req("test.stall");
+    num(fault, "thread", disconnect == 9);
+    json_object_put(call(fault));
+  } else if (disconnect == 6 || disconnect == 7) {
     J *fault = req("test.fault");
     num(fault, "thread", disconnect == 7);
     json_object_put(call(fault));
@@ -125,8 +130,9 @@ static void finish(int disconnect) {
   if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
     fprintf(stderr, "prototype: controller stop mode=%d %.0f ms\n", disconnect,
             stamp() - stop_started);
-  if (disconnect >= 3 && disconnect <= 7) {
-    int expected = (disconnect == 3 || disconnect == 5) ? 137 : 139;
+  if (disconnect >= 3 && disconnect <= 9) {
+    int expected =
+        (disconnect == 3 || disconnect == 5 || disconnect >= 8) ? 137 : 139;
     if (!WIFEXITED(status) || WEXITSTATUS(status) != expected)
       fatal("guardian crash status");
     if (stamp() - stop_started > 2000)
@@ -193,9 +199,9 @@ static void mark(const char *check) {
   fflush(stdout);
   discard(j);
 }
-static char *stage_helper(char **id) {
-  char *path = format("%s/helper-source", filescope);
-  int fd = open(source_helper, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+static char *stage_helper_from(char **id, const char *input, const char *name) {
+  char *path = format("%s/%s", filescope, name);
+  int fd = open(input, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   struct stat st;
   if (fd < 0 || fstat(fd, &st) || st.st_size < 1 || st.st_size > CHUNK)
     fatal("helper source");
@@ -242,6 +248,165 @@ static char *stage_helper(char **id) {
   mark("helper_digest_readonly_and_namespace");
   return staged;
 }
+static char *stage_helper(char **id) {
+  return stage_helper_from(id, source_helper, "helper-source");
+}
+static void command_fault_checks(void) {
+  for (int app_profile = 0; app_profile < 2; app_profile++) {
+    double started = stamp();
+    if (app_profile) {
+      J *j = req("app.exec");
+      str(j, "command", "kill -SEGV $$");
+      num(j, "timeout_ms", 5000);
+      J *r = call(j);
+      if (number(get(r, "result"), "exit_code") != 137)
+        fatal("app command fault result");
+      discard(r);
+    } else {
+      command("kill -SEGV $$", 5000, 137, 0);
+    }
+    discard(start_job("native-child-fault-01", "kill -ABRT $$", 5000,
+                      app_profile ? "app" : "root"));
+    await_job("native-child-fault-01", "completed", 137, 2000);
+    discard(call(job_req("job.forget", "native-child-fault-01")));
+    if (stamp() - started > 2000)
+      fatal("command faults exceeded two seconds");
+    discard(call(req("status")));
+  }
+  mark("root_and_app_command_faults_preserve_worker");
+#ifdef NATIVE_WORKER_FAULT_TEST
+  char *id, *path = stage_helper_from(&id, binary, "fault-source");
+  for (int profile = 0; profile < 2; profile++) {
+    for (int thread = 0; thread < 2; thread++) {
+      char *cmd =
+          format("exec '%s' %s", path,
+                 thread ? "--test-child-thread-fault" : "--test-child-fault");
+      double started = stamp();
+      discard(start_job("native-helper-fault-01", cmd, 5000,
+                        profile ? "app" : "root"));
+      free(cmd);
+      await_job("native-helper-fault-01", "completed", 137, 2000);
+      discard(call(job_req("job.forget", "native-helper-fault-01")));
+      if (stamp() - started > 2000)
+        fatal("helper fault exceeded two seconds");
+    }
+  }
+  J *j = req("helper.release");
+  str(j, "helper_id", id);
+  discard(call(j));
+  char *cmd = format("test ! -e '%s' && rm '%s/fault-source'", path, filescope);
+  command(cmd, 5000, 0, 0);
+  free(cmd);
+  free(id);
+  free(path);
+  mark("root_and_app_helper_memory_faults_normal_release");
+#endif
+}
+static int count_entries(pid_t pid, const char *name) {
+  char path[80];
+  snprintf(path, sizeof path, "/proc/%d/%s", pid, name);
+  DIR *d = opendir(path);
+  if (!d)
+    fatal("soak process directory");
+  int count = 0;
+  struct dirent *e;
+  while ((e = readdir(d)))
+    if (e->d_name[0] != '.')
+      count++;
+  closedir(d);
+  return count;
+}
+static int mount_count(pid_t pid) {
+  char path[80], line[8192];
+  snprintf(path, sizeof path, "/proc/%d/mountinfo", pid);
+  FILE *f = fopen(path, "r");
+  if (!f)
+    fatal("soak mount inventory");
+  int count = 0;
+  while (fgets(line, sizeof line, f))
+    count++;
+  fclose(f);
+  return count;
+}
+static long resident_kb(pid_t pid) {
+  char path[80], line[256];
+  snprintf(path, sizeof path, "/proc/%d/status", pid);
+  FILE *f = fopen(path, "r");
+  if (!f)
+    fatal("soak process status");
+  long rss = -1;
+  while (fgets(line, sizeof line, f))
+    if (sscanf(line, "VmRSS: %ld", &rss) == 1)
+      break;
+  fclose(f);
+  if (rss < 0)
+    fatal("soak RSS");
+  return rss;
+}
+static void soak(int seconds) {
+  if (!seconds)
+    return;
+  /* A foreground command beyond the progress grace must keep its lease alive.
+   */
+  command("sleep 32", 35000, 0, 0);
+  int fd0 = count_entries(worker_pid, "fd"),
+      tasks0 = count_entries(worker_pid, "task");
+  int gfd0 = count_entries(child, "fd"), mounts0 = mount_count(worker_pid);
+  long rss_min = LONG_MAX, rss_max = 0, guardian_rss_max = 0;
+  int cycles = 0;
+  double started = stamp();
+  do {
+    char *id, *path = stage_helper_from(&id, source_helper, "soak-source");
+    discard(
+        start_job("native-soak-root-01", "printf root-cycle", 5000, "root"));
+    discard(start_job("native-soak-app-01", path, 5000, "app"));
+    await_job("native-soak-root-01", "completed", 0, 7000);
+    await_job("native-soak-app-01", "completed", 0, 7000);
+    J *r = output("native-soak-app-01", 0, 0);
+    contains(r, "stdout", "uid=5001 euid=5001 gid=100 smack=User");
+    discard(r);
+    discard(call(job_req("job.forget", "native-soak-root-01")));
+    discard(call(job_req("job.forget", "native-soak-app-01")));
+    J *j = req("helper.release");
+    str(j, "helper_id", id);
+    discard(call(j));
+    char *cmd =
+        format("test ! -e '%s' && rm '%s/soak-source'", path, filescope);
+    command(cmd, 5000, 0, 0);
+    free(cmd);
+    free(id);
+    free(path);
+    discard(call(req("status")));
+    if (count_entries(worker_pid, "fd") != fd0 ||
+        count_entries(worker_pid, "task") != tasks0 ||
+        count_entries(child, "fd") != gfd0 ||
+        mount_count(worker_pid) != mounts0)
+      fatal("soak descriptor/thread/mount growth");
+    long rss = resident_kb(worker_pid), grss = resident_kb(child);
+    if (rss < rss_min)
+      rss_min = rss;
+    if (rss > rss_max)
+      rss_max = rss;
+    if (grss > guardian_rss_max)
+      guardian_rss_max = grss;
+    cycles++;
+    usleep(10000000);
+  } while (stamp() - started < seconds * 1000.0);
+  J *r = obj();
+  str(r, "check", "bounded_lifetime_soak");
+  boolean(r, "passed", 1);
+  num(r, "elapsed_ms", (int64_t)(stamp() - started));
+  num(r, "cycles", cycles);
+  num(r, "worker_rss_min_kb", rss_min);
+  num(r, "worker_rss_max_kb", rss_max);
+  num(r, "guardian_rss_max_kb", guardian_rss_max);
+  num(r, "worker_fds", fd0);
+  num(r, "worker_threads", tasks0);
+  num(r, "worker_mounts", mounts0);
+  puts(json(r));
+  fflush(stdout);
+  discard(r);
+}
 int main(int argc, char **argv) {
   if (argc != 7) {
     fprintf(stderr,
@@ -257,7 +422,19 @@ int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
   libraries();
   atexit(stop_child);
-  alarm(150);
+  int soak_seconds = 0;
+  const char *soak_value = getenv("COUCHROOT_NATIVE_SOAK_SECONDS");
+  if (soak_value) {
+    int64_t value;
+    if (!decimal(soak_value, &value) || value < 60 || value > 3600)
+      fatal("soak must be 60..3600 seconds");
+    soak_seconds = (int)value;
+    char lifetime[16];
+    snprintf(lifetime, sizeof lifetime, "%d", soak_seconds + 300);
+    if (setenv("COUCHROOT_NATIVE_LIFETIME_SECONDS", lifetime, 1))
+      fatal("soak lifetime");
+  }
+  alarm(soak_seconds + 240);
   readtext("/proc/sys/kernel/random/boot_id", boot, sizeof boot);
   ssize_t ns = readlink("/proc/self/ns/mnt", namespace_before,
                         sizeof namespace_before - 1);
@@ -376,6 +553,8 @@ int main(int argc, char **argv) {
   free(helper_id);
   free(helper_path);
   mark("helper_release_and_unknown_id");
+  command_fault_checks();
+  soak(soak_seconds);
   /* Fill all helper slots and ensure rollback/release permits reuse. */
   char *source = format("%s/helper-source", filescope);
   int fd = open(source, O_RDONLY | O_CLOEXEC);
@@ -467,7 +646,7 @@ int main(int argc, char **argv) {
                    : "signal_stop_cleans_active_job_and_helper");
   }
 #ifdef NATIVE_WORKER_FAULT_TEST
-  const int last_crash_mode = 7;
+  const int last_crash_mode = 9;
 #else
   const int last_crash_mode = 5;
 #endif
@@ -522,7 +701,11 @@ int main(int argc, char **argv) {
     if ((mode == 4 || mode == 6 || mode == 7) &&
         number(record, "worker_fault_signal") != SIGSEGV)
       fatal("worker fault was not intercepted");
-    if (mode == 5 &&
+    if (mode >= 8 &&
+        strcmp(textval(record, "watchdog_reason"),
+               mode == 8 ? "active-request-stalled" : "job-monitor-stalled"))
+      fatal("progress watchdog reason");
+    if ((mode == 5 || mode >= 8) &&
         !json_object_get_boolean(get(record, "watchdog_froze_group")))
       fatal("watchdog containment not used");
     discard(r);
@@ -545,7 +728,9 @@ int main(int argc, char **argv) {
          : mode == 5
              ? "stopped_worker_watchdog_freezes_owned_group_and_recovers"
          : mode == 6 ? "main_thread_memory_fault_recovery"
-                     : "new_worker_thread_memory_fault_recovery");
+         : mode == 7 ? "new_worker_thread_memory_fault_recovery"
+         : mode == 8 ? "active_request_progress_watchdog_recovery"
+                     : "job_monitor_progress_watchdog_recovery");
   }
   finish(0);
   if (unlink(app))

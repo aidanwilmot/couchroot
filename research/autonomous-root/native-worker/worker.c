@@ -1,12 +1,14 @@
 /* Experimental sidecar, not installed or selected by the production service.
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
 #include "common.h"
+#include "progress.h"
 typedef struct {
   int fd, upload;
   char id[33], name[256], temp[48], sha[65], expected[65];
   int64_t size;
 } Transfer;
 static Transfer transfers[8];
+static unsigned experiment_seconds = 300;
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
 static volatile sig_atomic_t active_child = 0;
@@ -174,6 +176,7 @@ static Result execute(const char *command, int timeout, int app) {
   double deadline = stamp() + timeout;
   int finished = 0, status = 0, openpipes = 2;
   while (!finished || openpipes) {
+    progress_touch(&progress_main);
     if (stamp() >= deadline && !r.timed) {
       r.timed = 1;
       kill(-pid, SIGKILL);
@@ -297,6 +300,13 @@ static J *operation(J *request, Wire *w, const char *seq) {
   if (!op)
     return failure("Invalid operation");
 #ifdef NATIVE_WORKER_FAULT_TEST
+  if (!strcmp(op, "test.stall")) {
+    int64_t thread = number(request, "thread");
+    if (thread != 0 && thread != 1)
+      return failure("invalid stall target");
+    fault_test_requested = thread ? 4 : 3;
+    return success(obj());
+  }
   if (!strcmp(op, "test.fault")) {
     int64_t thread = number(request, "thread");
     if (thread != 0 && thread != 1)
@@ -320,10 +330,12 @@ static J *operation(J *request, Wire *w, const char *seq) {
     str(j, "worker_id", worker_id);
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
-    str(j, "fault_supervision", "ptrace-owned-worker-threads");
+    str(j, "fault_supervision", "ptrace-owned-descendants");
     num(j, "worker_dumpable", prctl(PR_GET_DUMPABLE));
     str(j, "freezer_group", freezer_name);
     num(j, "heartbeat_timeout_ms", 1000);
+    num(j, "progress_timeout_ms", PROGRESS_GRACE_MS);
+    num(j, "lifetime_seconds", experiment_seconds);
     J *app = obj();
     str(app, "path", launcher);
     str(app, "sha256", launcher_sha);
@@ -490,6 +502,14 @@ static J *operation(J *request, Wire *w, const char *seq) {
   return failure("Unsupported file operation in native prototype");
 }
 int main(int argc, char **argv) {
+#ifdef NATIVE_WORKER_FAULT_TEST
+  if (argc == 2 && !strcmp(argv[1], "--test-child-fault"))
+    fault_test_memory(NULL);
+  if (argc == 2 && !strcmp(argv[1], "--test-child-thread-fault")) {
+    fault_test_requested = 2;
+    fault_test_execute();
+  }
+#endif
   if (argc != 7) {
     fputs("usage: worker HOST PORT TOKEN EXPERIMENT_DIRECTORY "
           "LAUNCHER_SOURCE SHA256\n",
@@ -502,7 +522,14 @@ int main(int argc, char **argv) {
   signal(SIGTERM, stop_signal);
   signal(SIGINT, stop_signal);
   signal(SIGALRM, stop_signal);
-  alarm(300);
+  const char *lifetime = getenv("COUCHROOT_NATIVE_LIFETIME_SECONDS");
+  int64_t seconds;
+  if (lifetime) {
+    if (!decimal(lifetime, &seconds) || seconds < 300 || seconds > 86400)
+      fatal("prototype lifetime must be 300..86400 seconds");
+    experiment_seconds = (unsigned)seconds;
+  }
+  alarm(experiment_seconds);
   libraries();
   for (int i = 0; i < 8; i++)
     transfers[i].fd = -1;
@@ -569,7 +596,7 @@ int main(int argc, char **argv) {
   signal_socket = w.fd;
   int one = 1;
   setsockopt(w.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
-  struct timeval limit = {300, 0};
+  struct timeval limit = {experiment_seconds, 0};
   setsockopt(w.fd, SOL_SOCKET, SO_RCVTIMEO, &limit, sizeof limit);
   setsockopt(w.fd, SOL_SOCKET, SO_SNDTIMEO, &limit, sizeof limit);
   if (connect(w.fd, (struct sockaddr *)&addr, sizeof addr))
@@ -602,7 +629,9 @@ int main(int argc, char **argv) {
   free(auth);
   int64_t previous = 0;
   for (;;) {
+    progress_idle(&progress_main);
     char *frame = receive(&w);
+    progress_touch(&progress_main);
     int count = fields(frame, f, 10);
     int64_t seq;
     if (count < 2 || !decimal(f[1], &seq) || seq <= previous)

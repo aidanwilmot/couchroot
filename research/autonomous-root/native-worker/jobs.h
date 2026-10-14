@@ -20,7 +20,7 @@ static Job jobs[16];
 static int jobs_dir = -1, jobs_lock = -1, jobs_started, jobs_stop;
 static pthread_t jobs_thread;
 static pthread_mutex_t jobs_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t jobs_changed = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t jobs_changed;
 static char current_boot[80];
 static int job_identity(pid_t pid, char result[32]) {
   char path[64], buf[4096];
@@ -154,6 +154,11 @@ static J *log_read(JobLog *log, int64_t cursor) {
 static void *job_monitor(void *unused) {
   (void)unused;
   for (;;) {
+#ifdef NATIVE_WORKER_FAULT_TEST
+    if (__atomic_load_n(&progress_test_jobs_stall, __ATOMIC_RELAXED))
+      progress_test_stall(&progress_jobs);
+#endif
+    progress_touch(&progress_jobs);
     pthread_mutex_lock(&jobs_mutex);
     int stop = jobs_stop;
     for (int i = 0; i < 16; i++) {
@@ -232,13 +237,25 @@ static void *job_monitor(void *unused) {
     for (int i = 0; i < 16; i++)
       if (jobs[i].id[0] && !jobs[i].finished)
         active = 1;
-    if (!stop && !active)
-      pthread_cond_wait(&jobs_changed, &jobs_mutex);
+    if (!stop && !active) {
+      /* Periodic wake detects mutex/reacquisition stalls without treating an
+       * idle job queue as a deadlock. Use monotonic time so wall-clock changes
+       * cannot turn an idle wait into a false progress timeout. */
+      struct timespec until;
+      clock_gettime(CLOCK_MONOTONIC, &until);
+      until.tv_nsec += 100000000;
+      if (until.tv_nsec >= 1000000000) {
+        until.tv_sec++;
+        until.tv_nsec -= 1000000000;
+      }
+      pthread_cond_timedwait(&jobs_changed, &jobs_mutex, &until);
+    }
     pthread_mutex_unlock(&jobs_mutex);
     if (stop && !active)
       break;
     usleep(10000);
   }
+  progress_idle(&progress_jobs);
   return NULL;
 }
 static void jobs_storage(void) {
@@ -258,6 +275,12 @@ static void jobs_storage(void) {
            sizeof current_boot);
 }
 static void jobs_init(void) {
+  pthread_condattr_t attr;
+  if (pthread_condattr_init(&attr) ||
+      pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) ||
+      pthread_cond_init(&jobs_changed, &attr))
+    fatal("job monitor monotonic condition");
+  pthread_condattr_destroy(&attr);
   /* Deliver lifecycle signals on the protocol thread only. Its foreground PID
    * cannot be reaped concurrently with a signal handler targeting that PID. */
   sigset_t blocked, previous;

@@ -5,6 +5,7 @@ static char freezer_name[64];
 static int pulse_pipe[2] = {-1, -1}, pulse_started, pulse_stop;
 static pthread_t pulse_thread;
 static int guardian_watchdog, containment_failed;
+static const char *guardian_watchdog_reason = "none";
 static int freezer_write(const char *file, const char *value) {
 #ifdef NATIVE_WORKER_TEST
   (void)file;
@@ -54,7 +55,10 @@ static int containment_cleanup(void) {
 static void *pulse_main(void *unused) {
   (void)unused;
   while (!__atomic_load_n(&pulse_stop, __ATOMIC_RELAXED)) {
-    ssize_t n = write(pulse_pipe[1], "1", 1);
+    unsigned char pulse = progress_expired(&progress_main)   ? 2
+                          : progress_expired(&progress_jobs) ? 3
+                                                             : 1;
+    ssize_t n = write(pulse_pipe[1], &pulse, 1);
     (void)n;
     usleep(100000);
   }

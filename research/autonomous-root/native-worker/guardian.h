@@ -101,6 +101,7 @@ static int guardian_recover_records(void) {
     str(r, "recovery", "guardian-reaped-descendants");
     num(r, "worker_fault_signal", guardian_fault_signal);
     boolean(r, "watchdog_triggered", guardian_watchdog);
+    str(r, "watchdog_reason", guardian_watchdog_reason);
     boolean(r, "watchdog_froze_group",
             guardian_watchdog && freezer_dir >= 0 && !containment_failed);
     boolean(r, "output_available", 0);
@@ -178,9 +179,26 @@ static int guardian_drain(void) {
 }
 /* Some TV kernels silently ignore fatal-signal sigaction registrations and
  * run a slow crash collector. Seize only our own gated child before it creates
- * threads, then follow clone-created worker threads (not forked commands).
+ * threads, then follow its threads and all fork/exec descendants.
  * A signal-delivery stop is handled before the kernel's default crash path.
  */
+static pid_t guardian_tgid(pid_t thread) {
+  /* Only called for a kernel-reported ptrace stop: the stopped task remains
+   * owned and cannot recycle its identity while we inspect it. */
+  char path[64], line[256];
+  snprintf(path, sizeof path, "/proc/%d/status", thread);
+  FILE *f = fopen(path, "r");
+  if (!f)
+    fatal("supervised task identity");
+  int tgid = 0;
+  while (fgets(line, sizeof line, f))
+    if (sscanf(line, "Tgid: %d", &tgid) == 1)
+      break;
+  fclose(f);
+  if (tgid <= 0)
+    fatal("supervised task thread group");
+  return (pid_t)tgid;
+}
 static void guardian_trace_stop(pid_t thread, int status, pid_t worker) {
   int sig = WSTOPSIG(status), event = (unsigned)status >> 16;
   enum __ptrace_request action = PTRACE_CONT;
@@ -189,18 +207,23 @@ static void guardian_trace_stop(pid_t thread, int status, pid_t worker) {
     if (sig != SIGTRAP)
       action =
           PTRACE_LISTEN; /* Preserve deliberate group stops for watchdog. */
-  } else if (event == PTRACE_EVENT_CLONE) {
+  } else if (event == PTRACE_EVENT_CLONE || event == PTRACE_EVENT_FORK ||
+             event == PTRACE_EVENT_VFORK || event == PTRACE_EVENT_EXEC) {
     /* The auto-attached thread has its own initial PTRACE_EVENT_STOP. */
   } else if (event) {
     fatal("unexpected worker trace event");
   } else if (sig == SIGSEGV || sig == SIGBUS || sig == SIGILL ||
              sig == SIGFPE || sig == SIGABRT) {
-    if (!guardian_fault_signal)
+    pid_t target = guardian_tgid(thread);
+    if (target == worker && !guardian_fault_signal)
       guardian_fault_signal = sig;
     if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
-      fprintf(stderr, "prototype: guardian intercepted worker fault %d\n", sig);
-    if (kill(worker, SIGKILL) && errno != ESRCH)
-      fatal("terminate faulted worker");
+      fprintf(stderr, "prototype: guardian intercepted %s fault %d\n",
+              target == worker ? "worker" : "command", sig);
+    /* Command parents receive the actual SIGKILL wait status (137). Never
+     * fabricate a SIGSEGV exit or mark the healthy worker as interrupted. */
+    if (kill(target, SIGKILL) && errno != ESRCH)
+      fatal("terminate faulted task");
     deliver = SIGKILL;
   } else {
     deliver = sig; /* Do not swallow normal signals, especially SIGCHLD. */
@@ -248,12 +271,14 @@ static void guardian_start(void) {
     if (got != 1 || ready != 'R')
       _exit(125);
     containment_enter();
-    alarm(300);
+    alarm(experiment_seconds);
     return;
   }
   close(gate[0]);
   if (ptrace(PTRACE_SEIZE, pid, NULL,
-             (void *)(uintptr_t)(PTRACE_O_TRACECLONE | PTRACE_O_EXITKILL))) {
+             (void *)(uintptr_t)(PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK |
+                                 PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC |
+                                 PTRACE_O_EXITKILL))) {
     int saved = errno;
     kill(pid, SIGKILL);
     while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {
@@ -270,18 +295,21 @@ static void guardian_start(void) {
   signal(SIGALRM, guardian_signal);
   if (sigprocmask(SIG_SETMASK, &previous, NULL))
     _exit(125);
-  alarm(310);
+  alarm(experiment_seconds + 10);
   int status = 0, worker_status = 0, worker_done = 0;
   close(pulse_pipe[1]);
   pulse_pipe[1] = -1;
   double stopping_at = 0, last_pulse = stamp();
-  int pulse_seen = 0;
+  int pulse_seen = 0, stalled = 0;
   while (!worker_done) {
     unsigned char pulses[128];
     ssize_t n;
     while ((n = read(pulse_pipe[0], pulses, sizeof pulses)) > 0) {
       last_pulse = stamp();
       pulse_seen = 1;
+      for (ssize_t i = 0; i < n; i++)
+        if (pulses[i] == 2 || pulses[i] == 3)
+          stalled = pulses[i];
     }
     if (n < 0 && errno != EAGAIN && errno != EINTR)
       _exit(125);
@@ -300,8 +328,11 @@ static void guardian_start(void) {
     if (worker_done)
       break;
     if (!guardian_watchdog &&
-        stamp() - last_pulse > (pulse_seen ? 1000 : 5000)) {
+        (stalled || stamp() - last_pulse > (pulse_seen ? 1000 : 5000))) {
       guardian_watchdog = 1;
+      guardian_watchdog_reason = stalled == 2   ? "active-request-stalled"
+                                 : stalled == 3 ? "job-monitor-stalled"
+                                                : "heartbeat-lost";
       containment_freeze(pid);
       kill(pid, SIGKILL);
       fputs("prototype: guardian watchdog froze experiment and killed "

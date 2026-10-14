@@ -113,6 +113,24 @@ class NativeWorkerTests(unittest.TestCase):
             if result['exit_code'] is not None:return result
             time.sleep(.02)
         self.fail('Job did not terminate')
+    def test_command_fault_keeps_worker_alive(self):
+        for sig in ['SEGV','ABRT','BUS','ILL','FPE']:
+            self.seq+=1
+            self.send(f'EXEC\t{self.seq}\t2000\t'+base64.b64encode(f'kill -{sig} $$'.encode()).decode())
+            self.assertEqual(self.receive().split('\t')[:4],['RESULT',str(self.seq),'137','0'])
+            self.assertTrue(self.op('status')['ok'])
+        self.start_job('kill -SEGV $$')
+        self.assertEqual(self.completed()['exit_code'],137)
+        self.assertTrue(self.job('job.forget')['ok'])
+        self.start_job('printf recovered')
+        self.assertEqual(self.completed()['exit_code'],0)
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'),'requires separate fault-injection build')
+    def test_exec_helper_memory_fault_keeps_worker_alive(self):
+        for arg in ['--test-child-fault','--test-child-thread-fault']:
+            self.start_job('exec '+os.environ['NATIVE_WORKER']+' '+arg)
+            self.assertEqual(self.completed()['exit_code'],137)
+            self.assertTrue(self.job('job.forget')['ok'])
+            self.assertTrue(self.op('status')['ok'])
     def test_job_results_duplicate_and_retention(self):
         started=self.start_job('printf stdout; printf stderr >&2; exit 7')
         self.assertGreater(started['pid'],0)
@@ -245,6 +263,17 @@ class NativeWorkerTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'),'requires separate fault-injection build')
     def test_new_thread_memory_fault_recovery(self):
         self.check_memory_fault(1)
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'),'requires separate fault-injection build')
+    def test_progress_watchdog_when_pulse_thread_healthy(self):
+        for thread,reason in [(0,'active-request-stalled'),(1,'job-monitor-stalled')]:
+            self.start_job('sleep 30',timeout=60000)
+            self.assertTrue(self.op('test.stall',thread=thread)['ok'])
+            self.proc.wait(timeout=3);self.assertEqual(self.proc.returncode,137)
+            record=json.loads((self.root/'.jobs/native-test-job-01.json').read_text())
+            self.assertEqual(record['state'],'interrupted')
+            self.assertIsNone(record['exit_code'])
+            self.assertEqual(record['watchdog_reason'],reason)
+            self.restart();self.assertTrue(self.job('job.forget')['ok'])
     def test_stopped_worker_watchdog_recovers(self):
         self.start_job('sleep 30',timeout=60000)
         os.kill(self.worker_pid,signal.SIGSTOP)

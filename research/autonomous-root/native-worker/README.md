@@ -43,8 +43,9 @@ binary. The worker accepts its source path inside the canonical file scope and a
 expected SHA-256; it validates ARM ELF32, stages a private root-only copy, applies
 Smack and a read-only bind mount, and verifies the staged digest before use. It no
 longer accepts a borrowed .NET execution view. Root acquisition and transport
-service integration are still borrowed, so startup is not complete service startup. The worker's five-minute
-experiment lifetime remains bounded; jobs cannot outlive that worker. Disconnect,
+service integration are still borrowed, so startup is not complete service startup. The worker defaults to a five-minute experiment lifetime. An explicit
+`COUCHROOT_NATIVE_LIFETIME_SECONDS` value from 300 to 86400 permits longer bounded
+experiments; jobs cannot outlive that worker. Disconnect,
 SIGTERM and graceful shutdown clean up owned active jobs and helper views.
 
 The worker executable starts a small guardian before the protocol worker and its
@@ -57,11 +58,15 @@ crash records have an unknown exit code and unavailable in-memory output. A new
 worker invocation reads those records and refuses duplicate starts. It does not
 automatically restart or replay commands. The protocol worker is non-dumpable.
 Before allowing that child to create threads, the guardian attaches with
-`PTRACE_SEIZE`, `PTRACE_O_TRACECLONE` and `PTRACE_O_EXITKILL`. It observes only the
-owned worker and its newly created threads; forked root/app commands are not
-traced. SIGSEGV, SIGBUS, SIGILL, SIGFPE and SIGABRT delivery stops terminate that
-worker before the
-TV's default crash collector. The original signal is saved separately as
+`PTRACE_SEIZE` and follows clone, fork, vfork and exec events with
+`PTRACE_O_EXITKILL`. This covers the owned worker, command descendants and their
+threads. SIGSEGV, SIGBUS, SIGILL, SIGFPE and SIGABRT delivery stops terminate the
+faulting thread group before the TV's default crash collector. A command fault
+does not kill the healthy worker: its parent receives the actual SIGKILL exit
+status, 137. The original command signal is currently diagnostic stderr only,
+not per-job metadata. Supervision intentionally prevents handlers for these
+signals from running in commands; software that uses them for its own recovery
+needs a separate compatibility decision before production adoption. The original signal is saved separately as
 `worker_fault_signal`; interrupted jobs still have an unknown exit code. Normal
 signals are forwarded, group stops remain stopped for the heartbeat watchdog,
 and unavailable tracing fails startup closed. No process is selected from a
@@ -71,7 +76,14 @@ signal-delivery and clone-stop semantics used here.
 
 The guardian also uses a heartbeat watchdog and an isolated freezer cgroup for
 an unresponsive worker. The controller waits for recovery and does not force-kill
-a guardian merely because its wait expires.
+a guardian merely because its wait expires. The pulse thread also checks separate
+30-second progress leases for an active protocol request and the job monitor.
+Foreground command polling refreshes the request lease; waiting for a new protocol
+frame is idle and remains bounded by socket/lifetime limits. File operations and
+blocked writes must complete within the progress grace. The job monitor wakes
+periodically even with an empty queue. A stalled lease triggers the same isolated
+cleanup, recording `active-request-stalled` or `job-monitor-stalled`; a missing
+pulse records `heartbeat-lost`. This does not supervise a stalled guardian.
 
 Each native run exclusively creates `/sys/fs/cgroup/freezer/couchroot-native-ID`.
 Only the protocol worker joins it before spawning threads or commands; its root
@@ -97,7 +109,13 @@ replace the deployed service's root acquisition, enrollment or restart machinery
 loopback controller. It checks an over-25-second job, simultaneous foreground and
 background execution, app-user helper execution, read-only mounts, output limits,
 cancellation, retention, disconnect cleanup and saved status after a native restart.
-These checks do not restart the production worker or TV.
+These checks do not restart the production worker or TV. Set
+`COUCHROOT_NATIVE_SOAK_SECONDS` to 60..3600 for an additional bounded run. It
+repeatedly uploads/stages/releases a helper, runs root and app jobs, verifies app
+identity, forgets records and checks stable worker/guardian descriptor counts,
+worker thread counts and mount counts. It reports RSS ranges as observations,
+not a full PSS/swap or CPU comparison. The controller grants the worker an explicit
+soak-duration-plus-300-second lifetime and keeps its own deadline bounded.
 
 `bench.c` runs on the TV as an authenticated root job. It alternates freshly
 executed copies of the installed .NET DLL and the C worker on independent loopback
@@ -130,7 +148,12 @@ in a dedicated container); an emulated x86 userspace is not a substitute.
 `worker-fault-test` and `accept-fault-test` are separately named builds with
 `NATIVE_WORKER_FAULT_TEST`. Only that worker build contains the authenticated
 `test.fault` operation, which writes a PROT_NONE page on the main thread or a new
-worker thread. Do not use this fault-injection build as a production worker.
+worker thread. That binary also supports isolated helper memory faults and a
+`test.stall` operation: it deliberately stops a selected progress path and ages
+its lease beyond the grace while leaving the pulse thread alive. Thus the test
+checks stale-progress detection and cleanup without waiting 30 seconds each time.
+The acceptance soak separately checks a healthy 32-second foreground command.
+Do not use this fault-injection build as a production worker.
 Tests cover authentication, replay, corrupted/truncated transfers, bounds, path
 and symlink rejection, conditional replacement, bounded output and timeouts.
 Job tests also cover duplicate intents, cursor truncation, retention, signal and
@@ -150,7 +173,21 @@ model's runtime paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
 
-## Crash delay and test-mount cleanup fix — 2026-10-13
+## Remaining production work
+
+- Reconcile a stale guardian journal after guardian loss without trusting saved
+  PIDs, weakening ownership checks or replaying commands.
+- Integrate acquisition, enrollment, service selection and rollback through the
+  existing production machinery; the experiment still borrows those services.
+- Qualify resource exhaustion, storage failures and substantially longer runs.
+  Decide whether durable output is required; current job logs remain in memory.
+- Decide command signal-handler compatibility and expose original command-fault
+  diagnostics separately from actual termination status.
+- Reconcile the narrower file policy and omitted legacy operations with the
+  desired public API, then repeat whole-process CPU/memory/startup comparisons.
+  The guardian's polling and the job monitor's periodic wakeups need measurement.
+
+## Historical crash delay and test-mount cleanup fix — 2026-10-13
 
 Revision `6b41b6d` passed the normal **16-group suite and extended 18-group suite
 on each TV**. The extended suite deliberately writes an inaccessible memory page
@@ -195,9 +232,9 @@ not identified.
 All test files, jobs, helper/launcher views and private freezer groups were removed.
 Original .NET worker/process and boot identities, launcher hashes, protected files,
 cgroup memberships and execution mount sets were verified unchanged. Neither TV
-was rebooted; .NET remains deployed. Forked command/helper processes are intentionally
-not traced, so this does not qualify their own fatal-fault behavior or replace
-production root acquisition and service recovery.
+was rebooted; .NET remained deployed. That revision did not trace forked
+command/helper processes or qualify their own fatal-fault behavior. Production
+root acquisition and service recovery remain outside the prototype.
 
 ## Historical independent launcher and crash recovery validation — 2026-10-13
 
