@@ -70,6 +70,35 @@ transaction, use the service-equivalent credentials, and reconcile uncertain
 submission rather than retrying. Neither the listener nor this entry point is
 currently selected by the installed service.
 
+`service/observer-launch.js` supplies an internal S90D-only submission boundary.
+It restricts the executable to the installed package observer, pins its digest,
+checks boot, package ownership/mode/parent paths and the private listener files,
+and submits a uniquely named transient systemd service. The child shell checks
+real/effective UID, primary and supplementary groups, package label and zero
+effective capabilities before entering `--supervise`. Group membership comes from
+the caller's verified service identity, not an HTTP parameter. No direct Node
+child-process call is used.
+
+The adapter syncs an exclusive transaction record and a shared pending marker
+before command submission. Transport loss, timeout or an unexpected command result
+leaves an unknown outcome; the same transaction ID cannot be submitted twice.
+Changing the request ID cannot bypass the pending marker. Acknowledgement advances
+only to `submitted`, never readiness or successful observation. The future runtime
+controller must connect the listener, held-worker confirmation, receipt polling,
+unit termination checks and cleanup reconciliation before removing that marker.
+The adapter deliberately does not guess that a pending launch expired.
+
+Read-only checks confirmed both TVs remained ready on .NET and that S90D provides
+systemd 244 with the expected service identity and no effective capabilities.
+The generated launch command passed shell syntax checking; four submission tests
+cover validation, durable intent before invocation, duplicate suppression, a
+different-ID retry after an unknown outcome, partial journals and private directory
+requirements. The combined Linux listener/supervisor/bridge/service suite passed
+46 Node tests, followed by a focused submission rerun after adding the shared
+pending marker. Actual systemd execution, service-credential launch and full
+adapter integration have not been qualified on either TV. No device mutation or
+reboot occurred for this submission revision.
+
 1. Check descriptor capacity and boot, close inherited descriptors, bind all
    pidfds and verify none has exited; emit `BOUND`.
 2. The service obtains fresh authenticated worker identity and resource inventory
