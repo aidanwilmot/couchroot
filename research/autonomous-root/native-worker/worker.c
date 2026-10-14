@@ -275,6 +275,7 @@ static void stop_signal(int sig);
 #include "containment.h"
 
 #include "guardian.h"
+#include "reconcile.h"
 static void runtime_cleanup(void) {
   if (runtime_owned && runtime_sweep() && containment_cleanup() &&
       guardian_journal_owned) {
@@ -330,6 +331,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     str(j, "worker_id", worker_id);
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
+    boolean(j, "stale_guardian_reconciled", guardian_reconciled);
     str(j, "fault_supervision", "ptrace-owned-descendants");
     num(j, "worker_dumpable", prctl(PR_GET_DUMPABLE));
     str(j, "freezer_group", freezer_name);
@@ -555,10 +557,12 @@ int main(int argc, char **argv) {
     fatal("disable prototype core dumps");
   signal(SIGCHLD, SIG_DFL);
   jobs_storage();
-  guardian_journal();
+  guardian_reconcile();
   helpers_init();
+  guardian_journal(0);
   launcher_stage(argv[5]);
   containment_prepare();
+  guardian_journal(1);
   guardian_start();
   jobs_init();
   Wire w = {0};

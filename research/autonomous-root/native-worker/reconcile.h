@@ -1,0 +1,315 @@
+/* Reconcile only a fully bound, same-boot guardian journal under the scope
+ * lock. No saved process ID is ever a signal target. SPDX-License-Identifier:
+ * 0BSD */
+static int reconcile_refuse(const char *reason) {
+  fprintf(stderr, "prototype: reconciliation refused: %s\n", reason);
+  return 0;
+}
+static int reconcile_bound(J *j, const char *prefix, const struct stat *st) {
+  char key[64];
+  int64_t dev, ino;
+  snprintf(key, sizeof key, "%s_dev", prefix);
+  if (!integer(j, key, &dev) || dev < 0)
+    return 0;
+  snprintf(key, sizeof key, "%s_ino", prefix);
+  return integer(j, key, &ino) && ino > 0 &&
+         (uint64_t)dev == (uint64_t)st->st_dev &&
+         (uint64_t)ino == (uint64_t)st->st_ino;
+}
+static int reconcile_dir(int parent, const char *name) {
+  int fd =
+      openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  struct stat st;
+  if (fd >= 0 && (fstat(fd, &st) || st.st_uid || (st.st_mode & 022))) {
+    close(fd);
+    errno = EPERM;
+    return -1;
+  }
+  return fd;
+}
+static int reconcile_mount_namespace_refs(long pid, int64_t ino) {
+  char path[80], expected[80], line[8192];
+  snprintf(path, sizeof path, "/proc/%ld/mountinfo", pid);
+  snprintf(expected, sizeof expected, "mnt:[%" PRId64 "]", ino);
+  FILE *f = fopen(path, "r");
+  if (!f)
+    return errno == ENOENT || errno == ESRCH;
+  int good = 1;
+  while (fgets(line, sizeof line, f)) {
+    char mount_root[128];
+    /* Older nsfs implementations omit the namespace identity in mountinfo.
+     * Such a pin cannot be classified safely, so retain the journal. */
+    int anonymous_nsfs = strstr(line, " - nsfs ") &&
+                         (sscanf(line, "%*s %*s %*s %127s", mount_root) != 1 ||
+                          !strstr(mount_root, ":["));
+    if (strstr(line, expected) || anonymous_nsfs || !strchr(line, '\n')) {
+      good = 0;
+      break;
+    }
+  }
+  if (ferror(f))
+    good = 0;
+  fclose(f);
+  return good;
+}
+static int reconcile_namespace_unused(J *journal) {
+#ifndef NATIVE_WORKER_TEST
+  int64_t dev, ino;
+  if (!integer(journal, "namespace_dev", &dev) || dev < 0 ||
+      !integer(journal, "namespace_ino", &ino) || ino <= 0)
+    return 0;
+  DIR *proc = opendir("/proc");
+  if (!proc)
+    return 0;
+  int good = 1;
+  struct {
+    dev_t dev;
+    ino_t ino;
+  } seen[256];
+  size_t seen_count = 0;
+  struct dirent *e;
+  while (good && (e = readdir(proc))) {
+    char *end;
+    long pid = strtol(e->d_name, &end, 10);
+    if (*end || pid < 1 || pid > INT_MAX)
+      continue;
+    char path[96];
+    struct stat st;
+    snprintf(path, sizeof path, "/proc/%ld/ns/mnt", pid);
+    if (!stat(path, &st)) {
+      if ((uint64_t)st.st_dev == (uint64_t)dev &&
+          (uint64_t)st.st_ino == (uint64_t)ino) {
+        good = 0;
+        break;
+      }
+      size_t index;
+      for (index = 0; index < seen_count; index++)
+        if (seen[index].dev == st.st_dev && seen[index].ino == st.st_ino)
+          break;
+      if (index == seen_count) {
+        if (seen_count == sizeof seen / sizeof *seen ||
+            !reconcile_mount_namespace_refs(pid, ino)) {
+          good = 0;
+          break;
+        }
+        seen[seen_count].dev = st.st_dev;
+        seen[seen_count++].ino = st.st_ino;
+      }
+    } else if (errno != ENOENT && errno != ESRCH) {
+      good = 0;
+      break;
+    }
+    /* Also refuse an explicitly retained namespace handle. Missing tasks/fds
+     * are normal races; inaccessible tasks are not proof of absence. */
+    snprintf(path, sizeof path, "/proc/%ld/fd", pid);
+    DIR *fds = opendir(path);
+    if (!fds) {
+      if (errno != ENOENT && errno != ESRCH)
+        good = 0;
+      continue;
+    }
+    struct dirent *f;
+    while (good && (f = readdir(fds))) {
+      if (f->d_name[0] == '.')
+        continue;
+      char target[128], expected[80];
+      ssize_t n = readlinkat(dirfd(fds), f->d_name, target, sizeof target - 1);
+      if (n < 0) {
+        if (errno != ENOENT && errno != ESRCH)
+          good = 0;
+      } else {
+        target[n] = 0;
+        snprintf(expected, sizeof expected, "mnt:[%" PRId64 "]", ino);
+        if (!strcmp(target, expected))
+          good = 0;
+      }
+    }
+    closedir(fds);
+  }
+  closedir(proc);
+  return good;
+#else
+  /* Host tests lack mount namespaces/Smack. Device tests must prove this. */
+  (void)journal;
+  return 1;
+#endif
+}
+static int reconcile_no_mounts(const char *owner_path) {
+  FILE *f = fopen("/proc/self/mountinfo", "r");
+  if (!f)
+    return 0;
+  char line[8192];
+  int good = 1;
+  size_t length = strlen(owner_path);
+  while (fgets(line, sizeof line, f)) {
+    char *save, *field = strtok_r(line, " ", &save);
+    for (int i = 0; i < 4 && field; i++)
+      field = strtok_r(NULL, " ", &save);
+    if (field && !strncmp(field, owner_path, length) &&
+        (!field[length] || field[length] == '/'))
+      good = 0;
+  }
+  if (ferror(f))
+    good = 0;
+  fclose(f);
+  return good;
+}
+static int reconcile_freezer(J *j) {
+#ifndef NATIVE_WORKER_TEST
+  freezer_root = open("/sys/fs/cgroup/freezer",
+                      O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (freezer_root < 0)
+    return 0;
+  snprintf(freezer_name, sizeof freezer_name, "couchroot-native-%s", worker_id);
+  freezer_dir = reconcile_dir(freezer_root, freezer_name);
+  if (freezer_dir < 0)
+    return errno == ENOENT; /* A previous reconciliation may have removed it. */
+  struct stat st;
+  if (fstat(freezer_dir, &st) || !reconcile_bound(j, "freezer", &st))
+    return 0;
+  /* EXITKILL is inherited by every released descendant. If the guardian died
+   * during freezing, old kernels may retain their pending kills until thaw.
+   * Thaw only this inode-bound leaf; never signal enumerated or saved PIDs. */
+  if (!freezer_write("freezer.state", "THAWED"))
+    return 0;
+  double deadline = stamp() + 5000;
+  for (;;) {
+    int empty = 1;
+    const char *names[] = {"cgroup.procs", "tasks"};
+    for (int i = 0; i < 2; i++) {
+      int fd = openat(freezer_dir, names[i], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+      char data[128];
+      ssize_t n = fd < 0 ? -1 : read(fd, data, sizeof data);
+      if (fd >= 0)
+        close(fd);
+      if (n < 0)
+        return 0;
+      if (n)
+        empty = 0;
+    }
+    if (empty)
+      return 1;
+    if (stamp() >= deadline)
+      return 0;
+    usleep(10000);
+  }
+#else
+  (void)j;
+  return 1;
+#endif
+}
+static int reconcile_resources(J *j) {
+  struct stat st;
+  const char *id = textval(j, "worker_id"), *boot = textval(j, "boot_id"),
+             *start = textval(j, "process_start");
+  int64_t schema, pid;
+  J *prepared = get(j, "prepared");
+  if (!integer(j, "schema", &schema) || schema != 2 || !prepared ||
+      !json_object_is_type(prepared, 1) || !json_object_get_boolean(prepared) ||
+      !hexvalid(id, 32) || !boot || strcmp(boot, current_boot) || !start ||
+      !*start || !integer(j, "pid", &pid) || pid < 1 || pid > INT_MAX ||
+      fstat(directory, &st) || !reconcile_bound(j, "scope", &st))
+    return 0;
+  char actual[32];
+  errno = 0;
+  if (job_identity((pid_t)pid, actual)) {
+    if (!strcmp(actual, start))
+      return 0; /* Still live (or unreaped): no takeover, even without its lock.
+                 */
+  } else if (errno != ENOENT && errno != ESRCH)
+    return 0;
+  strcpy(worker_id, id);
+#ifdef NATIVE_WORKER_TEST
+  helper_parent = reconcile_dir(directory, ".views");
+  if (snprintf(helper_owner_path, sizeof helper_owner_path, "%s/.views/%s",
+               root, id) >= (int)sizeof helper_owner_path)
+    return 0;
+#else
+  int opt = reconcile_dir(AT_FDCWD, "/opt");
+  if (opt < 0)
+    return 0;
+  int agent = reconcile_dir(opt, "couchroot-agent");
+  close(opt);
+  if (agent < 0)
+    return 0;
+  helper_parent = reconcile_dir(agent, "native-helpers");
+  close(agent);
+  snprintf(helper_owner_path, sizeof helper_owner_path,
+           "/opt/couchroot-agent/native-helpers/%s", id);
+#endif
+  if (helper_parent < 0 && errno != ENOENT)
+    return 0;
+  if (helper_parent >= 0) {
+    helper_owner = reconcile_dir(helper_parent, id);
+    if (helper_owner < 0 && errno != ENOENT)
+      return 0;
+    if (helper_owner >= 0 &&
+        (fstat(helper_owner, &st) || !reconcile_bound(j, "runtime", &st)))
+      return 0;
+  }
+  /* Bindings are validated before any cleanup. Missing resources are allowed
+   * for idempotence; existing mismatched resources are never adopted. */
+  helper_parent_created = json_object_get_boolean(get(j, "parent_created"));
+  if (!reconcile_freezer(j))
+    return reconcile_refuse("freezer identity or remaining tasks");
+  double deadline = stamp() + 5000;
+  while (!reconcile_namespace_unused(j)) {
+    if (stamp() >= deadline)
+      return reconcile_refuse("namespace remains referenced or inaccessible");
+    usleep(20000);
+  }
+  if (!reconcile_no_mounts(helper_owner_path))
+    return reconcile_refuse("unexpected visible runtime mount");
+  guardian_recovery_kind = "stale-guardian-reconciled";
+  if (helper_owner < 0 && helper_parent >= 0)
+    helpers_cleanup();
+  if (!guardian_recover_records() || !runtime_sweep() || !containment_cleanup())
+    return 0;
+  return !unlinkat(jobs_dir, "guardian", 0) && !fsync(jobs_dir);
+}
+static void guardian_reconcile(void) {
+  struct stat st;
+  if (!fstatat(jobs_dir, "guardian.next", &st, AT_SYMLINK_NOFOLLOW) ||
+      errno != ENOENT)
+    fatal("unresolved guardian journal temporary; inspect before recovery");
+  int fd = openat(jobs_dir, "guardian", O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) {
+    if (errno == ENOENT)
+      return;
+    fatal("unresolved guardian journal access");
+  }
+  char bytes[4096];
+  if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
+      (st.st_mode & 077) || st.st_nlink != 1 || st.st_size < 1 ||
+      st.st_size >= (off_t)sizeof bytes)
+    fatal("unresolved guardian journal metadata");
+  ssize_t n = read(fd, bytes, sizeof bytes - 1);
+  close(fd);
+  if (n != st.st_size)
+    fatal("unresolved guardian journal read");
+  bytes[n] = 0;
+  J *j = parse(bytes);
+  if (!j)
+    fatal("unresolved guardian journal format");
+  /* Recovery gets no command channel. Isolate globals and bypass atexit on
+   * every failure so partial inspection can never trigger generic cleanup. */
+  pid_t recovery = fork();
+  if (recovery < 0)
+    fatal("guardian reconciliation fork");
+  if (!recovery) {
+    signal(SIGTERM, SIG_DFL);
+    signal(SIGINT, SIG_DFL);
+    signal(SIGALRM, SIG_DFL);
+    alarm(15);
+    _exit(reconcile_resources(j) ? 0 : 125);
+  }
+  json_object_put(j);
+  int status;
+  pid_t got;
+  do {
+    got = waitpid(recovery, &status, 0);
+  } while (got < 0 && errno == EINTR);
+  if (got != recovery || !WIFEXITED(status) || WEXITSTATUS(status))
+    fatal("unresolved guardian journal; ownership or cleanup not proven");
+  guardian_reconciled = 1;
+}

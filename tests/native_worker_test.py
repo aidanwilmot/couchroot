@@ -282,6 +282,77 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertEqual(record['state'],'interrupted');self.assertTrue(record['watchdog_triggered'])
         self.assertFalse(record['watchdog_froze_group']) # Host mode has no freezer controller.
         self.restart();self.assertEqual(self.job('job.status')['result']['state'],'interrupted')
+    def guardian_loss(self):
+        status=self.op('status')['result']
+        self.start_job('sleep 30',timeout=60000)
+        self.proc.kill();self.proc.wait(timeout=3)
+        # The inherited scope lock remains held until EXITKILL closes worker fds.
+        import fcntl
+        deadline=time.monotonic()+3
+        with (self.root/'.jobs/lock').open('rb') as lock:
+            while True:
+                try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);break
+                except BlockingIOError:
+                    if time.monotonic()>deadline:self.fail('Lost guardian descendants retained scope lock')
+                    time.sleep(.01)
+            fcntl.flock(lock,fcntl.LOCK_UN)
+        return status,json.loads((self.root/'.jobs/guardian').read_text())
+    def test_guardian_loss_reconciles_without_replaying(self):
+        status,journal=self.guardian_loss()
+        old=Path(status['app_launcher']['path']);self.assertTrue(old.exists())
+        completed=self.root/'.jobs/native-old-complete.json'
+        completed.write_text(json.dumps(dict(worker_id=journal['worker_id'],id='native-old-complete',state='completed',exit_code=7)))
+        completed.chmod(0o600);original=completed.read_bytes()
+        foreign=self.root/'.views/foreign-owner';foreign.mkdir();(foreign/'keep').write_text('keep')
+        # A reused PID must not be signaled or trusted as the original guardian.
+        journal['pid']=os.getpid();journal['process_start']='0'
+        (self.root/'.jobs/guardian').write_text(json.dumps(journal))
+        self.restart()
+        self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+        self.assertFalse(old.exists());self.assertEqual((foreign/'keep').read_text(),'keep')
+        self.assertEqual(completed.read_bytes(),original)
+        r=self.job('job.status')['result'];self.assertEqual(r['state'],'interrupted')
+        self.assertIsNone(r['record']['exit_code']);self.assertEqual(r['record']['recovery'],'stale-guardian-reconciled')
+        self.assertFalse(self.job('job.start',command='touch '+str(self.root/'replayed'),profile='root',timeout_ms=1000)['ok'])
+        self.assertFalse((self.root/'replayed').exists());self.assertTrue(self.job('job.forget')['ok'])
+        self.start_job('exit 8');self.assertEqual(self.completed()['exit_code'],8)
+    def test_stale_journal_mismatch_and_live_identity_fail_closed(self):
+        import copy
+        status,journal=self.guardian_loss();path=self.root/'.jobs/guardian'
+        old=Path(status['app_launcher']['path']);old_bytes=old.read_bytes()
+        variants=[]
+        for key,value in [('schema',1),('prepared',False),('boot_id','different-boot'),('scope_ino',journal['scope_ino']+1),('runtime_ino',journal['runtime_ino']+1)]:
+            j=copy.deepcopy(journal);j[key]=value;variants.append(j)
+        live=copy.deepcopy(journal);live['pid']=os.getpid();live['process_start']=Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()[19];variants.append(live)
+        for j in variants:
+            raw=json.dumps(j);path.write_text(raw)
+            other=subprocess.run(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
+            self.assertNotEqual(other.returncode,0);self.assertIn(b'unresolved guardian journal',other.stderr)
+            self.assertEqual(path.read_text(),raw);self.assertEqual(old.read_bytes(),old_bytes)
+            self.assertEqual(json.loads((self.root/'.jobs/native-test-job-01.json').read_text())['state'],'running')
+        path.write_text(json.dumps(journal));self.restart()
+        self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+    def test_stale_journal_metadata_and_partial_write_refusal(self):
+        status,journal=self.guardian_loss();path=self.root/'.jobs/guardian'
+        original=path.read_bytes();old=Path(status['app_launcher']['path']);old_bytes=old.read_bytes()
+        def rejected():
+            r=subprocess.run(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
+            self.assertNotEqual(r.returncode,0);self.assertIn(b'unresolved guardian journal',r.stderr)
+            self.assertEqual(path.read_bytes(),original);self.assertEqual(old.read_bytes(),old_bytes)
+        temporary=self.root/'.jobs/guardian.next';temporary.write_bytes(original);temporary.chmod(0o600)
+        rejected();self.assertEqual(temporary.read_bytes(),original);temporary.unlink()
+        path.chmod(0o644);rejected();path.chmod(0o600)
+        linked=self.root/'linked-journal';os.link(path,linked);rejected();linked.unlink()
+        backup=self.root/'journal-backup';path.rename(backup);path.symlink_to(backup)
+        rejected();self.assertTrue(path.is_symlink());path.unlink();backup.rename(path)
+        self.restart();self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+    def test_interrupted_reconciliation_is_idempotent(self):
+        status,journal=self.guardian_loss()
+        # Model interruption after owned runtime deletion but before journal unlink.
+        old=Path(status['app_launcher']['path']);old.unlink();old.parent.rmdir();old.parent.parent.rmdir()
+        self.restart()
+        self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+        self.assertEqual(self.job('job.status')['result']['state'],'interrupted')
     def test_scope_lock_and_unresolved_guardian_refuse_replacement(self):
         other=subprocess.run(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=5)
         self.assertNotEqual(other.returncode,0);self.assertIn(b'exclusive job ownership',other.stderr)

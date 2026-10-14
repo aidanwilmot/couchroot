@@ -4,21 +4,46 @@
 static pid_t guardian_pid;
 static int guardian_fault_signal;
 static volatile sig_atomic_t guardian_stop;
-static int guardian_journal_owned;
+static int guardian_journal_owned, guardian_reconciled;
+static const char *guardian_recovery_kind = "guardian-reaped-descendants";
 static void guardian_signal(int sig) {
   (void)sig;
   guardian_stop = 1;
 }
-static void guardian_journal(void) {
+static void guardian_journal(int prepared) {
   char identity[32];
   if (!job_identity(getpid(), identity))
     fatal("guardian identity");
   J *j = obj();
+  num(j, "schema", 2);
+  boolean(j, "prepared", prepared);
+  struct stat scope_stat, ns_stat, runtime_stat, freezer_stat;
+  if (fstat(directory, &scope_stat) || stat("/proc/self/ns/mnt", &ns_stat))
+    fatal("guardian journal scope");
+  num(j, "scope_dev", scope_stat.st_dev);
+  num(j, "scope_ino", scope_stat.st_ino);
+  num(j, "namespace_dev", ns_stat.st_dev);
+  num(j, "namespace_ino", ns_stat.st_ino);
+  if (prepared) {
+    if (fstat(helper_owner, &runtime_stat))
+      fatal("guardian runtime binding");
+    num(j, "runtime_dev", runtime_stat.st_dev);
+    num(j, "runtime_ino", runtime_stat.st_ino);
+    boolean(j, "parent_created", helper_parent_created);
+#ifndef NATIVE_WORKER_TEST
+    if (fstat(freezer_dir, &freezer_stat))
+      fatal("guardian freezer binding");
+    num(j, "freezer_dev", freezer_stat.st_dev);
+    num(j, "freezer_ino", freezer_stat.st_ino);
+#else
+    (void)freezer_stat;
+#endif
+  }
   str(j, "worker_id", worker_id);
   str(j, "boot_id", current_boot);
   num(j, "pid", getpid());
   str(j, "process_start", identity);
-  int fd = openat(jobs_dir, "guardian",
+  int fd = openat(jobs_dir, prepared ? "guardian.next" : "guardian",
                   O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (fd < 0)
     fatal("unresolved guardian journal; inspect before recovery");
@@ -27,7 +52,9 @@ static void guardian_journal(void) {
   int good = job_write(fd, s, strlen(s)) && !fsync(fd);
   close(fd);
   json_object_put(j);
-  if (!good || fsync(jobs_dir))
+  if (!good ||
+      (prepared && renameat(jobs_dir, "guardian.next", jobs_dir, "guardian")) ||
+      fsync(jobs_dir))
     fatal("guardian journal persistence");
 }
 static int guardian_recover_records(void) {
@@ -98,7 +125,7 @@ static int guardian_recover_records(void) {
       continue;
     }
     str(r, "state", "interrupted");
-    str(r, "recovery", "guardian-reaped-descendants");
+    str(r, "recovery", guardian_recovery_kind);
     num(r, "worker_fault_signal", guardian_fault_signal);
     boolean(r, "watchdog_triggered", guardian_watchdog);
     str(r, "watchdog_reason", guardian_watchdog_reason);
@@ -252,6 +279,10 @@ static void guardian_start(void) {
   if (pid < 0)
     fatal("fork native worker");
   if (!pid) {
+    /* The guardian alone owns the scope lock. A frozen, EXITKILL-doomed worker
+     * must not prevent the next owner from thawing the bound stale cgroup. */
+    close(jobs_lock);
+    jobs_lock = -1;
     runtime_owned = 0;
     guardian_journal_owned = 0;
     if (prctl(PR_SET_PDEATHSIG, SIGKILL) || getppid() != guardian_pid)

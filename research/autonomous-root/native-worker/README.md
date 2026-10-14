@@ -31,8 +31,9 @@ sets Smack `User`, and creates a read-only, nosuid/nodev bind view. The native w
 unshares its mount namespace before starting threads. It owns at most eight views;
 release is refused while any of its jobs are active. A separate native guardian kills/reaps remaining descendants before unmounting
 helpers and its independently staged launcher. Failed unmounts retain their backing files.
-Worker SIGKILL/crashes are recovered by that guardian; loss of the guardian itself
-leaves its journal for explicit inspection. There is no durable log recovery. The
+Worker SIGKILL/crashes are recovered by that guardian. Guardian loss terminates
+its traced descendants; the next launch can reconcile a fully prepared, same-boot
+ownership journal before starting a new worker. Ambiguous state remains blocked. There is no durable log recovery. The
 controller and deployed .NET worker retain their original namespace.
 
 Missing parity still includes autonomous root acquisition and production
@@ -100,9 +101,10 @@ It removes the empty cgroup along with owned runtime views. It never changes the
 state of an existing system cgroup. Host tests bypass unavailable freezer support;
 actual membership, freezing and removal are exercised by the TV acceptance suite.
 
-Failure to finish recovery retains the ownership journal and blocks replacement.
-Loss of both worker and guardian, storage corruption, power loss and uninterruptible
-processes remain fail-closed/manual-inspection cases. This prototype does not
+Failure to finish recovery retains the ownership journal. The next launch retries
+only when its ownership checks permit it. Storage corruption, partial startup,
+legacy or different-boot journals and uninterruptible processes remain
+fail-closed/manual-inspection cases. This prototype does not
 replace the deployed service's root acquisition, enrollment or restart machinery.
 
 `accept.c` exercises the native job/helper lifecycle on the TV via a private
@@ -173,6 +175,43 @@ model's runtime paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
 
+## Guardian loss and stale journals
+
+The guardian alone holds the scope lock. Before releasing its traced worker it
+persists a schema-2 journal bound to the boot, scope directory, runtime directory,
+mount namespace and private freezer inode. A fully prepared journal is published
+with an atomic rename and directory fsync. An incomplete journal or leftover
+`guardian.next` blocks startup rather than guessing which preparation steps ran.
+
+On a later launch, reconciliation runs under the exclusive scope lock in a
+bounded child process, before staging a new launcher or accepting commands. It
+refuses a still-present guardian identity, mismatched directory/device bindings,
+legacy/different-boot journals, symlinks, hard-linked or permissive journals,
+unexpected mounts, inaccessible namespace evidence and retained namespace pins.
+Saved PIDs are inspected only: reconciliation never signals them.
+
+Guardian death applies `PTRACE_O_EXITKILL` to the worker and its traced descendants.
+If the guardian died while its private group was frozen, recovery thaws only the
+journal-bound cgroup so pending kills can finish on older kernels. It waits for
+both process and task membership to empty, then checks process namespace handles,
+open namespace descriptors and namespace bind mounts before removing backing
+files. It never enters or detaches a retained namespace. The scan is bounded to
+256 distinct visible mount namespaces and recovery has a 15-second outer limit.
+Older nsfs mount metadata can omit a namespace identity; those ambiguous pins
+block reconciliation conservatively. Compare the upstream
+[Linux 4.1 nsfs implementation](https://github.com/torvalds/linux/blob/v4.1/fs/nsfs.c)
+with [Linux 4.9's namespace mount-path reporting](https://github.com/torvalds/linux/blob/v4.9/fs/nsfs.c).
+
+Once absence and ownership are established, recovery marks only that worker's
+nonterminal jobs `interrupted`, with unknown exit codes and
+`recovery: stale-guardian-reconciled`. Completed results and foreign records stay
+unchanged. Strictly recognized owned runtime files and the empty cgroup are
+removed before deleting the journal. Missing resources permit an interrupted
+cleanup to resume; mismatched existing resources do not. A new native worker then
+stages its own launcher and reports `stale_guardian_reconciled: true`. Duplicate
+job IDs still cannot replay commands. This is recovery on the next explicit
+launch, not a new service restart mechanism or a replacement for .NET.
+
 ## Descendant faults, progress watchdogs and soak — 2026-10-13
 
 Revision `76a9649` passed **17 normal acceptance checks and 23 distinct extended
@@ -220,8 +259,9 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 
 ## Remaining production work
 
-- Reconcile a stale guardian journal after guardian loss without trusting saved
-  PIDs, weakening ownership checks or replaying commands.
+- Extend recovery qualification beyond fully prepared, same-boot journals.
+  Partial startup, interrupted journal preparation and cross-boot recovery still
+  require inspection; no reboot or power-loss behavior has been qualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
 - Qualify resource exhaustion, storage failures and substantially longer runs.

@@ -2,6 +2,9 @@
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
 #include "common.h"
 #include <dirent.h>
+#include <sched.h>
+#include <sys/file.h>
+#include <sys/mount.h>
 
 #include "controller.h"
 static const char *binary, *app, *appsha, *source_helper;
@@ -234,7 +237,7 @@ static char *stage_helper_from(char **id, const char *input, const char *name) {
                      staged, sha, staged);
   command(cmd, 5000, 0, 0);
   free(cmd);
-  /* Controller retains .NET's namespace and must not see the native bind mount.
+  /* The controller's separate test namespace must not see native bind mounts.
    */
   FILE *mounts = fopen("/proc/self/mountinfo", "r");
   char linebuf[8192];
@@ -407,6 +410,7 @@ static void soak(int seconds) {
   fflush(stdout);
   discard(r);
 }
+#include "guardian-loss-accept.h"
 int main(int argc, char **argv) {
   if (argc != 7) {
     fprintf(stderr,
@@ -421,6 +425,9 @@ int main(int argc, char **argv) {
   source_helper = argv[6];
   signal(SIGPIPE, SIG_IGN);
   libraries();
+  /* Namespace-pin refusal fixtures must never add mounts to deployed .NET. */
+  if (unshare(CLONE_NEWNS) || mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL))
+    fatal("controller test namespace");
   atexit(stop_child);
   int soak_seconds = 0;
   const char *soak_value = getenv("COUCHROOT_NATIVE_SOAK_SECONDS");
@@ -732,6 +739,8 @@ int main(int argc, char **argv) {
          : mode == 8 ? "active_request_progress_watchdog_recovery"
                      : "job_monitor_progress_watchdog_recovery");
   }
+  guardian_loss_checks(0);
+  guardian_loss_checks(1);
   finish(0);
   if (unlink(app))
     fatal("remove launcher source");
