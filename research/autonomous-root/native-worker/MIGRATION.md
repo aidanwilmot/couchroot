@@ -483,3 +483,20 @@ This integration does not enable stopping handoff. Uncertain launch/readiness
 reconciliation before provider identity is durably established, production native
 startup/state transfer, managed rollback, and the broader lifecycle/sunset gates
 remain required. The deployed .NET worker remains the fallback; no reboot was used.
+
+### Service-readable retained state — local follow-up
+
+The independent provider now exposes a dedicated snapshot operation for the stopped
+managed source's fixed job directory. It preserves record bytes, validates them
+against the supported offline import contract, checks source process/boot identity,
+and rejects changed inventory before returning a digest-bound result. It neither
+writes destination state nor launches or replays a job. A real native-channel host
+test reads the retained fixture after the real managed process exits; shell tests
+cover a live source, PID reuse, links, permissions, pending entries and overflow.
+
+The combined Linux suite passes 116 tests without skips. A differential Python/JS
+test checks standard JSON record acceptance against the existing offline importer,
+including integer types, escaped duplicate keys and UTF-8 BOM preservation. These
+are host results; both TVs remain on the previously qualified 0.7.13 packages.
+Destination staging, durable installation receipts, production native launch and
+rollback still need to consume this snapshot before stopping handoff is enabled.

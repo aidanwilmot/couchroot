@@ -331,7 +331,8 @@ below does not qualify installed-service handoff.
 ### Native retirement provider
 
 `observer-retirement.js` adapts a separately launched native worker channel to
-only `inspectUnit` and `retireUnit`. It requires a 300-second bounded instance
+dedicated `inspectUnit`, `retireUnit`, and retained-state snapshot operations.
+It requires a 300-second bounded instance
 with scoped files, no retained resources, an independently staged pinned launcher,
 root/System authentication, and worker/guardian identities distinct from the
 source. Boot, connection, process identities and resources are rechecked around
@@ -345,7 +346,8 @@ a new generic command endpoint or a managed maintenance dependency. Its caller
 must still stage the candidate, publish a durable launch intent, provide the
 private token, and own provider shutdown/staging reconciliation. Scoped mode
 requires the launcher source inside the experiment directory, separately from
-the read-only executable view. The service does not yet construct that lifecycle.
+the read-only executable view. Service 0.7.13 constructs this lifecycle for its
+non-stopping provider probe; stopping handoff remains gated.
 
 Local integration stops a real managed wire peer and then executes adapter
 commands through a separate native wire peer. That host build stubs Smack/mount
@@ -394,3 +396,19 @@ peers, then stops the managed source and continues native retirement commands.
 Smack/mount setup and systemd observations remain host-test substitutions. The
 service still needs listener/token coordination and provider teardown integration;
 this module alone does not enable a deployed stopping handoff.
+
+### Retained state after source exit
+
+The local `snapshotManagedJobs` provider operation uses `retained-state.js` to
+read the fixed managed job directory only after the bound source process is absent
+or its PID has been reused. It checks the boot around each bounded command, validates
+private single-link records, hashes each byte sequence, and compares complete sorted
+inventories before and after reading. At most 64 records below 2 KiB each are
+accepted. Unknown entries, import/guardian markers, links, duplicate JSON keys and
+changed content fail without rewriting source state or producing a snapshot.
+
+The operation is one-shot per provider and shares its serialized identity checks.
+It preserves retained bytes, including unknown outcomes, for the future installation
+and rollback transaction; it does not replay jobs or infer their outcomes. The
+returned receipt binds the source identity, record names, sizes, hashes and bytes.
+This addition is host-tested and not included in the deployed 0.7.13 packages.

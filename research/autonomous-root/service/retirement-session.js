@@ -42,7 +42,7 @@ async function openRetirementSession(options){
   clearTimeout(timer);
   let retiring=false,inUse=0;
   const call=async(method,request)=>{if(retiring||closed)throw Error('Retirement session is closing');inUse++;try{return await ready.provider[method](request);}finally{inUse--;}};
-  const provider=Object.freeze({identity:ready.provider.identity,inspectUnit:request=>call('inspectUnit',request),retireUnit:request=>call('retireUnit',request)});
+  const provider=Object.freeze({identity:ready.provider.identity,inspectUnit:request=>call('inspectUnit',request),retireUnit:request=>call('retireUnit',request),snapshotManagedJobs:()=>call('snapshotManagedJobs')});
   const retire=async executor=>{
    if(retiring||closed||inUse)throw Error('Retirement session is busy or closing');
    retiring=true;

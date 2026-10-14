@@ -53,3 +53,13 @@ test('late readiness cannot issue a retirement command after its deadline',async
  f.channel.operation=async()=>{now=9000;return f.info;};
  await assert.rejects(p.retireUnit(bound));assert.equal(f.calls.length,0);await assert.rejects(p.retireUnit(bound));
 });
+test('provider can snapshot retained managed jobs after observer retirement without exposing execution',async()=>{
+ const f=fixture(),p=await f.create();await p.retireUnit(bound);f.channel.execute=async command=>{f.calls.push({command});return {exit_code:0,stdout:'SNAPSHOT-END\n'};};
+ const result=await p.snapshotManagedJobs();assert.equal(result.implementation,'managed');assert.equal(result.records.length,0);assert.equal(result.source.worker_id,source.worker_id);assert.equal(f.calls.length,4);
+ assert.ok(f.calls.slice(2).every(c=>c.command.includes('/proc/42/stat')&&c.command.includes('/opt/couchroot-agent/jobs')));
+ await assert.rejects(p.snapshotManagedJobs());assert.equal(f.calls.length,4);assert.equal(p.execute,undefined);
+});
+test('failed source-exit check cannot be retried or followed by mutation',async()=>{
+ const f=fixture(),p=await f.create();let calls=0;f.channel.execute=async()=>{calls++;return {exit_code:1,stdout:''};};
+ await assert.rejects(p.snapshotManagedJobs());await assert.rejects(p.snapshotManagedJobs());await assert.rejects(p.retireUnit(bound));assert.equal(calls,1);
+});

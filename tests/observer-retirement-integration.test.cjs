@@ -22,13 +22,15 @@ test('native retirement channel remains usable after the real managed source exi
   assert.equal(native.peer.identity.smack,'host-test-without-Smack');native.peer.identity.smack='System';
   const source=processIdentities(await managed.server.operation({op:'status'}),managed.peer.identity.pid);
   const unit='couchroot-observer-'+'a'.repeat(32)+'.service',bound={unit,bootId:source.boot_id,sha256:'b'.repeat(64)};
+  const retained=path.join(root,'retained'),jobs=path.join(retained,'jobs');fs.mkdirSync(retained,{mode:0o700});fs.mkdirSync(jobs,{mode:0o700});
+  const saved=Buffer.from(JSON.stringify({id:'retained-job-0001',boot_id:source.boot_id,state:'completed',pid:0,exit_code:7}));fs.writeFileSync(path.join(jobs,'retained-job-0001.json'),saved,{mode:0o600});
   const sourceFile=path.resolve(__dirname,'../research/autonomous-root/service/observer-retirement.js'),real=createRequire(sourceFile),module={exports:{}};
   let commands=0;
   const unitOperations={
    inspectObserverUnit:async o=>{commands++;const r=await o.execute('printf inspected',1000);assert.equal(r.stdout,'inspected');return {unit:o.unit};},
    retireObserverUnit:async o=>{commands++;const r=await o.execute('printf retired',1000);assert.equal(r.stdout,'retired');return {unit:o.unit,boot_id:o.bootId,retired:true};}
   };
-  vm.runInNewContext(fs.readFileSync(sourceFile,'utf8'),{module,process,require:name=>name==='./observer-unit'?unitOperations:real(name)});
+  vm.runInNewContext(fs.readFileSync(sourceFile,'utf8'),{module,process,require:name=>name==='./observer-unit'?unitOperations:name==='./retained-state'?{snapshotManagedJobs:options=>real(name).snapshotManagedJobs({...options,execute:(command,timeout)=>options.execute(command.replaceAll('/opt/couchroot-agent',retained),timeout)})}:real(name)});
   const id='a'.repeat(32),record={schema:1,id,phase:'submitted',device:'s90d',manifest_sha256:'b'.repeat(64),worker_sha256:'b'.repeat(64),launcher_sha256:native.sha,observer_sha256:bound.sha256,boot_id:source.boot_id,source,unit:'couchroot-retirement-'+id+'.service',directory:'/opt/couchroot-retirement-'+id,scope:'/opt/couchroot-retirement-'+id+'/state',token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/retirement-ABC123/token',token_sha256:'b'.repeat(64),port:12345};
   const journalDirectory=path.join(root,'journal');fs.mkdirSync(journalDirectory,{mode:0o700});
   fs.writeFileSync(path.join(journalDirectory,id+'.retirement.json'),JSON.stringify(record),{mode:0o600});fs.writeFileSync(path.join(journalDirectory,'retirement-launch.pending'),id+'\n',{mode:0o600});
@@ -40,6 +42,7 @@ test('native retirement channel remains usable after the real managed source exi
   assert.deepEqual(await managed.server.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await managed.ended,[0,null],managed.stderr());
   await assert.rejects(managed.server.execute('must not execute',1000));
   assert.equal((await provider.inspectUnit(bound)).unit,unit);assert.equal((await provider.retireUnit(bound)).retired,true);assert.equal(commands,2);
+  const snapshot=await provider.snapshotManagedJobs();assert.equal(snapshot.records.length,1);assert.equal(Buffer.from(snapshot.records[0].base64,'base64').equals(saved),true);assert.equal(fs.readFileSync(path.join(jobs,'retained-job-0001.json')).equals(saved),true);
   const stopped=await require('../research/autonomous-root/service/retirement-teardown').shutdownRetirement({record:readyRecord,journalDirectory,channel:native.server});assert.equal(stopped.phase,'shutdown-acknowledged');assert.deepEqual(await native.ended,[0,null],native.stderr());
   assert.equal(fs.existsSync(path.join(native.dir,'.jobs','guardian')),false);assert.equal(fs.existsSync(path.join(native.dir,'.views')),false);
   assert.doesNotMatch(native.stderr(),/AddressSanitizer|runtime error:|recovery incomplete/);
