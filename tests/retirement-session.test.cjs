@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const file=path.resolve(__dirname,'../research/autonomous-root/service/retirement-session.js'),real=createRequire(file);
 async function fixture(mode,run){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'retirement-session-'));
- let instance,launches=0,readiness=0,launchOptions,closed=0;
+ let instance,launches=0,readiness=0,launchOptions,closed=0,lifecycle=[];
  class Server{
   constructor(options){this.options=options;this._server=new EventEmitter();instance=this;}
   start(callback){if(mode==='listen-error')queueMicrotask(()=>this._server.emit('error',Error('bind failed')));else callback();}
@@ -25,10 +25,15 @@ async function fixture(mode,run){
    instance.connect();if(mode==='disconnect')instance._conn=null;
    return {phase:'submitted'};
   }};
+  if(name==='./retirement-teardown')return {
+   shutdownRetirement:async options=>{lifecycle.push('shutdown');assert.equal(options.channel,instance);return {phase:'shutdown-acknowledged'};},
+   cleanupRetirement:async options=>{lifecycle.push('cleanup');assert.equal(options.record.phase,'shutdown-acknowledged');if(mode==='cleanup-error')throw Error('cleanup uncertain');return {phase:'staging-retired'};},
+   finishRetirement:options=>{lifecycle.push('finish');assert.equal(options.record.phase,'staging-retired');return {phase:'complete'};}
+  };
   if(name==='./retirement-readiness')return {readyRetirement:async options=>{readiness++;assert.equal(options.channel,instance);assert.equal(options.record.phase,'submitted');if(mode==='ready-error')throw Error('identity mismatch');return {record:{phase:'ready'},provider:{identity:'verified'}};}};
   return real(name);
  }});
- try{await run({directory,open:()=>module.exports.openRetirementSession({journalDirectory:directory}),state:()=>({instance,launches,readiness,launchOptions,closed})});}finally{fs.rmSync(directory,{recursive:true,force:true});}
+ try{await run({directory,open:()=>module.exports.openRetirementSession({journalDirectory:directory}),state:()=>({instance,launches,readiness,launchOptions,closed,lifecycle})});}finally{fs.rmSync(directory,{recursive:true,force:true});}
 }
 test('session binds private token to loopback listener and requires readiness before returning',()=>fixture('ok',async f=>{
  const session=await f.open(),s=f.state();assert.equal(s.instance.options.bindHost,'127.0.0.1');assert.equal(s.launchOptions.port,12345);assert.equal(s.readiness,1);assert.equal(session.record.phase,'ready');assert.equal(session.provider.identity,'verified');assert.equal(session.channel,undefined);
@@ -46,4 +51,12 @@ test('listener failure before submission removes unused token and never launches
 }));
 test('existing pending ownership refuses allocation',()=>fixture('ok',async f=>{
  fs.writeFileSync(path.join(f.directory,'retirement-launch.pending'),'previous');await assert.rejects(f.open(),/reconciliation/);assert.equal(f.state().instance,undefined);assert.deepEqual(fs.readdirSync(f.directory),['retirement-launch.pending']);
+}));
+
+test('session retires through shutdown, independent cleanup and token completion exactly once',()=>fixture('ok',async f=>{
+ const session=await f.open(),result=await session.retire({});assert.equal(result.phase,'complete');assert.deepEqual(f.state().lifecycle,['shutdown','cleanup','finish']);assert.equal(f.state().closed,1);
+ await assert.rejects(session.retire({}));await assert.rejects(session.provider.inspectUnit({}));assert.equal(f.state().lifecycle.length,3);
+}));
+test('uncertain teardown closes transport and cannot be repeated by the session',()=>fixture('cleanup-error',async f=>{
+ const session=await f.open();await assert.rejects(session.retire({}),/cleanup uncertain/);assert.deepEqual(f.state().lifecycle,['shutdown','cleanup']);assert.equal(f.state().closed,1);await assert.rejects(session.retire({}));
 }));

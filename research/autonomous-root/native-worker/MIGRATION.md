@@ -418,3 +418,20 @@ readiness rejection and refusal to launch over an existing pending record.
 This coordinator is not yet enabled in the installed service. Provider teardown,
 interrupted-session reconciliation and integration with the admission hold remain
 required before a stopping handoff can be enabled or qualified on either TV.
+
+### Retirement teardown (local only)
+
+`retirement-teardown.js` now journals a verified native shutdown, checks successful
+unit completion through an independent executor, verifies worker/guardian exit and
+hash-bound staging, and stops the completed unit without blocking. It removes only
+the expected worker, launcher and empty job-lock layout. Unexpected artifacts or
+uncertain execution retain pending ownership. Service token deletion follows remote
+cleanup; only then does completion release the launch marker. The session exposes
+this one-shot teardown while preventing further adapter operations.
+
+Linux host validation includes real native shutdown after managed-source exit,
+completion of the private token journal, and execution of the cleanup shell against
+controlled process/unit/filesystem fixtures. Systemd inspection remains simulated
+in these host tests. Neither TV has received this coordinator. Interrupted cleanup
+and token-deletion reconciliation, installed-service integration, and both-TV
+stopping handoff qualification remain open; .NET remains the deployed fallback.

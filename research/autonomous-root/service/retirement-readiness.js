@@ -49,4 +49,4 @@ async function readyRetirement({record,journalDirectory,channel,execute,confirmS
   return Object.freeze({record:Object.freeze(ready),provider});
  }catch(error){throw Object.assign(Error('Retirement readiness requires reconciliation'),{outcome:'unknown',cause:error});}
 }
-module.exports={readyRetirement};
+module.exports={readyRetirement,validateRecord,privateRead};

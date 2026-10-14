@@ -34,13 +34,13 @@ test('native retirement channel remains usable after the real managed source exi
   fs.writeFileSync(path.join(journalDirectory,id+'.retirement.json'),JSON.stringify(record),{mode:0o600});fs.writeFileSync(path.join(journalDirectory,'retirement-launch.pending'),id+'\n',{mode:0o600});
   const readinessFile=path.resolve(__dirname,'../research/autonomous-root/service/retirement-readiness.js'),readinessRequire=createRequire(readinessFile),readinessModule={exports:{}};
   vm.runInNewContext(fs.readFileSync(readinessFile,'utf8'),{module:readinessModule,process,Buffer,require:name=>name==='./observer-retirement'?{...readinessRequire(name),createObserverRetirement:module.exports.createObserverRetirement}:readinessRequire(name)});
-  const {provider}=await readinessModule.exports.readyRetirement({record,journalDirectory,channel:native.server,confirmSource:()=>managed.server.operation({op:'status'}),execute:async()=>({exit_code:0,stdout:`Id=${record.unit}\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=${native.child.pid}\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n`})});
+  const {provider,record:readyRecord}=await readinessModule.exports.readyRetirement({record,journalDirectory,channel:native.server,confirmSource:()=>managed.server.operation({op:'status'}),execute:async()=>({exit_code:0,stdout:`Id=${record.unit}\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=${native.child.pid}\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n`})});
   assert.equal(JSON.parse(fs.readFileSync(path.join(journalDirectory,id+'.retirement.json'))).phase,'ready');
   assert.notEqual(provider.identity.worker_id,source.worker_id);
   assert.deepEqual(await managed.server.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await managed.ended,[0,null],managed.stderr());
   await assert.rejects(managed.server.execute('must not execute',1000));
   assert.equal((await provider.inspectUnit(bound)).unit,unit);assert.equal((await provider.retireUnit(bound)).retired,true);assert.equal(commands,2);
-  assert.deepEqual(await native.server.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await native.ended,[0,null],native.stderr());
+  const stopped=await require('../research/autonomous-root/service/retirement-teardown').shutdownRetirement({record:readyRecord,journalDirectory,channel:native.server});assert.equal(stopped.phase,'shutdown-acknowledged');assert.deepEqual(await native.ended,[0,null],native.stderr());
   assert.equal(fs.existsSync(path.join(native.dir,'.jobs','guardian')),false);assert.equal(fs.existsSync(path.join(native.dir,'.views')),false);
   assert.doesNotMatch(native.stderr(),/AddressSanitizer|runtime error:|recovery incomplete/);
  }finally{
