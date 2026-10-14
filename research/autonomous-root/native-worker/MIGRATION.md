@@ -679,3 +679,32 @@ callbacks, duplicate adoption, retained admission and disconnect behavior. The
 separate real-process session/readiness integration remains passing. Installed
 controller orchestration, admission release, rollback/recovery and both-TV handoff
 remain open. Deployed packages and TV boots are unchanged.
+
+### Provider retirement and live admission release — local follow-up
+
+The adopted agent can now retire its matching temporary provider using the new
+native channel as the independently checked executor. Activation consumes the
+complete retirement receipt, rechecks the inactive/missing unit and absence of
+the provider's process identities/staging, and confirms the production identity
+before removing local production token material and transition markers. A durable
+activation intent covers partial cleanup/publication. Failure retains the hold;
+an active receipt with an unfinished intent is not automatically adopted.
+
+After activation and another fresh status check, the agent admits requests only
+for the bound channel/generation and exact committed selection. Cold startup is
+still governed by the existing selection launch policy; live admission does not
+permit an unverified native restart. Disconnect clears live admission without
+starting a managed replacement. Provider, source and production identities must
+remain distinct.
+
+The combined Linux suite passes 153 tests without skips, followed by targeted
+activation/admission reruns after tightening identity/selection binding. Tests
+cover incomplete provider cleanup, altered token/receipts, live/replaced provider,
+native drift, lost activation publication, blocked requests before completion and
+successful routing afterward. Agent retirement/activation uses fixture evidence
+in these unit tests; this is not an installed both-TV handoff result. The separate
+real native session/readiness tests remain passing.
+
+Full orchestration, interrupted-transition recovery, rollback, native cold-start
+integration and both-TV qualification remain open. Deployed packages and TV boots
+are unchanged; .NET remains deployed as fallback.

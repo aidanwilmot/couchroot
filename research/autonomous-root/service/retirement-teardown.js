@@ -103,4 +103,4 @@ function finishRetirement({record,journalDirectory}){
   fs.unlinkSync(intent);fs.unlinkSync(j.marker);j.sync();return Object.freeze(next);
  }catch(cause){throw Object.assign(Error('Retirement completion requires reconciliation'),{outcome:'unknown',cause});}
 }
-module.exports={shutdownRetirement,cleanupRetirement,cleanupCommand,finishRetirement,journal};
+module.exports={shutdownRetirement,cleanupRetirement,cleanupCommand,finishRetirement,journal,validateTeardownRecord:validate};

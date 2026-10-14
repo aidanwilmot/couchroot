@@ -11,6 +11,7 @@ const {stageObserver}=require('./observer-stage');
 const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime');
 const {openRetirementSession}=require('./retirement-session');
 const {validateLaunch}=require('./production-readiness');
+const {activateProduction}=require('./production-activation');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -26,7 +27,7 @@ function createAgent(config,options={}){
  const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
- let managedDigest=null,admissionHold=null;
+ let managedDigest=null,admissionHold=null,nativeRuntime=null;
  const inFlight=new Set();
  function selection(refresh=false){
   if(!options.selectionFile)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
@@ -38,8 +39,13 @@ function createAgent(config,options={}){
   return state;
  }
 
+ function runtimeAllowed(selected){
+  if(selected.selected_implementation==='managed')return selected.launch_allowed;
+  const h=selected.history&&selected.history[selected.history.length-1];
+  return !!(nativeRuntime&&running&&connected&&workerReady&&generation===nativeRuntime.generation&&channel===nativeRuntime.channel&&JSON.stringify(selected)===nativeRuntime.selection&&selected.phase==='stable'&&selected.selected_implementation==='native-prototype'&&selected.selected_manifest_sha256===nativeRuntime.record.manifest_sha256&&h&&h.id===nativeRuntime.record.id&&h.outcome==='committed'&&h.readiness_sha256===nativeRuntime.activation.readiness_sha256);
+ }
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&selected.launch_allowed&&!admissionHold,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -100,9 +106,9 @@ function createAgent(config,options={}){
   finally{if(gen===generation){launching=false;if(client){sdb.close(client);client=null;}if(!connected)schedule();}}
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
- function stop(){admissionHold=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
+ function stop(){admissionHold=null;nativeRuntime=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
  function submit(call){
-  if(admissionHold||!running||!connected||!workerReady||!channel||!selection().launch_allowed)return Promise.reject(Object.assign(Error('Root worker unavailable or admission held'),{outcome:'rejected'}));
+  if(admissionHold||!running||!connected||!workerReady||!channel||!runtimeAllowed(selection()))return Promise.reject(Object.assign(Error('Root worker unavailable or admission held'),{outcome:'rejected'}));
   let request;try{request=Promise.resolve(call(channel));}catch(e){request=Promise.reject(e);}
   // Keep a result classification, not command output, for the handoff drain.
   // Transport errors without an explicit outcome are also uncertain.
@@ -256,12 +262,33 @@ function createAgent(config,options={}){
      const adoptedGeneration=++generation,previousClose=next.onClose;
      channel=next;connected=true;workerReady=true;workerStatus=info;workerStatusAt=process.uptime();identity=peer.identity;launching=false;lastError=null;
      if(timer){clearTimeout(timer);timer=null;}
-     next.onClose=error=>{try{if(previousClose)previousClose(error);}finally{if(generation===adoptedGeneration&&channel===next){connected=false;workerReady=false;workerStatus=null;identity=null;workerStatusAt=0;lastError='Native worker disconnected; reconciliation required';}}};
+     next.onClose=error=>{try{if(previousClose)previousClose(error);}finally{if(generation===adoptedGeneration&&channel===next){connected=false;workerReady=false;workerStatus=null;identity=null;workerStatusAt=0;nativeRuntime=null;lastError='Native worker disconnected; reconciliation required';}}};
      owner.close();token.adopted={generation:adoptedGeneration,channel:next,record:readyRecord};
      // Admission stays held until provider retirement and transition completion
      // are independently verified by the controller.
      return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
     }catch(error){session.closeTransport();throw Object.assign(Error('Production channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
+   },
+   completeProduction:async retirementSession=>{
+    const adopted=token.adopted;
+    const bound=()=>{if(!adopted||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted production ownership required');};
+    bound();if(token.completing)throw Error('Production completion requires reconciliation');
+    if(!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching retirement session required');
+    token.completing=true;const peer=channel._conn;
+    const confirm=async()=>{
+     bound();const info=await adopted.channel.operation({op:'status'});bound();if(adopted.channel._conn!==peer)throw Error('Production peer changed');
+     validateReadiness(info,{implementation:'native-prototype',bootId:boot,launcherSha256:adopted.record.launcher_sha256});
+     if(JSON.stringify(processIdentities(info,peer.identity.pid))!==JSON.stringify(adopted.record.worker_identity))throw Error('Production identity changed');
+     const r=validateResourceInventory(info);if(r.jobs.length||r.helpers.length||r.transfers.length)throw Error('Production resources changed before activation');return info;
+    };
+    const execute=async(command,timeout)=>{await confirm();const result=await adopted.channel.execute(command,timeout);await confirm();return result;};
+    try{
+     const retired=await retirementSession.retire({execute,confirmExecutor:confirm,executorPid:peer.identity.pid});bound();
+     const activation=await activateProduction({record:adopted.record,retired,journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile,execute,confirmNative:async()=>processIdentities(await confirm(),peer.identity.pid)});
+     const info=await confirm();bound();nativeRuntime={...adopted,activation,selection:JSON.stringify(selectionStatus(options.selectionFile))};workerStatus=info;workerStatusAt=process.uptime();
+     if(!runtimeAllowed(selection()))throw Error('Native selection changed before admission');admissionHold=null;
+     return {transaction_id:adopted.record.id,worker_id:info.worker_id,admission_held:false,activation_sha256:activation.receipt_sha256};
+    }catch(error){nativeRuntime=null;throw Object.assign(Error('Production completion requires reconciliation'),{outcome:'unknown',cause:error});}
    },
    release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
   };
