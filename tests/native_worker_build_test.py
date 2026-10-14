@@ -63,6 +63,8 @@ class NativeWorkerBuildTests(unittest.TestCase):
             self.assertEqual(manifest['schema'],2)
             self.assertEqual(set(manifest['artifacts']),{'native-worker','native-app-launcher','native-process-observer'})
             self.assertIn('native-observer/process-observer.c',manifest['source'])
+            self.assertIn('native-observer/service-profile.h',manifest['source'])
+            self.assertFalse(any('test-service-profile' in name for name in manifest['source']))
             for name,record in manifest['artifacts'].items():
                 self.assertEqual(record['sha256'],sha((folder/name).read_bytes()))
                 self.assertEqual(record['interpreter'],'/lib/ld-linux.so.3')

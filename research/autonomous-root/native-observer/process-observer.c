@@ -61,7 +61,12 @@ static int boot_matches(const char *expected) {
     close(fd);
     return used == 37 && buf[36] == '\n' && !memcmp(buf, expected, 36);
 }
+/* Set only after the fixed root-to-service profile closed all inherited fds.
+ * The supervisor child closes its two explicit journal descriptors before
+ * observe(); it inherits no other non-stdio handles on that path. */
+static int profile_descriptors_closed;
 static int close_inherited(void) {
+    if (profile_descriptors_closed) return 1;
     DIR *dir = opendir("/proc/self/fd");
     if (!dir) return 0;
     struct dirent *entry;
@@ -91,6 +96,8 @@ static int capacity(int needed) {
     }
     return 0;
 }
+#include "service-profile.h"
+
 static long long milliseconds(void) {
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now)) return -1;
@@ -282,5 +289,17 @@ static int supervise(int argc, char **argv) {
     return ok ? 0 : fail("observer receipt publication failed");
 }
 int main(int argc, char **argv) {
+    if (argc > 1 && !strcmp(argv[1], "--service-supervise")) {
+        gid_t groups[32];
+        if ((argc != 7 && argc != 8) || !valid_boot(argv[5]) ||
+            !parse_pid(argv[6]) || (argc == 8 && (!parse_pid(argv[7]) || !strcmp(argv[6], argv[7])))) return fail("invalid service supervisor arguments");
+        int count = parse_service_groups(argv[2], groups);
+        if (!count || !drop_service_profile(groups, count)) return fail("service credential drop failed");
+        profile_descriptors_closed = 1;
+        /* Remove the group argument; all remaining supervision uses ordinary
+         * unprivileged code and the same authenticated socket protocol. */
+        argv[2] = "--supervise";
+        return supervise(argc - 1, argv + 1);
+    }
     return argc > 1 && !strcmp(argv[1], "--supervise") ? supervise(argc, argv) : observe(argc, argv);
 }

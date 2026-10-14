@@ -50,7 +50,8 @@ def build(folder, command):
     inputs = sorted((SOURCE / 'native-worker').glob('*.h')) + [
         SOURCE / 'native-worker/worker.c', SOURCE / 'native-worker/build.sh',
         SOURCE / 'native-launcher/app-launcher.c', SOURCE / 'native-launcher/build.sh',
-        SOURCE / 'native-observer/process-observer.c', SOURCE / 'native-observer/build.sh']
+        SOURCE / 'native-observer/process-observer.c', SOURCE / 'native-observer/service-profile.h',
+        SOURCE / 'native-observer/build.sh']
     source_hashes = {}
     for source in sorted(inputs):
         if source.is_symlink() or not source.is_file():

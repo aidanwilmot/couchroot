@@ -16,10 +16,6 @@ function launchPlan({device,id,binary,sha256,manifestSha256,launch,credentials})
  if(!credentials||credentials.uid!==5001||credentials.gid!==100||credentials.label!=='User::Pkg::MiniRoot01'||!Array.isArray(credentials.groups)||credentials.groups.length<1||credentials.groups.length>32||credentials.groups.some(g=>!Number.isInteger(g)||g<1||g>2147483647)||!credentials.groups.includes(100)||new Set(credentials.groups).size!==credentials.groups.length)throw Error('Invalid observer service credentials');
  const groups=credentials.groups.slice().sort((a,b)=>a-b),unit='couchroot-observer-'+id+'.service';
  const parents=[];let parent=path.dirname(binary);while(parent!=='/'){parents.unshift(parent);parent=path.dirname(parent);}
- const inner='set -eu\nPATH=/usr/bin:/bin\nexport PATH\n'+
-  'test "$(id -u)" = 5001\ntest "$(id -ru)" = 5001\ntest "$(id -g)" = 100\n'+
-  'test "$(id -G | tr " " "\\n" | sort -n -u | tr "\\n" " ")" = '+quote(groups.join(' ')+' ')+'\n'+
-  'exec '+[binary,'--supervise',launch.socketPath,launch.tokenFile,launch.bootId,...launch.pids.map(String)].map(quote).join(' ')+'\n';
  const command='set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+
   'test "$(cat /proc/sys/kernel/random/boot_id)" = '+quote(launch.bootId)+'\n'+
   'for p in '+parents.map(quote).join(' ')+'; do test -d "$p"; test ! -L "$p"; done\n'+
@@ -31,7 +27,7 @@ function launchPlan({device,id,binary,sha256,manifestSha256,launch,credentials})
   'test -f '+quote(binary)+'; test ! -L '+quote(binary)+'\n'+
   'test "$(stat -c "%u:%h:%a" '+quote(binary)+')" = 201:1:755\n'+
   'test "$(sha256sum '+quote(binary)+' | cut -d " " -f 1)" = '+quote(sha256)+'\n'+
-  'systemd-run --unit='+quote(unit)+' '+['User=5001','Group=100','SupplementaryGroups='+groups.join(' '),'SmackProcessLabel='+credentials.label,'WorkingDirectory=/','StandardOutput=null','StandardError=null','KillMode=control-group','RemainAfterExit=yes','NoNewPrivileges=yes','CapabilityBoundingSet=','AmbientCapabilities='].map(p=>'--property='+quote(p)).join(' ')+' /bin/sh -c '+quote(inner)+'\n'+
+  'systemd-run --unit='+quote(unit)+' '+['User=0','Group=0','SmackProcessLabel=System','WorkingDirectory=/','StandardOutput=null','StandardError=null','KillMode=control-group','RemainAfterExit=yes','NoNewPrivileges=yes','AmbientCapabilities='].map(p=>'--property='+quote(p)).join(' ')+' '+[binary,'--service-supervise',groups.join(','),launch.socketPath,launch.tokenFile,launch.bootId,...launch.pids.map(String)].map(quote).join(' ')+'\n'+
   'printf "OBSERVER-SUBMITTED\\n"\n';
  return {unit,command,root,credentials:{...credentials,groups}};
 }

@@ -270,3 +270,38 @@ probe. The service tests cover successful cleanup, uncertain submission and
 cleanup admission holds, missing request IDs before staging, fresh status
 capabilities, and continued refusal of shutdown. The Linux image lacks OpenSSL,
 so the TLS API suite ran on the host; no tests were skipped. Neither TV changed.
+
+## Fixed service credential drop
+
+`process-observer --service-supervise GROUP_CSV SOCKET TOKEN BOOT WORKER [GUARDIAN]`
+requires an already privileged caller. It is never installed setuid. The group
+list is canonical, sorted, unique, bounded to 32 nonzero IDs, and includes the
+fixed primary GID 100. No arbitrary UID, label, executable or command is accepted.
+The fixed identity is UID 5001, GID 100 and `User::Pkg::MiniRoot01`.
+
+The helper closes inherited descriptors while still in System, writes the fixed
+label, disables keep-caps, sets no-new-privileges, empties the bounding set, sets
+exact supplementary groups, and drops GID then UID. It clears and reads back all
+capability words, verifies real/effective/saved IDs, exact groups and
+no-new-privileges. Only then does the ordinary supervisor create a receipt intent
+and open target handles. Its child closes the supervisor's explicitly owned
+journal descriptors; that path requires no procfs descriptor scan under the
+restricted label. The service still independently reads the supervisor's actual
+kernel credentials before confirming and arming.
+
+Systemd starts this fixed mode directly as root/System. It does not supply the
+final account groups or run a shell under the package label. This avoids the
+observed merging of account-default groups. The service continues to pin the
+installed executable's owner, mode and hash before submission.
+
+Local tests cover 83 fault boundaries plus incorrect final identity/capability
+results. A disposable Linux root process actually drops credentials and cannot
+regain root; an end-to-end socket test checks all kernel UID/GID slots, groups,
+no-new-privileges, all five capability sets and the owned receipt. The Smack write
+is redirected to `/dev/null` only in that test binary, so these tests do not
+qualify TV label transition. Test binaries are excluded from signed artifacts.
+All 32 native, 61 focused Node and five packaging tests passed. Two ordinary ARM
+builds matched at 23,016 bytes, SHA-256
+`4677bef3f0137b792d6de2dd22fa91d32476db5b48c26213db8699b596e4e574`,
+with maximum GLIBC requirement 2.17. The profile header is pinned in the candidate
+source manifest. Hardware qualification remains separate.
