@@ -8,11 +8,16 @@ const {processIdentities}=require('./worker-processes');
 function preparePidfdExit({binary,sha256,bound,confirm}){
  if(typeof binary!=='string'||!binary.startsWith('/')||binary.includes('\0')||typeof sha256!=='string'||!/^[a-f0-9]{64}$/.test(sha256)||typeof confirm!=='function')return Promise.reject(Error('Invalid process observer configuration'));
  let identity;
+ function normalized(value,confirmation=false){
+  const guardian=value&&value.processes&&value.processes.guardian;
+  if(guardian&&confirmation){
+   if(value.implementation!=='native-prototype'||!Array.isArray(value.capabilities)||!value.capabilities.includes('guardian-parent-identity-v1'))throw Error('Fresh guardian parent confirmation required');
+   return processIdentities(value,identity.processes.worker.pid);
+  }
+  return processIdentities({...value,capabilities:['worker-process-identity-v1'],...(guardian?{implementation:'native-prototype',guardian_pid:guardian.pid}:{})},confirmation?identity.processes.worker.pid:value.processes.worker.pid);
+ }
  try{
-  identity=processIdentities({...bound,capabilities:['worker-process-identity-v1']},bound.processes.worker.pid);
-  // This bridge observes one handle only. Native handoff requires binding both
-  // handles plus fresh guardian-parent-identity-v1 confirmation before arming.
-  if(identity.processes.guardian!==null)throw Error('Guardian observation is not integrated');
+  identity=normalized(bound);
   // Package/staging owner must keep this executable immutable through spawn.
   // The digest is supplied by that trusted manifest, never by a request body.
   const fd=fs.openSync(binary,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
@@ -50,7 +55,7 @@ function preparePidfdExit({binary,sha256,bound,confirm}){
    phase='confirming';
    Promise.resolve().then(()=>confirm()).then(fresh=>{
     if(failed)return;
-    const value=processIdentities({...fresh,capabilities:['worker-process-identity-v1']},identity.processes.worker.pid);
+    const value=normalized(fresh,true);
     if(JSON.stringify(value)!==expected)throw Error('Worker identity changed after pidfd binding');
     phase='arming';child.stdin.write('ARM\n');
    }).catch(fail);
@@ -60,7 +65,9 @@ function preparePidfdExit({binary,sha256,bound,confirm}){
   }else if(phase==='waiting'&&value==='EXITED')phase='exited';
   else fail(Error('Invalid process observer response'));
  }
- try{child=spawn(binary,[identity.boot_id,String(identity.processes.worker.pid)],{cwd:'/',env:{PATH:'/usr/bin:/bin',LANG:'C'},stdio:['pipe','pipe','pipe']});}
+ const args=[identity.boot_id,String(identity.processes.worker.pid)];
+ if(identity.processes.guardian)args.push(String(identity.processes.guardian.pid));
+ try{child=spawn(binary,args,{cwd:'/',env:{PATH:'/usr/bin:/bin',LANG:'C'},stdio:['pipe','pipe','pipe']});}
  catch(e){closedResolve();fail(e);return ready;}
  child.on('error',fail);
  child.stdin.on('error',fail);
@@ -78,7 +85,7 @@ function preparePidfdExit({binary,sha256,bound,confirm}){
   if(failed)return;
   if(code!==0||signal||phase!=='exited'||buffer||errorBytes){fail(Error('Process observer did not confirm exit'));return;}
   done=true;
-  exitResolve({boot_id:identity.boot_id,worker_id:identity.worker_id,method:'pidfd',processes:{worker:{...identity.processes.worker,observation:'exited'},guardian:null}});
+  exitResolve({boot_id:identity.boot_id,worker_id:identity.worker_id,method:'pidfd',processes:{worker:{...identity.processes.worker,observation:'exited'},guardian:identity.processes.guardian?{...identity.processes.guardian,observation:'exited'}:null}});
  });
  return ready;
 }

@@ -51,6 +51,58 @@ class ProcessObserverTests(unittest.TestCase):
         self.assertEqual(p.wait(timeout=3), 0)
         self.assertEqual(p.stderr.read(), b'')
 
+    def test_pair_requires_both_exits_in_either_order(self):
+        for guardian_first in (False, True):
+            worker = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+            guardian = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+            try:
+                p = self.start([self.boot, str(worker.pid), str(guardian.pid)])
+                self.line(p, b'BOUND')
+                p.stdin.write(b'ARM\n'); p.stdin.flush()
+                self.line(p, b'ARMED')
+                first, second = (guardian, worker) if guardian_first else (worker, guardian)
+                first.terminate(); first.wait(timeout=3)
+                self.assertFalse(select.select([p.stdout], [], [], 0.1)[0])
+                self.assertIsNone(p.poll())
+                second.terminate(); second.wait(timeout=3)
+                self.line(p, b'EXITED')
+                self.assertEqual(p.wait(timeout=3), 0)
+            finally:
+                for child in (worker, guardian):
+                    if child.poll() is None: child.kill()
+                    child.wait(timeout=3)
+
+    def test_pair_refuses_duplicate_and_invalid_guardian_pid(self):
+        for guardian in (str(self.target.pid), '0', '-1', '01', '2147483648'):
+            p = self.start([self.boot, str(self.target.pid), guardian])
+            self.assertNotEqual(p.wait(timeout=3), 0)
+            self.assertEqual(p.stdout.read(), b'')
+        self.assertIsNone(self.target.poll())
+
+    def test_guardian_exit_before_arm_refuses_pair(self):
+        guardian = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+        try:
+            p = self.start([self.boot, str(self.target.pid), str(guardian.pid)])
+            self.line(p, b'BOUND')
+            guardian.terminate(); guardian.wait(timeout=3)
+            self.assertNotEqual(p.wait(timeout=3), 0)
+            self.assertNotIn(b'EXITED', p.stdout.read())
+            self.assertIsNone(self.target.poll())
+        finally:
+            if guardian.poll() is None: guardian.kill()
+            guardian.wait(timeout=3)
+
+    def test_pair_descriptor_admission_refuses_before_binding(self):
+        import resource
+        def tight_limit():
+            _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (5, hard))
+        p = self.start([self.boot, str(self.target.pid), str(os.getpid())], preexec_fn=tight_limit)
+        self.assertNotEqual(p.wait(timeout=3), 0)
+        self.assertEqual(p.stdout.read(), b'')
+        self.assertIn(b'initial observation unavailable', p.stderr.read())
+        self.assertIsNone(self.target.poll())
+
     def test_invalid_arguments_and_boot_fail_without_target_signal(self):
         for args in [[], [self.boot, '0'], [self.boot, '01'], [self.boot, '-1'], [self.boot, '+2'], [self.boot, '2147483648'], [self.boot, '9'*100], [self.boot.upper(), str(self.target.pid)], ['00000000-0000-0000-0000-000000000001', str(self.target.pid)]]:
             p = self.start(args)

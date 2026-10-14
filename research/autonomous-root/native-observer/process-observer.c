@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: 0BSD
- * Observe one process through a pidfd. Never signal or acquire privileges.
+ * Observe one or two processes through pidfds. Never signal or acquire privileges.
  * BOUND -> caller confirms authenticated identity -> ARM -> ARMED -> EXITED.
  * This helper alone cannot establish which process a numeric PID identifies.
  */
 #define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -68,6 +69,22 @@ static int close_inherited(void) {
     closedir(dir);
     return ok;
 }
+/* TV kernels may abort on exhaustion instead of returning EMFILE. Do not
+ * allocate even a proc directory handle until spare capacity is established.
+ * External concurrent limit changes remain outside this admission check. */
+static int capacity(int needed) {
+    struct rlimit limit;
+    if (getrlimit(RLIMIT_NOFILE, &limit)) return 0;
+    rlim_t bound = limit.rlim_cur < 4096 ? limit.rlim_cur : 4096;
+    for (int fd = 0; (rlim_t)fd < bound; fd++) {
+        /* F_GETFD needs no newer libc fcntl wrapper or large-file structure. */
+        if (syscall(SYS_fcntl, fd, F_GETFD, 0) < 0) {
+            if (errno != EBADF) return 0;
+            if (!--needed) return 1;
+        }
+    }
+    return 0;
+}
 static long long milliseconds(void) {
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now)) return -1;
@@ -83,52 +100,73 @@ static int emit(const char *message) {
     }
     return 1;
 }
+static pid_t parse_pid(const char *s) {
+    if (!*s || *s == '0') return 0;
+    for (const char *p = s; *p; p++) if (*p < '0' || *p > '9') return 0;
+    errno = 0; char *end; long pid = strtol(s, &end, 10);
+    return errno || *end || pid <= 1 || pid > INT_MAX || pid == getpid() ? 0 : (pid_t)pid;
+}
+static void close_targets(struct pollfd *fds, int count) {
+    for (int i = 0; i < count; i++) if (fds[i].fd >= 0) close(fds[i].fd);
+}
 int main(int argc, char **argv) {
-    if (argc != 3 || !valid_boot(argv[1]) || !*argv[2] || *argv[2] == '0') return fail("invalid arguments");
-    for (const char *p = argv[2]; *p; p++) if (*p < '0' || *p > '9') return fail("invalid pid");
-    errno = 0; char *end; long pid = strtol(argv[2], &end, 10);
-    if (errno || *end || pid <= 1 || pid > INT_MAX || pid == getpid()) return fail("invalid pid");
+    if ((argc != 3 && argc != 4) || !valid_boot(argv[1])) return fail("invalid arguments");
+    int count = argc - 2;
+    pid_t pids[2] = {parse_pid(argv[2]), count == 2 ? parse_pid(argv[3]) : 0};
+    if (!pids[0] || (count == 2 && (!pids[1] || pids[0] == pids[1]))) return fail("invalid pid");
     if (getuid() != geteuid() || getgid() != getegid()) return fail("changed credentials");
     sigset_t signals;
     sigemptyset(&signals);
     if (sigprocmask(SIG_SETMASK, &signals, NULL) || signal(SIGALRM, SIG_DFL) == SIG_ERR) return fail("signal setup failed");
     signal(SIGPIPE, SIG_IGN);
     alarm(35); /* Independent bound even if a pipe write or proc read stalls. */
-    if (!close_inherited() || !boot_matches(argv[1])) return fail("initial observation unavailable");
-    int target = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0);
-    if (target < 0) return fail("pidfd unavailable");
-    struct pollfd fds[2] = {{target, POLLIN, 0}, {STDIN_FILENO, POLLIN, 0}};
-    if (poll(fds, 1, 0) != 0 || !boot_matches(argv[1])) { close(target); return fail("process already exited or boot changed"); }
-    if (!emit("BOUND\n")) { close(target); return fail("output unavailable"); }
+    if (!capacity(1) || !close_inherited() || !capacity(count + 1) || !boot_matches(argv[1])) return fail("initial observation unavailable");
+    struct pollfd fds[3] = {{-1, POLLIN, 0}, {-1, POLLIN, 0}, {-1, POLLIN, 0}};
+    for (int i = 0; i < count; i++) {
+        fds[i].fd = (int)syscall(SYS_pidfd_open, pids[i], 0);
+        if (fds[i].fd < 0) { close_targets(fds, count); return fail("pidfd unavailable"); }
+    }
+    fds[count].fd = STDIN_FILENO;
+    if (poll(fds, count, 0) != 0 || !boot_matches(argv[1])) { close_targets(fds, count); return fail("process already exited or boot changed"); }
+    if (!emit("BOUND\n")) { close_targets(fds, count); return fail("output unavailable"); }
     long long now = milliseconds(), deadline = now + 10000;
     size_t arm_used = 0; int armed = 0, result = 1;
-    if (now < 0) { close(target); return fail("clock unavailable"); }
+    if (now < 0) { close_targets(fds, count); return fail("clock unavailable"); }
     for (;;) {
         now = milliseconds();
         if (now < 0 || now >= deadline) { fail("deadline expired"); break; }
-        int ready = poll(fds, 2, (int)(deadline - now));
+        int ready = poll(fds, count + 1, (int)(deadline - now));
         if (ready < 0 && errno == EINTR) continue;
         if (ready < 0) { fail("poll failed"); break; }
         /* Caller disappearance or malformed control always invalidates evidence. */
-        if (fds[1].revents & (POLLERR | POLLHUP | POLLNVAL)) { fail("controller disconnected"); break; }
-        if (fds[1].revents & POLLIN) {
+        if (fds[count].revents & (POLLERR | POLLHUP | POLLNVAL)) { fail("controller disconnected"); break; }
+        if (fds[count].revents & POLLIN) {
             char bytes[8]; ssize_t n = read(STDIN_FILENO, bytes, sizeof(bytes));
             if (n < 0 && errno == EINTR) continue;
             if (n <= 0 || armed || (size_t)n > 4 - arm_used || memcmp(bytes, "ARM\n" + arm_used, (size_t)n)) { fail("invalid control"); break; }
             arm_used += (size_t)n;
             if (arm_used == 4) {
-                if (poll(fds, 1, 0) != 0 || !boot_matches(argv[1])) { fail("process exited before arm"); break; }
+                if (poll(fds, count, 0) != 0 || !boot_matches(argv[1])) { fail("process exited before arm"); break; }
                 if (!emit("ARMED\n")) { fail("output unavailable"); break; }
                 armed = 1; deadline = milliseconds() + 20000;
             }
         }
-        if (fds[0].revents & (POLLERR | POLLNVAL)) { fail("invalid process handle"); break; }
-        if (fds[0].revents & (POLLIN | POLLHUP)) {
-            if (!armed || !boot_matches(argv[1])) { fail("unconfirmed process exit"); break; }
+        int remaining = 0, invalid = 0;
+        for (int i = 0; i < count; i++) {
+            if (fds[i].fd < 0) continue;
+            if (fds[i].revents & (POLLERR | POLLNVAL)) { invalid = 1; break; }
+            if (fds[i].revents & (POLLIN | POLLHUP)) {
+                if (!armed) { invalid = 1; break; }
+                close(fds[i].fd); fds[i].fd = -1;
+            } else remaining++;
+        }
+        if (invalid) { fail("unconfirmed process handle or exit"); break; }
+        if (!remaining) {
+            if (!boot_matches(argv[1])) { fail("boot changed at exit"); break; }
             if (!emit("EXITED\n")) { fail("output unavailable"); break; }
             result = 0; break;
         }
     }
-    close(target);
+    close_targets(fds, count);
     return result;
 }

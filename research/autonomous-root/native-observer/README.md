@@ -1,22 +1,23 @@
 # Process exit observer
 
-This small executable observes a single process using Linux `pidfd_open` and
+This small executable observes a worker and optional guardian using Linux `pidfd_open` and
 `poll`. It does not acquire credentials, signal the target, or prove resource
 cleanup. It is intended for S90D's service identity, which cannot read the root
 worker's `/proc/<pid>/stat`. QN90A's older kernel retains the existing proc-stat
 observer. An unavailable syscall or denied observation is a failure, never proof
 that a process has exited.
 
-Invocation: `process-observer BOOT_ID PID`, with pipes for stdin/stdout/stderr.
+Invocation: `process-observer BOOT_ID WORKER_PID [GUARDIAN_PID]`, with pipes for
+stdin/stdout/stderr. Pair PIDs must be distinct.
 
-1. Check the boot, close inherited descriptors, bind the pidfd and verify the
-   process has not exited; emit `BOUND`.
+1. Check descriptor capacity and boot, close inherited descriptors, bind all
+   pidfds and verify none has exited; emit `BOUND`.
 2. The service obtains fresh authenticated worker identity and resource inventory
    and compares them to the journal-bound snapshot. A bare numeric PID is not
    sufficient. The worker must still answer over the original connection.
 3. The service writes `ARM\n`; the observer verifies boot and liveness again and
    emits `ARMED`. Only then may the service submit `SHUTDOWN`.
-4. Once the handle reports exit, verify boot again, emit `EXITED` and exit zero.
+4. Once every handle reports exit, verify boot again, emit `EXITED` and exit zero.
    The service requires the exact protocol, clean pipe closure and zero exit.
 
 Preparation is bounded to ten seconds, armed observation to twenty seconds, and
@@ -34,18 +35,25 @@ this check is not a race-free executable loader. The option has no public API or
 configuration route. Default behavior remains proc-stat observation; there is no
 automatic fallback after a permission error.
 
-Native guardian observation is deliberately rejected by this single-handle
-bridge. Native status now confirms the original parent relationship on every
-request and advertises `guardian-parent-identity-v1`. Startup established the
+Native pair observation requires a fresh raw authenticated status response after
+both handles are bound, including `guardian-parent-identity-v1` and matching worker
+and guardian identities. Missing capability or changed identity refuses arming.
+Native status confirms the original parent relationship on every request.
+Startup established the
 guardian's start ticks and direct parent relationship; the fresh kernel parent
 check binds that cached identity to the original parent without opening another
-descriptor. This is point-in-time confirmation. Extending the observer to bind
-both handles before requiring that capability remains necessary.
+descriptor. This is point-in-time confirmation; either process can subsequently
+exit. The observer retains evidence of each exit and waits for the other process
+without repeatedly polling an already-exited handle.
 
 ## Qualification boundary
 
 The bridge is integrated into the service's internal managed handoff and tested
 locally with the real managed wire session, admission hold and selection journal.
+The native pair path is tested through the actual wire server and ordinary native
+worker/guardian, with journal/runtime cleanup verified separately after exit. The
+service selection controller still supports managed handoff only; these native
+wire tests do not qualify a native-to-managed service transition.
 The tests also cover changed confirmation, malformed protocol, digest mismatch,
 descriptor inheritance, deadlines, controller loss and no target signalling.
 
@@ -55,6 +63,12 @@ and pidfd observation and refusal before shutdown on an observer digest mismatch
 Two ordinary ARMv7 softfp builds matched byte-for-byte; their maximum required
 GLIBC version is 2.17. These results do not establish TV executable staging or
 service launch compatibility.
+
+The subsequent paired-observer revision passed 12 native protocol tests and 32
+Node bridge/service/process tests, including ordinary native worker and guardian
+shutdown through the actual wire server. Final repeated ARM builds matched and
+all nine candidate-package tests passed; GLIBC remains capped at 2.17. This is
+local evidence only.
 
 Schema-2 candidate manifests now include the observer and its source/build hashes.
 Schema-1 candidates remain accepted without an observer. The observer is not

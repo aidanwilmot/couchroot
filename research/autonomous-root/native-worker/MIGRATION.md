@@ -204,8 +204,10 @@ must still be verified against the package manifest and qualified in the TV serv
 Bind handles before a fresh authenticated identity confirmation; the test controller
 owns the guardian child. Native status now checks its original guardian parent
 relationship on every request (`guardian-parent-identity-v1`), without allocating
-a descriptor. The bridge must bind both handles and require this fresh confirmation
-before native handoff. A bare PID or an unreadable stat file is insufficient.
+a descriptor. The bridge now binds both handles and requires this fresh confirmation
+before arming. Local real-wire native shutdown tests pass with both exits and
+separate guardian cleanup checks. Native service selection and TV launch remain
+unqualified. A bare PID or an unreadable stat file is insufficient.
 The runtime controller, live state installation/rollback and actual service
 integration remain required; this is not phase-three completion.
 

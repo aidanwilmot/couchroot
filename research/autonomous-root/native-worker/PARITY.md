@@ -520,3 +520,28 @@ with the actual source-built schema-2 candidate, including the ordinary artifact
 case; its repeated builds matched. The five builder/package boundary tests also
 passed as part of the repository run. No TV was contacted or package installed.
 Actual service-side observer staging/launch and both-TV validation remain open.
+
+## Paired process exit observation — 2026-10-14
+
+The observer now accepts a distinct worker/guardian pair and binds both pidfds
+before emitting `BOUND`. The bridge requires a fresh authenticated native status
+with `guardian-parent-identity-v1` and unchanged identities before arming. Exit of
+only one process is insufficient. The completed receipt contains both original
+identities; the observer never signals either target. Managed single-process
+observation remains supported.
+
+Descriptor admission precedes even the inherited-descriptor scan and reserves
+room for both handles plus boot readback. The compiler's libc `fcntl` wrapper
+raised the ARM dependency to GLIBC 2.28 and was rejected by the package check.
+Using the existing `F_GETFD` syscall preserves the GLIBC 2.17 ceiling without
+weakening validation. Concurrent external limit changes remain outside admission.
+
+Final local checks passed 12 native observer tests and 32 Node bridge/service/
+process tests. The ordinary native worker completed shutdown through the real
+wire server with both proc-stat and pidfd observations; guardian exit status and
+journal/runtime cleanup were checked separately. Pair tests cover either exit
+order, premature guardian exit, duplicate PIDs, missing/changed confirmation and
+low-descriptor refusal. All nine candidate tests passed with the final ordinary
+source build, and both ARM builds matched. No TV was contacted. The service
+selection controller still supports managed handoff only; native service
+transitions and actual TV staging/launch remain unqualified.

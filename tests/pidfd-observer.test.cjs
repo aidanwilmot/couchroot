@@ -40,12 +40,30 @@ test('observer cancellation reaps only its own child',{skip:!enabled},async()=>f
  await observer.cancel();await assert.rejects(observer.waitForExit(),/cancelled/);
  assert.equal(target.signalCode,null);assert.equal(target.exitCode,null);
 }));
-test('observer bridge rejects boot mismatch and guardian identities',{skip:!enabled},async()=>fixture(async({bound})=>{
+test('observer bridge rejects boot mismatch and invalid pair confirmation',{skip:!enabled},async()=>fixture(async({bound})=>{
  let called=false;
  await assert.rejects(preparePidfdExit({binary,bound:{...bound,boot_id:'00000000-0000-0000-0000-000000000001'},confirm:()=>{called=true;return bound;}}));
  assert.equal(called,false);
  await assert.rejects(preparePidfdExit({binary,bound:{...bound,processes:{...bound.processes,guardian:{pid:42,start_ticks:'2'}}},confirm:()=>bound}));
 }));
+test('pair bridge requires fresh parent capability and unchanged guardian identity',{skip:!enabled},async()=>fixture(async({bound,target})=>fixture(async({bound:other,target:guardian})=>{
+ const pair={...bound,processes:{...bound.processes,guardian:other.processes.worker}};
+ const fresh={...pair,implementation:'native-prototype',guardian_pid:guardian.pid,capabilities:['worker-process-identity-v1','guardian-parent-identity-v1']};
+ for(const confirm of [()=>pair,()=>({...fresh,capabilities:['worker-process-identity-v1']}),()=>({...fresh,processes:{...fresh.processes,guardian:{...fresh.processes.guardian,start_ticks:'0'}}})]){
+  await assert.rejects(preparePidfdExit({binary,bound:pair,confirm}));
+  assert.equal(target.signalCode,null);assert.equal(guardian.signalCode,null);
+ }
+ const observer=await preparePidfdExit({binary,bound:pair,confirm:()=>fresh});
+ try{
+  observer.assertReady();const workerEnded=once(target,'exit');target.kill('SIGTERM');await workerEnded;
+  let settled=false;observer.waitForExit().then(()=>{settled=true;});
+  await new Promise(r=>setTimeout(r,50));assert.equal(settled,false);
+  const guardianEnded=once(guardian,'exit');guardian.kill('SIGTERM');await guardianEnded;
+  const result=await observer.waitForExit();
+  assert.equal(result.processes.worker.observation,'exited');assert.equal(result.processes.guardian.observation,'exited');
+  assert.equal(result.processes.guardian.start_ticks,other.processes.worker.start_ticks);
+ }finally{await observer.cancel();}
+})));
 test('observer bridge refuses altered or linked artifacts before confirmation',{skip:!enabled},async()=>fixture(async({bound,script})=>{
  let called=false;const confirm=()=>{called=true;return bound;};
  await assert.rejects(preparePidfdExit({binary,sha256:'0'.repeat(64),bound,confirm}),/digest mismatch/);
