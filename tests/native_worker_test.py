@@ -28,13 +28,13 @@ class NativeWorkerTests(unittest.TestCase):
         self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
         self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')
         auth=self.receive().split('\t');self.assertEqual(auth[0],'AUTH');self.worker_pid=int(auth[1]);self.assertNotEqual(self.worker_pid,self.proc.pid)
-    def restart(self, extra_env=None):
+    def restart(self, extra_env=None, pass_fds=()):
         self.stream.close();self.sock.close()
         _,stderr=self.proc.communicate(timeout=5)
         self.assertNotRegex(stderr.decode(errors='replace'),r'ERROR: AddressSanitizer|runtime error:|SUMMARY:')
         self.secret=os.urandom(32);self.nonce=os.urandom(32);self.seq=0
         self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
-        self.proc=subprocess.Popen(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={**os.environ,**(extra_env or {})})
+        self.proc=subprocess.Popen(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={**os.environ,**(extra_env or {})},pass_fds=pass_fds)
         self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
         self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')
         auth=self.receive().split('\t');self.assertEqual(auth[0],'AUTH');self.worker_pid=int(auth[1])
@@ -275,12 +275,32 @@ class NativeWorkerTests(unittest.TestCase):
 
     def test_descriptor_exhaustion_retains_intent_without_launch(self):
         import resource
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        high=max(int(p.name) for p in Path('/proc/self/fd').iterdir())+128
+        fd=os.open('/dev/null',os.O_RDONLY)
+        try:
+            os.dup2(fd,high)
+            self.restart(pass_fds=(high,))
+        finally:os.close(fd);os.close(high)
+        self.assertTrue(Path(f'/proc/{self.worker_pid}/fd/{high}').exists())
         marker=self.root/'descriptor-command'
         original=resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE)
-        # Permit record scanning/publication, but not all three launch pipes.
-        highest=max(int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir())
+        # A high inherited descriptor leaves many holes: the former highest+4
+        # fixture does not cause exhaustion. Prove that before the corrected probe.
         try:
-            resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(highest+4,original[1]))
+            resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(high+4,original[1]))
+            self.start_job(':',id='native-sparse-proof')
+        finally:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)
+        self.assertEqual(self.completed('native-sparse-proof')['exit_code'],0)
+        self.assertTrue(self.job('job.forget','native-sparse-proof')['ok'])
+        # Permit record scanning/publication, but not all three launch pipes.
+        occupied={int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir()}
+        limit=0;available=0
+        while available<3:
+            if limit not in occupied:available+=1
+            limit+=1
+        try:
+            resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(limit,original[1]))
             result=self.job('job.start','native-descriptor-limit',command='touch '+str(marker),timeout_ms=1000,profile='root')
             self.assertFalse(result['ok'])
         finally:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)

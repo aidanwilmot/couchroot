@@ -74,16 +74,28 @@ static void resource_limit_checks(void) {
   free(fdpath);
   if (!d)
     fatal("native descriptor inventory");
-  unsigned highest = 0;
+  unsigned char occupied[4096] = {0};
   struct dirent *entry;
   while ((entry = readdir(d))) {
     char *end;
     unsigned long fd = strtoul(entry->d_name, &end, 10);
-    if (!*end && fd > highest)
-      highest = fd;
+    if (!*end && fd < sizeof occupied)
+      occupied[fd] = 1;
   }
   closedir(d);
-  limited.current = highest + 4;
+  unsigned limit = 0, available = 0;
+  while (limit < sizeof occupied && available < 3) {
+    if (!occupied[limit])
+      available++;
+    limit++;
+  }
+  if (available != 3)
+    fatal("cannot establish bounded descriptor fixture");
+  /* Existing descriptors above the new soft limit remain usable. Count free
+   * slots below it instead of using the highest open descriptor: inherited
+   * descriptor tables can contain holes, as observed on both TVs.
+   */
+  limited.current = limit;
   limited.maximum = original.maximum;
   if (limited.current >= original.current ||
       syscall(SYS_prlimit64, worker_pid, RLIMIT_NOFILE, &limited, NULL))

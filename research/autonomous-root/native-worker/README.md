@@ -457,7 +457,12 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
   the unlaunched intent, refuses reuse, keeps the worker responsive and reconciles
   the record as interrupted after restart. Matching device probes are now included
   in the acceptance controller but remain unqualified until both TVs pass. The
-  descriptor probe uses `prlimit64` on its live authenticated native child only;
+  A first expanded run on both TVs reached the descriptor probe, where the old
+  highest-descriptor heuristic failed to induce exhaustion. Sparse-descriptor
+  host regression coverage now reproduces that flaw; the corrected probe counts
+  exactly three free slots below its soft limit. Both failed fixtures were cleaned
+  with original fallback invariants verified. The corrected device run is pending.
+  The descriptor probe uses `prlimit64` on its live authenticated native child only;
   the controller, guardian and deployed fallback retain their original limits. Preserve bounded, in-memory output as the public contract, matching the
   deployed .NET implementation; durable output is not required for parity.
   Job outcomes remain durable metadata and must recover after transient failures.
