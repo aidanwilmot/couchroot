@@ -47,8 +47,9 @@ function planInstallation({snapshot,id,manifestSha256}){
   'mv '+pending+' '+committed+'\nsync\n'+sourceExitGuard(snapshot.source)+'printf "STATE-READY\\n"\n';
  const discardScratch=prefix+pendingGuard+'if test -e '+jobs+'/.import-record || test -L '+jobs+'/.import-record; then\n'+file(jobs+'/.import-record')+'test "$(stat -c %s '+jobs+'/.import-record)" -lt 2048\nrm '+jobs+'/.import-record\nfi\nprintf "STATE-SCRATCH-CLEAR\\n"\n';
  const record={schema:1,id,phase:'pending',source:snapshot.source,snapshot_sha256:snapshot.sha256,manifest_sha256:manifestSha256,installed_manifest_sha256:manifestHash,directory,scope};
- for(const command of [inspect,begin,commit,discardScratch,...copies])check(Buffer.byteLength(command)<=65536);
- return {record,inspect,begin,copies,commit,discardScratch};
+ const verifyReady=prefix+readyGuard+sourceExitGuard(snapshot.source)+'printf "STATE-READY\\n"\n';
+ for(const command of [inspect,verifyReady,begin,commit,discardScratch,...copies])check(Buffer.byteLength(command)<=65536);
+ return {record,inspect,verifyReady,begin,copies,commit,discardScratch};
 }
 async function installRetainedState(options){
  const {journalDirectory,selectionFile,execute}=options;

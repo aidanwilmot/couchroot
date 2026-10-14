@@ -575,3 +575,27 @@ that test is still performed by the harness, not the installed service controlle
 Journaled production launch, readiness acceptance, rollback and both-TV stopping
 handoff therefore remain open. The deployed TV packages are unchanged; no reboot
 was performed.
+
+### Journaled production submission — local follow-up
+
+An independent provider can now submit a production worker after accepting its
+own retained-state installation. The launch binds the accepted receipt, source
+identity, target manifest, packaged worker/launcher hashes and a private loopback
+token. Before staging, it persists a single-use production launch record and
+ownership marker. The generated command revalidates all installed records, rejects
+an existing unit, stages root-owned code/launcher/token, checks source departure
+again and requests production mode with no bounded probe lifetime.
+
+Submission acknowledgement only changes the launch journal to submitted. It does
+not mark a worker ready, commit selection, release admission or retire the
+independent provider. A lost/failed result retains unknown ownership and refuses
+replay. Local ownership drift retains the original intent instead of overwriting
+newer state. A partial staging directory is not automatically adopted or removed.
+
+The combined Linux suite passes 135 tests without skips. Shell tests exercise
+actual filesystem ownership, hashes, retained record preservation and source-exit
+guards, including maximum retention command size. Systemd submission is a fixture
+in these tests; no production unit was launched on either TV. The private listener,
+production readiness record, uncertain-launch reconciliation and rollback still
+need integration before installed stopping handoff can be enabled. Deployed .NET
+fallback and both TV boots remain unchanged.
