@@ -319,3 +319,30 @@ package, enrollment, protected files, startup flags and loopback settings were
 verified; bounded collector evidence was archived and its owned files removed.
 The update journal accepts only the installed managed fallback, not the observer
 or migration. Local PID/profile validation passes all 61 focused Linux tests.
+
+
+## Native profile and controller identity — 2026-10-14
+
+Version 0.7.6 included the exact native credential-drop mode, but the installed
+service refused its new source-header entry. No probe was submitted. The managed
+fallback and all 39 package members verified. The source allowlist now admits the
+specific profile header and requires it when the observer exposes that mode.
+Fourteen candidate/staging tests passed against the actual ordinary build, and
+the real signed payload passed the service loader before preparing 0.7.7.
+
+Version 0.7.7 verified the candidate successfully. Its one-shot probe rejected the
+controller's label before observer submission. Kernel PID and process-tree
+inspection establish why: JavaScript executes in `/usr/bin/wrt-service`, labelled
+`System::Privileged`, with effective CAP_MAC_ADMIN. The separately running package
+launch stub is labelled `User::Pkg::MiniRoot01` with zero effective capabilities.
+Earlier preflight had inspected the stub and incorrectly treated its profile as
+the JavaScript controller's. A stale `process.pid` value has not been established
+as the cause. The kernel-derived PID remains useful for explicit lookup binding.
+
+The controller parser now recognizes only the observed broker identity (fixed
+UID/GID, known label and exactly CAP_MAC_ADMIN) or the existing package context.
+It derives an observer profile retaining the controller's exact group list while
+requiring the fixed package label and zero capabilities. The native helper never
+inherits the broker label or capability. Supervisor credential confirmation still
+rejects a privileged broker profile. All 62 focused Linux service/observer tests
+pass; the corrected role distinction still needs installed qualification.

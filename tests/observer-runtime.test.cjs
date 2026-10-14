@@ -15,7 +15,7 @@ function credentials(change={}){
  const fakeProcess={pid:9999,getuid:()=>5001,geteuid:()=>5001,getgid:()=>100,getegid:()=>100,getgroups:()=>{throw Error('Do not consult WRT credential getters');}};
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process:fakeProcess,require:name=>name==='fs'?fakeFs:real(name)});
  if(change.capture)return module.exports.serviceCredentials(change.capture,'00000000-0000-0000-0000-000000000001');
- return module.exports.parseCredentials(fakeFs.readFileSync('/proc/self/status'),fakeFs.readFileSync('/proc/self/attr/current'),42);
+ return module.exports.parseCredentials(fakeFs.readFileSync('/proc/self/status'),fakeFs.readFileSync('/proc/self/attr/current'),42,change.role||'observer');
 }
 test('observer captures exact service identity and refuses altered credentials',()=>{
  assert.equal(JSON.stringify(credentials()),JSON.stringify({uid:5001,gid:100,groups:[29,100,201],label:'User::Pkg::MiniRoot01'}));
@@ -49,4 +49,17 @@ test('runtime confirms actual supervisor credentials before fresh worker confirm
   if(failure){await assert.rejects(options.confirm());assert.equal(events.includes('fresh-worker'),false);}
   else{assert.equal(await options.confirm(),'fresh');assert.deepEqual(events,['credentials-42','inspect','credentials-77','fresh-worker']);}
  }
+});
+
+test('recognized WRT broker context yields a reduced observer profile, never a privileged observer',async()=>{
+ const context={label:'System::Privileged',CapEff:'0000000200000000',role:'controller'};
+ assert.equal(credentials(context).label,'User::Pkg::MiniRoot01');
+ assert.throws(()=>credentials({...context,role:'observer'}),/label/);
+ assert.throws(()=>credentials({...context,CapEff:'0000000200000001'}),/broker-capabilities/);
+ assert.throws(()=>credentials({...context,label:'System'}),/label/);
+ assert.throws(()=>credentials({...context,Uid:'0 0 0 0'}),/uids/);
+ assert.throws(()=>credentials({...context,role:'arbitrary'}),/role/);
+ const result=await credentials({capture:async()=>({exit_code:0,stdout:'Pid: 42\nUid: 5001 5001 5001 5001\nGid: 100 100 100 100\nGroups: 29 100 201\nCapEff: 0000000200000000\nOBSERVER-SERVICE-LABEL\nSystem::Privileged'})});
+ assert.equal(result.label,'User::Pkg::MiniRoot01');
+ assert.equal(Object.keys(result).sort().join('|'),'gid|groups|label|uid');
 });

@@ -247,7 +247,10 @@ external supervised observer. It does not launch an observer at service startup.
 The API's persisted request ID deterministically names the external transaction;
 unknown submissions cannot acquire a fresh identity by retrying that request.
 The service captures its own real/effective/saved/filesystem IDs, supplementary
-groups, label and effective capabilities before launching with matching credentials.
+groups, label and effective capabilities. The recognized WRT broker context is
+normalized to the fixed package label and zero capabilities for the observer; its
+exact group list is retained. The launched supervisor must match that derived
+profile, not the broker's elevated label or capability.
 Observer launch records live in a private `worker-state/observer-launches` directory.
 
 The managed admission hold supplies staging, submission, fresh identity confirmation,
