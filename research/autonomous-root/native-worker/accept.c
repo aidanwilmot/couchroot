@@ -411,6 +411,7 @@ static void soak(int seconds) {
   discard(r);
 }
 #include "guardian-loss-accept.h"
+#include "resource-accept.h"
 #include "storage-accept.h"
 int main(int argc, char **argv) {
   if (argc != 7) {
@@ -747,6 +748,7 @@ int main(int argc, char **argv) {
   orphan_intent_checks();
 #endif
   storage_recovery_checks();
+  resource_limit_checks();
   finish(0);
   if (unlink(app))
     fatal("remove launcher source");

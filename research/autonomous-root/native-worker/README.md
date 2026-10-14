@@ -415,8 +415,10 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
   runs. Host tests now cover the 64-record saved-job limit, explicit-forget
   capacity recovery, and launch-pipe descriptor exhaustion. The latter preserves
   the unlaunched intent, refuses reuse, keeps the worker responsive and reconciles
-  the record as interrupted after restart. Device resource-limit probes remain
-  outstanding. Preserve bounded, in-memory output as the public contract, matching the
+  the record as interrupted after restart. Matching device probes are now included
+  in the acceptance controller but remain unqualified until both TVs pass. The
+  descriptor probe uses `prlimit64` on its live authenticated native child only;
+  the controller, guardian and deployed fallback retain their original limits. Preserve bounded, in-memory output as the public contract, matching the
   deployed .NET implementation; durable output is not required for parity.
   Job outcomes remain durable metadata and must recover after transient failures.
 - Decide command signal-handler compatibility and expose original command-fault
