@@ -196,7 +196,7 @@ journal-bound cgroup so pending kills can finish on older kernels. It waits for
 both process and task membership to empty, then checks process namespace handles,
 open namespace descriptors and namespace bind mounts before removing backing
 files. It never enters or detaches a retained namespace. The scan is bounded to
-256 distinct visible mount namespaces and recovery has a 15-second outer limit.
+256 distinct visible mount namespaces and recovery sets a 15-second alarm.
 Older nsfs mount metadata can omit a namespace identity; those ambiguous pins
 block reconciliation conservatively. Compare the upstream
 [Linux 4.1 nsfs implementation](https://github.com/torvalds/linux/blob/v4.1/fs/nsfs.c)
@@ -211,6 +211,43 @@ cleanup to resume; mismatched existing resources do not. A new native worker the
 stages its own launcher and reports `stale_guardian_reconciled: true`. Duplicate
 job IDs still cannot replay commands. This is recovery on the next explicit
 launch, not a new service restart mechanism or a replacement for .NET.
+
+## Guardian-loss validation — 2026-10-13
+
+The worker and acceptance harness from `5a4f69c` passed on QN90A and S90D.
+Each TV completed the normal suite with 22 distinct checks (25 result rows) and
+the extended memory-fault/progress-watchdog suite with 27 distinct checks
+(31 result rows), all passing with exit code zero. Repeated rows exercise both
+running and frozen guardian-loss scenarios. Sanitized build hashes, check names
+and cleanup evidence are in [guardian-loss-results.json](guardian-loss-results.json).
+
+The controller killed its own guardian child while root and app jobs were active,
+including a detached delayed writer. EXITKILL prevented that writer from running;
+the next launch reconciled interrupted records without replay and preserved the
+completed exit-7 record. The frozen case verified that thawing the bound private
+freezer lets pending kills finish. Fresh app-user execution then succeeded.
+
+Recovery refused retained namespace descriptors and namespace bind mounts,
+wrong schema, unprepared state, different boot, mismatched scope/runtime/freezer
+bindings and a still-live owner identity. A simulated reused PID referenced the
+live controller with a different process start time: reconciliation succeeded
+without signaling it. Host tests additionally cover unsafe journal permissions,
+hard links, symlinks, a leftover temporary journal, completed/foreign record
+preservation and retry after interrupted resource cleanup.
+
+All 31 native host tests passed under AddressSanitizer and
+UndefinedBehaviorSanitizer on Linux ARM64. The repository suite passed 226 tests
+with those 31 native tests skipped by its ordinary runner. Neither device's
+observed kernel window contained a crash-collector wait or worker executable dump.
+Both final cleanup checks verified unchanged deployed .NET worker/PID, boot,
+launcher/protected-file hashes, original execution mounts and cgroup membership;
+owned test files, helpers and prototype freezer groups were removed. No TV was
+rebooted, and no installed package, enrollment, SDK or boot configuration changed.
+
+These tests qualify fully prepared, same-boot schema-2 reconciliation only.
+Recovery requires a subsequent explicit launch; production restart integration,
+partial-preparation and cross-boot recovery remain open. This is not a new CPU,
+memory or startup comparison, and .NET remains the deployed implementation.
 
 ## Descendant faults, progress watchdogs and soak — 2026-10-13
 
