@@ -293,28 +293,38 @@ class NativeWorkerTests(unittest.TestCase):
         finally:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)
         self.assertEqual(self.completed('native-sparse-proof')['exit_code'],0)
         self.assertTrue(self.job('job.forget','native-sparse-proof')['ok'])
-        # Permit record scanning/publication, but not all three launch pipes.
+        # No slot: reject before retention scanning can trigger the TV's
+        # kernel abort. One/three/five slots: retain the durable intent but
+        # reject before allocating any of the six launch descriptors.
         occupied={int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir()}
-        limit=0;available=0
-        while available<3:
-            if limit not in occupied:available+=1
-            limit+=1
-        try:
-            resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(limit,original[1]))
-            result=self.job('job.start','native-descriptor-limit',command='touch '+str(marker),timeout_ms=1000,profile='root')
-            self.assertFalse(result['ok'])
-        finally:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)
-        self.assertFalse(marker.exists())
-        saved=self.root/'.jobs/native-descriptor-limit.json'
-        self.assertTrue(saved.exists());self.assertEqual(json.loads(saved.read_text())['state'],'unknown')
-        self.assertTrue(self.op('status')['ok'])
-        self.assertFalse(self.job('job.start','native-descriptor-limit',command='touch '+str(marker),timeout_ms=1000,profile='root')['ok'])
+        for slots in (0,1,3,5):
+            with self.subTest(free_slots=slots):
+                limit=0;available=0
+                while available<slots:
+                    if limit not in occupied:available+=1
+                    limit+=1
+                id=f'native-descriptor-limit-{slots}'
+                try:
+                    resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(limit,original[1]))
+                    result=self.job('job.start',id,command='touch '+str(marker),timeout_ms=1000,profile='root')
+                    self.assertFalse(result['ok'])
+                finally:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)
+                self.assertFalse(marker.exists())
+                self.assertEqual({int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir()},occupied)
+                saved=self.root/f'.jobs/{id}.json'
+                self.assertEqual(saved.exists(),bool(slots))
+                if slots:
+                    self.assertEqual(json.loads(saved.read_text())['state'],'unknown')
+                    self.assertFalse(self.job('job.start',id,command='touch '+str(marker),timeout_ms=1000,profile='root')['ok'])
+                self.assertTrue(self.op('status')['ok'])
         self.start_job(':',id='native-after-descriptor');self.assertEqual(self.completed('native-after-descriptor')['exit_code'],0)
         self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
         self.restart()
-        result=self.job('job.status','native-descriptor-limit')['result']
-        self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
-        self.assertFalse(marker.exists());self.assertTrue(self.job('job.forget','native-descriptor-limit')['ok'])
+        for slots in (1,3,5):
+            id=f'native-descriptor-limit-{slots}'
+            result=self.job('job.status',id)['result']
+            self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
+            self.assertFalse(marker.exists());self.assertTrue(self.job('job.forget',id)['ok'])
 
     def test_job_ring_cursors(self):
         self.start_job("head -c 1200000 /dev/zero; printf end; printf error >&2")

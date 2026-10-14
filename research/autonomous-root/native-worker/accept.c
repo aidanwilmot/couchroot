@@ -453,6 +453,20 @@ int main(int argc, char **argv) {
     fatal("parent namespace");
   namespace_before[ns] = 0;
   launch();
+  if (getenv("COUCHROOT_NATIVE_RESOURCE_ONLY")) {
+    resource_limit_checks();
+    fault_diagnostic_checks();
+    json_upload_checks();
+    finish(0);
+    char *lock = format("%s/.jobs/lock", filescope),
+         *dir = format("%s/.jobs", filescope);
+    if (unlink(app) || unlink(lock) || rmdir(dir))
+      fatal("focused resource cleanup");
+    free(lock);
+    free(dir);
+    mark("focused_resource_shutdown_and_cleanup");
+    return 0;
+  }
   J *initial = call(req("status"));
   const char *staged =
       textval(get(get(initial, "result"), "app_launcher"), "path");
