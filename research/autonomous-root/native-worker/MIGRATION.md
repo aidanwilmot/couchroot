@@ -219,6 +219,11 @@ inspection found installer-owned package files and a 2755 app data directory:
 provide verified executable staging and a separate private selection-state
 directory before service activation. See the observer
 [deployment gate](../native-observer/DEPLOYMENT.md).
+The private-state bootstrap is now implemented locally, using
+`data/worker-state/worker-selection.json` and refusing conflicting legacy state.
+Local tests include the unprivileged app UID. It is not yet deployed; rebuild the
+previously prepared signed candidates before installation. Observer executable
+staging and actual service-context validation remain open.
 
 Package ordinary worker, guardian functionality and app launcher from reproducible
 source builds. Do not ship fault-control operations or depend on a copied binary

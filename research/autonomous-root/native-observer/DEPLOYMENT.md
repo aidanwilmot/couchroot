@@ -59,3 +59,19 @@ for the observer. Do not infer service executability from a signed member hash.
 The selection writer's private-parent requirement also needs a dedicated 0700
 subdirectory rather than changing the existing app data directory's permissions.
 Resolve both staging details before invoking an installed-service handoff.
+
+The subsequent service bootstrap creates `data/worker-state` privately and uses
+`data/worker-state/worker-selection.json`. It validates app ownership, rejects
+group/other write access on the app data directory, syncs directory publication
+and leaves existing data permissions and enrollment unchanged. Only a newly
+created child's inherited setgid bit is cleared. An existing private 2700 child
+can be reused unchanged after an interrupted creation; public, linked or wrongly
+owned state directories are refused.
+
+Any legacy `data/worker-selection.json` or `.writer` entry, including a dangling
+link, prevents startup until reconciliation. The bootstrap neither migrates nor
+deletes it. Pending selection and writer markers in the private directory remain
+authoritative. Local state/selection/readiness tests passed (32 checks), and the
+seven bootstrap checks also passed under UID 5001/GID 100 in Linux. This does not
+qualify TV Smack behavior. The earlier signed candidates predate this new service
+module and must be rebuilt and inventory-reviewed before deployment.
