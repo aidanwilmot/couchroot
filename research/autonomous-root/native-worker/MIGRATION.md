@@ -211,6 +211,15 @@ unqualified. A bare PID or an unreadable stat file is insufficient.
 The runtime controller, live state installation/rollback and actual service
 integration remain required; this is not phase-three completion.
 
+The shared package updater now accepts an explicitly reviewed inventory digest
+bound to both signed packages' complete member hashes, with union readback and
+absence checks. Local tests pass; this is not hardware update/rollback evidence.
+Signed candidates are prepared for both TVs but not installed. Read-only layout
+inspection found installer-owned package files and a 2755 app data directory:
+provide verified executable staging and a separate private selection-state
+directory before service activation. See the observer
+[deployment gate](../native-observer/DEPLOYMENT.md).
+
 Package ordinary worker, guardian functionality and app launcher from reproducible
 source builds. Do not ship fault-control operations or depend on a copied binary
 from a prior experiment. Record per-artifact hashes, ABI, dependencies and profile
