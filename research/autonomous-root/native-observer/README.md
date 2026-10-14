@@ -10,6 +10,30 @@ that a process has exited.
 Invocation: `process-observer BOOT_ID WORKER_PID [GUARDIAN_PID]`, with pipes for
 stdin/stdout/stderr. Pair PIDs must be distinct.
 
+An opt-in external transport is also available:
+`process-observer --connect SOCKET_PATH TOKEN_FILE BOOT_ID WORKER_PID [GUARDIAN_PID]`.
+The observer connects to an existing filesystem Unix socket, checks that its peer
+has the same effective UID and GID, and redirects only stdin/stdout to that socket.
+It reads exactly 64 lowercase hexadecimal characters from a regular, single-link,
+0600 token file owned by its effective UID, refusing a final-component symlink.
+It emits `AUTH TOKEN\n` before the unchanged observation protocol. Stderr remains
+with the external launcher; no token is printed there or in argument values.
+
+The future service listener must create a fresh random token in its private
+directory for each launch, authenticate it before interpreting `BOUND`, consume it
+once, enforce bounded input/deadlines, and bind the connection to the expected
+transaction. The native option alone does not implement that listener or launch a
+process independently of the worker. Socket EOF is not proof of the observer's
+exit status: the external launcher/supervisor must supply completion evidence
+before this can replace the child-process bridge's exit checks. The installed
+service's child-process rejection guard remains enabled.
+
+External connection/authentication uses the same independent 35-second alarm.
+Descriptor admission precedes token/socket allocation, and controller loss fails
+observation without signalling either target. Parent stdio is not needed for the
+observation protocol. Callers must preserve the selected service-equivalent
+identity; this option never changes credentials or labels.
+
 1. Check descriptor capacity and boot, close inherited descriptors, bind all
    pidfds and verify none has exited; emit `BOUND`.
 2. The service obtains fresh authenticated worker identity and resource inventory
@@ -86,3 +110,13 @@ inside the disposable parity container. Run `process_observer_test.py`,
 `pidfd-observer.test.cjs`, and `managed-handoff-integration.test.cjs`; the latter
 also needs the existing `MANAGED_PARITY` harness. Never point test process-control
 fixtures at device PIDs.
+
+The external socket revision passed 22 native tests (12 existing and 10 socket
+cases), plus all 31 focused Node bridge/service/managed-wire tests in the Linux
+container. Socket coverage includes fragmented control, both target exits,
+controller disconnect, invalid control, token contents/mode/links, wrong boot,
+descriptor pressure, missing listener and mismatched peer credentials. Two ARM
+builds matched at 18,016 bytes, SHA-256
+`e8a3b47e66b92791c0a06d50c0a6edd72e46e1235f70601892c7249caee32085`,
+with the maximum GLIBC requirement still 2.17. This is local transport evidence;
+no TV was contacted, changed or rebooted for this revision.

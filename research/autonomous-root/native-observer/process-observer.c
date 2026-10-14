@@ -7,6 +7,10 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/stat.h>
+#include <stddef.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -109,7 +113,53 @@ static pid_t parse_pid(const char *s) {
 static void close_targets(struct pollfd *fds, int count) {
     for (int i = 0; i < count; i++) if (fds[i].fd >= 0) close(fds[i].fd);
 }
+/* Optional external transport: the launcher supplies an existing private Unix
+ * listener and a per-launch token file owned by this same execution identity.
+ * Never listen on a public interface or accept target IDs from the socket. */
+static int connect_controller(const char *socket_path, const char *token_path) {
+    struct sockaddr_un address;
+    size_t length = strlen(socket_path);
+    if (!length || socket_path[0] != '/' || length >= sizeof(address.sun_path) || token_path[0] != '/') return 0;
+    int token = open(token_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+    if (token < 0) return 0;
+    struct stat st;
+    char secret[65]; size_t used = 0;
+    int ok = !fstat(token, &st) && S_ISREG(st.st_mode) && st.st_uid == geteuid() &&
+             st.st_nlink == 1 && (st.st_mode & 07777) == 0600 && st.st_size == 64;
+    while (ok && used < sizeof(secret)) {
+        ssize_t n = read(token, secret + used, sizeof(secret) - used);
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0) { ok = 0; break; }
+        if (!n) break;
+        used += (size_t)n;
+    }
+    close(token);
+    if (!ok || used != 64) return 0;
+    for (size_t i = 0; i < used; i++) if (!((secret[i] >= '0' && secret[i] <= '9') || (secret[i] >= 'a' && secret[i] <= 'f'))) return 0;
+    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd < 0) return 0;
+    memset(&address, 0, sizeof(address)); address.sun_family = AF_UNIX;
+    memcpy(address.sun_path, socket_path, length + 1);
+    struct ucred peer; socklen_t size = sizeof(peer);
+    ok = !connect(fd, (struct sockaddr *)&address, (socklen_t)(offsetof(struct sockaddr_un, sun_path) + length + 1)) &&
+         !getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &peer, &size) && size == sizeof(peer) &&
+         peer.uid == geteuid() && peer.gid == getegid() && peer.pid > 1;
+    if (ok) ok = dup2(fd, STDIN_FILENO) == STDIN_FILENO && dup2(fd, STDOUT_FILENO) == STDOUT_FILENO;
+    if (fd > STDERR_FILENO) close(fd);
+    if (!ok) return 0;
+    secret[64] = 0;
+    ok = emit("AUTH ") && emit(secret) && emit("\n");
+    memset(secret, 0, sizeof(secret));
+    return ok;
+}
 int main(int argc, char **argv) {
+    int external = argc >= 2 && !strcmp(argv[1], "--connect");
+    const char *socket_path = NULL, *token_path = NULL;
+    if (external) {
+        if (argc != 6 && argc != 7) return fail("invalid arguments");
+        socket_path = argv[2]; token_path = argv[3];
+        argc -= 3; argv += 3;
+    }
     if ((argc != 3 && argc != 4) || !valid_boot(argv[1])) return fail("invalid arguments");
     int count = argc - 2;
     pid_t pids[2] = {parse_pid(argv[2]), count == 2 ? parse_pid(argv[3]) : 0};
@@ -120,7 +170,8 @@ int main(int argc, char **argv) {
     if (sigprocmask(SIG_SETMASK, &signals, NULL) || signal(SIGALRM, SIG_DFL) == SIG_ERR) return fail("signal setup failed");
     signal(SIGPIPE, SIG_IGN);
     alarm(35); /* Independent bound even if a pipe write or proc read stalls. */
-    if (!capacity(1) || !close_inherited() || !capacity(count + 1) || !boot_matches(argv[1])) return fail("initial observation unavailable");
+    if (!capacity(1) || !close_inherited() || !capacity(count + (external ? 3 : 1)) || !boot_matches(argv[1])) return fail("initial observation unavailable");
+    if (external && !connect_controller(socket_path, token_path)) return fail("controller connection unavailable");
     struct pollfd fds[3] = {{-1, POLLIN, 0}, {-1, POLLIN, 0}, {-1, POLLIN, 0}};
     for (int i = 0; i < count; i++) {
         fds[i].fd = (int)syscall(SYS_pidfd_open, pids[i], 0);
