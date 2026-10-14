@@ -106,7 +106,8 @@ function createBootLaunch(agent,enabled){
  let state=enabled?'waiting-agent':'disabled',busy=false,started=false;
  async function tick(){
   if(busy||!enabled||!['waiting-agent','waiting-foreground'].includes(state))return;
-  if(!agent.status().connected)return;
+  const readiness=agent.status();
+  if(!readiness.connected||readiness.worker_ready===false)return;
   busy=true;
   try{
    const r=await agent.execute(wire(script('inspect')),5000);

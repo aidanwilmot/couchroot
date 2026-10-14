@@ -35,6 +35,20 @@ budgets have local transport validation and are not yet deployed to either TV.
 callers retain checked execution; `_execute(..., check=False)` is available when
 only stdout is needed and a nonzero exit is expected.
 
+The migration service accepts worker readiness only after matching the current
+local boot ID, a valid worker identity, the expected implementation's complete
+capability set, and launcher metadata. The existing managed status format without
+an `implementation` field remains supported; an explicit mismatched implementation
+is rejected. Native readiness validation additionally requires a pinned launcher
+digest, independent staging, a guardian identity and production lifetime mode.
+That validation path does not itself enable native selection.
+
+Commands and operations are rejected while a connection is still being checked.
+Disconnect and stop clear current worker status. Late replies or errors from an
+old connection cannot restore readiness or overwrite a replacement's status.
+Boot-launch inspection waits for worker validation. These checks require device
+qualification, including service access to the local boot ID, before deployment.
+
 The migration candidate also reports `selected_implementation: "managed"` and
 `native_candidate`. Candidate state is `absent`, `invalid`, or `verified`, with a
 `checked_at` timestamp and a bounded reason code on failure. Verification reports

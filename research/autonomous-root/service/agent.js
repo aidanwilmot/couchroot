@@ -3,6 +3,7 @@ const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const sdb=require('./vendor/sdb'),{tarGz}=require('./vendor/tar'),{RootAgentServer}=require('./vendor/root-agent');
 const {read,hash,verifyFirmware,sdkRuntimeGuard}=require('./policy');
 const {candidateStatus}=require('./native-candidate');
+const {validateReadiness}=require('./worker-readiness');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -15,6 +16,7 @@ function launchRequest(stage,gate){
 function createAgent(config,options={}){
  let running=false,connected=false,launching=false,timer=null,channel=null,client=null,stage=null,attempts=0,generation=0,lastError=null,identity=null,lastAcquired=null,workerReady=false,workerStatus=null,workerStatusAt=0;
  const firmware=options.verifyFirmware||verifyFirmware;
+ const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
@@ -58,7 +60,7 @@ function createAgent(config,options={}){
    firmware(config);
    const secret=crypto.randomBytes(32);
    if(channel)channel.close();
-   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation)return;if(!info.boot_id||!Number.isFinite(info.uptime_seconds))throw Error('Invalid worker readiness');workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();}).catch(error=>{if(gen===generation){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;schedule();}});
+   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
    await new Promise((resolve,reject)=>{channel.start(resolve);channel._server.once('error',reject);});
    if(!running||gen!==generation)return;
    step='loopback connection';
@@ -77,7 +79,7 @@ function createAgent(config,options={}){
   finally{if(gen===generation){launching=false;if(client){sdb.close(client);client=null;}if(!connected)schedule();}}
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
- function stop(){running=false;connected=false;workerReady=false;identity=null;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
- return {status,start,stop,operation:(value,data)=>{if(!running||!connected||!channel)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value,data);},execute:(command,timeout)=>{if(!running||!connected||!channel)return Promise.reject(Error('Root agent unavailable'));return channel.execute(command,timeout);}};
+ function stop(){running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
+ return {status,start,stop,operation:(value,data)=>{if(!running||!connected||!workerReady||!channel)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value,data);},execute:(command,timeout)=>{if(!running||!connected||!workerReady||!channel)return Promise.reject(Object.assign(Error('Root agent unavailable'),{outcome:'rejected'}));return channel.execute(command,timeout);}};
 }
 module.exports={createAgent,launchRequest};

@@ -192,7 +192,11 @@ of managed or native, selected version and last-known-good version. Stage and ve
 new artifacts before changing selection. Replace hard-coded managed launch arguments,
 file allowlists, status-file assumptions and payload manifests in `service/agent.js`.
 Require the expected implementation and capabilities during readiness, not merely
-boot ID and a numeric uptime.
+boot ID and a numeric uptime. The local service now implements this gate for
+managed status and provides native readiness validation requiring pinned launcher
+identity and production lifetime. It also rejects late connection status and
+blocks requests before readiness. Native selection/staging and both-TV validation
+remain required; the native validator alone does not enable a native launch.
 
 Preserve connection-generation checks, capped acquisition retries and backoff.
 On worker failure, reconcile its jobs and owned resources before selecting another

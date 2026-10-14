@@ -275,3 +275,33 @@ provenance or probe device libraries. ABI dependency/version declarations are
 bound to the package's artifact hashes; live compatibility still requires device
 qualification. Journaled implementation selection, retained-state installation,
 rollback, and integrated native readiness remain open.
+
+## Subsequent worker readiness gate — 2026-10-14
+
+Before implementation selection can be committed, the service needs to prove
+that its authenticated connection supplies the expected worker contract. The
+managed path now checks the local boot ID, nonnegative finite uptime, worker ID,
+complete managed capabilities and native-launcher metadata. The deployed managed
+status shape lacks an implementation field and remains accepted; an explicit
+mismatched implementation does not. Native readiness validation requires its
+prototype production capabilities, a pinned launcher SHA-256, independent staging,
+positive guardian PID and unbounded production lifetime. This validator is not
+native selection and does not independently attest the executing worker binary.
+
+Connection ownership is checked again when asynchronous status resolves. Closed
+or superseded connections cannot become ready, and late failures cannot overwrite
+a replacement's status. Disconnect and stop clear current worker metadata. The
+service rejects execution/operations until validation succeeds; boot-launch
+inspection also waits, preserving its attempt while the connection is checking.
+
+Seven readiness tests and one additional boot-launch test passed. The combined
+service, candidate, protocol, deadline and boot suite passed 43 Node tests with
+two previously qualified extended/artifact checks skipped. State-transition tests
+use controlled channels and stop before any device access. No TV was accessed,
+changed or rebooted.
+
+Local boot-ID readability under the deployed service identity must be checked on
+both TVs before shipping this gate. Managed launcher digest format is checked;
+older packages do not have a separately pinned managed embedded-launcher digest.
+The native path requires an explicit digest supplied by future selected-artifact
+staging. Durable selection, retained-state installation and rollback remain open.
