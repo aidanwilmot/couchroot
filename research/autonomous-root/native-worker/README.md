@@ -173,6 +173,51 @@ model's runtime paths.
 Inspect results before releasing helper views and deleting only owned experiment
 files. Preserve credentials, raw measurements and signed artifacts outside Git.
 
+## Descendant faults, progress watchdogs and soak — 2026-10-13
+
+Revision `76a9649` passed **17 normal acceptance checks and 23 distinct extended
+checks on each TV**, including a ten-minute soak. All controller exits were zero.
+[progress-results.json](progress-results.json) records the build hashes, individual
+recovery observations, soak measurements and final invariants. Local validation
+passed 226 repository tests plus 27 native tests under address/undefined-behavior
+sanitizers on native ARM64 Linux.
+
+Root and app shell faults returned actual exit 137 while the worker remained
+responsive. Independently staged helpers deliberately faulted both their main
+thread and a newly created thread under root and UID 5001 / Smack `User` profiles.
+Every helper fault completed within the two-second acceptance bound; their native
+views released normally. Original signal details remain diagnostic output rather
+than per-job metadata.
+
+The extended suite stopped active-request and job-monitor progress independently
+while the heartbeat thread remained alive. It checked the saved watchdog reason,
+interrupted records with unknown exit codes, descendant containment, normal mount
+cleanup, duplicate-start rejection and app execution after a fresh native launch.
+These tests deliberately age a lease beyond its 30-second grace: their 142–214 ms
+observations measure detection/cleanup after expiry, not the production grace.
+A healthy 32-second foreground command completed on both TVs without a watchdog
+termination; idle protocol connections also remained usable.
+
+| Ten-minute soak observation | QN90A | S90D |
+| --- | ---: | ---: |
+| Elapsed workload loop | 605.4 s | 601.1 s |
+| Transfer/stage/job/release cycles | 57 | 57 |
+| Worker RSS range | 860–916 KiB | 892–1,064 KiB |
+| Maximum observed guardian RSS | 1,092 KiB | 1,152 KiB |
+| Worker threads | 3, stable | 3, stable |
+
+Worker and guardian descriptor counts and worker mount counts remained stable.
+Each cycle verified app identity, completed root/app jobs, forgot their records
+and released its helper normally. These are bounded workload observations, not
+proof against all leaks or a fresh PSS/swap/CPU comparison with .NET.
+
+Both the normal and extended suites cleaned up through the regular helper APIs;
+no lazy unmount or detach/rebind repair was needed. Captured kernel windows had
+no crash-collector messages. All experiment files, jobs, native runtime views and
+private freezer groups were removed. The original .NET process/worker and boot
+identities, launcher hashes, protected files, cgroup membership and execution
+mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
+
 ## Remaining production work
 
 - Reconcile a stale guardian journal after guardian loss without trusting saved
