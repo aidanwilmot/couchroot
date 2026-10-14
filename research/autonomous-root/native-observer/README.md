@@ -19,14 +19,24 @@ It reads exactly 64 lowercase hexadecimal characters from a regular, single-link
 It emits `AUTH TOKEN\n` before the unchanged observation protocol. Stderr remains
 with the external launcher; no token is printed there or in argument values.
 
-The future service listener must create a fresh random token in its private
-directory for each launch, authenticate it before interpreting `BOUND`, consume it
-once, enforce bounded input/deadlines, and bind the connection to the expected
-transaction. The native option alone does not implement that listener or launch a
-process independently of the worker. Socket EOF is not proof of the observer's
-exit status: the external launcher/supervisor must supply completion evidence
-before this can replace the child-process bridge's exit checks. The installed
-service's child-process rejection guard remains enabled.
+The internal `service/external-observer.js` listener creates a fresh random token
+and private directory for each launch, authenticates the first connection before
+interpreting `BOUND`, refuses additional connections, and bounds input/deadlines.
+After binding it requires a fresh authenticated worker status with unchanged
+identities; native pairs also require fresh guardian-parent confirmation. Only
+then does it send `ARM` and expose readiness. Its launch descriptor contains paths,
+boot ID and target PIDs, not token contents. A future launch adapter must bind this
+listener and its termination receipt to the selection transaction.
+
+The listener does not spawn a process. Socket EOF is not proof of the observer's
+exit status: its trusted launcher must call `recordExit` with independently observed
+termination. Successful exit observation requires `EXITED`, clean socket EOF and
+a zero-exit/no-signal receipt. Nonzero exit or signals invalidate the result.
+`cancel` closes the control channel without signalling a target. `dispose` refuses
+to remove the private token/directory until termination has been established, and
+unknown outcomes retain those files for reconciliation. This is not a durable
+launch journal or recovery controller. The installed service's child-process
+rejection guard remains enabled; neither transport is selected automatically.
 
 External connection/authentication uses the same independent 35-second alarm.
 Descriptor admission precedes token/socket allocation, and controller loss fails
@@ -120,3 +130,11 @@ builds matched at 18,016 bytes, SHA-256
 `e8a3b47e66b92791c0a06d50c0a6edd72e46e1235f70601892c7249caee32085`,
 with the maximum GLIBC requirement still 2.17. This is local transport evidence;
 no TV was contacted, changed or rebooted for this revision.
+
+The subsequent service listener passed eight additional tests, including the real
+ordinary socket observer against a live Linux target. All 39 focused Node observer,
+service and managed-wire tests passed. Tests require an independent termination
+receipt after EOF, refuse bad authentication/sequence/identity, propagate a nonzero
+observer exit, preserve files after cancellation or timeout, and enforce a private
+parent directory. Device launch integration and supervised termination evidence
+remain required; host test children supply that receipt only in the test harness.
