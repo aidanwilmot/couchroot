@@ -534,3 +534,20 @@ read an incomplete test source once; syntax validation and the complete rerun
 passed. These are host results, not on-TV installation qualification. Both TVs
 remain on service 0.7.13 with managed selection. Production launch orchestration,
 rollback and stopping-handoff qualification remain open; no reboot was performed.
+
+### Managed short-job baseline repair — local follow-up
+
+The intermittent short-job failure is now reproduced deterministically: after a
+tracked child exits and is reaped, its procfs stat read can raise
+`DirectoryNotFoundException`, while job start previously caught only
+`FileNotFoundException`. A live procfs read can also race process exit. Identity
+capture now treats an I/O failure as absent start identity only when the tracked
+`Process.HasExited` confirms exit. Other failures still propagate; retained-job
+cancellation continues using the strict identity reader.
+
+A Linux harness checks live identity, then forces exit before identity capture,
+and verifies 64 immediate commands preserve output, exit code and retained record.
+The deterministic test failed before the fix. The combined migration suite passes
+124 tests without skips. This is host validation; the deployed managed payloads
+on both TVs have not changed, and device qualification remains required before
+calling the repair deployed. No reboot was performed.

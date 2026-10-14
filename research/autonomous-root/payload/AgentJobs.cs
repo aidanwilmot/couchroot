@@ -61,6 +61,13 @@ internal static partial class SamsungTvRootAgent
     {
         string stat=File.ReadAllText("/proc/"+pid+"/stat"); return stat.Substring(stat.LastIndexOf(')')+2).Split(' ')[19];
     }
+    private static string StartedProcessIdentity(Process process)
+    {
+        try { return ProcessIdentity(process.Id); }
+        // A short command may be reaped before procfs is read (ENOENT or ESRCH).
+        // Only the tracked process exit proves that missing identity is benign.
+        catch(IOException) when (process.HasExited) { return null; }
+    }
     private static async Task Drain(Stream stream, LogRing log)
     {
         byte[] buffer=new byte[8192]; int count;
@@ -87,7 +94,7 @@ internal static partial class SamsungTvRootAgent
             try
             {
                 job.Process=Process.Start(start);
-                try{job.ProcessStart=ProcessIdentity(job.Process.Id);}catch(FileNotFoundException){job.ProcessStart=null;}
+                job.ProcessStart=StartedProcessIdentity(job.Process);
                 job.State="running";job.Save();Jobs.Add(id,job);
             }
             catch
