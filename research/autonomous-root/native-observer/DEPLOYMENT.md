@@ -259,3 +259,38 @@ reboot. The S90D update journal is complete for the guard only, explicitly leavi
 observer launch and native migration unqualified. Local Linux tests passed 31
 focused service/observer/managed-wire checks. The tracked-file privacy audit
 reported no findings across 548 files.
+
+## External observer credential preflight — 2026-10-14
+
+The signed 0.7.3 integration was installed on S90D with managed selection and
+independent recovery retained. Its single journaled non-stopping probe failed
+before listener creation or launch submission: the service receives EACCES when
+opening `/proc/self/status`. The service remained connected with admission held;
+no observer submission marker was created. Disabling and enabling the agent
+restored a ready managed worker on the same boot. The request's unknown result
+was preserved, not replayed or rewritten. All 39 signed package members,
+enrollment, protected files, startup flags and loopback SDK configuration verified.
+Bounded diagnostics were archived and digest-verified before exact-file cleanup.
+The update journal is complete only for the installed managed fallback; observer
+qualification failed and native migration remains unaccepted.
+
+Credential capture now uses the authenticated held worker to read the explicit
+service PID's status and label. It compares PID, real/effective/saved/filesystem
+UID/GID, supplementary groups, label and effective capabilities for the explicit
+JavaScript process PID. The external launch shell no longer reads procfs
+under the package label. Systemd enforces the configured label, no-new-privileges,
+and empty capability bounds/ambient capabilities. Before arming, the controller
+uses the held worker to inspect the running supervisor's actual credentials and
+then obtains fresh worker identity confirmation. Local validation passes 61
+focused Linux tests; this correction still requires installed-runtime qualification.
+
+The signed 0.7.4 correction reached the credential-profile comparison but rejected
+before creating a listener or submitting a launch. Managed access was restored on
+the same boot. Independent kernel readback matches the intended service profile,
+and the actual captured record passes the parser locally. The remaining mismatch
+is in the combined runtime/kernel comparison; the exact WRT getter discrepancy
+has not been established. Credential checks now use the explicit current service
+PID's kernel record as the authoritative source, and compare the supervisor's
+kernel record against it. The fixed UID/GID, label, zero-capability and group
+constraints remain enforced. A regression test makes WRT group getters throw;
+credential validation must not consult them. Installed qualification remains open.
