@@ -123,3 +123,17 @@ only package permission staging is substituted there, and tested separately on
 ARM candidate bytes. The repository runner passed 248 tests and skipped 88
 environment-dependent checks. These results do not qualify TV service execution.
 Rebuild and review signed candidates containing this endpoint before deployment.
+
+Signed 0.6.1 candidates were subsequently rebuilt for both profiles at source
+`e3062b9`. Verification against each retained signed 0.6.0 package found twelve
+added members and no removals: the four native payload/manifest members and eight
+service modules. Both managed payloads remain present; managed remains selected.
+The content-bound inventory reviews and signed packages are retained privately.
+These replace the earlier prepared candidates, which lacked the latest probe.
+
+Read-only HTTPS observations before and after preparation confirmed both TVs
+ready and connected, with unchanged boot ID, worker ID, process identity and
+last acquisition time. No package was installed and neither TV was rebooted.
+Installation still requires the shared update transaction, preservation of the
+current enrollment/configuration, verified maintenance access and signed recovery
+material. Successful preparation is not installed-service qualification.
