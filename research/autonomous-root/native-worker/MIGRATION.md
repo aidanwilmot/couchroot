@@ -404,3 +404,17 @@ works without the managed components being retired; production artifacts contain
 no test hooks; the agent-only build has no .NET SDK dependency; and the owner has
 approved the final removal after the observation window. Keep .NET available until
 then.
+
+### Retirement session coordination (local only)
+
+`retirement-session.js` composes a private loopback listener and fsynced random
+token with journaled launch and provider readiness. It exposes only the verified
+retirement adapter and transport closure; no generic command channel is returned.
+A launch/readiness failure retains ownership material for reconciliation. Closing
+the transport does not retire the unit, release the launch marker, or delete
+staging. Host tests exercise ordering, token binding, listener failure, disconnect,
+readiness rejection and refusal to launch over an existing pending record.
+
+This coordinator is not yet enabled in the installed service. Provider teardown,
+interrupted-session reconciliation and integration with the admission hold remain
+required before a stopping handoff can be enabled or qualified on either TV.
