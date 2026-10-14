@@ -876,3 +876,28 @@ boot configuration changed. Original worker IDs and boot IDs were unchanged at
 completion. Helpers, benchmark jobs and owned test files were removed; original
 execution mounts and protected-file hashes were verified. Reboot behavior was not
 tested. Raw logs, credentials and copied system libraries remain private.
+
+## Ordinary candidate packaging — 2026-10-14
+
+`python3 -m tvsetup.autonomous_root --device DEVICE --native-candidate` adds the
+ordinary native worker, independent launcher and `native-manifest.json` to the
+existing managed package preparation. Use the existing `--unsigned` option when
+only preparing an unsigned package tree. This flag does not install anything or
+select the native worker. The package still contains the managed worker and
+acquisition payload, and the service continues to launch managed by default.
+
+`tvsetup.native_worker.build` snapshots native C/header/build inputs and builds
+worker plus launcher twice in an image pinned by its local immutable image ID,
+with networking disabled. The build script's `--worker-only` option excludes
+controllers and fault-test executables. It checks matching artifact digests,
+ELF32 ARM EABI5, interpreter, dynamic dependencies and GLIBC requirements, and
+rejects known test-control markers. The worker ceiling is GLIBC 2.28 and the
+launcher ceiling 2.17; actual requirements are recorded in the manifest. Runtime
+json-c and crypto alternatives are listed separately from ELF dependencies.
+
+The manifest binds source bytes, toolchain identity and final artifact bytes;
+the package's existing digest manifest also covers all three candidate files.
+It labels both TV profiles as candidates, sets `device_qualified=false`, and
+records managed selection. Preparing a candidate does not establish that device
+libraries, source staging, live migration or rollback work. Those remain the
+service-selection and device-qualification gates in `MIGRATION.md`.

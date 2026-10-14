@@ -32,7 +32,7 @@ def certificate(builder, folder, name):
     return sha(ssl.PEM_cert_to_DER_cert(cert.read_text()))
 
 
-def prepare(device, site, sign=True, version=None):
+def prepare(device, site, sign=True, version=None, native_candidate=False):
     profile=configured_profile(device,site)
     if sign:require_trust(profile)
     folder=PRIVATE/'autonomous-root'/device/run_id();folder.mkdir(parents=True,mode=0o700)
@@ -45,8 +45,15 @@ def prepare(device, site, sign=True, version=None):
         p=stage/'config.xml';p.write_text(p.read_text().replace('version="0.1.0"','version="'+version+'"'))
     shutil.copytree(SOURCE/'service',stage/'service')
     payload=stage/'payload';payload.mkdir(mode=0o700)
-    from .root_launcher import build as build_launcher
-    launcher = build_launcher(folder/'native-app-launcher', builder.command)
+    if native_candidate:
+        from .native_worker import build as build_native
+        native = build_native(folder/'native-worker-candidate', builder.command)
+        launcher = native/'native-app-launcher'
+        for name in ('native-worker', 'native-app-launcher', 'native-manifest.json'):
+            shutil.copyfile(native/name, payload/name)
+    else:
+        from .root_launcher import build as build_launcher
+        launcher = build_launcher(folder/'native-app-launcher', builder.command)
     for name in ('SamsungTvRootAgent','SamsungTvArchiveRoot'):
         output=folder/'compiled'/name
         builder.build_managed(SOURCE/'payload'/(name+'.csproj'),output,
@@ -88,9 +95,10 @@ def prepare(device, site, sign=True, version=None):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device',choices=['qn90a','s90d'],required=True)
+    parser.add_argument('--native-candidate',action='store_true',help='Include reproducible native artifacts; managed remains selected')
     parser.add_argument('--version');parser.add_argument('--site',type=Path);parser.add_argument('--unsigned',action='store_true')
     args=parser.parse_args()
-    try:print(json.dumps(prepare(args.device,load_site(args.site),not args.unsigned,args.version)))
+    try:print(json.dumps(prepare(args.device,load_site(args.site),not args.unsigned,args.version,args.native_candidate)))
     except Refused as e:print(str(e),file=sys.stderr);return 1
     return 0
 

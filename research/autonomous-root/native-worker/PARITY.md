@@ -204,3 +204,41 @@ TVs, reconcile observed operation tails, and verify deployment and rollback with
 retained state. Older separately copied clients need updating to use the longer
 budgets. Native packaging, implementation selection and later lifecycle gates in
 `MIGRATION.md` remain open.
+
+## Subsequent ordinary candidate packaging — 2026-10-14
+
+The package preparer accepts `--native-candidate`. It builds the ordinary native
+worker and launcher, copies them and their manifest into the existing package,
+and retains both managed payloads. Managed selection and disabled provisioning
+remain unchanged. No signing, package installation, selection change or device
+access was performed during this follow-up.
+
+The build snapshots source inputs, pins the compiler image by immutable local
+identity, runs without networking, checks two identical builds, and verifies the
+published files against the measured digests. The candidate manifest records
+source/artifact hashes, compiler version/image identity, ARM ABI, interpreter,
+ELF dependencies and runtime-loaded library alternatives. Fault-test/controller
+outputs are excluded. Nonempty output directories, symlink artifacts, unexpected
+outputs, mismatched repeated builds, incompatible ABI/dependencies and recognized
+test-control markers are refused without publishing a manifest.
+
+Actual repeated ARM builds produced:
+
+| Artifact | Bytes | Highest required GLIBC | SHA-256 |
+| --- | ---: | --- | --- |
+| native-worker | 107568 | 2.28 | `ab3f37813ca3254303f0be015d12c2bec077878114c093684615846e886fd28c` |
+| native-app-launcher | 13296 | 2.4 | `4ba756c8b725ba2e375ca02608c9ca7579f6d6275c4ed96348ba93bf5b8a6d55` |
+
+The worker's requirement includes `fcntl64@GLIBC_2.28`; it is not appropriate to
+apply the launcher's 2.17 ceiling to that artifact. Existing native-service
+research records libc 2.30 on the TVs, but candidate qualification must still
+verify the currently deployed libraries on each device. Both artifacts use
+`/lib/ld-linux.so.3`; the worker additionally needs libc, libdl and libpthread,
+plus the runtime json-c/crypto alternatives recorded in its manifest.
+
+Five new build/package tests passed. Repository Python discovery passed 243 tests
+with 74 native fixture tests skipped. The package-boundary fixture verifies both
+managed DLLs, candidate hashes in the package manifest and unchanged managed
+selection. Shell syntax and CLI-help checks passed. This evidence qualifies local
+artifact preparation, not an installed package or a native-only agent build.
+Service selection, state migration and rollback remain open.

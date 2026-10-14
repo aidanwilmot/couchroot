@@ -1,10 +1,15 @@
 #!/bin/sh
 # SPDX-License-Identifier: 0BSD
 set -eu
-: "${1:?output directory outside the checkout}"
+if test "$#" -lt 1 || test "$#" -gt 2 || { test "$#" -eq 2 && test "$2" != --worker-only; }; then
+ echo 'usage: build.sh OUTPUT_DIRECTORY [--worker-only]' >&2
+ exit 64
+fi
 src=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 mkdir -p "$1"
-for name in worker bench accept worker-fault-test accept-fault-test; do
+targets="worker bench accept worker-fault-test accept-fault-test"
+if test "$#" -eq 2; then targets=worker; fi
+for name in $targets; do
  unit=$name
  fault_flags=
  case "$name" in

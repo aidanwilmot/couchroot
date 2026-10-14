@@ -176,6 +176,12 @@ migration fixtures.
 
 ### 3 Integrate packaging and service selection
 
+Local packaging foundation is implemented: `--native-candidate` includes two
+reproducibly built ordinary artifacts and a manifest while retaining managed
+selection. See `PARITY.md` for build evidence. Durable native selection, manifest
+validation at service startup, state installation/rollback and real-device
+candidate acceptance are still required; this is not phase-three completion.
+
 Package ordinary worker, guardian functionality and app launcher from reproducible
 source builds. Do not ship fault-control operations or depend on a copied binary
 from a prior experiment. Record per-artifact hashes, ABI, dependencies and profile
