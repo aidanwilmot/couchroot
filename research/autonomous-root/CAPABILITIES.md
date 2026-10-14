@@ -35,6 +35,15 @@ budgets have local transport validation and are not yet deployed to either TV.
 callers retain checked execution; `_execute(..., check=False)` is available when
 only stdout is needed and a nonzero exit is expected.
 
+The migration candidate also reports `selected_implementation: "managed"` and
+`native_candidate`. Candidate state is `absent`, `invalid`, or `verified`, with a
+`checked_at` timestamp and a bounded reason code on failure. Verification reports
+the native manifest digest and `device_qualified: false`; it does not establish
+worker readiness, verify device libraries, or select native. Checks run at service
+creation and before an acquisition attempt. Legacy packages remain supported, and
+invalid optional candidate files do not disable managed fallback. These fields
+are local migration work and are not yet deployed to either TV.
+
 `/v1/status` now includes `boot_id`, `uptime_seconds`, `worker_ready`, `worker_id`,
 `last_root_acquired_at`, and capability names. Readiness requires root authentication
 and a completed worker operation. The HTTPS listener may be available earlier.

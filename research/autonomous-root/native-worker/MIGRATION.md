@@ -178,9 +178,9 @@ migration fixtures.
 
 Local packaging foundation is implemented: `--native-candidate` includes two
 reproducibly built ordinary artifacts and a manifest while retaining managed
-selection. See `PARITY.md` for build evidence. Durable native selection, manifest
-validation at service startup, state installation/rollback and real-device
-candidate acceptance are still required; this is not phase-three completion.
+selection. See `PARITY.md` for build evidence. Service-side candidate manifest validation and diagnostics are also implemented,
+without native selection. Durable selection, state installation/rollback and
+real-device candidate acceptance are still required; this is not phase-three completion.
 
 Package ordinary worker, guardian functionality and app launcher from reproducible
 source builds. Do not ship fault-control operations or depend on a copied binary

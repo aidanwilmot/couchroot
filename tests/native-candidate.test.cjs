@@ -1,0 +1,86 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const fs=require('fs'),os=require('os'),path=require('path');
+const {hash}=require('../research/autonomous-root/service/policy');
+const {loadCandidate,candidateStatus}=require('../research/autonomous-root/service/native-candidate');
+const {createAgent}=require('../research/autonomous-root/service/agent');
+const names=['native-worker','native-app-launcher'];
+function artifact(){const b=Buffer.alloc(64);Buffer.from([127,69,76,70,1,1,1]).copy(b);b.writeUInt16LE(3,16);b.writeUInt16LE(40,18);b.writeUInt32LE(0x05000200,36);return b;}
+function fixture(){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-candidate-test-'));
+ const source=Object.fromEntries(['native-worker/worker.c','native-worker/build.sh','native-launcher/app-launcher.c','native-launcher/build.sh'].map(n=>[n,'a'.repeat(64)]));
+ const m={schema:1,kind:'native-worker-candidate',implementation:'native-prototype',selection:'managed',device_qualified:false,candidate_profiles:['qn90a','s90d'],source,toolchain:{image:'sha256:'+'b'.repeat(64),compiler:'10.2.1'},reproducible_builds:2,artifacts:{},runtime_loads:{json_c:['libjson-c.so.5','libjson-c.so.4'],crypto:['libcrypto.so.1.1','libcrypto.so.3']}};
+ for(const name of names){const bytes=artifact();fs.writeFileSync(path.join(dir,name),bytes);m.artifacts[name]={sha256:hash(bytes),size:bytes.length,abi:'armv7-eabi5-softfp',interpreter:'/lib/ld-linux.so.3',needed:['libc.so.6'],glibc_max:'2.17.0'};}
+ const seal=()=>{const raw=JSON.stringify(m);fs.writeFileSync(path.join(dir,'native-manifest.json'),raw);fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({'native-manifest.json':hash(raw),...Object.fromEntries(names.map(n=>[n,m.artifacts[n].sha256]))}));};
+ seal();return {dir,m,seal,close:()=>fs.rmSync(dir,{recursive:true,force:true})};
+}
+test('legacy packages have no candidate and remain managed',()=>{
+ const f=fixture();try{
+  for(const name of [...names,'native-manifest.json'])fs.unlinkSync(path.join(f.dir,name));
+  fs.writeFileSync(path.join(f.dir,'manifest.json'),'{}');
+  assert.equal(loadCandidate(f.dir,'qn90a'),null);
+  const status=createAgent({device:'qn90a'},{payload:f.dir}).status();
+  assert.equal(status.selected_implementation,'managed');assert.equal(status.native_candidate.state,'absent');assert.equal(status.worker_ready,false);
+ }finally{f.close();}
+});
+test('both profiles validate candidate bytes without promoting readiness or selecting native',()=>{
+ const f=fixture();try{
+  for(const device of ['qn90a','s90d']){
+   const c=loadCandidate(f.dir,device);assert.equal(c.manifest_sha256,hash(fs.readFileSync(path.join(f.dir,'native-manifest.json'))));
+   assert.equal(c.artifacts['native-worker'].sha256,f.m.artifacts['native-worker'].sha256);
+   const status=createAgent({device},{payload:f.dir}).status();
+   assert.equal(status.selected_implementation,'managed');assert.equal(status.native_candidate.state,'verified');
+   assert.equal(status.native_candidate.device_qualified,false);assert.equal(status.worker_ready,false);assert.equal(status.connected,false);
+  }
+ }finally{f.close();}
+});
+test('invalid schema profile build provenance and dependency declarations are rejected',()=>{
+ const cases=[m=>m.schema=2,m=>m.selection='native',m=>m.device_qualified=true,m=>m.reproducible_builds=1,
+  m=>m.candidate_profiles=['s90d'],m=>m.candidate_profiles=['qn90a','qn90a'],m=>m.toolchain.image='mutable:tag',
+  m=>m.toolchain.compiler=['10.2.1'],m=>m.source['../outside']='a'.repeat(64),m=>delete m.source['native-worker/worker.c'],
+  m=>m.artifacts['native-worker'].needed=['libc.so.6','libunexpected.so'],m=>m.artifacts['native-worker'].glibc_max='2.29.0',
+  m=>m.artifacts['native-app-launcher'].glibc_max='2.28.0',m=>m.artifacts['native-worker'].size=0,
+  m=>m.artifacts['native-worker'].interpreter='/lib/other',m=>m.runtime_loads.crypto=['libcrypto.so'],m=>m.unexpected=true];
+ for(const change of cases){const f=fixture();try{change(f.m);f.seal();assert.throws(()=>loadCandidate(f.dir,'qn90a'));assert.equal(candidateStatus(f.dir,'qn90a').state,'invalid');}finally{f.close();}}
+});
+test('digest mismatches missing files symlinks and oversized metadata are not valid candidates',()=>{
+ for(const kind of ['binary','manifest','missing','missing-all','symlink','oversized']){
+  const f=fixture();try{
+   if(kind==='binary')fs.appendFileSync(path.join(f.dir,'native-worker'),'changed');
+   if(kind==='manifest')fs.appendFileSync(path.join(f.dir,'native-manifest.json'),' ');
+   if(kind==='missing')fs.unlinkSync(path.join(f.dir,'native-app-launcher'));
+   if(kind==='missing-all')for(const name of [...names,'native-manifest.json'])fs.unlinkSync(path.join(f.dir,name));
+   if(kind==='symlink'){fs.renameSync(path.join(f.dir,'native-worker'),path.join(f.dir,'other'));fs.symlinkSync('other',path.join(f.dir,'native-worker'));}
+   if(kind==='oversized')fs.writeFileSync(path.join(f.dir,'native-manifest.json'),' '.repeat(65537));
+   assert.throws(()=>loadCandidate(f.dir,'qn90a'));
+   const status=createAgent({device:'qn90a'},{payload:f.dir}).status();assert.equal(status.selected_implementation,'managed');assert.equal(status.native_candidate.state,'invalid');
+   assert.ok(!JSON.stringify(status.native_candidate).includes(f.dir));
+  }finally{f.close();}
+ }
+});
+test('rehashed wrong-ABI and test-controlled binaries are still rejected',()=>{
+ for(const kind of ['machine','hard-float','test']){
+  const f=fixture();try{
+   let bytes=artifact();if(kind==='machine')bytes.writeUInt16LE(62,18);if(kind==='hard-float')bytes.writeUInt32LE(0x05000400,36);if(kind==='test')bytes=Buffer.concat([bytes,Buffer.from('--test-child-fault')]);
+   fs.writeFileSync(path.join(f.dir,'native-worker'),bytes);Object.assign(f.m.artifacts['native-worker'],{sha256:hash(bytes),size:bytes.length});f.seal();
+   assert.throws(()=>loadCandidate(f.dir,'qn90a'),/candidate-(artifact-header|test-controls)/);
+  }finally{f.close();}
+ }
+});
+test('candidate diagnostics refresh before an acquisition attempt without blocking managed fallback',async()=>{
+ const f=fixture();let checked=0;
+ const agent=createAgent({device:'qn90a'},{payload:f.dir,verifyFirmware:()=>{checked++;throw Error('fixture-stop-before-device-access');}});
+ try{
+  assert.equal(agent.status().native_candidate.state,'verified');fs.appendFileSync(path.join(f.dir,'native-worker'),'changed');
+  agent.start();await new Promise(r=>setImmediate(r));
+  assert.equal(checked,1);assert.equal(agent.status().selected_implementation,'managed');assert.equal(agent.status().native_candidate.state,'invalid');
+  assert.match(agent.status().last_error,/fixture-stop-before-device-access/);
+ }finally{agent.stop();f.close();}
+});
+test('ordinary source-built candidate is accepted for both profile declarations',{skip:!process.env.NATIVE_CANDIDATE_BUILD},()=>{
+ const f=fixture();try{
+  for(const name of [...names,'native-manifest.json'])fs.copyFileSync(path.join(process.env.NATIVE_CANDIDATE_BUILD,name),path.join(f.dir,name));
+  const index=Object.fromEntries([...names,'native-manifest.json'].map(name=>[name,hash(fs.readFileSync(path.join(f.dir,name)))]));fs.writeFileSync(path.join(f.dir,'manifest.json'),JSON.stringify(index));
+  for(const device of ['qn90a','s90d'])assert.ok(loadCandidate(f.dir,device));
+ }finally{f.close();}
+});

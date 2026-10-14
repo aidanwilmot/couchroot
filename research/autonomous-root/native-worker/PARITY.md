@@ -242,3 +242,36 @@ managed DLLs, candidate hashes in the package manifest and unchanged managed
 selection. Shell syntax and CLI-help checks passed. This evidence qualifies local
 artifact preparation, not an installed package or a native-only agent build.
 Service selection, state migration and rollback remain open.
+
+## Subsequent service candidate validation — 2026-10-14
+
+The service now validates optional native candidate package contents at creation
+and before an acquisition attempt. It checks the package index's native-manifest
+digest, exact candidate schema, supported profile declaration, managed selection,
+unqualified status, repeated-build declaration, source/toolchain metadata, artifact
+set, declared ABI/dependency limits and runtime-library alternatives. Bounded
+no-follow reads verify final artifact size/digests and ELF headers, and refuse
+known test-control markers. All referenced artifact names are fixed; manifest
+source paths are metadata and are never opened by this validator.
+
+`selected_implementation` remains `managed`. Candidate diagnostics distinguish
+absent, invalid and verified packages and include when they were checked. An
+invalid candidate has a bounded reason code and does not suppress managed launch.
+Successful candidate verification does not set `worker_ready`, select native or
+mark the device qualified. A later staging/selection transaction must freshly
+validate its expected manifest digest and copied bytes.
+
+Seven new Node tests passed, covering both profile declarations, legacy absence,
+invalid metadata, digest failures, incomplete packages, symlinks, oversized input,
+wrong ELF headers, test-control markers, refresh-before-launch, and the actual
+ordinary binaries built in the preceding step. Fourteen candidate/service tests
+passed in total; sixteen additional protocol/deadline tests passed, with the
+previously completed 42-second test skipped in this run. Five candidate-builder
+Python tests passed. No TV access or deployment occurred.
+
+This is package consistency validation within the existing signed-package trust
+boundary. It does not independently rebuild source, rerun readelf, prove compiler
+provenance or probe device libraries. ABI dependency/version declarations are
+bound to the package's artifact hashes; live compatibility still requires device
+qualification. Journaled implementation selection, retained-state installation,
+rollback, and integrated native readiness remain open.

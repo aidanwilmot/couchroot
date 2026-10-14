@@ -2,6 +2,7 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const sdb=require('./vendor/sdb'),{tarGz}=require('./vendor/tar'),{RootAgentServer}=require('./vendor/root-agent');
 const {read,hash,verifyFirmware,sdkRuntimeGuard}=require('./policy');
+const {candidateStatus}=require('./native-candidate');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -15,8 +16,9 @@ function createAgent(config,options={}){
  let running=false,connected=false,launching=false,timer=null,channel=null,client=null,stage=null,attempts=0,generation=0,lastError=null,identity=null,lastAcquired=null,workerReady=false,workerStatus=null,workerStatusAt=0;
  const firmware=options.verifyFirmware||verifyFirmware;
  const payload=options.payload||path.join(__dirname,'../payload');
+ let nativeCandidate=candidateStatus(payload,config.device);
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,selected_implementation:'managed',native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -52,6 +54,7 @@ function createAgent(config,options={}){
  async function launch(){
   if(!running||connected||launching)return;launching=true;attempts++;const gen=++generation;let step='firmware verification';
   try{
+   nativeCandidate=candidateStatus(payload,config.device);
    firmware(config);
    const secret=crypto.randomBytes(32);
    if(channel)channel.close();
