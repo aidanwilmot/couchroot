@@ -599,3 +599,31 @@ in these tests; no production unit was launched on either TV. The private listen
 production readiness record, uncertain-launch reconciliation and rollback still
 need integration before installed stopping handoff can be enabled. Deployed .NET
 fallback and both TV boots remain unchanged.
+
+### Production readiness acceptance — local follow-up
+
+The independent provider now verifies its submitted production peer before a
+state-ready transition can become trial-ready. Readiness requires the expected
+root/System peer, production lifetime/capabilities, staged launcher digest,
+empty owned-resource inventory and distinct source/provider/production process
+identities. Two matching unit observations bind the guardian and monotonic unit
+start. Independent shell checks verify live process start identities/executable
+paths, staged artifacts, consumed token, import manifest and retained bytes in
+both source and destination. Every retained record is also read through the new
+worker's job-status operation and compared with the expected saved-record result.
+
+The ready launch record is durably published before the selection journal gains
+its readiness digest. Selection remains managed and pending, and the production
+ownership marker remains. Drift, disconnects and publication uncertainty retain
+reconciliation evidence; a ready record alone cannot bypass an unfinished
+readiness intent or authorize launch replay.
+
+The combined Linux suite passes 141 tests without skips. The real managed-exit
+integration now verifies a staged production native worker via a separate native
+provider, including actual procfs/executable/file checks and ordinary/BOM job
+records. Systemd state and unavailable host Smack/mount setup remain fixtures;
+this does not establish on-TV production readiness. Maximum-retention command
+size, identity/unit drift, changed resources/records and lost ready-publication
+acknowledgement are covered. The private production listener, recovery of partial
+publication, controller adoption/rollback and both-TV stopping handoff remain
+open. Deployed packages and TV boots are unchanged.

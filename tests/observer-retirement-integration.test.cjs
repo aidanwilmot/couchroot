@@ -5,11 +5,11 @@ for (const bom of [false,true]) test('native retirement channel migrates retaine
  skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:20000
 },async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'independent-retirement-')),children=[],servers=[];
- async function start(name,native,existing,production=false){
+ async function start(name,native,existing,production=false,binary=process.env.NATIVE_WORKER){
   const dir=existing||path.join(root,name);if(!existing)fs.mkdirSync(dir,{mode:0o700});const secret=crypto.randomBytes(32),token=path.join(dir,'token');fs.writeFileSync(token,secret.toString('base64'),{mode:0o600});
   let accept;const ready=new Promise(resolve=>{accept=resolve;}),server=new RootAgentServer({secret,onConnect:accept});servers.push(server);await new Promise(resolve=>server.start(resolve));
   let command,args,sha;
-  if(native){const launcher=path.join(dir,'launcher');fs.copyFileSync('/bin/true',launcher);fs.chmodSync(launcher,0o600);sha=crypto.createHash('sha256').update(fs.readFileSync(launcher)).digest('hex');command=process.env.NATIVE_WORKER;args=['127.0.0.1',String(server.listeningPort()),token,dir,launcher,sha];if(production)args.push('--production');}
+  if(native){const launcher=path.join(dir,'launcher');fs.copyFileSync('/bin/true',launcher);fs.chmodSync(launcher,production?0o400:0o600);sha=crypto.createHash('sha256').update(fs.readFileSync(launcher)).digest('hex');command=binary;args=['127.0.0.1',String(server.listeningPort()),token,dir,launcher,sha];if(production)args.push('--production');}
   else{command='dotnet';args=[process.env.MANAGED_PARITY,'--parity-wire',String(server.listeningPort()),dir];}
   const child=spawn(command,args,{stdio:['ignore','ignore','pipe']}),ended=once(child,'exit');let stderr='';child.stderr.on('data',data=>{stderr=(stderr+data).slice(-8192);});children.push({child,ended});
   const peer=await Promise.race([ready,ended.then(()=>{throw Error(name+' exited early: '+stderr);})]);
@@ -47,7 +47,18 @@ for (const bom of [false,true]) test('native retirement channel migrates retaine
   const installation=await provider.installManagedState({id:transition.pending.id,manifestSha256:'b'.repeat(64),journalDirectory,selectionFile});assert.equal(installation.phase,'ready');assert.equal(selection.read().pending.phase,'prepared');
   assert.equal(fs.readFileSync(path.join(installed,'state','.jobs','retained-job-0001.json')).equals(saved),true);
   const accepted=await provider.acceptManagedState({journalDirectory,selectionFile});assert.equal(accepted.pending.phase,'state-ready');assert.equal(accepted.pending.state_sha256,installation.receipt_sha256);assert.equal(accepted.selected.implementation,'managed');
-  const production=await start('production',true,path.join(installed,'state'),true);const productionInfo=await production.server.operation({op:'status'});assert.equal(productionInfo.lifetime_mode,'production');assert.equal(productionInfo.lifetime_seconds,0);
+  fs.mkdirSync(path.join(installed,'code'),{mode:0o700});const productionBinary=path.join(installed,'code','worker');fs.copyFileSync(process.env.NATIVE_WORKER,productionBinary);fs.chmodSync(productionBinary,0o500);
+  const production=await start('production',true,path.join(installed,'state'),true,productionBinary);const productionInfo=await production.server.operation({op:'status'});assert.equal(productionInfo.lifetime_mode,'production');assert.equal(productionInfo.lifetime_seconds,0);
+  assert.equal(production.peer.identity.smack,'host-test-without-Smack');production.peer.identity.smack='System';
+  const productionRecord={schema:1,id:transition.pending.id,phase:'submitted',device:'s90d',manifest_sha256:'b'.repeat(64),state_receipt_sha256:installation.receipt_sha256,worker_sha256:crypto.createHash('sha256').update(fs.readFileSync(productionBinary)).digest('hex'),launcher_sha256:production.sha,source,boot_id:source.boot_id,unit:'couchroot-worker-'+transition.pending.id+'.service',directory:'/opt/couchroot-worker-'+transition.pending.id,scope:'/opt/couchroot-worker-'+transition.pending.id+'/state',port:production.server.listeningPort(),token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/production-ABC123/token',token_sha256:'b'.repeat(64)};
+  fs.writeFileSync(path.join(journalDirectory,productionRecord.id+'.production.json'),JSON.stringify(productionRecord),{mode:0o600});fs.writeFileSync(path.join(journalDirectory,'production-launch.pending'),productionRecord.id+'\n',{mode:0o600});
+  const trial=await require('../research/autonomous-root/service/production-readiness').readyProduction({record:productionRecord,journalDirectory,selectionFile,channel:production.server,providerIdentity:provider.identity,execute:async(command,timeout)=>{
+   // The host fixture has no systemd. Process, executable and retained-file
+   // checks below use the real independent native connection and live procfs.
+   if(command.includes('--property=Id,'))return {exit_code:0,stdout:`Id=${productionRecord.unit}\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=${production.child.pid}\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n`};
+   return native.server.execute(command.replaceAll('/opt/couchroot-agent',retained).replaceAll(productionRecord.directory,installed),timeout);
+  }});
+  assert.equal(trial.selection.pending.phase,'trial-ready');assert.equal(trial.selection.selected.implementation,'managed');
   const retainedStatus=await production.server.operation({op:'job.status',id:'retained-job-0001'});assert.equal(retainedStatus.state,'completed');assert.equal(retainedStatus.record.exit_code,7);assert.equal(retainedStatus.output_available,false);
   assert.deepEqual(await production.server.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await production.ended,[0,null],production.stderr());
   assert.equal(fs.readFileSync(path.join(installed,'state','.jobs','retained-job-0001.json')).equals(saved),true);

@@ -6,6 +6,7 @@ const {validateResourceInventory}=require('./worker-readiness');
 const {snapshotManagedJobs}=require('./retained-state');
 const {installRetainedState,acceptRetainedState}=require('./retained-install');
 const {submitProduction}=require('./production-launch');
+const {readyProduction}=require('./production-readiness');
 const {inspectObserverUnit,retireObserverUnit}=require('./observer-unit');
 const HEX=/^[a-f0-9]{64}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const CAPS=['prototype-scoped-files-v1','worker-process-identity-v1','guardian-parent-identity-v1','resource-inventory-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1'];
@@ -37,7 +38,7 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
  const clock=()=>{const t=process.hrtime();return t[0]*1000+t[1]/1000000;};
  let expires=clock()+5000;
  const peer=channel._conn,expected={bootId:target.bootId,launcherSha256};
- let pinned=null,busy=false,failed=false,retirementEntered=false,retired=false,snapshotEntered=false,retainedSnapshot=null,installEntered=false,retainedInstallation=null,acceptEntered=false,stateAccepted=false,productionEntered=false;
+ let pinned=null,busy=false,failed=false,retirementEntered=false,retired=false,snapshotEntered=false,retainedSnapshot=null,installEntered=false,retainedInstallation=null,acceptEntered=false,stateAccepted=false,productionEntered=false,productionRecord=null,readinessEntered=false;
  function current(){requireValue(!failed&&channel._conn===peer&&peer&&clock()<expires);}
  async function verify(){
   current();const info=await channel.operation({op:'status'});current();
@@ -71,9 +72,15 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
+  verifyProduction:async options=>{
+   requireValue(!busy&&!failed&&!readinessEntered&&productionRecord);busy=true;readinessEntered=true;expires=clock()+120000;
+   try{return await readyProduction({...options,record:productionRecord,providerIdentity:identity,execute});}
+   catch(error){failed=true;throw error;}
+   finally{busy=false;}
+  },
   launchProduction:async options=>{
    requireValue(!busy&&!failed&&!productionEntered&&stateAccepted&&retainedInstallation);busy=true;productionEntered=true;expires=clock()+30000;
-   try{return await submitProduction({...options,id:retainedInstallation.id,manifestSha256:retainedInstallation.manifest_sha256,receiptSha256:retainedInstallation.receipt_sha256,execute});}
+   try{productionRecord=await submitProduction({...options,id:retainedInstallation.id,manifestSha256:retainedInstallation.manifest_sha256,receiptSha256:retainedInstallation.receipt_sha256,execute});return productionRecord;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
