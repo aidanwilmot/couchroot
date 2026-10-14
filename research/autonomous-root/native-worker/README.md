@@ -238,6 +238,36 @@ stages its own launcher and reports `stale_guardian_reconciled: true`. Duplicate
 job IDs still cannot replay commands. This is recovery on the next explicit
 launch, not a new service restart mechanism or a replacement for .NET.
 
+## Storage-failure and namespace-reuse validation — 2026-10-13
+
+The worker in `f9ae182` passed 43 distinct extended checks (47 rows) on each TV.
+A private 2 MiB tmpfs reached actual ENOSPC without filling TV storage. Failed
+initial intents neither published partial records nor released a command. A job
+that completed while full exposed `persistence_failed`, then persisted its original
+exit code after space returned; an external execution counter remained exactly
+one. A read-only remount of only this test filesystem rejected a new job; restored
+writes permitted fresh app-user execution. A worker crash while full removed its
+runtime views, retained the journal and reconciled interrupted jobs after space
+returned. Final verification confirmed no prototype freezer groups remained.
+The immediate freezer-absence assertion was subsequently tightened to use its
+absolute cgroup path; its additional validation is part of the pending endurance run.
+
+An earlier QN90A run observed a saved namespace inode reused by a newer Samsung
+framework process. Its mount table had no owned native execution views. Corrected
+reconciliation recovered the old resources while preserving that unrelated process.
+The suite also simulates this case on both TVs and retains its namespace descriptor
+and bind-pin refusal tests. Earlier fixture failures and their verified cleanup
+are recorded in [storage-recovery-results.json](storage-recovery-results.json).
+
+All 35 native host tests passed under AddressSanitizer and
+UndefinedBehaviorSanitizer on Linux ARM64; the repository suite passed 226 tests
+with 35 native tests skipped by that runner. The final TV runs exited zero, showed
+no observed crash-collector waits or worker executable dumps, and passed original
+.NET worker, boot, protected-file, mount and cgroup preservation checks. No TV was
+rebooted. One-hour endurance tests have started separately; they are not yet
+qualified results. Production integration and the other remaining work below
+remain open.
+
 ## Startup-checkpoint validation — 2026-10-13
 
 Revision `1f5d770` passed 38 distinct extended acceptance checks (42 rows) on
