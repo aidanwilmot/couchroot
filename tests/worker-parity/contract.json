@@ -1,0 +1,154 @@
+{
+  "schema": 1,
+  "baseline": "managed-agent-0.7.0",
+  "scope": "Public operation behavior; HTTPS enrollment and routing remain owned by the unchanged service.",
+  "limits": {
+    "transfer_count": 8,
+    "file_bytes": 2147483648,
+    "chunk_bytes": 1048576,
+    "jobs_memory": 16,
+    "job_records": 64,
+    "job_min_ms": 100,
+    "job_max_ms": 86400000,
+    "app_max_ms": 25000,
+    "stream_ring_bytes": 1048576,
+    "tail_bytes": 65536,
+    "public_command_bytes": 16384,
+    "public_exec_min_ms": 100,
+    "public_exec_max_ms": 25000,
+    "wire_exec_max_ms": 300000,
+    "wire_exec_command_bytes": 65536,
+    "foreground_stream_bytes": 1048576
+  },
+  "generated_fields": [
+    "worker_id",
+    "transfer_id",
+    "pid",
+    "process_start",
+    "started_at"
+  ],
+  "operations": {
+    "status": [
+      "boot_id",
+      "uptime_seconds",
+      "worker_id",
+      "app_launcher",
+      "capabilities"
+    ],
+    "exec": [
+      "exit_code",
+      "timed_out",
+      "stdout",
+      "stderr"
+    ],
+    "app.exec": [
+      "exit_code",
+      "timed_out",
+      "stdout",
+      "stderr"
+    ],
+    "file.open": [
+      "transfer_id",
+      "size",
+      "sha256",
+      "chunk_bytes",
+      "offset"
+    ],
+    "file.begin": [
+      "transfer_id",
+      "size",
+      "sha256",
+      "chunk_bytes",
+      "offset"
+    ],
+    "file.status": [
+      "offset",
+      "size",
+      "upload",
+      "path",
+      "sha256",
+      "expected_sha256",
+      "chunk_bytes",
+      "transfer_id"
+    ],
+    "file.read": [
+      "data",
+      "offset",
+      "sha256"
+    ],
+    "file.write": [
+      "offset"
+    ],
+    "file.commit": [
+      "committed",
+      "sha256",
+      "size"
+    ],
+    "file.close": [
+      "closed"
+    ],
+    "job.start": [
+      "id",
+      "boot_id",
+      "state",
+      "started_at",
+      "pid",
+      "process_start",
+      "exit_code",
+      "timed_out"
+    ],
+    "job.status": [
+      "id",
+      "boot_id",
+      "state"
+    ],
+    "job.output": [
+      "stdout",
+      "stderr",
+      "state"
+    ],
+    "job.cancel": [
+      "id",
+      "state"
+    ],
+    "job.forget": [
+      "forgotten"
+    ],
+    "helper.prepare": [
+      "helper_id",
+      "path",
+      "sha256"
+    ],
+    "helper.release": [
+      "released"
+    ]
+  },
+  "outcomes": {
+    "rejected": "Not admitted by service",
+    "failed": "Worker reported failure; intermediate changes may exist",
+    "unknown": "No confirmed result after submission; never automatically replay"
+  },
+  "intentional_differences": {
+    "saved_job_cancel": "Native refuses saved-process signalling; inspect/reconcile instead. No PID-only cancellation is introduced.",
+    "command_faults": "Native strict interception remains explicit in status; full signal-handler compatibility is a later gate.",
+    "owned_metadata_paths": "Native file operations cannot address their own .jobs or .views directories.",
+    "directory_replacement": "Native refuses commit when the parent is moved/replaced; independent writers must be quiesced.",
+    "legacy_unknown_records": "Imported same-boot uncertain jobs stay unknown. Import is not evidence that descendants were reaped.",
+    "extra_fields": "Native diagnostics are additive; only documented generated fields and per-operation additions may be normalized.",
+    "special_upload_destination": "Native rejects existing non-regular upload destinations at begin rather than allowing a staging file first.",
+    "interrupted_forget": "Native permits forgetting a terminal interrupted record on the same boot; managed permits fewer same-boot terminal states."
+  },
+  "remaining_integration_gates": [
+    "production capability advertisement",
+    "real HTTPS service end-to-end worker selection",
+    "app identity and helper execution on both TVs",
+    "signal-handler policy approval",
+    "production lifetime",
+    "acquisition and recovery",
+    "authorized cross-boot qualification"
+  ],
+  "legacy_frames": {
+    "READFILE": "not in public replacement contract",
+    "WRITEFILE": "not in public replacement contract"
+  }
+}

@@ -52,8 +52,8 @@ with durable resource bindings before starting a new worker. Ambiguous state rem
 controller and deployed .NET worker retain their original namespace.
 
 Missing parity still includes autonomous root acquisition and production
-packaging/recovery integration and the broader production file
-access policy. Legacy READFILE/WRITEFILE frames remain omitted: neither the
+packaging/recovery integration. The broader production file policy and offline
+managed-record migration are now opt-in, as described in [PARITY.md](PARITY.md). Legacy READFILE/WRITEFILE frames remain omitted: neither the
 current HTTPS API, enrolled client nor loopback service exposes them. JSON
 `file.write` is supported on the worker protocol for older service compatibility,
 using canonical base64 and the same 1 MiB chunk, digest, offset and commit checks
@@ -602,6 +602,11 @@ protected files. Neither TV was rebooted. See [admission-results.json](admission
 
 ## Remaining production work
 
+The first migration implementation adds an opt-in production file policy,
+offline managed-job import/rollback snapshots, and differential tests. See
+[phase-one behavior and validation](PARITY.md). The installed service still
+selects .NET; the default experiment mode retains its narrow file scope.
+
 The [native agent parity and .NET retirement plan](MIGRATION.md) maps the
 remaining contracts, managed dependencies, implementation order, rollback and
 release gates. It distinguishes a native worker default from a fully native
@@ -623,8 +628,9 @@ agent installation and recovery path.
 - Decide command signal-handler compatibility. The strict policy is explicit in
   status. Original command-fault diagnostics are separate from actual termination
   status and now pass the focused device checks on both TVs.
-- Reconcile the narrower file policy with the current public API, then repeat
-  whole-process CPU/memory/startup comparisons. Legacy READFILE/WRITEFILE frames
+- Integrate the opt-in production file policy and verified retained-record
+  snapshots with service selection and rollback, then repeat whole-process
+  CPU/memory/startup comparisons. Legacy READFILE/WRITEFILE frames
   are outside the current public replacement contract. Worker-protocol JSON
   uploads now pass host and focused device checks. Guardian, job-monitor and
   foreground wait wakeups are now measured; include them in that comparison.

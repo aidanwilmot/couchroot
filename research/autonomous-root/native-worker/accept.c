@@ -38,6 +38,8 @@ static void launch(void) {
     fatal("fork");
   if (!child) {
     execl(binary, binary, "127.0.0.1", port, token, filescope, app, appsha,
+          getenv("COUCHROOT_NATIVE_PARITY_ONLY") ? "--production-files"
+                                                 : (char *)NULL,
           (char *)NULL);
     _exit(127);
   }
@@ -413,6 +415,7 @@ static void soak(int seconds) {
 #include "fault-events-accept.h"
 #include "guardian-loss-accept.h"
 #include "json-upload-accept.h"
+#include "parity-accept.h"
 #include "resource-accept.h"
 #include "storage-accept.h"
 int main(int argc, char **argv) {
@@ -453,6 +456,10 @@ int main(int argc, char **argv) {
     fatal("parent namespace");
   namespace_before[ns] = 0;
   launch();
+  if (getenv("COUCHROOT_NATIVE_PARITY_ONLY")) {
+    parity_checks();
+    return 0;
+  }
   if (getenv("COUCHROOT_NATIVE_RESOURCE_ONLY")) {
     resource_limit_checks();
     fault_diagnostic_checks();

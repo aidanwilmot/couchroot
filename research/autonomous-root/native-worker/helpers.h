@@ -178,7 +178,10 @@ static J *helper_operation(J *request, const char *op) {
     return failure("Unsupported helper operation");
   const char *path = textval(request, "path"),
              *sha = textval(request, "sha256"), *name;
-  if (!leaf(path, &name) || !hexvalid(sha, 64))
+  if ((production_files ? (!file_path_allowed(path, 1) ||
+                           !path_below(path, "/opt/couchroot-agent/files"))
+                        : !leaf(path, &name)) ||
+      !hexvalid(sha, 64))
     return failure("Invalid helper source or digest");
   Helper *h = NULL;
   for (int i = 0; i < 8; i++)
@@ -188,7 +191,16 @@ static J *helper_operation(J *request, const char *op) {
     }
   if (!h)
     return failure("Helper retention limit reached");
-  int source = openat(directory, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  char leafname[256];
+  int parent = production_files ? file_parent(path, 0, leafname) : directory;
+  if (parent < 0)
+    return failure("Helper parent unavailable");
+  if (production_files)
+    name = leafname;
+  int source =
+      openat(parent, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+  if (production_files)
+    close(parent);
   struct stat st;
   if (source < 0)
     return failure("Helper source unavailable");
@@ -237,8 +249,8 @@ static J *helper_operation(J *request, const char *op) {
   char actual[65];
   if (ok)
     ok = filedigest(target, actual) && !strcmp(actual, sha) &&
-         !fchmod(target, 0555) && !helper_label(target) &&
-         !fsync(target) && !fsync(dir);
+         !fchmod(target, 0555) && !helper_label(target) && !fsync(target) &&
+         !fsync(dir);
   close(source);
   if (target >= 0)
     close(target);

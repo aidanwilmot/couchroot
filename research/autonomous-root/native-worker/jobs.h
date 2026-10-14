@@ -45,7 +45,8 @@ static int job_record_read(const char *name, char bytes[2048]) {
     return RECORD_MISSING;
   struct stat st;
   if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
-      (st.st_mode & 077) || st.st_size < 1 || st.st_size >= 2048) {
+      (st.st_mode & 077) || st.st_nlink != 1 || st.st_size < 1 ||
+      st.st_size >= 2048) {
     close(fd);
     return RECORD_INVALID;
   }
@@ -77,6 +78,43 @@ static int job_identity(pid_t pid, char result[32]) {
       strcpy(result, s);
       return 1;
     }
+  return 0;
+}
+/* Match managed IsNullOrWhiteSpace for a UTF-8 command. JSON has already
+ * rejected embedded NUL. Any non-whitespace byte sequence is a command. */
+static int job_command_nonblank(const char *command) {
+  if (!command)
+    return 0;
+  const unsigned char *p = (const unsigned char *)command;
+  while (*p) {
+    if (*p == ' ' || (*p >= 9 && *p <= 13)) {
+      p++;
+      continue;
+    }
+    if (p[0] == 0xc2 && (p[1] == 0x85 || p[1] == 0xa0)) {
+      p += 2;
+      continue;
+    }
+    if (p[0] == 0xe1 && p[1] == 0x9a && p[2] == 0x80) {
+      p += 3;
+      continue;
+    }
+    if (p[0] == 0xe2 && p[1] == 0x80 &&
+        ((p[2] >= 0x80 && p[2] <= 0x8a) || p[2] == 0xa8 || p[2] == 0xa9 ||
+         p[2] == 0xaf)) {
+      p += 3;
+      continue;
+    }
+    if (p[0] == 0xe2 && p[1] == 0x81 && p[2] == 0x9f) {
+      p += 3;
+      continue;
+    }
+    if (p[0] == 0xe3 && p[1] == 0x80 && p[2] == 0x80) {
+      p += 3;
+      continue;
+    }
+    return 1;
+  }
   return 0;
 }
 static int job_valid_id(const char *id) {
@@ -373,6 +411,9 @@ static void jobs_storage(void) {
   if (jobs_lock < 0 || fstat(jobs_lock, &st) || !S_ISREG(st.st_mode) ||
       st.st_uid || (st.st_mode & 077) || flock(jobs_lock, LOCK_EX | LOCK_NB))
     fatal("exclusive job ownership");
+  if (fstatat(jobs_dir, ".import-pending", &st, AT_SYMLINK_NOFOLLOW) == 0 ||
+      errno != ENOENT)
+    fatal("unfinished job import; resume offline migration first");
   readtext("/proc/sys/kernel/random/boot_id", current_boot,
            sizeof current_boot);
 }
@@ -424,7 +465,11 @@ static J *saved_job(J *request, const char *op, const char *id) {
   J *record = parse(bytes);
   const char *state = record ? textval(record, "state") : NULL,
              *boot = record ? textval(record, "boot_id") : NULL;
-  if (!state || !boot) {
+  const char *record_id = record ? textval(record, "id") : NULL;
+  if (!state || !boot || !record_id || strcmp(record_id, id) ||
+      (!job_terminal(state) && strcmp(state, "unknown") &&
+       strcmp(state, "starting") && strcmp(state, "running") &&
+       strcmp(state, "cancelling"))) {
     if (record)
       json_object_put(record);
     return failure("Invalid job record");
@@ -477,7 +522,7 @@ static J *job_operation_locked(J *request, const char *op) {
     const char *command = textval(request, "command"),
                *profile = textval(request, "profile");
     if (!integer(request, "timeout_ms", &timeout) || timeout < 100 ||
-        timeout > 86400000 || !command || !*command ||
+        timeout > 86400000 || !job_command_nonblank(command) ||
         strlen(command) > 16384 || !profile ||
         (strcmp(profile, "root") && strcmp(profile, "app")))
       return failure("Invalid job request");

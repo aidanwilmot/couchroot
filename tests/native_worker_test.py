@@ -23,7 +23,7 @@ class NativeWorkerTests(unittest.TestCase):
         self.token=self.root/'token'; self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
         self.listener=socket.socket();self.listener.bind(('127.0.0.1',0));self.listener.listen();self.listener.settimeout(5)
         launcher=self.root/'launcher-source';launcher.write_bytes(Path('/bin/true').read_bytes());launcher.chmod(0o600);sha=hashlib.sha256(launcher.read_bytes()).hexdigest()
-        self.worker_args=[os.environ['NATIVE_WORKER'],'127.0.0.1',str(self.listener.getsockname()[1]),str(self.token),str(self.root),str(launcher),sha]
+        self.worker_args=[os.environ['NATIVE_WORKER'],'127.0.0.1',str(self.listener.getsockname()[1]),str(self.token),str(self.root),str(launcher),sha]+getattr(self,"extra_worker_args",[])
         self.proc=subprocess.Popen(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
         self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')

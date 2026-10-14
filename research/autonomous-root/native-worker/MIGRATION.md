@@ -118,6 +118,11 @@ error classification and side effects. Additional native diagnostics may be addi
 
 ## Ordered implementation work
 
+Phase-one implementation status is recorded in [PARITY.md](PARITY.md): the
+contract and differential harness, opt-in production file access and offline
+retained-job import/export are implemented. Live state installation and worker
+selection are still gated on the later packaging/rollback work below.
+
 ### 1 Freeze the compatibility contract
 
 Create a machine-readable operation/result matrix and differential tests that run

@@ -1,19 +1,20 @@
 /* Experimental sidecar, not installed or selected by the production service.
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
 #include "common.h"
-#include <dirent.h>
-#include <pthread.h>
 #include "fault-events.h"
 #include "progress.h"
+#include <dirent.h>
+#include <pthread.h>
 typedef struct {
-  int fd, upload;
-  char id[33], name[256], temp[48], sha[65], expected[65];
+  int fd, upload, parent;
+  char id[33], name[256], temp[48], sha[65], expected[65], path[PATH_MAX];
   int64_t size;
 } Transfer;
 static Transfer transfers[8];
 static unsigned experiment_seconds = 300;
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
+#include "file-policy.h"
 static volatile sig_atomic_t active_child = 0;
 /* Async-signal-safe. Callers keep the leader unreaped until after this group
  * kill, so a recycled PID can never become the target. */
@@ -64,8 +65,8 @@ static void lifecycle_signals(sigset_t *set) {
   sigaddset(set, SIGINT);
   sigaddset(set, SIGALRM);
 }
-static void start_thread(pthread_t *thread, void *(*body)(void *),
-                         int *started, const char *what) {
+static void start_thread(pthread_t *thread, void *(*body)(void *), int *started,
+                         const char *what) {
   sigset_t blocked, previous;
   lifecycle_signals(&blocked);
   if (pthread_sigmask(SIG_BLOCK, &blocked, &previous))
@@ -79,10 +80,12 @@ static void start_thread(pthread_t *thread, void *(*body)(void *),
 static void release(Transfer *t) {
   if (t->fd >= 0)
     close(t->fd);
-  if (t->temp[0] && directory >= 0)
-    unlinkat(directory, t->temp, 0);
+  if (t->temp[0])
+    unlinkat(t->parent >= 0 ? t->parent : directory, t->temp, 0);
+  if (t->parent >= 0)
+    close(t->parent);
   memset(t, 0, sizeof *t);
-  t->fd = -1;
+  t->fd = t->parent = -1;
 }
 static void jobs_cleanup(void);
 static void helpers_cleanup(void);
@@ -148,16 +151,17 @@ static J *snapshot(Transfer *t) {
   str(j, "transfer_id", t->id);
   num(j, "size", t->size);
   str(j, "sha256", t->sha);
-  str(j, "expected_sha256", t->expected);
+  if (t->upload)
+    str(j, "expected_sha256", t->expected);
+  else
+    json_object_object_add(j, "expected_sha256", NULL);
   num(j, "chunk_bytes", CHUNK);
   int64_t size;
   if (!regular(t->fd, &size))
     fatal("transfer stat");
-  num(j, "offset", t->upload ? size : 0);
+  num(j, "offset", size);
   boolean(j, "upload", t->upload);
-  char *p = format("%s/%s", root, t->name);
-  str(j, "path", p);
-  free(p);
+  str(j, "path", t->path);
   return j;
 }
 static J *writechunk(const char *id, int64_t offset, const unsigned char *data,
@@ -393,6 +397,10 @@ static int descriptor_admission(int needed) {
  * plus its child's /dev/null; helper staging holds source, directory and
  * target. Transfers keep one descriptor until closed. */
 static int operation_descriptors(const char *op) {
+  if (production_files &&
+      (!strcmp(op, "file.begin") || !strcmp(op, "file.open") ||
+       !strcmp(op, "file.commit")))
+    return 2;
   if (!strcmp(op, "app.exec"))
     return 5;
   if (!strcmp(op, "helper.prepare"))
@@ -454,7 +462,8 @@ static J *operation(J *request, Wire *w, const char *seq) {
     str(app, "sha256", launcher_sha);
     boolean(app, "independently_staged", 1);
     json_object_object_add(j, "app_launcher", app);
-    const char *names[] = {"prototype-scoped-files-v1",
+    const char *names[] = {production_files ? "prototype-production-files-v1"
+                                            : "prototype-scoped-files-v1",
                            "binary-upload-v1",
                            "binary-download-v1",
                            "prototype-app-exec-v1",
@@ -498,10 +507,11 @@ static J *operation(J *request, Wire *w, const char *seq) {
       }
     if (!t)
       return failure("Transfer limit");
-    const char *name;
-    if (!leaf(textval(request, "path"), &name))
-      return failure("Prototype path outside experiment directory");
+    const char *name, *path = textval(request, "path");
     int upload = !strcmp(op, "file.begin");
+    if (production_files ? !file_path_allowed(path, upload)
+                         : !leaf(path, &name))
+      return failure("Path outside file policy");
     int64_t size = 0;
     const char *sha = NULL, *expected = NULL;
     if (upload) {
@@ -512,6 +522,23 @@ static J *operation(J *request, Wire *w, const char *seq) {
           (strcmp(expected, "absent") && !hexvalid(expected, 64)))
         return failure("Invalid upload metadata");
     }
+    char leafname[256];
+    int parent =
+        production_files ? file_parent(path, upload, leafname) : directory;
+    if (parent < 0)
+      return failure("File parent unavailable");
+    if (production_files)
+      name = leafname;
+    /* Reject a symlink destination even for create-only uploads. */
+    struct stat named;
+    if (upload && fstatat(parent, name, &named, AT_SYMLINK_NOFOLLOW) == 0 &&
+        !S_ISREG(named.st_mode)) {
+      if (production_files)
+        close(parent);
+      return failure("Regular destination required");
+    }
+    t->parent = production_files ? parent : -1;
+    strcpy(t->path, path);
     unsigned char id[16];
     random_bytes(id, sizeof id);
     hex(id, sizeof id, t->id);
@@ -523,11 +550,11 @@ static J *operation(J *request, Wire *w, const char *seq) {
       strcpy(t->expected, expected);
       memcpy(t->temp, ".upload-", 8);
       memcpy(t->temp + 8, t->id, sizeof t->id);
-      t->fd = openat(directory, t->temp,
+      t->fd = openat(parent, t->temp,
                      O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     } else
-      t->fd = openat(directory, name,
-                     O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+      t->fd =
+          openat(parent, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
     if (t->fd < 0) {
       t->temp[0] =
           0; // Never unlink an existing file after exclusive creation failed.
@@ -538,9 +565,15 @@ static J *operation(J *request, Wire *w, const char *seq) {
       release(t);
       return failure("Not a bounded regular file");
     }
-    if (!upload)
+    if (!upload) {
       t->size = size;
-    return success(snapshot(t));
+      if (t->parent >= 0)
+        close(t->parent);
+      t->parent = -1;
+    }
+    J *opened = snapshot(t);
+    num(opened, "offset", 0);
+    return success(opened);
   }
   if (strncmp(op, "file.", 5))
     return failure("Unsupported in native prototype (no fallback)");
@@ -606,11 +639,14 @@ static J *operation(J *request, Wire *w, const char *seq) {
     if (!t->upload || !regular(t->fd, &size) || size != t->size ||
         !filedigest(t->fd, actual) || strcmp(actual, t->sha))
       return failure("Upload digest or size mismatch");
+    if (!file_parent_unchanged(t))
+      return failure("Upload parent changed; retained for inspection");
+    int parent = t->parent >= 0 ? t->parent : directory;
     if (!strcmp(t->expected, "absent")) {
-      if (linkat(directory, t->temp, directory, t->name, 0))
+      if (linkat(parent, t->temp, parent, t->name, 0))
         return failure("Target exists or cannot be created");
     } else {
-      int fd = openat(directory, t->name,
+      int fd = openat(parent, t->name,
                       O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
       int good = fd >= 0 && regular(fd, &size) && filedigest(fd, actual) &&
                  !strcmp(actual, t->expected);
@@ -618,7 +654,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
         close(fd);
       if (!good)
         return failure("Target hash conflict");
-      if (renameat(directory, t->temp, directory, t->name))
+      if (renameat(parent, t->temp, parent, t->name))
         return failure("Atomic replacement failed");
     }
     J *j = obj();
@@ -639,9 +675,10 @@ int main(int argc, char **argv) {
     fault_test_execute();
   }
 #endif
-  if (argc != 7) {
+  production_files = argc == 8 && !strcmp(argv[7], "--production-files");
+  if (argc != 7 && !production_files) {
     fputs("usage: worker HOST PORT TOKEN EXPERIMENT_DIRECTORY "
-          "LAUNCHER_SOURCE SHA256\n",
+          "LAUNCHER_SOURCE SHA256 [--production-files]\n",
           stderr);
     return 64;
   }
@@ -661,13 +698,21 @@ int main(int argc, char **argv) {
   alarm(experiment_seconds);
   libraries();
   for (int i = 0; i < 8; i++)
-    transfers[i].fd = -1;
+    transfers[i].fd = transfers[i].parent = -1;
   atexit(cleanup);
   char resolved[PATH_MAX];
   if (!realpath(argv[4], resolved) || strcmp(resolved, argv[4]) ||
       strlen(resolved) > PATH_MAX - 257)
     fatal("canonical experiment directory required");
   strcpy(root, resolved);
+  if (production_files) {
+    if (!canonical_file(argv[3]))
+      fatal("canonical token path required");
+    strcpy(staging_root, argv[3]);
+    *strrchr(staging_root, '/') = 0;
+    if (!staging_root[0])
+      fatal("private staging directory required");
+  }
   directory = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   struct stat st;
   if (directory < 0 || fstat(directory, &st) || st.st_uid != 0 ||
