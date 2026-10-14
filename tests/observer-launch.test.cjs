@@ -4,7 +4,7 @@ const root='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/observer-AB
 const options=()=>({device:'s90d',id:'a'.repeat(32),binary:'/opt/usr/apps/MiniRoot01/res/wgt/payload/native-process-observer',sha256:'b'.repeat(64),manifestSha256:'c'.repeat(64),launch:{socketPath:root+'/control',tokenFile:root+'/token',bootId:'00000000-0000-0000-0000-000000000001',pids:[42,43]},credentials:{uid:5001,gid:100,groups:[201,100,29],label:'User::Pkg::MiniRoot01'}});
 async function fixture(fn){const journalDirectory=fs.mkdtempSync('/tmp/cr-launch-');try{await fn(journalDirectory);}finally{fs.rmSync(journalDirectory,{recursive:true,force:true});}}
 test('launch plan restricts identity artifact and transport and parses as shell',()=>{
- const plan=launchPlan(options());assert.equal(plan.unit,'couchroot-observer-'+'a'.repeat(32));
+ const plan=launchPlan(options());assert.equal(plan.unit,'couchroot-observer-'+'a'.repeat(32)+'.service');
  assert.match(plan.command,/--supervise/);assert.match(plan.command,/CapEff/);assert.match(plan.command,/201:1:755/);
  assert.deepEqual(plan.credentials.groups,[29,100,201]);
  const parsed=spawnSync('/bin/sh',['-n'],{input:plan.command,encoding:'utf8'});assert.equal(parsed.status,0,parsed.stderr);

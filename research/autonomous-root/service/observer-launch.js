@@ -14,7 +14,7 @@ function launchPlan({device,id,binary,sha256,manifestSha256,launch,credentials})
  const root=typeof launch.tokenFile==='string'?path.dirname(launch.tokenFile):'';
  if(path.dirname(root)!==STATE||!/^observer-[a-zA-Z0-9]{6}$/.test(path.basename(root))||launch.tokenFile!==root+'/token'||launch.socketPath!==root+'/control')throw Error('Invalid observer launch paths');
  if(!credentials||credentials.uid!==5001||credentials.gid!==100||credentials.label!=='User::Pkg::MiniRoot01'||!Array.isArray(credentials.groups)||credentials.groups.length<1||credentials.groups.length>32||credentials.groups.some(g=>!Number.isInteger(g)||g<1||g>2147483647)||!credentials.groups.includes(100)||new Set(credentials.groups).size!==credentials.groups.length)throw Error('Invalid observer service credentials');
- const groups=credentials.groups.slice().sort((a,b)=>a-b),unit='couchroot-observer-'+id;
+ const groups=credentials.groups.slice().sort((a,b)=>a-b),unit='couchroot-observer-'+id+'.service';
  const parents=[];let parent=path.dirname(binary);while(parent!=='/'){parents.unshift(parent);parent=path.dirname(parent);}
  const inner='set -eu\nPATH=/usr/bin:/bin\nexport PATH\n'+
   'test "$(id -u)" = 5001\ntest "$(id -ru)" = 5001\ntest "$(id -g)" = 100\n'+
@@ -33,7 +33,7 @@ function launchPlan({device,id,binary,sha256,manifestSha256,launch,credentials})
   'test -f '+quote(binary)+'; test ! -L '+quote(binary)+'\n'+
   'test "$(stat -c "%u:%h:%a" '+quote(binary)+')" = 201:1:755\n'+
   'test "$(sha256sum '+quote(binary)+' | cut -d " " -f 1)" = '+quote(sha256)+'\n'+
-  'systemd-run --unit='+quote(unit)+' '+['User=5001','Group=100','SupplementaryGroups='+groups.join(' '),'SmackProcessLabel='+credentials.label,'WorkingDirectory=/','StandardOutput=null','StandardError=null','KillMode=control-group'].map(p=>'--property='+quote(p)).join(' ')+' /bin/sh -c '+quote(inner)+'\n'+
+  'systemd-run --unit='+quote(unit)+' '+['User=5001','Group=100','SupplementaryGroups='+groups.join(' '),'SmackProcessLabel='+credentials.label,'WorkingDirectory=/','StandardOutput=null','StandardError=null','KillMode=control-group','RemainAfterExit=yes'].map(p=>'--property='+quote(p)).join(' ')+' /bin/sh -c '+quote(inner)+'\n'+
   'printf "OBSERVER-SUBMITTED\\n"\n';
  return {unit,command,root,credentials:{...credentials,groups}};
 }

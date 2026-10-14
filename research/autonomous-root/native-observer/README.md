@@ -99,6 +99,43 @@ pending marker. Actual systemd execution, service-credential launch and full
 adapter integration have not been qualified on either TV. No device mutation or
 reboot occurred for this submission revision.
 
+The internal `observer-controller.js` now joins listener creation, exclusive
+submission, fresh identity confirmation, receipt polling and cleanup. Confirmation
+waits for the launch acknowledgement so it cannot overlap the submitting worker
+request. Receipt polling has a monotonic deadline. Successful target observation
+and cleanup are separate: cleanup also requires independently obtained supervisor
+unit completion evidence. Before deleting the listener files, the controller saves
+the receipt, its digest and the unit evidence in the durable transaction record.
+Only verified cleanup releases the pending marker. Cancellation closes the socket
+and waits for the observer receipt without signalling either target.
+
+Transient units now use `RemainAfterExit=yes` and fully qualified `.service`
+names, retaining their completion status for inspection. `observer-unit.js` checks
+the boot before and after its bounded query and requires the exact unit identity.
+Completion requires `active/exited`, no main PID, a successful exit status and a
+nonzero start timestamp. A separate retirement step rechecks completion, stops
+only the owned unit and verifies inactive/absent state. Retirement uncertainty
+keeps the durable `cleanup-verified` checkpoint and receipt. The controller does
+not repeat cleanup calls or automatically reconcile an interrupted transaction.
+A future reconciler must handle `cleanup-verified`, `unit-retired`, terminal
+records with leftover markers, and earlier uncertain submissions explicitly.
+
+All 56 focused Linux Node tests passed, including real supervisor/listener process
+tests with scripted systemd submission/inspection boundaries. They cover normal
+completion, cancellation, lost submission response, incomplete unit termination,
+lost retirement response, and cleanup of a listener rejected before submission.
+Systemd command parsing and result validation are tested locally; actual unit
+execution is not established by these fixtures. A small parser follow-up passed
+the three unit tests again. No TV was accessed or changed for this controller
+revision. The service's external observer path remains unwired and the deployed
+child-process rejection guard stays enabled.
+
+For a future worker handoff, unit inspection/retirement needs an authenticated
+executor that remains available after the old worker exits. The controller takes
+that dependency explicitly and must not query a disconnected old worker or assume
+that observer EOF proves supervisor-unit retirement. A non-stopping probe can
+use its held managed worker; this does not qualify full handoff recovery.
+
 1. Check descriptor capacity and boot, close inherited descriptors, bind all
    pidfds and verify none has exited; emit `BOUND`.
 2. The service obtains fresh authenticated worker identity and resource inventory

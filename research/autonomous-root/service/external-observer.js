@@ -98,6 +98,14 @@ async function createExternalObserver({directory,bound,confirm,timeoutMs=32000})
    recordExit({exit_code:value.exit_code,signal:value.signal===null?null:'SIG'+value.signal});return true;
   },
   cancel:()=>fail(Error('External observation cancelled')),
+  discardUnlaunched:async()=>{
+   // Trusted caller may use this only before entering its launch submission.
+   if(socket||receipt||disposed||phase!=='auth')throw Error('Observer may already have launched');
+   fail(Error('Observer launch abandoned'));
+   await new Promise(resolve=>server.close(resolve));sameRoot();
+   for(const file of [tokenFile,socketPath])try{fs.unlinkSync(file);}catch(e){if(e.code!=='ENOENT')throw e;}
+   fs.rmdirSync(root);disposed=true;
+  },
   dispose:async()=>{
    if(disposed)return;
    if(!receipt)throw Error('Observer termination must be established before cleanup');
