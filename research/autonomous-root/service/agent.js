@@ -12,6 +12,7 @@ const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime
 const {openRetirementSession}=require('./retirement-session');
 const {validateLaunch}=require('./production-readiness');
 const {activateProduction}=require('./production-activation');
+const {createNativeMigration}=require('./native-migration');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -27,7 +28,7 @@ function createAgent(config,options={}){
  const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
- let managedDigest=null,admissionHold=null,nativeRuntime=null;
+ let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null;
  const inFlight=new Set();
  function selection(refresh=false){
   if(!options.selectionFile)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
@@ -45,7 +46,7 @@ function createAgent(config,options={}){
   return !!(nativeRuntime&&running&&connected&&workerReady&&generation===nativeRuntime.generation&&channel===nativeRuntime.channel&&JSON.stringify(selected)===nativeRuntime.selection&&selected.phase==='stable'&&selected.selected_implementation==='native-prototype'&&selected.selected_manifest_sha256===nativeRuntime.record.manifest_sha256&&h&&h.id===nativeRuntime.record.id&&h.outcome==='committed'&&h.readiness_sha256===nativeRuntime.activation.readiness_sha256);
  }
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,native_migration:migration?migration.status():null,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -106,7 +107,7 @@ function createAgent(config,options={}){
   finally{if(gen===generation){launching=false;if(client){sdb.close(client);client=null;}if(!connected)schedule();}}
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
- function stop(){admissionHold=null;nativeRuntime=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
+ function stop(){admissionHold=null;nativeRuntime=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(migration)migration.closeTransport();if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
  function submit(call){
   if(admissionHold||!running||!connected||!workerReady||!channel||!runtimeAllowed(selection()))return Promise.reject(Object.assign(Error('Root worker unavailable or admission held'),{outcome:'rejected'}));
   let request;try{request=Promise.resolve(call(channel));}catch(e){request=Promise.reject(e);}
@@ -144,7 +145,7 @@ function createAgent(config,options={}){
   return {
    snapshot:async()=>{if(token.preparingStop)throw Error('Worker shutdown preparation in progress');return snapshot();},
    probeObserver:async (expectedManifest,requestId)=>{
-    current();if(token.preparingStop||token.stopping||token.observerStaging||token.observerProbe)throw Error('Observer probe already pending');
+    current();if(token.preparingStop||token.stopping||token.observerStaging||token.observerProbe||token.retirementPreparing||token.retirementSession)throw Error('Observer probe already pending');
     if(config.device==='s90d'&&options.observerChildProcess===false&&!options.externalObserverDirectory)throw Object.assign(Error('Process observer requires an external launch transport'),{outcome:'rejected'});
     if(typeof expectedManifest!=='string'||expectedManifest.length!==64||!/^[a-f0-9]{64}$/.test(expectedManifest))throw Error('Candidate manifest digest required');
     if(options.retirementProbeDirectory)observerTransactionId(requestId,'provider-probe');
@@ -186,9 +187,21 @@ function createAgent(config,options={}){
      return {verified:true,method:config.device==='s90d'?(options.externalObserverDirectory?'pidfd-external-bind-cancel':'pidfd-bind-cancel'):'proc-stat',manifest_sha256:staged.manifest_sha256,observer_sha256:staged.sha256,boot_id:boot,worker_id:worker,worker_stopped:false,...(retirementSession?{retirement_provider_verified:true,retirement_provider_retired:true}:{})};
     }finally{if(retirementSession)retirementSession.closeTransport();token.preparingStop=false;}
    },
+   prepareNative:async transactionId=>{
+    current();if(token.stopping||token.preparingStop||token.retirementPreparing||token.retirementSession)throw Error('Native provider preparation requires reconciliation');
+    const inventory=await snapshot(),digest=hash(JSON.stringify(inventory));current();prepared(transactionId,digest);
+    const target=selection().pending.to;if(target.implementation!=='native-prototype')throw Error('Native handoff target required');
+    token.retirementPreparing=true;
+    const execute=async(command,timeout)=>{current();prepared(transactionId,digest);const result=await owner.execute(command,timeout);current();prepared(transactionId,digest);return result;};
+    try{
+     const session=await openRetirementSession({device:config.device,id:observerTransactionId(transactionId,'handoff'),payload,manifestSha256:target.manifest_sha256,source:{boot_id:inventory.boot_id,worker_id:inventory.worker_id,processes:inventory.processes},journalDirectory:path.dirname(options.selectionFile),execute,confirmSource:()=>snapshot(true)});
+     current();prepared(transactionId,digest);token.retirementSession=session;return session;
+    }catch(error){throw Object.assign(Error('Native provider preparation requires reconciliation'),{outcome:'unknown',cause:error});}
+   },
    shutdown:async transactionId=>{
-    current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Worker shutdown or observer staging requires reconciliation');
-    const externalHandoff=config.device==='s90d'&&options.externalObserverDirectory&&options.externalObserverRetirement&&typeof options.externalObserverRetirement.inspectUnit==='function'&&typeof options.externalObserverRetirement.retireUnit==='function';
+    current();if(token.stopping||token.preparingStop||token.observerStaging||(token.retirementPreparing&&!token.retirementSession))throw Error('Worker shutdown or observer staging requires reconciliation');
+    const retirement=token.retirementSession?token.retirementSession.provider:options.externalObserverRetirement;
+    const externalHandoff=config.device==='s90d'&&options.externalObserverDirectory&&retirement&&typeof retirement.inspectUnit==='function'&&typeof retirement.retireUnit==='function';
     if(options.observerChildProcess===false&&(options.processObserver||options.stagePackagedObserver)&&!externalHandoff)throw Object.assign(Error('Process observer requires an external launch transport with independent retirement'),{outcome:'rejected'});
     token.preparingStop=true;
     let observer=null,stagedObserver=null,completed=null;
@@ -213,7 +226,7 @@ function createAgent(config,options={}){
     }
     if(externalHandoff){
      if(!stagedObserver)throw Error('External handoff requires a packaged observer');
-     observer=await prepareRuntimeObserver({purpose:'handoff',directory:options.externalObserverDirectory,requestId:transactionId,staged:stagedObserver,bound:inventory,retirement:options.externalObserverRetirement,
+     observer=await prepareRuntimeObserver({purpose:'handoff',directory:options.externalObserverDirectory,requestId:transactionId,staged:stagedObserver,bound:inventory,retirement,
       execute:async(command,timeout)=>{current();prepared(transactionId,digest);const result=await owner.execute(command,timeout);current();prepared(transactionId,digest);return result;},
       confirm:async()=>{
        const info=await snapshot(true);current();prepared(transactionId,digest);
@@ -273,7 +286,7 @@ function createAgent(config,options={}){
     const adopted=token.adopted;
     const bound=()=>{if(!adopted||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted production ownership required');};
     bound();if(token.completing)throw Error('Production completion requires reconciliation');
-    if(!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching retirement session required');
+    if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching retirement session required');
     token.completing=true;const peer=channel._conn;
     const confirm=async()=>{
      bound();const info=await adopted.channel.operation({op:'status'});bound();if(adopted.channel._conn!==peer)throw Error('Production peer changed');
@@ -290,7 +303,7 @@ function createAgent(config,options={}){
      return {transaction_id:adopted.record.id,worker_id:info.worker_id,admission_held:false,activation_sha256:activation.receipt_sha256};
     }catch(error){nativeRuntime=null;throw Object.assign(Error('Production completion requires reconciliation'),{outcome:'unknown',cause:error});}
    },
-   release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
+   release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe||token.retirementPreparing||token.retirementSession)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
   };
  }
  async function probeObserver(expectedManifest,requestId){
@@ -298,6 +311,6 @@ function createAgent(config,options={}){
   try{const result=await hold.probeObserver(expectedManifest,requestId);hold.release();return result;}
   catch(error){try{hold.release();}catch(_){}throw error;}
  }
- return {status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout))};
+ const api={status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
 }
 module.exports={createAgent,launchRequest};

@@ -449,3 +449,17 @@ test('stopped handoff adopts matching native channel while retaining admission a
   }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
  }
 });
+
+test('native preparation binds held inventory and prevents shutdown during provider startup',async()=>{
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{observerTransactionId}=require('../research/autonomous-root/service/observer-runtime');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'held-provider-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});
+ let release,launchOptions;const waiting=new Promise(resolve=>{release=resolve;}),session={provider:{},retire:async()=>{}};
+ const modules={'./retirement-session':{openRetirementSession:async options=>{launchOptions=options;await options.execute('stage provider',1000);assert.equal((await options.confirmSource()).worker_id,managed().worker_id);await waiting;return session;}}};
+ const {agent,channels}=fixture({selectionFile:file,managedVersion:()=>DIGEST},modules);agent.start();const channel=channels[0],ready=channel.connect();
+ try{
+  ready.resolve(managed());await flush();channel.operation=async()=>inventoried();channel.execute=async()=>({exit_code:0});const hold=agent.holdAdmission(),inventory=await hold.snapshot();
+  const transition=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},crypto.createHash('sha256').update(JSON.stringify(inventory)).digest('hex'));
+  const preparing=hold.prepareNative(transition.pending.id);await flush();assert.equal(launchOptions.id,observerTransactionId(transition.pending.id,'handoff'));assert.equal(launchOptions.journalDirectory,dir);assert.equal(launchOptions.manifestSha256,'c'.repeat(64));
+  await assert.rejects(hold.shutdown(transition.pending.id),/reconciliation/);assert.throws(()=>hold.release());release();assert.equal(await preparing,session);await assert.rejects(hold.prepareNative(transition.pending.id));assert.throws(()=>hold.release());assert.equal(agent.status().admission_held,true);
+ }finally{release();agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+});

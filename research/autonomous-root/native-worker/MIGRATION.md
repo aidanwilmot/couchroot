@@ -708,3 +708,28 @@ real native session/readiness tests remain passing.
 Full orchestration, interrupted-transition recovery, rollback, native cold-start
 integration and both-TV qualification remain open. Deployed packages and TV boots
 are unchanged; .NET remains deployed as fallback.
+
+### Coordinated live handoff — local follow-up
+
+The internal agent migration entry point now coordinates candidate/baseline checks,
+admission drain, selection intent, independent provider preparation, source stop,
+retained snapshot/install/acceptance, production session/readiness, selection commit,
+channel adoption and retirement/activation. The provider is prepared under the
+held source identity and cannot race source shutdown while startup is pending.
+S90D's external observer retirement uses that same prepared provider.
+
+The controller is single-use. Pre-handoff refusal releases only a hold it acquired
+before a selection intent could have published. After begin, uncertainty keeps
+admission held and retains live session references for explicit recovery instead
+of discarding useful access or replaying launches. Agent stop closes retained
+transports and prevents the controller progressing through its next phase. Status
+reports the migration phase/transaction without token or command contents.
+
+The combined Linux suite passes 159 tests without skips. Controller tests use real
+selection journals with operation fixtures to verify order, each failure boundary,
+preexisting ownership refusal and cancellation. Separate live managed/native
+session tests and the provider-preparation/admission tests remain passing. This
+is not yet a full installed controller run on a TV. No public migration endpoint
+is enabled by this change; rollback and interrupted-transition recovery remain
+required before on-TV cutover. Native cold startup and broader sunset gates also
+remain open. Deployed packages and TV boots are unchanged.
