@@ -48,7 +48,7 @@ test('lost cleanup response preserves intent and marker without automatic retry'
  const options={...f.options,executorPid:42,confirmExecutor:async()=>({...source,capabilities:['worker-process-identity-v1']}),execute:async()=>{if(++calls===1)return {exit_code:0,stdout:f.unit};throw Error('response lost');}};
  await assert.rejects(cleanupRetirement(options),e=>e.outcome==='unknown');assert.equal(fs.existsSync(f.file+'.cleanup.pending'),true);assert.equal(fs.existsSync(f.marker),true);assert.equal(JSON.parse(fs.readFileSync(f.file)).phase,'shutdown-acknowledged');
 }));
-test('completion removes only the bound service token before releasing pending ownership',{skip:!process.env.COUCHROOT_PARITY_CONTAINER||process.geteuid()!==0},async()=>{
+test('completion removes only the bound service token before releasing pending ownership',{skip:!process.env.COUCHROOT_PARITY_CONTAINER||process.geteuid()!==0},async()=>require('./retirement-test-state.cjs').withRetirementState(async()=>{
  fs.mkdirSync(state,{recursive:true,mode:0o700});const directory=fs.mkdtempSync(state+'/retirement-'),r=record(),token=crypto.randomBytes(32).toString('base64');
  r.phase='staging-retired';r.token_file=directory+'/token';r.token_sha256=crypto.createHash('sha256').update(token).digest('hex');
  const file=state+'/'+id+'.retirement.json',marker=state+'/retirement-launch.pending';
@@ -56,7 +56,7 @@ test('completion removes only the bound service token before releasing pending o
   fs.writeFileSync(r.token_file,token,{mode:0o600,flag:'wx'});fs.writeFileSync(file,JSON.stringify(r),{mode:0o600,flag:'wx'});fs.writeFileSync(marker,id+'\n',{mode:0o600,flag:'wx'});
   const next=finishRetirement({record:r,journalDirectory:state});assert.equal(next.phase,'complete');assert.equal(fs.existsSync(directory),false);assert.equal(fs.existsSync(marker),false);assert.equal(JSON.parse(fs.readFileSync(file)).phase,'complete');
  }finally{fs.rmSync(directory,{recursive:true,force:true});fs.rmSync(file,{force:true});fs.rmSync(marker,{force:true});}
-});
+}));
 test('cleanup shell rejects live processes and unexpected artifacts before deleting anything',{skip:!process.env.COUCHROOT_PARITY_CONTAINER||process.geteuid()!==0},async()=>{
  for(const mode of ['clean','live','extra','hash','guardian','bad-state']){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'retire-shell-')),r=record(),d=root+'/owned',scope=d+'/state';

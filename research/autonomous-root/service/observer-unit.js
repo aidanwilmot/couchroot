@@ -3,7 +3,7 @@
 // a disconnected worker cannot establish its former supervisor's unit state.
 const UNITS={observer:/^couchroot-observer-[a-f0-9]{32}\.service$/,retirement:/^couchroot-retirement-[a-f0-9]{32}\.service$/};
 const BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
-async function inspectOwnedUnit({unit,bootId,execute},kind){
+async function inspectOwnedUnit({unit,bootId,execute,allowMissing=false},kind){
  if(typeof unit!=='string'||unit.length!==('couchroot-'+kind+'-').length+40||!UNITS[kind].test(unit)||typeof bootId!=='string'||bootId.length!==36||!BOOT.test(bootId)||typeof execute!=='function')throw Error('Invalid observer unit inspection');
  const guard='test "$(cat /proc/sys/kernel/random/boot_id)" = '+bootId+'\n';
  const command='set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+guard+
@@ -15,11 +15,12 @@ async function inspectOwnedUnit({unit,bootId,execute},kind){
   const i=line.indexOf('=');if(i<1||Object.prototype.hasOwnProperty.call(values,line.slice(0,i)))throw Error('Malformed observer unit inspection');
   values[line.slice(0,i)]=line.slice(i+1);
  }
- if(Object.keys(values).sort().join('|')!=='ActiveState|ExecMainCode|ExecMainStartTimestampMonotonic|ExecMainStatus|Id|LoadState|MainPID|SubState'||values.Id!==unit||values.LoadState!=='loaded'||!['inactive','active','activating','deactivating','failed','reloading'].includes(values.ActiveState))throw Error('Observer unit identity unavailable');
+ if(Object.keys(values).sort().join('|')!=='ActiveState|ExecMainCode|ExecMainStartTimestampMonotonic|ExecMainStatus|Id|LoadState|MainPID|SubState'||values.Id!==unit||(values.LoadState!=='loaded'&&!(kind==='retirement'&&allowMissing&&values.LoadState==='not-found'))||!['inactive','active','activating','deactivating','failed','reloading'].includes(values.ActiveState))throw Error('Observer unit identity unavailable');
  for(const key of ['MainPID','ExecMainCode','ExecMainStatus','ExecMainStartTimestampMonotonic'])if(!/^(0|[1-9][0-9]{0,19})$/.test(values[key])||values[key].trim()!==values[key])throw Error('Invalid observer unit counter');
  const pid=Number(values.MainPID),code=Number(values.ExecMainCode),status=Number(values.ExecMainStatus);
  if(!Number.isSafeInteger(pid)||pid>2147483647||code>3||status>255)throw Error('Observer unit counter exceeds limits');
- return {unit,boot_id:bootId,active_state:values.ActiveState,sub_state:values.SubState,main_pid:pid,exec_code:code,exec_status:status,started_monotonic:values.ExecMainStartTimestampMonotonic};
+ if(values.LoadState==='not-found'&&!(values.ActiveState==='inactive'&&values.SubState==='dead'&&pid===0&&code===0&&status===0&&values.ExecMainStartTimestampMonotonic==='0'))throw Error('Missing retirement unit has inconsistent state');
+ return {...(values.LoadState==='not-found'?{load_state:'not-found'}:{}),unit,boot_id:bootId,active_state:values.ActiveState,sub_state:values.SubState,main_pid:pid,exec_code:code,exec_status:status,started_monotonic:values.ExecMainStartTimestampMonotonic};
 }
 const inspectObserverUnit=options=>inspectOwnedUnit(options,'observer');
 const inspectRetirementUnit=options=>inspectOwnedUnit(options,'retirement');

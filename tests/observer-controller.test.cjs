@@ -11,7 +11,7 @@ test('supervisor completion evidence must bind exact unit boot and successful ex
 });
 const enabled=process.platform==='linux'&&process.env.COUCHROOT_PARITY_CONTAINER==='1'&&!!process.env.PROCESS_OBSERVER;
 const APP='/opt/usr/home/owner/apps_rw/MiniRoot01',STATE=APP+'/data/worker-state';
-async function fixture(fn,mode='normal'){
+async function fixture(fn,mode='normal'){return require('./retirement-test-state.cjs').withRetirementState(async()=>{
  assert.equal(fs.existsSync(APP),false,'isolated app directory required');fs.mkdirSync(STATE,{recursive:true,mode:0o700});fs.chmodSync(STATE,0o700);
  const journalDirectory=path.join(STATE,'launches');fs.mkdirSync(journalDirectory,{mode:0o700});
  const target=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});await once(target,'spawn');const targetExit=once(target,'exit');
@@ -38,7 +38,7 @@ async function fixture(fn,mode='normal'){
   if(target.exitCode===null&&target.signalCode===null){target.kill('SIGKILL');await targetExit;}
   fs.rmSync(APP,{recursive:true,force:true});
  }
-}
+});}
 test('controller completes real observation and archives evidence before releasing pending ownership',{skip:!enabled,timeout:10000},()=>fixture(async f=>{
  const observer=await f.prepare();observer.assertReady();assert.deepEqual(f.events,['execute','ack','confirm']);
  f.target.kill('SIGTERM');await f.targetExit;const exit=await observer.waitForExit();assert.equal(exit.processes.worker.pid,f.target.pid);

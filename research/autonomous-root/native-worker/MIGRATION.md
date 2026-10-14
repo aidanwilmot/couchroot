@@ -435,3 +435,24 @@ controlled process/unit/filesystem fixtures. Systemd inspection remains simulate
 in these host tests. Neither TV has received this coordinator. Interrupted cleanup
 and token-deletion reconciliation, installed-service integration, and both-TV
 stopping handoff qualification remain open; .NET remains the deployed fallback.
+
+### Interrupted retirement reconciliation (local only)
+
+`retirement-reconcile.js` handles a journaled shutdown whose reply was lost,
+partial remote cleanup, and the local token/completion publication crash windows.
+It distinguishes observed process exit from an acknowledged shutdown and never
+replays launch or shutdown. A durable cleanup intent permits checking and removing
+remaining owned entries after the unit has stopped; missing entries alone do not
+prove success. If cleanup had not yet stopped the successfully completed unit,
+the full original artifact layout must pass before the nonblocking stop. Live or
+replaced processes, unexpected entries, changed hashes and inconsistent unit
+snapshots retain pending ownership. Token removal and marker release follow the
+persisted remote-cleanup result.
+
+The combined Linux host suite passes 106 tests without skips, including partial
+filesystem cleanup, lost responses, token deletion interruptions and real native
+shutdown. Shared exact-path fixtures now serialize access to the isolated app
+state. Unit state is simulated in reconciliation tests. Uncertain launch/readiness
+before a verified provider record, installed-service orchestration and both-TV
+handoff validation remain open. No device update or reboot was performed for this
+change; the managed fallback remains deployed.

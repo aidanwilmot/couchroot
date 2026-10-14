@@ -9,7 +9,7 @@ const {inspectRetirementUnit}=require('./observer-unit');
 function check(ok){if(!ok)throw Error('Retirement teardown ownership unavailable');}
 function validate(record){
  const {provider_identity,unit_started_monotonic,...launch}=record;
- check(['ready','shutdown-acknowledged','staging-retired'].includes(launch.phase));
+ check(['ready','shutdown-acknowledged','shutdown-observed','staging-retired','complete'].includes(launch.phase));
  validateRecord({...launch,phase:'submitted'});
  check(typeof unit_started_monotonic==='string'&&/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic));
  const p=provider_identity;
@@ -62,7 +62,7 @@ function cleanupCommand(record){
   'rm '+d+'/code/worker '+s+'/launcher '+s+'/.jobs/lock\nrmdir '+s+'/.jobs '+s+' '+d+'/code '+d+'\n'+guard+'printf "RETIREMENT-CLEANED\\n"\n';
 }
 async function cleanupRetirement({record,journalDirectory,execute,confirmExecutor,executorPid}){
- const j=journal(record,journalDirectory);check(record.phase==='shutdown-acknowledged'&&typeof execute==='function'&&typeof confirmExecutor==='function');
+ const j=journal(record,journalDirectory);check(['shutdown-acknowledged','shutdown-observed'].includes(record.phase)&&typeof execute==='function'&&typeof confirmExecutor==='function');
  const confirm=async()=>{const p=processIdentities(await confirmExecutor(),executorPid);check(p.boot_id===record.boot_id&&p.worker_id!==record.provider_identity.worker_id&&Object.values(p.processes).every(v=>!v||!Object.values(record.provider_identity.processes).some(x=>x.pid===v.pid)));return JSON.stringify(p);};
  const executor=await confirm(),unit=await inspectRetirementUnit({unit:record.unit,bootId:record.boot_id,execute});
  check(unit.active_state==='active'&&unit.sub_state==='exited'&&unit.main_pid===0&&unit.exec_code===1&&unit.exec_status===0&&unit.started_monotonic===record.unit_started_monotonic);
@@ -91,4 +91,4 @@ function finishRetirement({record,journalDirectory}){
   fs.unlinkSync(intent);fs.unlinkSync(j.marker);j.sync();return Object.freeze(next);
  }catch(cause){throw Object.assign(Error('Retirement completion requires reconciliation'),{outcome:'unknown',cause});}
 }
-module.exports={shutdownRetirement,cleanupRetirement,cleanupCommand,finishRetirement};
+module.exports={shutdownRetirement,cleanupRetirement,cleanupCommand,finishRetirement,journal};
