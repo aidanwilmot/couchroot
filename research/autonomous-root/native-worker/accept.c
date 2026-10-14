@@ -741,6 +741,9 @@ int main(int argc, char **argv) {
   }
   guardian_loss_checks(0);
   guardian_loss_checks(1);
+#ifdef NATIVE_WORKER_FAULT_TEST
+  startup_recovery_checks();
+#endif
   finish(0);
   if (unlink(app))
     fatal("remove launcher source");

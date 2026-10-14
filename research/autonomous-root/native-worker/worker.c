@@ -265,6 +265,16 @@ static int verified_launcher(void) {
   close(fd);
   return good;
 }
+/* Fault binaries only: terminate before opening any command channel. */
+static void startup_fault(const char *stage) {
+#ifdef NATIVE_WORKER_FAULT_TEST
+  const char *selected = getenv("COUCHROOT_NATIVE_STARTUP_FAULT");
+  if (selected && !strcmp(selected, stage))
+    _exit(86);
+#else
+  (void)stage;
+#endif
+}
 #include "jobs.h"
 
 #include "helpers.h"
@@ -559,10 +569,19 @@ int main(int argc, char **argv) {
   jobs_storage();
   guardian_reconcile();
   helpers_init();
-  guardian_journal(0);
+  guardian_journal("namespace");
+  startup_fault("namespace");
+  if (!helper_storage())
+    fatal("initial runtime storage");
+  guardian_journal("runtime");
+  startup_fault("runtime");
   launcher_stage(argv[5]);
+  startup_fault("launcher");
   containment_prepare();
-  guardian_journal(1);
+  guardian_journal("contained");
+  startup_fault("contained");
+  guardian_journal("ready");
+  startup_fault("ready");
   guardian_start();
   jobs_init();
   Wire w = {0};

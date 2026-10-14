@@ -262,3 +262,71 @@ static void guardian_loss_checks(int frozen) {
   free(journal_path);
   mark("guardian_loss_reconciles_without_pid_signals_or_job_replay");
 }
+
+#ifdef NATIVE_WORKER_FAULT_TEST
+static void startup_recovery_checks(void) {
+  const char *stages[] = {"namespace",        "runtime",
+                          "launcher-created", "launcher-partial-copy",
+                          "launcher-copy",    "launcher",
+                          "contained",        "ready",
+                          "journal-runtime",  "journal-contained",
+                          "journal-ready"};
+  for (size_t i = 0; i < sizeof stages / sizeof *stages; i++) {
+    finish(0);
+    pid_t probe = fork();
+    if (probe < 0)
+      fatal("startup recovery probe fork");
+    if (!probe) {
+      if (setenv("COUCHROOT_NATIVE_STARTUP_FAULT", stages[i], 1))
+        _exit(127);
+      execl(binary, binary, "127.0.0.1", "1", "/nonexistent-native-test-token",
+            filescope, app, appsha, (char *)NULL);
+      _exit(127);
+    }
+    double deadline = stamp() + 10000;
+    int status;
+    pid_t got;
+    do {
+      got = waitpid(probe, &status, WNOHANG);
+      if (!got)
+        usleep(10000);
+    } while (!got && stamp() < deadline);
+    if (got != probe) {
+      kill(probe, SIGKILL);
+      waitpid(probe, NULL, 0);
+      fatal("startup recovery probe hung");
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 86)
+      fatal("startup recovery injection did not run");
+    char *path = format("%s/.jobs/guardian", filescope), bytes[4096];
+    readtext(path, bytes, sizeof bytes);
+    free(path);
+    J *journal = parse(bytes);
+    const char *id = journal ? textval(journal, "worker_id") : NULL;
+    if (!hexvalid(id, 32))
+      fatal("startup recovery journal identity");
+    char *old = format("/opt/couchroot-agent/native-helpers/%s", id),
+         *group = format("/sys/fs/cgroup/freezer/couchroot-native-%s", id);
+    discard(journal);
+    launch();
+    J *r = call(req("status"));
+    if (!json_object_get_boolean(
+            get(get(r, "result"), "stale_guardian_reconciled")))
+      fatal("startup reconciliation not reported");
+    discard(r);
+    struct stat st;
+    if (!lstat(old, &st) || errno != ENOENT || !lstat(group, &st) ||
+        errno != ENOENT)
+      fatal("startup reconciliation retained resources");
+    free(old);
+    free(group);
+    discard(start_job("native-startup-app", "printf startup-recovered", 5000,
+                      "app"));
+    await_job("native-startup-app", "completed", 0, 7000);
+    discard(call(job_req("job.forget", "native-startup-app")));
+    char check[128];
+    snprintf(check, sizeof check, "startup_checkpoint_recovery_%s", stages[i]);
+    mark(check);
+  }
+}
+#endif

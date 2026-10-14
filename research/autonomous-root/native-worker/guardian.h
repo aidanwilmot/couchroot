@@ -10,12 +10,14 @@ static void guardian_signal(int sig) {
   (void)sig;
   guardian_stop = 1;
 }
-static void guardian_journal(int prepared) {
+static void guardian_journal(const char *phase) {
+  int prepared = !strcmp(phase, "ready");
   char identity[32];
   if (!job_identity(getpid(), identity))
     fatal("guardian identity");
   J *j = obj();
-  num(j, "schema", 2);
+  num(j, "schema", 3);
+  str(j, "phase", phase);
   boolean(j, "prepared", prepared);
   struct stat scope_stat, ns_stat, runtime_stat, freezer_stat;
   if (fstat(directory, &scope_stat) || stat("/proc/self/ns/mnt", &ns_stat))
@@ -24,26 +26,29 @@ static void guardian_journal(int prepared) {
   num(j, "scope_ino", scope_stat.st_ino);
   num(j, "namespace_dev", ns_stat.st_dev);
   num(j, "namespace_ino", ns_stat.st_ino);
-  if (prepared) {
+  if (helper_owner >= 0) {
     if (fstat(helper_owner, &runtime_stat))
       fatal("guardian runtime binding");
     num(j, "runtime_dev", runtime_stat.st_dev);
     num(j, "runtime_ino", runtime_stat.st_ino);
     boolean(j, "parent_created", helper_parent_created);
+  }
 #ifndef NATIVE_WORKER_TEST
+  if (freezer_dir >= 0) {
     if (fstat(freezer_dir, &freezer_stat))
       fatal("guardian freezer binding");
     num(j, "freezer_dev", freezer_stat.st_dev);
     num(j, "freezer_ino", freezer_stat.st_ino);
-#else
-    (void)freezer_stat;
-#endif
   }
+#else
+  (void)freezer_stat;
+#endif
   str(j, "worker_id", worker_id);
   str(j, "boot_id", current_boot);
   num(j, "pid", getpid());
   str(j, "process_start", identity);
-  int fd = openat(jobs_dir, prepared ? "guardian.next" : "guardian",
+  int replacing = guardian_journal_owned;
+  int fd = openat(jobs_dir, replacing ? "guardian.next" : "guardian",
                   O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (fd < 0)
     fatal("unresolved guardian journal; inspect before recovery");
@@ -52,9 +57,16 @@ static void guardian_journal(int prepared) {
   int good = job_write(fd, s, strlen(s)) && !fsync(fd);
   close(fd);
   json_object_put(j);
-  if (!good ||
-      (prepared && renameat(jobs_dir, "guardian.next", jobs_dir, "guardian")) ||
-      fsync(jobs_dir))
+  if (!good)
+    fatal("guardian journal persistence");
+  if (replacing) {
+    char checkpoint[64];
+    snprintf(checkpoint, sizeof checkpoint, "journal-%s", phase);
+    startup_fault(checkpoint);
+    if (renameat(jobs_dir, "guardian.next", jobs_dir, "guardian"))
+      fatal("guardian journal rename");
+  }
+  if (fsync(jobs_dir))
     fatal("guardian journal persistence");
 }
 static int guardian_recover_records(void) {

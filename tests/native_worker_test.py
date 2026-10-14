@@ -346,6 +346,47 @@ class NativeWorkerTests(unittest.TestCase):
         backup=self.root/'journal-backup';path.rename(backup);path.symlink_to(backup)
         rejected();self.assertTrue(path.is_symlink());path.unlink();backup.rename(path)
         self.restart();self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
+    def test_startup_checkpoint_recovery(self):
+        for stage in ['namespace','runtime','launcher-created','launcher-partial-copy','launcher-copy','launcher','contained','ready','journal-runtime','journal-contained','journal-ready']:
+            with self.subTest(stage=stage):
+                self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+                self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
+                result=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':stage},capture_output=True,timeout=5)
+                self.assertEqual(result.returncode,86,result.stderr)
+                journal=json.loads((self.root/'.jobs/guardian').read_text())
+                self.assertEqual(journal['schema'],3)
+                old=self.root/'.views'/journal['worker_id']
+                self.restart()
+                self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+                self.assertFalse(old.exists())
+                self.start_job('exit 9');self.assertEqual(self.completed()['exit_code'],9)
+                self.assertTrue(self.job('job.forget')['ok'])
+
+    def test_legacy_prepared_schema_two_recovery(self):
+        _,journal=self.guardian_loss()
+        journal['schema']=2;journal.pop('phase')
+        (self.root/'.jobs/guardian').write_text(json.dumps(journal))
+        self.restart()
+        self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
+    def test_temporary_checkpoint_identity_refusal(self):
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        result=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':'journal-runtime'},capture_output=True,timeout=5)
+        self.assertEqual(result.returncode,86,result.stderr)
+        path=self.root/'.jobs/guardian.next';original=path.read_bytes();journal=json.loads(original)
+        old=self.root/'.views'/journal['worker_id']
+        for key,value in [('phase','ready'),('worker_id','0'*32),('boot_id','different-boot'),('process_start','0'),('pid',journal['pid']+1),('namespace_ino',journal['namespace_ino']+1),('scope_ino',journal['scope_ino']+1)]:
+            bad={**journal,key:value};raw=json.dumps(bad).encode();path.write_bytes(raw)
+            rejected=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+            self.assertNotEqual(rejected.returncode,0)
+            self.assertIn(b'unresolved guardian journal',rejected.stderr)
+            self.assertEqual(path.read_bytes(),raw);self.assertTrue(old.is_dir())
+        path.write_bytes(original);self.restart()
+        self.assertFalse(old.exists())
+        self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+
     def test_interrupted_reconciliation_is_idempotent(self):
         status,journal=self.guardian_loss()
         # Model interruption after owned runtime deletion but before journal unlink.

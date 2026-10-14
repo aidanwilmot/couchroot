@@ -1,4 +1,4 @@
-/* Reconcile only a fully bound, same-boot guardian journal under the scope
+/* Reconcile a bound, same-boot guardian journal under the scope
  * lock. No saved process ID is ever a signal target. SPDX-License-Identifier:
  * 0BSD */
 static int reconcile_refuse(const char *reason) {
@@ -204,8 +204,15 @@ static int reconcile_resources(J *j) {
              *start = textval(j, "process_start");
   int64_t schema, pid;
   J *prepared = get(j, "prepared");
-  if (!integer(j, "schema", &schema) || schema != 2 || !prepared ||
-      !json_object_is_type(prepared, 1) || !json_object_get_boolean(prepared) ||
+  const char *phase = textval(j, "phase");
+  if (!integer(j, "schema", &schema) || !prepared ||
+      !json_object_is_type(prepared, 1) ||
+      !((schema == 2 && json_object_get_boolean(prepared)) ||
+        (schema == 3 && phase &&
+         ((!strcmp(phase, "ready") && json_object_get_boolean(prepared)) ||
+          ((!strcmp(phase, "namespace") || !strcmp(phase, "runtime") ||
+            !strcmp(phase, "contained")) &&
+           !json_object_get_boolean(prepared))))) ||
       !hexvalid(id, 32) || !boot || strcmp(boot, current_boot) || !start ||
       !*start || !integer(j, "pid", &pid) || pid < 1 || pid > INT_MAX ||
       fstat(directory, &st) || !reconcile_bound(j, "scope", &st))
@@ -265,17 +272,14 @@ static int reconcile_resources(J *j) {
     helpers_cleanup();
   if (!guardian_recover_records() || !runtime_sweep() || !containment_cleanup())
     return 0;
-  return !unlinkat(jobs_dir, "guardian", 0) && !fsync(jobs_dir);
+  return 1;
 }
-static void guardian_reconcile(void) {
+static J *reconcile_read_journal(const char *name) {
   struct stat st;
-  if (!fstatat(jobs_dir, "guardian.next", &st, AT_SYMLINK_NOFOLLOW) ||
-      errno != ENOENT)
-    fatal("unresolved guardian journal temporary; inspect before recovery");
-  int fd = openat(jobs_dir, "guardian", O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  int fd = openat(jobs_dir, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   if (fd < 0) {
     if (errno == ENOENT)
-      return;
+      return NULL;
     fatal("unresolved guardian journal access");
   }
   char bytes[4096];
@@ -291,6 +295,51 @@ static void guardian_reconcile(void) {
   J *j = parse(bytes);
   if (!j)
     fatal("unresolved guardian journal format");
+  return j;
+}
+static int reconcile_phase(J *j) {
+  int64_t schema;
+  const char *phase = textval(j, "phase");
+  if (!integer(j, "schema", &schema) || schema != 3 || !phase)
+    return 0;
+  const char *phases[] = {"namespace", "runtime", "contained", "ready"};
+  for (int i = 0; i < 4; i++)
+    if (!strcmp(phase, phases[i]))
+      return i + 1;
+  return 0;
+}
+static int reconcile_successor(J *old, J *next) {
+  int a = reconcile_phase(old), b = reconcile_phase(next);
+  if (!a || b != a + 1)
+    return 0;
+  const char *identity[] = {"worker_id", "boot_id", "process_start"};
+  for (size_t i = 0; i < sizeof identity / sizeof *identity; i++) {
+    const char *x = textval(old, identity[i]), *y = textval(next, identity[i]);
+    if (!x || !y || strcmp(x, y))
+      return 0;
+  }
+  const char *bindings[] = {"pid",           "scope_dev",     "scope_ino",
+                            "namespace_dev", "namespace_ino", "runtime_dev",
+                            "runtime_ino",   "freezer_dev",   "freezer_ino"};
+  for (size_t i = 0; i < sizeof bindings / sizeof *bindings; i++) {
+    int64_t x, y;
+    if (get(old, bindings[i]) && (!integer(old, bindings[i], &x) ||
+                                  !integer(next, bindings[i], &y) || x != y))
+      return 0;
+  }
+  return 1;
+}
+static void guardian_reconcile(void) {
+  J *j = reconcile_read_journal("guardian");
+  J *next = reconcile_read_journal("guardian.next");
+  if (next) {
+    if (!j || !reconcile_successor(j, next))
+      fatal("unresolved guardian journal temporary ownership");
+    json_object_put(j);
+    j = next;
+  }
+  if (!j)
+    return;
   /* Recovery gets no command channel. Isolate globals and bypass atexit on
    * every failure so partial inspection can never trigger generic cleanup. */
   pid_t recovery = fork();
@@ -301,7 +350,12 @@ static void guardian_reconcile(void) {
     signal(SIGINT, SIG_DFL);
     signal(SIGALRM, SIG_DFL);
     alarm(15);
-    _exit(reconcile_resources(j) ? 0 : 125);
+    int good = reconcile_resources(j);
+    if (good && next)
+      good = !unlinkat(jobs_dir, "guardian.next", 0) && !fsync(jobs_dir);
+    if (good)
+      good = !unlinkat(jobs_dir, "guardian", 0) && !fsync(jobs_dir);
+    _exit(good ? 0 : 125);
   }
   json_object_put(j);
   int status;

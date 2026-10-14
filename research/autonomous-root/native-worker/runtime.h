@@ -130,6 +130,7 @@ static void launcher_stage(const char *source) {
                       O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0500);
   if (target < 0)
     fatal("launcher create");
+  startup_fault("launcher-created");
   unsigned char bytes[65536];
   off_t copied = 0;
   while (copied < st.st_size) {
@@ -139,7 +140,9 @@ static void launcher_stage(const char *source) {
     if (n <= 0 || copied + n > st.st_size || !job_write(target, bytes, n))
       fatal("launcher copy");
     copied += n;
+    startup_fault("launcher-partial-copy");
   }
+  startup_fault("launcher-copy");
   close(fd);
   if (!filedigest(target, digest_value) || strcmp(digest_value, launcher_sha) ||
       fchmod(target, 0500) || helper_label(target) || fsync(target) ||

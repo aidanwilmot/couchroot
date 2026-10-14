@@ -32,8 +32,8 @@ unshares its mount namespace before starting threads. It owns at most eight view
 release is refused while any of its jobs are active. A separate native guardian kills/reaps remaining descendants before unmounting
 helpers and its independently staged launcher. Failed unmounts retain their backing files.
 Worker SIGKILL/crashes are recovered by that guardian. Guardian loss terminates
-its traced descendants; the next launch can reconcile a fully prepared, same-boot
-ownership journal before starting a new worker. Ambiguous state remains blocked. There is no durable log recovery. The
+its traced descendants; the next launch can reconcile a same-boot ownership journal
+with durable resource bindings before starting a new worker. Ambiguous state remains blocked. There is no durable log recovery. The
 controller and deployed .NET worker retain their original namespace.
 
 Missing parity still includes autonomous root acquisition and production
@@ -102,7 +102,7 @@ state of an existing system cgroup. Host tests bypass unavailable freezer suppor
 actual membership, freezing and removal are exercised by the TV acceptance suite.
 
 Failure to finish recovery retains the ownership journal. The next launch retries
-only when its ownership checks permit it. Storage corruption, partial startup,
+only when its ownership checks permit it. Storage corruption, unbound partial resource creation,
 legacy or different-boot journals and uninterruptible processes remain
 fail-closed/manual-inspection cases. This prototype does not
 replace the deployed service's root acquisition, enrollment or restart machinery.
@@ -178,10 +178,22 @@ files. Preserve credentials, raw measurements and signed artifacts outside Git.
 ## Guardian loss and stale journals
 
 The guardian alone holds the scope lock. Before releasing its traced worker it
-persists a schema-2 journal bound to the boot, scope directory, runtime directory,
-mount namespace and private freezer inode. A fully prepared journal is published
-with an atomic rename and directory fsync. An incomplete journal or leftover
-`guardian.next` blocks startup rather than guessing which preparation steps ran.
+persists a schema-3 journal with namespace, runtime, contained and ready phases.
+Each checkpoint binds the boot, scope and mount namespace, plus runtime and
+freezer inodes as those resources are created. Runtime ownership is persisted
+before launcher content is copied. Updates use atomic rename and directory fsync.
+A complete `guardian.next` can recover an interrupted rename only when it advances
+the same owner's phase by exactly one step and preserves all existing identity
+and inode bindings. Invalid, truncated, foreign or non-advancing temporary files
+block startup. Fully prepared schema-2 journals remain supported.
+
+An interrupted launcher copy or mount can be swept using the durable runtime
+binding after its old namespace disappears. A crash between resource creation
+and persistence of its inode binding remains blocked: recovery never adopts an
+existing unbound directory or freezer group. Initial truncated journals and
+cross-boot recovery likewise remain unqualified. Startup fault injection exists
+only in the separate fault-test binary; the ordinary binary ignores its test
+environment variable.
 
 On a later launch, reconciliation runs under the exclusive scope lock in a
 bounded child process, before staging a new launcher or accepting commands. It
@@ -296,9 +308,10 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 
 ## Remaining production work
 
-- Extend recovery qualification beyond fully prepared, same-boot journals.
-  Partial startup, interrupted journal preparation and cross-boot recovery still
-  require inspection; no reboot or power-loss behavior has been qualified.
+- Finish recovery for the resource-creation-before-binding and truncated initial
+  journal windows. Schema-3 startup checkpoints and complete interrupted updates
+  are recoverable, but unbound resources still require inspection. Cross-boot,
+  reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
 - Qualify resource exhaustion, storage failures and substantially longer runs.
