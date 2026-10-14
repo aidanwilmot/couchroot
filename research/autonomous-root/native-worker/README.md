@@ -525,8 +525,10 @@ and helper faults, and both progress watchdogs. Every gated worker-fault
 recovery stayed within the unchanged two-second limit. The stopped-worker
 watchdog recovered in 1,131 ms on QN90A and 1,206 ms on S90D. This was not a
 repeat of the one-hour exercise, so S90D's earlier 2,188 ms post-endurance
-result is not closed. Neither kernel window contained collector waits, worker
-dumps or file-open-checker events. Final checks preserved both original .NET
+result is not closed. The retained kernel logs contained no collector waits,
+worker dumps or file-open-checker events. Samsung's verbose kernel logging wraps
+the ring buffer within minutes, so they covered only the last 324 s on QN90A
+and 229 s on S90D, not the whole run. Final checks preserved both original .NET
 process/worker identities, boot IDs, launcher and protected-file hashes, mounts
 and cgroups. All temporary helpers, jobs and files were removed. Neither TV was
 rebooted. Local validation passed 48 native tests under ASAN/UBSAN in three
@@ -568,30 +570,44 @@ The repeated one-hour endurance run passed on **QN90A**. It ran 347
 root/app/helper cycles in 3,606 s with stable descriptors, threads and mounts.
 Worker RSS was 764–952 KiB; guardian RSS peaked at 1,124 KiB. The extended
 suite that followed passed 76 distinct checks. Stopped-worker recovery took
-1,069 ms, and every gated fault recovered in at most 204 ms. QN90A's kernel
-window had no collector waits, worker dumps or file-open-checker events. Final
+1,069 ms, and every gated fault recovered in at most 204 ms. QN90A's retained
+kernel log had no collector waits, worker dumps or file-open-checker events.
+The ring buffer had wrapped, so it covered only the final 334 s, which was the
+extended suite. Final
 checks preserved its .NET worker, PID, boot, mounts, cgroups and protected
 files, and all test resources were removed.
 
-**S90D has no endurance result at this revision.** About 16 minutes into the
-soak, S90D logged a power-off request. It stayed in standby, then entered deep
-suspend about 36 minutes in. After it resumed, the root-agent service
-re-acquired a new .NET worker, which ended the managed acceptance job and its
+**S90D's first attempt was interrupted by a TV power-off.** About 16 minutes
+into the soak, S90D logged a power-off request. It stayed in standby, then
+entered deep suspend about 36 minutes in. After it resumed, the root-agent
+service re-acquired a new .NET worker, which ended the managed job and its
 in-memory output. All 213 rows recorded before the suspend had passed. The
 native guardian completed recovery: no native processes, runtime views, freezer
 group or guardian journal remained. The stale helper views and experiment files
-were removed after hash and mount checks. Boot, protected files, launcher
-content, mount kinds and cgroup membership were unchanged. Neither TV was
-rebooted. The managed worker refuses to forget the same-boot running record, so
-it remains. Its focused admission run had passed earlier. See [admission-results.json](admission-results.json).
+were removed after hash and mount checks. At the owner's request, the stale
+same-boot .NET job record was removed after confirming its process was gone.
+
+**The S90D rerun passed** while the TV stayed on. It ran 344 cycles in 3,610 s
+with stable descriptors, threads and mounts. Worker RSS was 776–948 KiB;
+guardian RSS peaked at 1,124 KiB. The extended suite passed 76 distinct checks.
+Stopped-worker recovery took 1,031 ms; the earlier 2,188 ms post-endurance
+result was not reproduced. The slowest gated recovery was a main-thread memory
+fault at 909 ms. Of that, 343 ms was post-exit record, runtime and cgroup
+cleanup, matching the storage stalls seen in both builds. The retained kernel
+log covered the final 353 s and had no collector waits, worker dumps,
+file-open-checker events or suspend. Kernel log time does not advance during
+suspend, so the window start was corrected for the earlier suspend. Final checks
+preserved S90D's current .NET worker, PID, boot, launcher, mounts, cgroups and
+protected files. Neither TV was rebooted. See [admission-results.json](admission-results.json).
 
 ## Remaining production work
 
-- Rerun S90D's endurance at `f9e6d0c` while the TV stays powered on; a
-  power-off ended the last attempt. QN90A passed it, with
-  1,069 ms stopped-worker recovery. S90D's earlier 2,188 ms post-endurance
-  recovery has not been reproduced or explained against the unchanged
-  two-second gate. Cross-boot, reboot and power-loss recovery remain unqualified.
+- Capture kernel logs continuously during device runs. The ring buffer keeps
+  only a few minutes, so endurance windows observed just the final extended
+  suite. Both TVs passed the one-hour endurance run at `f9e6d0c`. Stopped-worker
+  recovery took 1,069 ms on QN90A and 1,031 ms on S90D; S90D's earlier 2,188 ms
+  was not reproduced and remains unexplained. Cross-boot, reboot and power-loss
+  recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
 - Extend resource-exhaustion qualification beyond protocol descriptor

@@ -371,7 +371,10 @@
     "lines": 6147,
     "worker_executable_dump_lines": 0,
     "file_open_checker_events": 0,
-    "too_many_open_files_events": 0
+    "too_many_open_files_events": 0,
+    "retained_seconds": 324,
+    "unobserved_seconds_after_start": 104,
+    "coverage_note": "Samsung kernel logging wraps the ring buffer within minutes; only the retained tail of the run was scanned."
    },
    "cleanup_and_preservation": {
     "boot_unchanged": true,
@@ -635,7 +638,10 @@
     "lines": 6143,
     "worker_executable_dump_lines": 0,
     "file_open_checker_events": 0,
-    "too_many_open_files_events": 0
+    "too_many_open_files_events": 0,
+    "retained_seconds": 229,
+    "unobserved_seconds_after_start": 201,
+    "coverage_note": "Samsung kernel logging wraps the ring buffer within minutes; only the retained tail of the run was scanned."
    },
    "cleanup_and_preservation": {
     "boot_unchanged": true,
