@@ -315,3 +315,36 @@ test('unqualified service child-process transport rejects before staging or shut
   hold.release();assert.equal(agent.status().worker_ready,true);assert.equal(mutations,0);
  }finally{agent.stop();}
 });
+
+test('external service probe confirms fresh status and cleans up while retaining shutdown guard',async()=>{
+ for(const failure of [false,'submission','cleanup','missing-id']){
+  const events=[],runtime=require('../research/autonomous-root/service/observer-runtime');
+  const modules={
+   './observer-stage':{stageObserver:async input=>{events.push('stage');await input.execute('stage',25000);return {manifest_sha256:DIGEST,sha256:'d'.repeat(64)};}},
+   './pidfd-observer':{probeExecutable:async()=>{throw Error('Forbidden child launch');},preparePidfdExit:async()=>{throw Error('Forbidden child launch');}},
+   './observer-runtime':{observerTransactionId:runtime.observerTransactionId,prepareRuntimeObserver:async input=>{
+    events.push('external');assert.equal(input.requestId,'external-probe-identity');assert.equal(input.directory,'/fixture');
+    if(failure==='submission')throw Error('Submission unknown');
+    await input.execute('submit',25000);
+    const fresh=await input.confirm();assert.ok(fresh.capabilities.includes('worker-process-identity-v1'));assert.equal(fresh.worker_id,input.bound.worker_id);
+    return {assertReady:()=>events.push('armed'),cancel:async()=>{events.push('cleanup');await input.execute('inspect-retire',5000);if(failure==='cleanup')throw Error('Cleanup unknown');}};
+   }}
+  };
+  const {agent,channels}=fixture({observerChildProcess:false,stagePackagedObserver:true,externalObserverDirectory:'/fixture'},modules,'s90d');
+  agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();channel.operation=async()=>inventoried();channel.execute=async()=>({exit_code:0});channel.shutdown=async()=>{throw Error('Forbidden shutdown');};
+   if(failure){
+    await assert.rejects(agent.probeObserver(DIGEST,failure==='missing-id'?undefined:'external-probe-identity'));
+    assert.equal(agent.status().admission_held,failure!=='missing-id');
+    if(failure==='missing-id')assert.deepEqual(events,[]);
+   }else{
+    const result=await agent.probeObserver(DIGEST,'external-probe-identity');assert.equal(result.method,'pidfd-external-bind-cancel');
+    assert.deepEqual(events,['stage','external','armed','cleanup']);assert.equal(agent.status().admission_held,false);
+    const hold=agent.holdAdmission();await assert.rejects(hold.shutdown('unused'),/external launch transport/);hold.release();
+   }
+   assert.equal(agent.status().connected,true);
+   assert.equal(agent.status().worker_ready,!failure||failure==='missing-id');
+  }finally{agent.stop();}
+ }
+});

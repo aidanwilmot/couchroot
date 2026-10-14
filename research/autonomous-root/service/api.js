@@ -36,7 +36,7 @@ function createApi(options){
     if(!agent.status().connected||agent.status().worker_ready===false){reply(503,{outcome:'rejected',error:'Root agent unavailable'});return;}
     journal.begin({id:value.id,command:'observer.probe:'+value.manifest_sha256,timeout_ms:25000});operationId=value.id;submitted=true;
     req.setTimeout(120000);
-    const result=await agent.probeObserver(value.manifest_sha256);
+    const result=await agent.probeObserver(value.manifest_sha256,value.id);
     journal.finish(operationId,{exit_code:0,timed_out:false});reply(200,{id:value.id,...result});return;
    }
    if(['/v1/op','/v1/files/read','/v1/files/write'].includes(req.url)){

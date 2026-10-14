@@ -8,6 +8,7 @@ const {selectionStatus,managedVersion}=require('./worker-selection');
 const {processIdentities,observeProcesses,waitForProcessExit}=require('./worker-processes');
 const {preparePidfdExit,probeExecutable}=require('./pidfd-observer');
 const {stageObserver}=require('./observer-stage');
+const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -113,7 +114,7 @@ function createAgent(config,options={}){
   const token={},owner=channel,peer=channel._conn,gen=generation,worker=workerStatus.worker_id,boot=workerStatus.boot_id,pending=Array.from(inFlight),sourceVersion=selected.selected_manifest_sha256;
   admissionHold=token;
   function current(){if(admissionHold!==token||generation!==gen||channel!==owner||owner._conn!==peer||!running||!connected||!workerReady||!workerStatus||workerStatus.worker_id!==worker)throw Error('Worker changed during handoff hold');}
-  async function snapshot(){
+  async function snapshot(full=false){
     current();if(token.stopping)throw Error('Worker shutdown already submitted');const outcomes=await Promise.all(pending);current();
     if(outcomes.some(known=>!known))throw Error('Uncertain request outcome during handoff drain');
     const info=await owner.operation({op:'status'});current();
@@ -122,7 +123,7 @@ function createAgent(config,options={}){
     const resources=validateResourceInventory(info),bound=processIdentities(info,peer.identity.pid);
     // This is a fresh inventory under a held service admission gate, not a
     // durable quiescence receipt or proof that detached work has stopped.
-    return {...bound,resources:JSON.parse(JSON.stringify(resources))};
+    return full?JSON.parse(JSON.stringify(info)):{...bound,resources:JSON.parse(JSON.stringify(resources))};
   }
   function prepared(id,digest){
    if(!options.selectionFile)throw Error('Durable selection required before shutdown');
@@ -134,10 +135,11 @@ function createAgent(config,options={}){
   }
   return {
    snapshot:async()=>{if(token.preparingStop)throw Error('Worker shutdown preparation in progress');return snapshot();},
-   probeObserver:async expectedManifest=>{
+   probeObserver:async (expectedManifest,requestId)=>{
     current();if(token.preparingStop||token.stopping||token.observerStaging||token.observerProbe)throw Error('Observer probe already pending');
-    if(config.device==='s90d'&&options.observerChildProcess===false)throw Object.assign(Error('Process observer requires an external launch transport'),{outcome:'rejected'});
+    if(config.device==='s90d'&&options.observerChildProcess===false&&!options.externalObserverDirectory)throw Object.assign(Error('Process observer requires an external launch transport'),{outcome:'rejected'});
     if(typeof expectedManifest!=='string'||expectedManifest.length!==64||!/^[a-f0-9]{64}$/.test(expectedManifest))throw Error('Candidate manifest digest required');
+    if(config.device==='s90d'&&options.externalObserverDirectory)observerTransactionId(requestId);
     token.preparingStop=true;
     try{
      const bound=await snapshot();current();
@@ -145,7 +147,12 @@ function createAgent(config,options={}){
       current();token.observerStaging=true;const result=await owner.execute(command,timeout);current();return result;
      }});
      token.observerStaging=false;token.observerProbe=true;
-     if(config.device==='s90d'){
+     if(config.device==='s90d'&&options.externalObserverDirectory){
+      const observer=await prepareRuntimeObserver({directory:options.externalObserverDirectory,requestId,staged,bound,confirm:()=>snapshot(true),execute:async(command,timeout)=>{
+       current();const result=await owner.execute(command,timeout);current();return result;
+      }});
+      try{observer.assertReady();}finally{await observer.cancel();}
+     }else if(config.device==='s90d'){
       try{await probeExecutable(staged);}catch(error){if(['failed','rejected'].includes(error.outcome))token.observerProbe=false;throw error;}current();
       const observer=await preparePidfdExit({...staged,bound,confirm:snapshot});
       try{observer.assertReady();}finally{await observer.cancel();}
@@ -159,7 +166,7 @@ function createAgent(config,options={}){
      const final=await snapshot();current();
      if(hash(JSON.stringify({boot_id:final.boot_id,worker_id:final.worker_id,processes:final.processes}))!==hash(JSON.stringify({boot_id:bound.boot_id,worker_id:bound.worker_id,processes:bound.processes})))throw Error('Worker changed during observer probe');
      token.observerProbe=false;
-     return {verified:true,method:config.device==='s90d'?'pidfd-bind-cancel':'proc-stat',manifest_sha256:staged.manifest_sha256,observer_sha256:staged.sha256,boot_id:boot,worker_id:worker,worker_stopped:false};
+     return {verified:true,method:config.device==='s90d'?(options.externalObserverDirectory?'pidfd-external-bind-cancel':'pidfd-bind-cancel'):'proc-stat',manifest_sha256:staged.manifest_sha256,observer_sha256:staged.sha256,boot_id:boot,worker_id:worker,worker_stopped:false};
     }finally{token.preparingStop=false;}
    },
    shutdown:async transactionId=>{
@@ -208,9 +215,9 @@ function createAgent(config,options={}){
    release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
   };
  }
- async function probeObserver(expectedManifest){
+ async function probeObserver(expectedManifest,requestId){
   let hold;try{hold=holdAdmission();}catch(error){throw Object.assign(error,{outcome:'rejected'});}
-  try{const result=await hold.probeObserver(expectedManifest);hold.release();return result;}
+  try{const result=await hold.probeObserver(expectedManifest,requestId);hold.release();return result;}
   catch(error){try{hold.release();}catch(_){}throw error;}
  }
  return {status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout))};

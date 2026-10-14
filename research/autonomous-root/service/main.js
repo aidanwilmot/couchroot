@@ -7,7 +7,7 @@ let server,agent,bootTimer;
 function start(){
  const c=config(JSON.parse(read(DATA+'/config.json')));
  const state=prepareWorkerState(DATA);
- agent=createAgent(c,{selectionFile:state.selectionFile,stagePackagedObserver:c.device==='s90d',observerChildProcess:false});
+ agent=createAgent(c,{selectionFile:state.selectionFile,stagePackagedObserver:c.device==='s90d',observerChildProcess:false,externalObserverDirectory:c.device==='s90d'?state.directory:undefined});
  const boot=createBootLaunch(agent,c.boot_launcher===true);
  const originalStatus=agent.status;
  agent.status=()=>Object.assign(originalStatus(),{boot_launcher:boot.status()});

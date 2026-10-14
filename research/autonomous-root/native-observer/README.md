@@ -239,3 +239,32 @@ Node tests passed, including the real supervisor publishing a receipt consumed b
 the socket listener. Two ARM builds matched at 22,740 bytes, SHA-256
 `8919e5283aae233f1cdf619306a4b34a55c57d4e378bf52d9236d8766f4b7691`;
 the maximum GLIBC requirement remains 2.17. No TV access or deployment occurred.
+
+## Service integration for the non-stopping probe
+
+The S90D service now routes an explicit `/v1/observer/probe` request through the
+external supervised observer. It does not launch an observer at service startup.
+The API's persisted request ID deterministically names the external transaction;
+unknown submissions cannot acquire a fresh identity by retrying that request.
+The service captures its own real/effective/saved/filesystem IDs, supplementary
+groups, label and effective capabilities before launching with matching credentials.
+Observer launch records live in a private `worker-state/observer-launches` directory.
+
+The managed admission hold supplies staging, submission, fresh identity confirmation,
+unit inspection and unit retirement. Successful bind-and-cancel qualification must
+complete journaled observer cleanup and verify the original worker remains alive
+before releasing admission. Uncertain launch or cleanup retains the hold. This
+path uses no JavaScript child-process launch. QN90A retains proc-stat observation.
+
+This executor is intentionally limited to the non-stopping probe: it depends on
+the managed worker remaining alive. The internal shutdown guard stays enabled.
+A full handoff still requires an executor that can inspect and retire the observer
+unit after the old worker exits, plus restart reconciliation of pending journals.
+The service integration has not yet been deployed or qualified on either TV.
+
+Local verification passed 59 Linux observer/service/managed-wire tests and seven
+host API tests. The API tests verify that the persisted request ID reaches the
+probe. The service tests cover successful cleanup, uncertain submission and
+cleanup admission holds, missing request IDs before staging, fresh status
+capabilities, and continued refusal of shutdown. The Linux image lacks OpenSSL,
+so the TLS API suite ran on the host; no tests were skipped. Neither TV changed.
