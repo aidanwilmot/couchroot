@@ -85,6 +85,27 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertEqual((self.root/'file').read_bytes(),data)
         id=self.begin(b'replacement',expected=hashlib.sha256(data).hexdigest());self.assertTrue(self.upload(id,b'replacement')['ok']);self.assertTrue(self.op('file.commit',transfer_id=id)['ok'])
         self.assertEqual((self.root/'file').read_bytes(),b'replacement')
+    def test_json_and_binary_upload_interoperate_at_chunk_limit(self):
+        data=os.urandom(1048576);tail=b'last';id=self.begin(data+tail)
+        encoded=base64.b64encode(data).decode();digest=hashlib.sha256(data).hexdigest()
+        for changes in [dict(sha256='0'*64),dict(offset=-1),dict(offset=1),dict(data='!bad'),dict(data=''),dict(data=encoded+'AAAA'),dict(data=encoded+'\0')]:
+            values=dict(transfer_id=id,offset=0,data=encoded,sha256=digest);values.update(changes)
+            self.assertFalse(self.op('file.write',**values)['ok'])
+            self.assertEqual(self.op('file.status',transfer_id=id)['result']['offset'],0)
+        result=self.op('file.write',transfer_id=id,offset=0,data=encoded,sha256=digest)
+        self.assertTrue(result['ok']);self.assertEqual(result['result']['offset'],len(data))
+        self.assertFalse(self.op('file.write',transfer_id=id,offset=0,data=encoded,sha256=digest)['ok'])
+        self.assertTrue(self.upload(id,tail,offset=len(data))['ok'])
+        self.assertTrue(self.op('file.commit',transfer_id=id)['ok']);self.assertEqual((self.root/'file').read_bytes(),data+tail)
+        read=self.op('file.open',path=str(self.root/'file'))['result']['transfer_id']
+        self.assertFalse(self.op('file.write',transfer_id=read,offset=0,data=base64.b64encode(tail).decode(),sha256=hashlib.sha256(tail).hexdigest())['ok'])
+        self.assertTrue(self.op('file.close',transfer_id=read)['ok'])
+        id=self.begin(data+tail,path='mixed')
+        self.assertTrue(self.upload(id,tail)['ok'])
+        self.assertTrue(self.op('file.write',transfer_id=id,offset=len(tail),data=encoded,sha256=digest)['ok'])
+        self.assertFalse(self.op('file.commit',transfer_id=id)['ok'])
+        self.assertTrue(self.op('file.close',transfer_id=id)['ok']);self.assertFalse((self.root/'mixed').exists())
+
     @unittest.skipUnless(os.environ.get('NATIVE_WORKER_STORAGE_TEST'), 'isolated mount-capable container required')
     def test_full_and_readonly_job_intent_storage(self):
         import errno

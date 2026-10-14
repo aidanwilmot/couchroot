@@ -53,7 +53,12 @@ controller and deployed .NET worker retain their original namespace.
 
 Missing parity still includes autonomous root acquisition and production
 packaging/recovery integration and the broader production file
-access policy. Legacy READFILE/WRITEFILE and JSON file.write are omitted. Unsupported
+access policy. Legacy READFILE/WRITEFILE frames remain omitted: neither the
+current HTTPS API, enrolled client nor loopback service exposes them. JSON
+`file.write` is supported on the worker protocol for older service compatibility,
+using canonical base64 and the same 1 MiB chunk, digest, offset and commit checks
+as binary uploads. JSON and binary chunks can share a transfer. The current
+HTTPS API continues to require binary upload bodies. Unsupported
 operations fail explicitly; there is no automatic fallback or replay. The build also produces the existing native `app-launcher` source as a separate
 binary. The worker accepts its source path inside the canonical file scope and an
 expected SHA-256; it validates ARM ELF32, stages a private root-only copy, applies
@@ -410,9 +415,9 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 ## Remaining production work
 
 - Validate the schema-4 initial-journal, resource-reservation and partial-update
-  recovery and owner-tagged orphan job-intent recovery on both TVs. All 46 native
+  recovery and owner-tagged orphan job-intent recovery on both TVs. All 47 native
   sanitizer host tests and ARM builds pass; the repository suite passes 226 tests
-  with the 46 native tests skipped by that runner. The expanded device suite is
+  with the 47 native tests skipped by that runner. The expanded device suite is
   prepared while the prior build's endurance run continues.
   Cross-boot, reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
@@ -431,8 +436,11 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
   explicit in native status. Original command-fault diagnostics are exposed
   separately from actual termination status and pass host tests; the matching
   device probe remains pending.
-- Reconcile the narrower file policy and omitted legacy operations with the
-  desired public API, then repeat whole-process CPU/memory/startup comparisons.
+- Reconcile the narrower file policy with the current public API, then repeat
+  whole-process CPU/memory/startup comparisons. The current service and enrolled
+  client do not expose legacy READFILE/WRITEFILE frames; supporting those frames
+  is outside the replacement contract. Worker-protocol JSON uploads now pass
+  host tests; their device probe is pending.
   The guardian's polling and the job monitor's periodic wakeups need measurement.
 
 ## Historical crash delay and test-mount cleanup fix — 2026-10-13

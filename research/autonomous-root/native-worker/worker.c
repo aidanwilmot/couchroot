@@ -465,6 +465,21 @@ static J *operation(J *request, Wire *w, const char *seq) {
     boolean(j, "closed", 1);
     return success(j);
   }
+  if (!strcmp(op, "file.write")) {
+    int64_t offset;
+    const char *encoded = textval(request, "data"),
+               *sha = textval(request, "sha256");
+    if (!integer(request, "offset", &offset) || !encoded ||
+        strlen(encoded) > ((CHUNK + 2) / 3) * 4 || !hexvalid(sha, 64))
+      return failure("Invalid JSON upload chunk");
+    size_t length;
+    unsigned char *data = decode(encoded, &length);
+    if (!data)
+      return failure("Invalid chunk base64");
+    J *r = writechunk(t->id, offset, data, length, sha);
+    free(data);
+    return r;
+  }
   if (!strcmp(op, "file.read")) {
     int64_t offset, length;
     if (t->upload || !integer(request, "offset", &offset) ||
@@ -702,12 +717,16 @@ int main(int argc, char **argv) {
     } else if (!strcmp(f[0], "OP") && count == 3) {
       size_t len;
       unsigned char *bytes = decode(f[2], &len);
-      if (!bytes || len > 20000 || strlen((char *)bytes) != len)
+      if (!bytes || len > ((CHUNK + 2) / 3) * 4 + 20000 ||
+          strlen((char *)bytes) != len)
         fatal("operation encoding");
       J *request = parse((char *)bytes);
       free(bytes);
       if (!request)
         fatal("operation JSON");
+      const char *op = textval(request, "op");
+      if (len > 20000 && (!op || strcmp(op, "file.write")))
+        fatal("operation size");
       reply = operation(request, &w, f[1]);
       json_object_put(request);
     } else if (!strcmp(f[0], "EXEC") && count == 4) {
