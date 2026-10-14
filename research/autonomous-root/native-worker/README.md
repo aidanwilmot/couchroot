@@ -404,15 +404,19 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 ## Remaining production work
 
 - Validate the schema-4 initial-journal, resource-reservation and partial-update
-  recovery and owner-tagged orphan job-intent recovery on both TVs. All 43 native
+  recovery and owner-tagged orphan job-intent recovery on both TVs. All 45 native
   sanitizer host tests and ARM builds pass; the repository suite passes 226 tests
-  with the 43 native tests skipped by that runner. The expanded device suite is
+  with the 45 native tests skipped by that runner. The expanded device suite is
   prepared while the prior build's endurance run continues.
   Cross-boot, reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
 - Qualify resource exhaustion, further storage failures and substantially longer
-  runs. Preserve bounded, in-memory output as the public contract, matching the
+  runs. Host tests now cover the 64-record saved-job limit, explicit-forget
+  capacity recovery, and launch-pipe descriptor exhaustion. The latter preserves
+  the unlaunched intent, refuses reuse, keeps the worker responsive and reconciles
+  the record as interrupted after restart. Device resource-limit probes remain
+  outstanding. Preserve bounded, in-memory output as the public contract, matching the
   deployed .NET implementation; durable output is not required for parity.
   Job outcomes remain durable metadata and must recover after transient failures.
 - Decide command signal-handler compatibility and expose original command-fault

@@ -26,6 +26,16 @@ static void storage_job_rejected(const char *witness) {
     fatal("storage failure retained partial job intent");
   free(record);
   free(temp);
+  char *directory = format("%s/.jobs", filescope);
+  DIR *d = opendir(directory);
+  free(directory);
+  if (!d)
+    fatal("storage intent directory");
+  struct dirent *entry;
+  while ((entry = readdir(d)))
+    if (!strncmp(entry->d_name, ".intent-", 8))
+      fatal("storage failure retained unpublished job intent");
+  closedir(d);
 }
 static void storage_fill(const char *filler) {
   int fd =

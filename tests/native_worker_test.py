@@ -107,6 +107,7 @@ class NativeWorkerTests(unittest.TestCase):
                 self.assertFalse(result['ok']);self.assertFalse(marker.exists())
                 self.assertFalse((self.root/'.jobs/native-test-job-01.json').exists())
                 self.assertFalse((self.root/'.jobs/native-test-job-01.json.next').exists())
+                self.assertFalse(any((self.root/'.jobs').glob('.intent-*')))
                 terminal=self.completed('native-storage-finish')
                 self.assertEqual(terminal['exit_code'],19);self.assertTrue(terminal['persistence_failed'])
                 filler.unlink()
@@ -208,6 +209,47 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertFalse(self.job('job.start','native-retention-17',command=':',timeout_ms=1000,profile='root')['ok'])
         for i in range(16):
             self.completed(f'native-retention-{i:02}');self.assertTrue(self.job('job.forget',f'native-retention-{i:02}')['ok'])
+    def test_saved_job_retention_recovers_after_explicit_forget(self):
+        jobs=self.root/'.jobs'
+        boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        records={}
+        for i in range(64):
+            id=f'native-saved-retention-{i:02}'
+            data=json.dumps(dict(id=id,worker_id='f'*32,boot_id=boot,state='completed',exit_code=i)).encode()
+            path=jobs/(id+'.json');path.write_bytes(data);path.chmod(0o600);records[path]=data
+        marker=self.root/'retention-command'
+        r=self.job('job.start','native-after-retention',command='touch '+str(marker),timeout_ms=1000,profile='root')
+        self.assertFalse(r['ok']);self.assertFalse(marker.exists())
+        for path,data in records.items():self.assertEqual(path.read_bytes(),data)
+        self.assertTrue(self.job('job.forget','native-saved-retention-00')['ok'])
+        self.start_job('touch '+str(marker),id='native-after-retention')
+        self.assertEqual(self.completed('native-after-retention')['exit_code'],0);self.assertTrue(marker.exists())
+        self.assertTrue(self.job('job.forget','native-after-retention')['ok'])
+        self.assertEqual(len(list(jobs.glob('*.json'))),63)
+
+    def test_descriptor_exhaustion_retains_intent_without_launch(self):
+        import resource
+        marker=self.root/'descriptor-command'
+        original=resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE)
+        # Permit record scanning/publication, but not all three launch pipes.
+        highest=max(int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir())
+        try:
+            resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,(highest+4,original[1]))
+            result=self.job('job.start','native-descriptor-limit',command='touch '+str(marker),timeout_ms=1000,profile='root')
+            self.assertFalse(result['ok'])
+        finally:resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE,original)
+        self.assertFalse(marker.exists())
+        saved=self.root/'.jobs/native-descriptor-limit.json'
+        self.assertTrue(saved.exists());self.assertEqual(json.loads(saved.read_text())['state'],'unknown')
+        self.assertTrue(self.op('status')['ok'])
+        self.assertFalse(self.job('job.start','native-descriptor-limit',command='touch '+str(marker),timeout_ms=1000,profile='root')['ok'])
+        self.start_job(':',id='native-after-descriptor');self.assertEqual(self.completed('native-after-descriptor')['exit_code'],0)
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        self.restart()
+        result=self.job('job.status','native-descriptor-limit')['result']
+        self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
+        self.assertFalse(marker.exists());self.assertTrue(self.job('job.forget','native-descriptor-limit')['ok'])
+
     def test_job_ring_cursors(self):
         self.start_job("head -c 1200000 /dev/zero; printf end; printf error >&2")
         done=self.completed();self.assertEqual(done['exit_code'],0)
