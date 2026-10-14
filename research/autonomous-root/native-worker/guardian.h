@@ -446,7 +446,7 @@ static void guardian_start(void) {
     if (got != 1 || ready != 'R')
       _exit(125);
     containment_enter();
-    alarm(experiment_seconds);
+    alarm(lifetime_seconds);
     return;
   }
   close(gate[0]);
@@ -479,7 +479,7 @@ static void guardian_start(void) {
       sigaction(SIGCHLD, &child_event, NULL) ||
       sigprocmask(SIG_BLOCK, &blocked, NULL))
     _exit(125);
-  alarm(experiment_seconds + 10);
+  alarm(lifetime_seconds ? lifetime_seconds + 10 : 0);
   int status = 0, worker_status = 0, worker_done = 0;
   close(pulse_pipe[1]);
   pulse_pipe[1] = -1;

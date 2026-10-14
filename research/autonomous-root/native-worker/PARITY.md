@@ -4,7 +4,9 @@ This phase implements the file-access and retained-record portions of the
 [migration plan](MIGRATION.md), with a [machine-readable contract](../../../tests/worker-parity/contract.json)
 and [differential harness](../../../tests/worker-parity/README.md). It does not
 select native in the installed service, remove .NET, or remove the prototype's
-bounded lifetime. Default experiments keep their original narrow file policy.
+bounded lifetime. A subsequent local lifetime change adds the explicit
+`--production` mode described in the README; it has not been deployed or
+qualified on either TV. Default experiments keep their original narrow file policy.
 
 ## Opt-in production file policy
 
@@ -115,3 +117,26 @@ production packaging and capability advertisement, HTTPS worker selection,
 production lifetime, acquisition/recovery ports, signal-policy decision and
 cross-boot qualification remain the subsequent gates in `MIGRATION.md`. Do not
 claim full .NET replacement readiness from these tests.
+
+## Subsequent local lifetime validation — 2026-10-14
+
+The explicit `--production` mode removes the worker and guardian lifetime alarms,
+retains production file policy, and separates an idle connection from an active
+frame. It does not select native in the service. Default and `--production-files`
+experiments remain bounded. A conflicting experiment-lifetime environment value
+is rejected, and status reports the mode and zero seconds for no lifetime expiry.
+
+All 61 existing native/file/differential tests passed with ASAN/UBSAN. Six distinct
+lifetime checks passed across ordinary host and sanitizer builds: production
+status and job deadlines, conflicting configuration refusal, buffered requests,
+default bounded mode with 32 seconds of idle time, 315 seconds of uninterrupted
+production idle time with a running job, and partial-frame expiry with owned-job
+cleanup. The two extended checks ran in the ordinary host build without fault
+controls. Both old lifetime thresholds (300 and 310 seconds) were crossed without
+replacing the worker or guardian. ARMv7 worker/controller and fault-test builds
+compiled successfully. These are local tests, not TV qualification.
+
+A 24-hour job deadline was accepted and the job explicitly cancelled; no claim is
+made that a job completed 24 hours of execution. Slow-storage progress, integrated
+service selection, both-TV lifetime/endurance checks and power lifecycle remain
+open. No TV was contacted, restarted or switched during this follow-up.

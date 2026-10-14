@@ -11,7 +11,8 @@ typedef struct {
   int64_t size;
 } Transfer;
 static Transfer transfers[8];
-static unsigned experiment_seconds = 300;
+static unsigned lifetime_seconds = 300;
+static int production_mode;
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
 #include "file-policy.h"
@@ -456,7 +457,8 @@ static J *operation(J *request, Wire *w, const char *seq) {
     str(j, "freezer_group", freezer_name);
     num(j, "heartbeat_timeout_ms", 1000);
     num(j, "progress_timeout_ms", PROGRESS_GRACE_MS);
-    num(j, "lifetime_seconds", experiment_seconds);
+    num(j, "lifetime_seconds", lifetime_seconds);
+    str(j, "lifetime_mode", production_mode ? "production" : "bounded");
     J *app = obj();
     str(app, "path", launcher);
     str(app, "sha256", launcher_sha);
@@ -675,10 +677,12 @@ int main(int argc, char **argv) {
     fault_test_execute();
   }
 #endif
-  production_files = argc == 8 && !strcmp(argv[7], "--production-files");
+  production_mode = argc == 8 && !strcmp(argv[7], "--production");
+  production_files = production_mode ||
+                     (argc == 8 && !strcmp(argv[7], "--production-files"));
   if (argc != 7 && !production_files) {
     fputs("usage: worker HOST PORT TOKEN EXPERIMENT_DIRECTORY "
-          "LAUNCHER_SOURCE SHA256 [--production-files]\n",
+          "LAUNCHER_SOURCE SHA256 [--production-files|--production]\n",
           stderr);
     return 64;
   }
@@ -690,12 +694,16 @@ int main(int argc, char **argv) {
   signal(SIGALRM, stop_signal);
   const char *lifetime = getenv("COUCHROOT_NATIVE_LIFETIME_SECONDS");
   int64_t seconds;
+  if (production_mode && lifetime)
+    fatal("production mode cannot use an experiment lifetime");
+  if (production_mode)
+    lifetime_seconds = 0;
   if (lifetime) {
     if (!decimal(lifetime, &seconds) || seconds < 300 || seconds > 86400)
       fatal("prototype lifetime must be 300..86400 seconds");
-    experiment_seconds = (unsigned)seconds;
+    lifetime_seconds = (unsigned)seconds;
   }
-  alarm(experiment_seconds);
+  alarm(lifetime_seconds);
   libraries();
   for (int i = 0; i < 8; i++)
     transfers[i].fd = transfers[i].parent = -1;
@@ -790,7 +798,10 @@ int main(int argc, char **argv) {
   signal_socket = w.fd;
   int one = 1;
   setsockopt(w.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
-  struct timeval limit = {experiment_seconds, 0};
+  /* Idle production connections have no lifetime. Individual reads/writes and
+   * the first handshake remain bounded; active frame parsing has a progress
+   * lease as well, so trickled bytes cannot keep an unfinished request alive. */
+  struct timeval limit = {production_mode ? 30 : lifetime_seconds, 0};
   setsockopt(w.fd, SOL_SOCKET, SO_RCVTIMEO, &limit, sizeof limit);
   setsockopt(w.fd, SOL_SOCKET, SO_SNDTIMEO, &limit, sizeof limit);
   if (connect(w.fd, (struct sockaddr *)&addr, sizeof addr))
@@ -824,6 +835,17 @@ int main(int argc, char **argv) {
   int64_t previous = 0;
   for (;;) {
     progress_idle(&progress_main);
+    if (production_mode && w.at == w.end) {
+      struct pollfd ready = {.fd = w.fd, .events = POLLIN};
+      int result;
+      do {
+        result = poll(&ready, 1, -1);
+      } while (result < 0 && errno == EINTR);
+      if (result < 0)
+        fatal("idle protocol wait");
+    }
+    if (production_mode)
+      progress_touch(&progress_main);
     char *frame = receive(&w);
     progress_touch(&progress_main);
     int count = fields(frame, f, 10);

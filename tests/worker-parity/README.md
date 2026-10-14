@@ -64,3 +64,15 @@ python3 -m unittest discover -s tests -p native_job_migration_test.py
 ```
 
 The production ARM build still excludes host substitutions and fault controls.
+
+## Production lifetime checks
+
+`native_lifetime_test.py` checks explicit production-mode admission, status,
+buffered requests and retained job deadlines. Set
+`NATIVE_WORKER_LIFETIME_TEST=1` to additionally exercise an uninterrupted
+315-second idle connection with a running job and a stalled partial frame with
+owned-job cleanup. Use the same isolated container and `NATIVE_WORKER` path as
+above. An ordinary host build needs only `-DNATIVE_WORKER_TEST` for host platform
+substitutions; these checks need no fault controls. The 315-second check crosses
+the old worker and guardian expiry thresholds; accepting a 24-hour job timeout
+and cancelling it is not a completed 24-hour job qualification.

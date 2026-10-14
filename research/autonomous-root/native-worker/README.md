@@ -66,7 +66,12 @@ Smack and a read-only bind mount, and verifies the staged digest before use. It 
 longer accepts a borrowed .NET execution view. Root acquisition and transport
 service integration are still borrowed, so startup is not complete service startup. The worker defaults to a five-minute experiment lifetime. An explicit
 `COUCHROOT_NATIVE_LIFETIME_SECONDS` value from 300 to 86400 permits longer bounded
-experiments; jobs cannot outlive that worker. Disconnect,
+experiments; jobs cannot outlive that worker. The explicit `--production` option
+enables production file policy and removes both worker and guardian lifetime
+alarms. It rejects `COUCHROOT_NATIVE_LIFETIME_SECONDS` rather than silently
+ignoring it. Status reports `lifetime_mode=production` and `lifetime_seconds=0`
+(no expiry). This mode is not yet selected or packaged by the deployed service.
+The `--production-files` option alone keeps the bounded experiment lifetime. Disconnect,
 SIGTERM and graceful shutdown clean up owned active jobs and helper views.
 
 The worker executable starts a small guardian before the protocol worker and its
@@ -106,7 +111,11 @@ an unresponsive worker. The controller waits for recovery and does not force-kil
 a guardian merely because its wait expires. The pulse thread also checks separate
 30-second progress leases for an active protocol request and the job monitor.
 Foreground command polling refreshes the request lease; waiting for a new protocol
-frame is idle and remains bounded by socket/lifetime limits. File operations and
+frame is idle. Bounded experiments retain their socket/lifetime limits. Production
+mode waits indefinitely for the first byte of a request, then applies the active
+progress lease; individual socket reads/writes and the initial handshake have a
+30-second timeout. Buffered frames are processed without another socket wait.
+File operations and
 blocked writes must complete within the progress grace. The job monitor wakes
 periodically even with an empty queue. A stalled lease triggers the same isolated
 cleanup, recording `active-request-stalled` or `job-monitor-stalled`; a missing
