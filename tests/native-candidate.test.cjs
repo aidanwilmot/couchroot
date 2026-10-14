@@ -6,10 +6,13 @@ const {loadCandidate,candidateStatus}=require('../research/autonomous-root/servi
 const {createAgent}=require('../research/autonomous-root/service/agent');
 const names=['native-worker','native-app-launcher'];
 function artifact(){const b=Buffer.alloc(64);Buffer.from([127,69,76,70,1,1,1]).copy(b);b.writeUInt16LE(3,16);b.writeUInt16LE(40,18);b.writeUInt32LE(0x05000200,36);return b;}
-function fixture(){
+function fixture(schema=1){
+ const names=schema===2?['native-worker','native-app-launcher','native-process-observer']:['native-worker','native-app-launcher'];
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-candidate-test-'));
  const source=Object.fromEntries(['native-worker/worker.c','native-worker/build.sh','native-launcher/app-launcher.c','native-launcher/build.sh'].map(n=>[n,'a'.repeat(64)]));
  const m={schema:1,kind:'native-worker-candidate',implementation:'native-prototype',selection:'managed',device_qualified:false,candidate_profiles:['qn90a','s90d'],source,toolchain:{image:'sha256:'+'b'.repeat(64),compiler:'10.2.1'},reproducible_builds:2,artifacts:{},runtime_loads:{json_c:['libjson-c.so.5','libjson-c.so.4'],crypto:['libcrypto.so.1.1','libcrypto.so.3']}};
+ m.schema=schema;
+ if(schema===2)for(const n of ['native-observer/process-observer.c','native-observer/build.sh'])source[n]='a'.repeat(64);
  for(const name of names){const bytes=artifact();fs.writeFileSync(path.join(dir,name),bytes);m.artifacts[name]={sha256:hash(bytes),size:bytes.length,abi:'armv7-eabi5-softfp',interpreter:'/lib/ld-linux.so.3',needed:['libc.so.6'],glibc_max:'2.17.0'};}
  const seal=()=>{const raw=JSON.stringify(m);fs.writeFileSync(path.join(dir,'native-manifest.json'),raw);fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({'native-manifest.json':hash(raw),...Object.fromEntries(names.map(n=>[n,m.artifacts[n].sha256]))}));};
  seal();return {dir,m,seal,close:()=>fs.rmSync(dir,{recursive:true,force:true})};
@@ -79,8 +82,37 @@ test('candidate diagnostics refresh before an acquisition attempt without blocki
 });
 test('ordinary source-built candidate is accepted for both profile declarations',{skip:!process.env.NATIVE_CANDIDATE_BUILD},()=>{
  const f=fixture();try{
+  const manifest=JSON.parse(fs.readFileSync(path.join(process.env.NATIVE_CANDIDATE_BUILD,'native-manifest.json')));
+  const names=Object.keys(manifest.artifacts);
   for(const name of [...names,'native-manifest.json'])fs.copyFileSync(path.join(process.env.NATIVE_CANDIDATE_BUILD,name),path.join(f.dir,name));
   const index=Object.fromEntries([...names,'native-manifest.json'].map(name=>[name,hash(fs.readFileSync(path.join(f.dir,name)))]));fs.writeFileSync(path.join(f.dir,'manifest.json'),JSON.stringify(index));
   for(const device of ['qn90a','s90d'])assert.ok(loadCandidate(f.dir,device));
+ }finally{f.close();}
+});
+test('schema two binds observer bytes and provenance while preserving managed default',()=>{
+ const f=fixture(2);try{
+  for(const device of ['qn90a','s90d']){
+   const c=loadCandidate(f.dir,device);
+   assert.equal(c.artifacts['native-process-observer'].sha256,f.m.artifacts['native-process-observer'].sha256);
+   assert.equal(createAgent({device},{payload:f.dir}).status().selected_implementation,'managed');
+  }
+ }finally{f.close();}
+});
+test('schema two refuses missing changed incompatible or unbound observers',()=>{
+ for(const kind of ['missing','changed','source','glibc','large','downgrade','schema']){
+  const f=fixture(2);try{
+   if(kind==='missing')fs.unlinkSync(path.join(f.dir,'native-process-observer'));
+   if(kind==='changed')fs.appendFileSync(path.join(f.dir,'native-process-observer'),'changed');
+   if(kind==='source')delete f.m.source['native-observer/process-observer.c'];
+   if(kind==='glibc')f.m.artifacts['native-process-observer'].glibc_max='2.28.0';
+   if(kind==='large')f.m.artifacts['native-process-observer'].size=128*1024+1;
+   if(kind==='downgrade')f.m.schema=1;
+   if(kind==='schema')f.m.schema=3;
+   f.seal();assert.throws(()=>loadCandidate(f.dir,'s90d'));
+  }finally{f.close();}
+ }
+ const f=fixture();try{
+  fs.writeFileSync(path.join(f.dir,'native-process-observer'),artifact());
+  assert.throws(()=>loadCandidate(f.dir,'s90d'),/package-incomplete/);
  }finally{f.close();}
 });

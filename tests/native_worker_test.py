@@ -85,6 +85,15 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertEqual((self.root/'file').read_bytes(),data)
         id=self.begin(b'replacement',expected=hashlib.sha256(data).hexdigest());self.assertTrue(self.upload(id,b'replacement')['ok']);self.assertTrue(self.op('file.commit',transfer_id=id)['ok'])
         self.assertEqual((self.root/'file').read_bytes(),b'replacement')
+    def test_status_confirms_original_guardian_parent(self):
+        for _ in range(3):
+            info=self.op('status')['result']
+            self.assertIn('guardian-parent-identity-v1',info['capabilities'])
+            self.assertEqual(info['processes']['guardian']['pid'],self.proc.pid)
+            stat=Path(f'/proc/{self.worker_pid}/stat').read_text().rsplit(')',1)[1].split()
+            self.assertEqual(int(stat[1]),self.proc.pid)
+            guardian=Path(f'/proc/{self.proc.pid}/stat').read_text().rsplit(')',1)[1].split()
+            self.assertEqual(info['processes']['guardian']['start_ticks'],guardian[19])
     def test_json_and_binary_upload_interoperate_at_chunk_limit(self):
         data=os.urandom(1048576);tail=b'last';id=self.begin(data+tail)
         encoded=base64.b64encode(data).decode();digest=hashlib.sha256(data).hexdigest()
@@ -349,7 +358,9 @@ class NativeWorkerTests(unittest.TestCase):
         saved.write_text(json.dumps(dict(id='native-admission-saved',worker_id='f'*32,boot_id=boot,state='completed',exit_code=0)));saved.chmod(0o600)
         (self.root/'readable').write_bytes(b'read');(self.root/'helper-source').write_bytes(b'helper');(self.root/'helper-source').chmod(0o600)
         # Status needs no descriptor, even with none free.
-        self.assertTrue(limited(0,lambda:self.op('status'))['ok'])
+        info=limited(0,lambda:self.op('status'))
+        self.assertTrue(info['ok'])
+        self.assertIn('guardian-parent-identity-v1',info['result']['capabilities'])
         rejected(0,'job.status',id='native-admission-saved')
         self.assertTrue(limited(1,lambda:self.op('job.status',id='native-admission-saved'))['ok'])
         rejected(1,'file.open',path=str(self.root/'readable'))

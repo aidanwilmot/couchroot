@@ -30,6 +30,13 @@ class Compiler:
             return 'tag-only' if self.invalid=='image' else 'sha256:'+'a'*64
         if '-dumpfullversion' in args:return '10.2.1'
         if 'arm-linux-gnueabi-readelf' in args:return REPORT
+        if '/src/native-observer/build.sh' in args:
+            output=Path(next(a[:-5] for a in args if a.endswith(':/out')))
+            data=elf()
+            if self.invalid=='observer-different' and self.builds==2:data+=b'changed'
+            if self.invalid=='observer-large':data+=b'x'*(128*1024)
+            (output/'process-observer').write_bytes(data)
+            return ''
         if '--worker-only' in args:
             self.builds+=1
             output=Path(next(a[:-5] for a in args if a.endswith(':/out')))
@@ -53,7 +60,9 @@ class NativeWorkerBuildTests(unittest.TestCase):
             self.assertFalse(manifest['device_qualified'])
             self.assertEqual(manifest['reproducible_builds'],2)
             self.assertEqual(manifest['toolchain']['image'],'sha256:'+'a'*64)
-            self.assertEqual(set(manifest['artifacts']),{'native-worker','native-app-launcher'})
+            self.assertEqual(manifest['schema'],2)
+            self.assertEqual(set(manifest['artifacts']),{'native-worker','native-app-launcher','native-process-observer'})
+            self.assertIn('native-observer/process-observer.c',manifest['source'])
             for name,record in manifest['artifacts'].items():
                 self.assertEqual(record['sha256'],sha((folder/name).read_bytes()))
                 self.assertEqual(record['interpreter'],'/lib/ld-linux.so.3')
@@ -67,7 +76,7 @@ class NativeWorkerBuildTests(unittest.TestCase):
             self.assertEqual(compiler.builds,2)
 
     def test_failures_never_publish_candidate_manifest(self):
-        for invalid in ('image','different','fault','extra','symlink'):
+        for invalid in ('image','different','fault','extra','symlink','observer-different','observer-large'):
             with self.subTest(invalid=invalid),tempfile.TemporaryDirectory() as temp:
                 with self.assertRaises(Refused):native_worker.build(temp,Compiler(invalid))
                 self.assertFalse((Path(temp)/'native-manifest.json').exists())
@@ -112,7 +121,7 @@ class NativeWorkerBuildTests(unittest.TestCase):
             self.assertTrue((payload/'SamsungTvRootAgent.dll').is_file())
             self.assertTrue((payload/'SamsungTvArchiveRoot.dll').is_file())
             manifest=json.loads((payload/'manifest.json').read_text())
-            for name in ('native-worker','native-app-launcher','native-manifest.json'):
+            for name in ('native-worker','native-app-launcher','native-process-observer','native-manifest.json'):
                 self.assertEqual(manifest[name],sha((payload/name).read_bytes()))
             candidate=json.loads((payload/'native-manifest.json').read_text())
             self.assertEqual(candidate['selection'],'managed')

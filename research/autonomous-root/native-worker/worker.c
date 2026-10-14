@@ -472,6 +472,13 @@ static J *operation(J *request, Wire *w, const char *seq) {
   if (!strncmp(op, "helper.", 7))
     return helper_operation(request, op);
   if (!strcmp(op, "status")) {
+    /* guardian_start forked this worker directly and checked the relationship
+     * before opening the supervision gate. A fresh kernel parent check binds
+     * the cached start identity to that original parent: a lost parent cannot
+     * be replaced by a recycled numeric PID. No new descriptor is needed.
+     * This is point-in-time evidence, not a promise of future guardian life. */
+    if (guardian_pid <= 1 || getppid() != guardian_pid)
+      return failure("Original guardian parent unavailable");
     J *j = obj(), *caps = json_object_new_array();
     str(j, "boot_id", current_boot); /* Read once at startup; fixed per boot. */
     /* /proc/uptime reports this clock in centiseconds; reading it needs no
@@ -513,6 +520,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
                            "binary-upload-v1",
                            "resource-inventory-v1",
                            "worker-process-identity-v1",
+                           "guardian-parent-identity-v1",
                            "binary-download-v1",
                            "prototype-app-exec-v1",
                            "prototype-jobs-v1",

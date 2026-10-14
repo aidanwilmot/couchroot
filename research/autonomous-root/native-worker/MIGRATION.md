@@ -176,9 +176,9 @@ migration fixtures.
 
 ### 3 Integrate packaging and service selection
 
-Local packaging foundation is implemented: `--native-candidate` includes two
+Local packaging foundation is implemented: `--native-candidate` includes three
 reproducibly built ordinary artifacts and a manifest while retaining managed
-selection. See `PARITY.md` for build evidence. Service-side candidate manifest validation and diagnostics are also implemented,
+selection (worker, app launcher and process observer). See `PARITY.md` for build evidence. Service-side candidate manifest validation and diagnostics are also implemented,
 without native launch. A durable selection journal and service guards now track
 versions, transition phases and evidence hashes. Workers now expose bounded live
 resource inventories, and an internal service admission hold drains admitted
@@ -193,16 +193,19 @@ constraint: S90D's service identity receives EACCES reading root process stat fi
 The direct observer must remain fail-closed there. A matching service-identity
 probe successfully bound and polled pidfds across shutdown on S90D; QN90A's older
 kernel passed the existing proc-stat approach. See `handoff-results.json` and
-`PARITY.md`. Package and integrate the pidfd bridge before enabling S90D handoff.
+`PARITY.md`. Complete deployment integration before enabling S90D handoff.
 An internal managed-handoff pidfd bridge now binds the handle before a fresh
 authenticated inventory/identity confirmation and requires bounded observer exit
 evidence. It is locally tested through the actual service hold and managed wire
-session, but not packaged or enabled by the installed service. See
+session. Schema-2 candidates now package the observer with source/build hashes;
+schema-1 candidates remain accepted without it. It is not enabled by the installed service. See
 [`native-observer/README.md`](../native-observer/README.md). The staged executable
-must still be bound to the package manifest and qualified in the TV service context.
+must still be verified against the package manifest and qualified in the TV service context.
 Bind handles before a fresh authenticated identity confirmation; the test controller
-owns the guardian child, while a production bridge needs an equivalent fresh
-guardian-identity check. A bare PID or an unreadable stat file is insufficient.
+owns the guardian child. Native status now checks its original guardian parent
+relationship on every request (`guardian-parent-identity-v1`), without allocating
+a descriptor. The bridge must bind both handles and require this fresh confirmation
+before native handoff. A bare PID or an unreadable stat file is insufficient.
 The runtime controller, live state installation/rollback and actual service
 integration remain required; this is not phase-three completion.
 

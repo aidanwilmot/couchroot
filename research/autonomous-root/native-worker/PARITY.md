@@ -496,3 +496,27 @@ QN90A and 6015 on S90D. Their new tails had no matching panic/BUG/Oops/segfault/
 file_open_checker patterns. This avoids the earlier suspend-clock filtering error,
 but remains retained-interval evidence rather than continuous collection. Long-run
 qualification still needs continuous bounded capture and explicit gap reporting.
+
+## Observer packaging and fresh guardian confirmation — 2026-10-14
+
+Schema-2 native candidates include the ordinary process observer alongside the
+worker and app launcher. All three artifacts are built twice from snapshotted
+sources with the pinned compiler image. Manifest validation checks observer source
+provenance, artifact hash, ABI, GLIBC ceiling 2.17 and the bridge's 128 KiB limit.
+Schema-1 candidates remain accepted without an observer; an unexpected observer
+in a schema-1 package is refused. Managed payloads and selection remain unchanged.
+
+Native status now checks that its current kernel parent is the original guardian
+and advertises `guardian-parent-identity-v1`. Startup establishes the direct parent
+relationship and guardian start ticks; this fresh check binds those cached ticks
+to the original parent without allocating a descriptor. It does not promise future
+liveness. The single-handle service bridge still rejects native guardian pairs:
+binding both handles and requiring this confirmation is the next integration step.
+
+Local validation passed 50 native ASAN/UBSAN tests, seven differential groups and
+six production file/record tests. The repository runner passed 243 tests and
+skipped 84 environment-dependent tests. All nine candidate service tests passed
+with the actual source-built schema-2 candidate, including the ordinary artifact
+case; its repeated builds matched. The five builder/package boundary tests also
+passed as part of the repository run. No TV was contacted or package installed.
+Actual service-side observer staging/launch and both-TV validation remain open.

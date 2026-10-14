@@ -46,10 +46,10 @@ def prepare(device, site, sign=True, version=None, native_candidate=False):
     shutil.copytree(SOURCE/'service',stage/'service')
     payload=stage/'payload';payload.mkdir(mode=0o700)
     if native_candidate:
-        from .native_worker import build as build_native
+        from .native_worker import ARTIFACTS, build as build_native
         native = build_native(folder/'native-worker-candidate', builder.command)
         launcher = native/'native-app-launcher'
-        for name in ('native-worker', 'native-app-launcher', 'native-manifest.json'):
+        for name in (*ARTIFACTS, 'native-manifest.json'):
             shutil.copyfile(native/name, payload/name)
     else:
         from .root_launcher import build as build_launcher

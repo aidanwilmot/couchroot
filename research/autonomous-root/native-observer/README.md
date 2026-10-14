@@ -34,9 +34,13 @@ this check is not a race-free executable loader. The option has no public API or
 configuration route. Default behavior remains proc-stat observation; there is no
 automatic fallback after a permission error.
 
-Native guardian observation is deliberately rejected. The current native status
-caches guardian start ticks. Fresh root-side guardian identity verification is
-required before extending this binding protocol to the worker/guardian pair.
+Native guardian observation is deliberately rejected by this single-handle
+bridge. Native status now confirms the original parent relationship on every
+request and advertises `guardian-parent-identity-v1`. Startup established the
+guardian's start ticks and direct parent relationship; the fresh kernel parent
+check binds that cached identity to the original parent without opening another
+descriptor. This is point-in-time confirmation. Extending the observer to bind
+both handles before requiring that capability remains necessary.
 
 ## Qualification boundary
 
@@ -52,7 +56,9 @@ Two ordinary ARMv7 softfp builds matched byte-for-byte; their maximum required
 GLIBC version is 2.17. These results do not establish TV executable staging or
 service launch compatibility.
 
-The observer is not yet in the candidate package manifest or enabled by `main.js`.
+Schema-2 candidate manifests now include the observer and its source/build hashes.
+Schema-1 candidates remain accepted without an observer. The observer is not
+enabled by `main.js`.
 Its launch from the actual installed TV service still needs qualification. Earlier
 TV pidfd probes establish kernel feasibility, not this executable's deployment.
 Do not enable production handoff based only on host tests. .NET remains deployed.

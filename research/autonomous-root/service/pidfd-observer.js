@@ -10,8 +10,8 @@ function preparePidfdExit({binary,sha256,bound,confirm}){
  let identity;
  try{
   identity=processIdentities({...bound,capabilities:['worker-process-identity-v1']},bound.processes.worker.pid);
-  // Native's cached guardian identity is not fresh confirmation. Do not allow
-  // a caller to infer guardian ownership merely from a previously returned PID.
+  // This bridge observes one handle only. Native handoff requires binding both
+  // handles plus fresh guardian-parent-identity-v1 confirmation before arming.
   if(identity.processes.guardian!==null)throw Error('Guardian observation is not integrated');
   // Package/staging owner must keep this executable immutable through spawn.
   // The digest is supplied by that trusted manifest, never by a request body.

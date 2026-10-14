@@ -211,6 +211,7 @@
       "start_ticks"
     ],
     "guardian": "null for managed; native guardian pid and start_ticks",
+    "guardian_confirmation": "guardian-parent-identity-v1 means this status request freshly checked the kernel parent PID against the direct guardian parent established at startup. Cached start ticks remain bound to that original parent; this does not promise future liveness or observe both pidfd exits.",
     "identity": "Bind to boot_id, worker_id and authenticated worker PID. Preserve decimal start_ticks as a string.",
     "exit": "BYE and disconnect precede cleanup. Observe original worker and guardian identities absent or replaced before treating process exit as verified. Mounts, detached descendants and retained state require separate reconciliation."
   }

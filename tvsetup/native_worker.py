@@ -8,7 +8,8 @@ from .common import REPO, Refused, atomic_json, sha
 from .root_launcher import IMAGE
 
 SOURCE = REPO / 'research/autonomous-root'
-ARTIFACTS = {'native-worker': 'worker', 'native-app-launcher': 'app-launcher'}
+ARTIFACTS = {'native-worker': 'worker', 'native-app-launcher': 'app-launcher',
+             'native-process-observer': 'process-observer'}
 ALLOWED_NEEDED = {'libc.so.6', 'libdl.so.2', 'libpthread.so.0', 'librt.so.1',
                   'libgcc_s.so.1', 'ld-linux.so.3'}
 
@@ -48,7 +49,8 @@ def build(folder, command):
     snapshot = folder / 'source'
     inputs = sorted((SOURCE / 'native-worker').glob('*.h')) + [
         SOURCE / 'native-worker/worker.c', SOURCE / 'native-worker/build.sh',
-        SOURCE / 'native-launcher/app-launcher.c', SOURCE / 'native-launcher/build.sh']
+        SOURCE / 'native-launcher/app-launcher.c', SOURCE / 'native-launcher/build.sh',
+        SOURCE / 'native-observer/process-observer.c', SOURCE / 'native-observer/build.sh']
     source_hashes = {}
     for source in sorted(inputs):
         if source.is_symlink() or not source.is_file():
@@ -72,6 +74,8 @@ def build(folder, command):
         output.mkdir()
         command(base + ['-v', str(snapshot) + ':/src:ro', '-v', str(output) + ':/out',
                         image, 'sh', '/src/native-worker/build.sh', '/out', '--worker-only'])
+        command(base + ['-v', str(snapshot) + ':/src:ro', '-v', str(output) + ':/out',
+                        image, 'sh', '/src/native-observer/build.sh', '/out'])
         if {p.name for p in output.iterdir()} != set(ARTIFACTS.values()):
             raise Refused('Ordinary native build emitted unexpected artifacts')
         records = {}
@@ -82,11 +86,13 @@ def build(folder, command):
             data = binary.read_bytes()
             report = command(base + ['-v', str(output) + ':/out:ro', image,
                                       'arm-linux-gnueabi-readelf', '-l', '-d', '-V', '/out/' + compiled])
-            records[name] = dict(sha256=sha(data), size=len(data), **inspect_binary(data, report, (2, 17, 0) if name == 'native-app-launcher' else (2, 28, 0)))
+            if name == 'native-process-observer' and len(data) > 128 * 1024:
+                raise Refused('Native observer exceeds service artifact limit')
+            records[name] = dict(sha256=sha(data), size=len(data), **inspect_binary(data, report, (2, 28, 0) if name == 'native-worker' else (2, 17, 0)))
         runs.append(records)
     if runs[0] != runs[1]:
         raise Refused('Repeated native candidate builds differ')
-    manifest = dict(schema=1, kind='native-worker-candidate', implementation='native-prototype',
+    manifest = dict(schema=2, kind='native-worker-candidate', implementation='native-prototype',
                     selection='managed', device_qualified=False,
                     candidate_profiles=['qn90a', 's90d'],
                     source=source_hashes, toolchain=dict(image=image, compiler=compiler),
