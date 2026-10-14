@@ -44,6 +44,32 @@ observation without signalling either target. Parent stdio is not needed for the
 observation protocol. Callers must preserve the selected service-equivalent
 identity; this option never changes credentials or labels.
 
+The native supervision entry point is
+`process-observer --supervise SOCKET_PATH TOKEN_FILE BOOT_ID WORKER_PID [GUARDIAN_PID]`.
+It requires `control` and `token` in the same caller-owned 0700 directory. Before
+forking it creates and syncs an exclusive `result.next` intent. Existing intent or
+result files refuse a second launch. The child runs the socket observer in the
+same executable/identity; it sets a parent-death signal and verifies its parent
+before proceeding. The supervisor waits for and reaps only that child, then
+publishes a synced, create-only `result` receipt and removes the intent. It never
+signals the target worker or guardian. Observer and supervisor alarms are 35 and
+45 seconds respectively; interrupted supervision can leave only an unknown intent.
+
+Receipt schema 1 records boot ID, both target PIDs, observer PID, nullable exit
+code and nullable numeric terminating signal. Supervisor exit zero means receipt
+publication succeeded, **not** that observation succeeded: the receipt can record
+a failed or signalled observer. `readPublishedExit()` on the service listener waits
+for intent removal, validates the bounded private single-link receipt against the
+launch, and feeds its result into the existing socket-plus-termination gate. It
+retains malformed, mismatched or unfinished files for reconciliation. Cleanup
+removes a consumed receipt only if its inode still matches.
+
+The TV launch adapter is still required. It must start this supervisor outside
+`wrt-service`, pin the executable and invocation to the selected manifest and
+transaction, use the service-equivalent credentials, and reconcile uncertain
+submission rather than retrying. Neither the listener nor this entry point is
+currently selected by the installed service.
+
 1. Check descriptor capacity and boot, close inherited descriptors, bind all
    pidfds and verify none has exited; emit `BOUND`.
 2. The service obtains fresh authenticated worker identity and resource inventory
@@ -138,3 +164,12 @@ receipt after EOF, refuse bad authentication/sequence/identity, propagate a nonz
 observer exit, preserve files after cancellation or timeout, and enforce a private
 parent directory. Device launch integration and supervised termination evidence
 remain required; host test children supply that receipt only in the test harness.
+
+The native supervisor revision passed eight supervisor tests in addition to the
+22 existing native observer/socket tests. Coverage includes a pair, actual child
+reaping, nonzero/signal receipts, controller and supervisor loss, retained unknown
+intent, duplicate refusal, directory permissions and boot mismatch. All 42 focused
+Node tests passed, including the real supervisor publishing a receipt consumed by
+the socket listener. Two ARM builds matched at 22,740 bytes, SHA-256
+`8919e5283aae233f1cdf619306a4b34a55c57d4e378bf52d9236d8766f4b7691`;
+the maximum GLIBC requirement remains 2.17. No TV access or deployment occurred.

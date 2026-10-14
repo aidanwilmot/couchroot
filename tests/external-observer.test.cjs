@@ -84,3 +84,43 @@ test('ordinary native socket observer completes against real process identity',{
   fs.rmSync(directory,{recursive:true,force:true});
  }
 });
+
+test('published supervisor receipt is bound to this launch and waits for intent removal',()=>fixture(async({observer,socket,token})=>{
+ await arm(socket,token,observer);socket.end('EXITED\n');await pause();
+ const root=path.dirname(observer.launch.tokenFile),file=path.join(root,'result'),intent=path.join(root,'result.next');
+ const report={schema:1,boot_id:BOOT,worker_pid:42,guardian_pid:null,observer_pid:99,exit_code:0,signal:null};
+ fs.writeFileSync(file,JSON.stringify({...report,worker_pid:43}),{mode:0o600});
+ assert.throws(()=>observer.readPublishedExit(),/mismatch/);fs.unlinkSync(file);
+ fs.writeFileSync(file,JSON.stringify(report),{mode:0o600});fs.writeFileSync(intent,'',{mode:0o600});
+ assert.equal(observer.readPublishedExit(),false);fs.unlinkSync(intent);
+ assert.equal(observer.readPublishedExit(),true);assert.equal((await observer.exited).method,'pidfd-external');
+}));
+test('receipt symlinks public permissions and malformed contents are refused',()=>fixture(async({observer})=>{
+ const root=path.dirname(observer.launch.tokenFile),file=path.join(root,'result');
+ fs.symlinkSync(observer.launch.tokenFile,file);assert.throws(()=>observer.readPublishedExit());fs.unlinkSync(file);
+ fs.writeFileSync(file,'{}',{mode:0o644});assert.throws(()=>observer.readPublishedExit(),/receipt file/);fs.chmodSync(file,0o600);
+ assert.throws(()=>observer.readPublishedExit(),/mismatch/);fs.unlinkSync(file);
+ assert.equal(observer.readPublishedExit(),false);
+}));
+test('native supervisor supplies reaped-child receipt to the real socket listener',{
+ skip:process.platform!=='linux'||!process.env.PROCESS_OBSERVER||process.env.COUCHROOT_PARITY_CONTAINER!=='1',timeout:10000
+},async()=>{
+ const directory=fs.mkdtempSync('/tmp/cr-ext-');let observer,supervisor;
+ const target=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});await once(target,'spawn');const targetExit=once(target,'exit');
+ try{
+  const identity={...bound,boot_id:fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),processes:{worker:{pid:target.pid,start_ticks:startTicks(fs.readFileSync('/proc/'+target.pid+'/stat','utf8'),target.pid)},guardian:null}};
+  observer=await createExternalObserver({directory,bound:identity,confirm:()=>identity});
+  const l=observer.launch;supervisor=spawn(process.env.PROCESS_OBSERVER,['--supervise',l.socketPath,l.tokenFile,l.bootId,...l.pids.map(String)],{stdio:'ignore'});
+  const supervisorExit=once(supervisor,'exit');
+  const armed=await observer.ready;armed.assertReady();assert.equal(observer.readPublishedExit(),false);
+  target.kill('SIGTERM');await targetExit;assert.deepEqual(await supervisorExit,[0,null]);
+  assert.equal(observer.readPublishedExit(),true);
+  assert.equal((await observer.exited).processes.worker.pid,target.pid);
+  await observer.dispose();assert.deepEqual(fs.readdirSync(directory),[]);
+ }finally{
+  if(target.exitCode===null&&target.signalCode===null){target.kill('SIGKILL');await targetExit;}
+  if(supervisor&&supervisor.exitCode===null&&supervisor.signalCode===null){supervisor.kill('SIGKILL');await once(supervisor,'exit');}
+  if(observer){observer.cancel();try{await observer.dispose();}catch(_){}}
+  fs.rmSync(directory,{recursive:true,force:true});
+ }
+});

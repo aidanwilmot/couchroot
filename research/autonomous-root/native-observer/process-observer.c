@@ -10,6 +10,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/prctl.h>
 #include <stddef.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -152,7 +154,7 @@ static int connect_controller(const char *socket_path, const char *token_path) {
     memset(secret, 0, sizeof(secret));
     return ok;
 }
-int main(int argc, char **argv) {
+static int observe(int argc, char **argv) {
     int external = argc >= 2 && !strcmp(argv[1], "--connect");
     const char *socket_path = NULL, *token_path = NULL;
     if (external) {
@@ -220,4 +222,65 @@ int main(int argc, char **argv) {
     }
     close_targets(fds, count);
     return result;
+}
+
+/* The supervisor owns only this forked child. Publish a termination receipt only
+ * after waitpid; socket EOF is deliberately insufficient. An interrupted intent
+ * is retained, and neither the intent nor a final receipt may be overwritten. */
+static int supervise(int argc, char **argv) {
+    if ((argc != 6 && argc != 7) || !valid_boot(argv[4]) ||
+        !parse_pid(argv[5]) || (argc == 7 && (!parse_pid(argv[6]) || !strcmp(argv[5], argv[6])))) return fail("invalid supervisor arguments");
+    if (getuid() != geteuid() || getgid() != getegid()) return fail("changed credentials");
+    sigset_t signals; sigemptyset(&signals);
+    if (sigprocmask(SIG_SETMASK, &signals, NULL) || signal(SIGCHLD, SIG_DFL) == SIG_ERR || signal(SIGALRM, SIG_DFL) == SIG_ERR || signal(SIGTERM, SIG_DFL) == SIG_ERR || signal(SIGINT, SIG_DFL) == SIG_ERR) return fail("supervisor signal setup failed");
+    alarm(45);
+    umask(077);
+    if (!capacity(1) || !close_inherited() || !capacity(4) || !boot_matches(argv[4])) return fail("supervisor admission failed");
+    char directory[sizeof(((struct sockaddr_un *)0)->sun_path)];
+    size_t length = strlen(argv[3]);
+    if (length < 7 || length >= sizeof(directory) || argv[3][0] != '/' || strcmp(argv[3] + length - 6, "/token")) return fail("invalid supervisor directory");
+    memcpy(directory, argv[3], length - 6); directory[length - 6] = 0;
+    char expected_socket[sizeof(directory) + 8];
+    int printed = snprintf(expected_socket, sizeof(expected_socket), "%s/control", directory);
+    if (printed < 0 || (size_t)printed >= sizeof(expected_socket) || strcmp(expected_socket, argv[2])) return fail("supervisor socket mismatch");
+    int dir = open(directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (dir < 0) return fail("supervisor directory unavailable");
+    struct stat st;
+    if (fstat(dir, &st) || st.st_uid != geteuid() || (st.st_mode & 07777) != 0700) { close(dir); return fail("supervisor directory invalid"); }
+    if (!fstatat(dir, "result", &st, AT_SYMLINK_NOFOLLOW) || errno != ENOENT) { close(dir); return fail("supervisor result exists or unavailable"); }
+    int report = openat(dir, "result.next", O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (report < 0) { close(dir); return fail("supervisor intent exists or unavailable"); }
+    if (fsync(report) || fsync(dir)) { close(report); close(dir); return fail("supervisor intent sync failed"); }
+    pid_t parent = getpid(), child = fork();
+    if (child < 0) { close(report); close(dir); return fail("observer fork failed"); }
+    if (!child) {
+        close(report); close(dir);
+        if (prctl(PR_SET_PDEATHSIG, SIGKILL) || getppid() != parent) _exit(1);
+        argv[1] = "--connect";
+        _exit(observe(argc, argv));
+    }
+    int status; pid_t reaped;
+    do { reaped = waitpid(child, &status, 0); } while (reaped < 0 && errno == EINTR);
+    if (reaped != child || (!WIFEXITED(status) && !WIFSIGNALED(status)) || !boot_matches(argv[4])) { close(report); close(dir); return fail("observer termination unavailable"); }
+    char result[512], code[16], sig[16], guardian[16];
+    if (WIFEXITED(status)) snprintf(code, sizeof(code), "%d", WEXITSTATUS(status)); else strcpy(code, "null");
+    if (WIFSIGNALED(status)) snprintf(sig, sizeof(sig), "%d", WTERMSIG(status)); else strcpy(sig, "null");
+    if (argc == 7) snprintf(guardian, sizeof(guardian), "%s", argv[6]); else strcpy(guardian, "null");
+    int size = snprintf(result, sizeof(result), "{\"schema\":1,\"boot_id\":\"%s\",\"worker_pid\":%s,\"guardian_pid\":%s,\"observer_pid\":%ld,\"exit_code\":%s,\"signal\":%s}\n", argv[4], argv[5], guardian, (long)child, code, sig);
+    int ok = size > 0 && (size_t)size < sizeof(result);
+    size_t used = 0;
+    while (ok && used < (size_t)size) {
+        ssize_t n = write(report, result + used, (size_t)size - used);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) { ok = 0; break; }
+        used += (size_t)n;
+    }
+    if (ok) ok = !fsync(report);
+    close(report);
+    if (ok) ok = !linkat(dir, "result.next", dir, "result", 0) && !fsync(dir) && !unlinkat(dir, "result.next", 0) && !fsync(dir);
+    close(dir); alarm(0);
+    return ok ? 0 : fail("observer receipt publication failed");
+}
+int main(int argc, char **argv) {
+    return argc > 1 && !strcmp(argv[1], "--supervise") ? supervise(argc, argv) : observe(argc, argv);
 }

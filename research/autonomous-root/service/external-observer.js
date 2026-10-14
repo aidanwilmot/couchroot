@@ -21,7 +21,7 @@ async function createExternalObserver({directory,bound,confirm,timeoutMs=32000})
  let readyYes,readyNo,exitYes,exitNo;
  const ready=new Promise((a,b)=>{readyYes=a;readyNo=b;}),exited=new Promise((a,b)=>{exitYes=a;exitNo=b;});
  ready.catch(()=>{});exited.catch(()=>{});
- let socket=null,phase='auth',buffer='',bytes=0,failure=null,ended=false,receipt=null,disposed=false;
+ let socket=null,phase='auth',buffer='',bytes=0,failure=null,ended=false,receipt=null,reportIdentity=null,disposed=false;
  const server=net.createServer(connection=>{
   if(socket||failure){connection.destroy();return;}
   socket=connection;
@@ -66,12 +66,36 @@ async function createExternalObserver({directory,bound,confirm,timeoutMs=32000})
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socketPath,()=>{server.removeListener('error',reject);resolve();});});
   fs.chmodSync(socketPath,0o600);
  }catch(error){clearTimeout(timer);server.close();fs.unlinkSync(tokenFile);try{fs.unlinkSync(socketPath);}catch(e){if(e.code!=='ENOENT')throw e;}fs.rmdirSync(root);throw error;}
+ function recordExit(value){
+  if(receipt||disposed||!value||Object.keys(value).sort().join('|')!=='exit_code|signal'||!((Number.isInteger(value.exit_code)&&value.exit_code>=0&&value.exit_code<=255&&value.signal===null)||(value.exit_code===null&&typeof value.signal==='string'&&/^SIG[A-Z0-9]+$/.test(value.signal))))throw Error('Invalid or duplicate observer termination receipt');
+  receipt={...value};if(value.exit_code!==0||value.signal!==null)fail(Error('Observer process did not exit successfully'));else finish();
+ }
+ function sameRoot(){
+  const current=fs.lstatSync(root);
+  if(!current.isDirectory()||current.isSymbolicLink()||current.dev!==rootIdentity.dev||current.ino!==rootIdentity.ino)throw Error('Observer directory changed before cleanup');
+ }
+ function intentExists(){try{fs.lstatSync(path.join(root,'result.next'));return true;}catch(e){if(e.code!=='ENOENT')throw e;return false;}}
  return Object.freeze({
   launch:Object.freeze({socketPath,tokenFile,bootId:identity.boot_id,pids:Object.freeze([identity.processes.worker.pid,...(identity.processes.guardian?[identity.processes.guardian.pid]:[])])}),
   ready,exited,
-  recordExit:value=>{
-   if(receipt||disposed||!value||Object.keys(value).sort().join('|')!=='exit_code|signal'||!((Number.isInteger(value.exit_code)&&value.exit_code>=0&&value.exit_code<=255&&value.signal===null)||(value.exit_code===null&&typeof value.signal==='string'&&/^SIG[A-Z0-9]+$/.test(value.signal))))throw Error('Invalid or duplicate observer termination receipt');
-   receipt={...value};if(value.exit_code!==0||value.signal!==null)fail(Error('Observer process did not exit successfully'));else finish();
+  recordExit,
+  readPublishedExit:()=>{
+   if(receipt||disposed)throw Error('Observer termination already recorded');
+   sameRoot();if(intentExists())return false;
+   let fd;try{fd=fs.openSync(path.join(root,'result'),fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);}catch(e){if(e.code==='ENOENT')return false;throw e;}
+   let st,value;
+   try{
+    st=fs.fstatSync(fd);
+    if(!st.isFile()||st.uid!==process.geteuid()||st.nlink!==1||(st.mode&0o7777)!==0o600||st.size<1||st.size>512)throw Error('Invalid observer receipt file');
+    const data=Buffer.alloc(st.size+1);let at=0;
+    while(at<data.length){const n=fs.readSync(fd,data,at,data.length-at,null);if(!n)break;at+=n;}
+    if(at!==st.size)throw Error('Observer receipt changed during read');
+    value=JSON.parse(data.subarray(0,at));
+   }finally{fs.closeSync(fd);}
+   if(!value||Object.keys(value).sort().join('|')!=='boot_id|exit_code|guardian_pid|observer_pid|schema|signal|worker_pid'||value.schema!==1||value.boot_id!==identity.boot_id||value.worker_pid!==identity.processes.worker.pid||value.guardian_pid!==(identity.processes.guardian?identity.processes.guardian.pid:null)||!Number.isInteger(value.observer_pid)||value.observer_pid<=1||value.observer_pid>2147483647||[value.worker_pid,value.guardian_pid].includes(value.observer_pid)||!((Number.isInteger(value.exit_code)&&value.exit_code>=0&&value.exit_code<=255&&value.signal===null)||(value.exit_code===null&&Number.isInteger(value.signal)&&value.signal>=1&&value.signal<=64)))throw Error('Observer receipt identity or result mismatch');
+   sameRoot();if(intentExists())return false;
+   reportIdentity=st;
+   recordExit({exit_code:value.exit_code,signal:value.signal===null?null:'SIG'+value.signal});return true;
   },
   cancel:()=>fail(Error('External observation cancelled')),
   dispose:async()=>{
@@ -79,8 +103,12 @@ async function createExternalObserver({directory,bound,confirm,timeoutMs=32000})
    if(!receipt)throw Error('Observer termination must be established before cleanup');
    if(!failure&&(!ended||phase!=='exited'))fail(Error('Observation disposed before completion'));
    await new Promise(resolve=>server.close(resolve));
-   const current=fs.lstatSync(root);
-   if(!current.isDirectory()||current.isSymbolicLink()||current.dev!==rootIdentity.dev||current.ino!==rootIdentity.ino)throw Error('Observer directory changed before cleanup');
+   sameRoot();
+   if(reportIdentity){
+    const file=path.join(root,'result'),now=fs.lstatSync(file);
+    if(!now.isFile()||now.dev!==reportIdentity.dev||now.ino!==reportIdentity.ino)throw Error('Observer receipt changed before cleanup');
+    fs.unlinkSync(file);
+   }
    // Only our two exact files; unknown entries prevent directory removal.
    for(const file of [tokenFile,socketPath])try{fs.unlinkSync(file);}catch(e){if(e.code!=='ENOENT')throw e;}
    fs.rmdirSync(root);disposed=true;clearTimeout(timer);
