@@ -6,6 +6,7 @@ const {candidateStatus}=require('./native-candidate');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const {selectionStatus,managedVersion}=require('./worker-selection');
 const {processIdentities,observeProcesses,waitForProcessExit}=require('./worker-processes');
+const {preparePidfdExit}=require('./pidfd-observer');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -132,20 +133,32 @@ function createAgent(config,options={}){
    shutdown:async transactionId=>{
     current();if(token.stopping||token.preparingStop)throw Error('Worker shutdown already submitted');
     token.preparingStop=true;
+    let observer=null;
     try{
     const inventory=await snapshot();current();if(token.stopping)throw Error('Worker shutdown already submitted');
     const r=inventory.resources;
     if(r.transfers.length||r.helpers.length||r.jobs.some(j=>!j.monitor_finished||!['completed','cancelled','timed_out','interrupted'].includes(j.state)))throw Error('Worker resources must be settled before shutdown');
     const digest=hash(JSON.stringify(inventory));prepared(transactionId,digest);
-    const before=observeProcesses(inventory,options.readProcessFile);
-    if(Object.values(before.processes).some(p=>p&&p.observation!=='present'))throw Error('Worker process identity changed before shutdown');
+    // Explicit trusted construction option only. Packaging/staging must provide
+    // an immutable manifest-bound observer; never downgrade an EACCES to exit.
+    if(options.processObserver){
+     observer=await preparePidfdExit({...options.processObserver,bound:inventory,confirm:async()=>{
+      const fresh=await snapshot();current();prepared(transactionId,digest);
+      if(hash(JSON.stringify(fresh))!==digest)throw Error('Worker inventory changed after process handle binding');
+      return fresh;
+     }});
+     observer.assertReady();
+    }else{
+     const before=observeProcesses(inventory,options.readProcessFile);
+     if(Object.values(before.processes).some(p=>p&&p.observation!=='present'))throw Error('Worker process identity changed before shutdown');
+    }
     current();prepared(transactionId,digest);token.stopping=true;
     const shutdown=await owner.shutdown();
-    const exited=await waitForProcessExit(inventory,{read:options.readProcessFile});
+    const exited=await (observer?observer.waitForExit():waitForProcessExit(inventory,{read:options.readProcessFile}));
     if(admissionHold!==token||generation!==gen||channel!==owner||!running)throw Error('Handoff ownership changed during shutdown');
     prepared(transactionId,digest);
     return {transaction_id:transactionId,source_manifest_sha256:sourceVersion,inventory_sha256:digest,shutdown,exited};
-    }finally{token.preparingStop=false;}
+    }finally{try{if(observer)await observer.cancel();}finally{token.preparingStop=false;}}
    },
    release:()=>{current();if(token.stopping||token.preparingStop)throw Error('Cannot release a pending shutdown');admissionHold=null;}
   };

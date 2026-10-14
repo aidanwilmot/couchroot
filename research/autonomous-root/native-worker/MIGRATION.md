@@ -194,6 +194,12 @@ The direct observer must remain fail-closed there. A matching service-identity
 probe successfully bound and polled pidfds across shutdown on S90D; QN90A's older
 kernel passed the existing proc-stat approach. See `handoff-results.json` and
 `PARITY.md`. Package and integrate the pidfd bridge before enabling S90D handoff.
+An internal managed-handoff pidfd bridge now binds the handle before a fresh
+authenticated inventory/identity confirmation and requires bounded observer exit
+evidence. It is locally tested through the actual service hold and managed wire
+session, but not packaged or enabled by the installed service. See
+[`native-observer/README.md`](../native-observer/README.md). The staged executable
+must still be bound to the package manifest and qualified in the TV service context.
 Bind handles before a fresh authenticated identity confirmation; the test controller
 owns the guardian child, while a production bridge needs an equivalent fresh
 guardian-identity check. A bare PID or an unreadable stat file is insufficient.

@@ -2,8 +2,8 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
 const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
 const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
-test('managed session drains through the real service hold and exits with retained record intact',{
- skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.MANAGED_PARITY,
+for(const mode of ['proc','pidfd','pidfd-bad-digest'])test('managed handoff with '+mode+' preserves retained records and admission ownership',{
+ skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.MANAGED_PARITY||(mode.startsWith('pidfd')&&!process.env.PROCESS_OBSERVER),
  timeout:20000
 },async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'managed-handoff-'));fs.chmodSync(root,0o700);
@@ -14,7 +14,9 @@ test('managed session drains through the real service hold and exits with retain
  const module={exports:{}};
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,__dirname:path.dirname(source),process,Buffer,setTimeout,clearTimeout,
   require:name=>name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name)});
- const agent=module.exports.createAgent({device:'qn90a'},{verifyFirmware:()=>{},selectionFile:file,managedVersion:()=>version});
+ const observer=mode.startsWith('pidfd')?{binary:process.env.PROCESS_OBSERVER,sha256:mode==='pidfd-bad-digest'?'0'.repeat(64):crypto.createHash('sha256').update(fs.readFileSync(process.env.PROCESS_OBSERVER)).digest('hex')}:undefined;
+ const agent=module.exports.createAgent({device:'qn90a'},{verifyFirmware:()=>{},selectionFile:file,managedVersion:()=>version,processObserver:observer,
+  ...(mode==='pidfd'?{readProcessFile:()=>{throw Object.assign(Error('proc denied'),{code:'EACCES'});}}:{})});
  let child,ended,stderr='';const id='handoff-'+crypto.randomBytes(12).toString('hex'),record='/opt/couchroot-agent/jobs/'+id+'.json';
  const until=async predicate=>{const deadline=Date.now()+5000;while(!await predicate()){if(Date.now()>deadline)throw Error('Condition deadline: '+stderr);await pause();}};
  try{
@@ -31,8 +33,16 @@ test('managed session drains through the real service hold and exits with retain
   assert.equal(inventory.processes.worker.pid,child.pid);assert.equal(inventory.resources.jobs[0].state,'completed');
   const digest=crypto.createHash('sha256').update(JSON.stringify(inventory)).digest('hex');
   const prepared=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},digest);
+  if(mode==='pidfd-bad-digest'){
+   await assert.rejects(hold.shutdown(prepared.pending.id),/digest mismatch/);
+   assert.equal(child.exitCode,null);assert.equal(child.signalCode,null);
+   assert.equal((await channel.operation({op:'status'})).worker_id,inventory.worker_id);
+   assert.equal(agent.status().admission_held,true);assert.equal(journal.read().pending.phase,'prepared');
+   assert.deepEqual(fs.readFileSync(record),retained);
+   return;
+  }
   const stopped=await hold.shutdown(prepared.pending.id);
-  assert.equal(stopped.exited.processes.worker.observation,'absent');assert.equal(stopped.exited.processes.guardian,null);
+  assert.equal(stopped.exited.processes.worker.observation,mode==='pidfd'?'exited':'absent');assert.equal(stopped.exited.processes.guardian,null);
   assert.deepEqual(await ended,[0,null],stderr);assert.deepEqual(fs.readFileSync(record),retained);
   assert.equal(agent.status().admission_held,true);assert.equal(agent.status().attempts,1);
   await assert.rejects(agent.execute('must not start',100),e=>e.outcome==='rejected');

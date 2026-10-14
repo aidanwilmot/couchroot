@@ -3,10 +3,12 @@
 This phase implements the file-access and retained-record portions of the
 [migration plan](MIGRATION.md), with a [machine-readable contract](../../../tests/worker-parity/contract.json)
 and [differential harness](../../../tests/worker-parity/README.md). It does not
-select native in the installed service, remove .NET, or remove the prototype's
-bounded lifetime. A subsequent local lifetime change adds the explicit
-`--production` mode described in the README; it has not been deployed or
-qualified on either TV. Default experiments keep their original narrow file policy.
+select native in the installed service or remove .NET. Subsequent work adds the
+explicit `--production` mode described in the README. Short ordinary-sidecar
+handoff trials exercised that mode on both TVs; they do not qualify production
+selection, long-running operation or the full lifecycle. See the dated evidence
+below and `handoff-results.json`. Default experiments keep their original narrow
+file policy and bounded lifetime.
 
 ## Opt-in production file policy
 
@@ -97,6 +99,12 @@ exported current snapshot when selecting rollback data. Changed-ID collisions
 require inspection, not last-writer-wins merging.
 
 ## Qualification and remaining gates
+
+Focused recheck at source revision `36859d8` rebuilt the managed harness and the
+native ASAN/UBSAN host executable. All 23 phase-one checks passed: six production
+file-policy/retained-record tests, seven differential groups and ten offline
+migration/rollback tests. This recheck was local in the isolated Linux container;
+the device results below are previously recorded evidence, not a new deployment.
 
 Local verification comprises 49 existing native ASAN/UBSAN tests, six new native
 production-policy/record tests, six differential groups and ten offline migration
