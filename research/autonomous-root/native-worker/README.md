@@ -299,9 +299,37 @@ UndefinedBehaviorSanitizer on Linux ARM64; the repository suite passed 226 tests
 with 35 native tests skipped by that runner. The final TV runs exited zero, showed
 no observed crash-collector waits or worker executable dumps, and passed original
 .NET worker, boot, protected-file, mount and cgroup preservation checks. No TV was
-rebooted. One-hour endurance tests have started separately; they are not yet
-qualified results. Production integration and the other remaining work below
+rebooted. The subsequent one-hour exercise completed on both TVs, but S90D failed a
+follow-on recovery-latency gate; see the endurance observation below. Production integration and the other remaining work below
 remain open.
+
+## One-hour endurance observation — 2026-10-13
+
+The storage-qualified `f9ae182` worker completed one hour of repeated root/app
+jobs and helper staging/release on both TVs. QN90A completed 341 cycles in
+3,608,304 ms; S90D completed 340 cycles in 3,600,799 ms. Every cycle preserved
+worker/guardian descriptor counts, worker thread count and mount count. Worker
+RSS ranged from 824–916 KiB on QN90A and 868–916 KiB on S90D. These are observations
+of this build, not a leak-proof claim or measurements of later revisions.
+
+QN90A also passed the entire subsequent extended suite, including the strengthened
+absolute-path assertion for immediate freezer cleanup. S90D's follow-on stopped
+worker recovered in **2,188 ms**, exceeding the unchanged **2,000 ms** acceptance
+limit. It exited and drained descendants, but the controller stopped at that
+failed gate, so later checks did not run. The complete combined suite is therefore
+**not qualified on both TVs**. Additional heartbeat/freezer/exit/resource timing
+is being collected before deciding whether code or the latency contract needs to
+change; the limit has not been relaxed.
+
+Both fixtures are fully cleaned. S90D's interrupted record was retained privately;
+only its known, hash-verified files were removed after confirming absent native
+runtime/freezer resources and acquiring the scope lock. Final checks preserved
+both original .NET worker identities, boot IDs, protected file hashes, launcher
+hashes, execution mounts and cgroup memberships. Neither observed kernel window
+contained crash-collector waits or worker executable dumps. No TV was rebooted.
+[Sanitized evidence](endurance-results.json) records both the successful exercise
+and the failed S90D gate. The later startup, orphan-intent, diagnostic and JSON
+upload changes remain separate, pending device qualification.
 
 ## Startup-checkpoint validation — 2026-10-13
 
@@ -418,7 +446,8 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
   recovery and owner-tagged orphan job-intent recovery on both TVs. All 47 native
   sanitizer host tests and ARM builds pass; the repository suite passes 226 tests
   with the 47 native tests skipped by that runner. The expanded device suite is
-  prepared while the prior build's endurance run continues.
+  prepared. The prior build completed its one-hour exercise on both TVs, but
+  S90D's subsequent 2,188 ms stopped-worker recovery exceeded the two-second gate.
   Cross-boot, reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.

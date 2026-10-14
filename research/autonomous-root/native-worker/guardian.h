@@ -500,7 +500,7 @@ static void guardian_start(void) {
   int status = 0, worker_status = 0, worker_done = 0;
   close(pulse_pipe[1]);
   pulse_pipe[1] = -1;
-  double stopping_at = 0, last_pulse = stamp();
+  double stopping_at = 0, watchdog_started = 0, last_pulse = stamp();
   int pulse_seen = 0, stalled = 0;
   while (!worker_done) {
     unsigned char pulses[128];
@@ -534,7 +534,14 @@ static void guardian_start(void) {
       guardian_watchdog_reason = stalled == 2   ? "active-request-stalled"
                                  : stalled == 3 ? "job-monitor-stalled"
                                                 : "heartbeat-lost";
+      watchdog_started = stamp();
+      if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+        fprintf(stderr, "prototype: watchdog heartbeat age %.0f ms\n",
+                watchdog_started - last_pulse);
       containment_freeze(pid);
+      if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+        fprintf(stderr, "prototype: watchdog freeze %.0f ms\n",
+                stamp() - watchdog_started);
       kill(pid, SIGKILL);
       fputs("prototype: guardian watchdog froze experiment and killed "
             "unresponsive worker\n",
@@ -557,6 +564,9 @@ static void guardian_start(void) {
   /* Do not release ownership or publish interruption while any descendant can
    * still run. Unexpected retention leaves the durable journal fail-closed. */
   double recovery_started = stamp();
+  if (watchdog_started && getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+    fprintf(stderr, "prototype: watchdog worker exit %.0f ms\n",
+            recovery_started - watchdog_started);
   int drained = guardian_drain();
   if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
     fprintf(stderr, "prototype: guardian drain %.0f ms\n",
@@ -570,6 +580,9 @@ static void guardian_start(void) {
     runtime_good = runtime_sweep();
     containment_good = containment_cleanup();
   }
+  if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
+    fprintf(stderr, "prototype: guardian recovery resources %.0f ms\n",
+            stamp() - recovery_started);
   if (!drained || !records_good || !runtime_good || !containment_good ||
       containment_failed) {
     fputs("prototype: guardian recovery incomplete; journal retained\n",
