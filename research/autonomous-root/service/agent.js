@@ -5,6 +5,7 @@ const {read,hash,verifyFirmware,sdkRuntimeGuard}=require('./policy');
 const {candidateStatus}=require('./native-candidate');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const {selectionStatus,managedVersion}=require('./worker-selection');
+const {processIdentities,observeProcesses,waitForProcessExit}=require('./worker-processes');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -45,7 +46,7 @@ function createAgent(config,options={}){
   const pkg=path.basename(stage);for(const suffix of ['.tar.gz','.tar.gz.signature']){const p=BASE+'/on-demand/'+pkg+suffix;if(fs.existsSync(p)&&fs.lstatSync(p).isFile())fs.unlinkSync(p);}
   try{fs.rmdirSync(stage);stage=null;}catch(_){}try{fs.rmdirSync(BASE+'/on-demand');}catch(_){}
  }
- function schedule(){if(!running||timer||connected)return;if(attempts>=8){lastError='Acquisition retry budget exhausted; use authenticated disable/enable after diagnosis';return;}timer=setTimeout(()=>{timer=null;launch();},Math.min(60000,5000*Math.pow(2,Math.max(0,attempts-1))));}
+ function schedule(){if(!running||timer||connected||admissionHold)return;if(attempts>=8){lastError='Acquisition retry budget exhausted; use authenticated disable/enable after diagnosis';return;}timer=setTimeout(()=>{timer=null;launch();},Math.min(60000,5000*Math.pow(2,Math.max(0,attempts-1))));}
  function prepare(port,secret){
   firmware(config);
   const pkg='archive-root-'+crypto.randomBytes(8).toString('hex');stage=BASE+'/'+pkg;
@@ -67,7 +68,7 @@ function createAgent(config,options={}){
   return pkg;
  }
  async function launch(){
-  if(!running||connected||launching)return;
+  if(!running||connected||launching||admissionHold)return;
   if(!selection(true).launch_allowed){running=false;lastError='Worker selection requires reconciliation';return;}
   launching=true;attempts++;const gen=++generation;let step='firmware verification';
   try{
@@ -75,7 +76,7 @@ function createAgent(config,options={}){
    firmware(config);
    const secret=crypto.randomBytes(32);
    if(channel)channel.close();
-   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
+   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation||(admissionHold&&admissionHold.stopping)){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
    await new Promise((resolve,reject)=>{channel.start(resolve);channel._server.once('error',reject);});
    if(!running||gen!==generation)return;
    step='loopback connection';
@@ -105,23 +106,48 @@ function createAgent(config,options={}){
   return request;
  }
  function holdAdmission(){
-  if(admissionHold||!running||!connected||!workerReady||!channel||!selection().launch_allowed)throw Error('Ready worker required for handoff hold');
-  const token={},owner=channel,peer=channel._conn,gen=generation,worker=workerStatus.worker_id,boot=workerStatus.boot_id,pending=Array.from(inFlight);
+  const selected=selection();
+  if(admissionHold||!running||!connected||!workerReady||!channel||!selected.launch_allowed)throw Error('Ready worker required for handoff hold');
+  const token={},owner=channel,peer=channel._conn,gen=generation,worker=workerStatus.worker_id,boot=workerStatus.boot_id,pending=Array.from(inFlight),sourceVersion=selected.selected_manifest_sha256;
   admissionHold=token;
   function current(){if(admissionHold!==token||generation!==gen||channel!==owner||owner._conn!==peer||!running||!connected||!workerReady||!workerStatus||workerStatus.worker_id!==worker)throw Error('Worker changed during handoff hold');}
-  return {
-   snapshot:async()=>{
-    current();const outcomes=await Promise.all(pending);current();
+  async function snapshot(){
+    current();if(token.stopping)throw Error('Worker shutdown already submitted');const outcomes=await Promise.all(pending);current();
     if(outcomes.some(known=>!known))throw Error('Uncertain request outcome during handoff drain');
     const info=await owner.operation({op:'status'});current();
     validateReadiness(info,{implementation:'managed',bootId:boot});
     if(info.worker_id!==worker)throw Error('Worker identity changed during handoff inventory');
-    const resources=validateResourceInventory(info);
+    const resources=validateResourceInventory(info),bound=processIdentities(info,peer.identity.pid);
     // This is a fresh inventory under a held service admission gate, not a
     // durable quiescence receipt or proof that detached work has stopped.
-    return {boot_id:boot,worker_id:worker,resources:JSON.parse(JSON.stringify(resources))};
+    return {...bound,resources:JSON.parse(JSON.stringify(resources))};
+  }
+  function prepared(id,digest){
+   if(!options.selectionFile)throw Error('Durable selection required before shutdown');
+   const state=selection(),p=state.pending;
+   if(state.phase!=='reconciliation-required'||!p||p.id!==id||p.phase!=='prepared'||p.from.implementation!=='managed'||!sourceVersion||p.from.manifest_sha256!==sourceVersion||p.quiescence_sha256!==digest)throw Error('Selection does not bind this drained worker inventory');
+  }
+  return {
+   snapshot:async()=>{if(token.preparingStop)throw Error('Worker shutdown preparation in progress');return snapshot();},
+   shutdown:async transactionId=>{
+    current();if(token.stopping||token.preparingStop)throw Error('Worker shutdown already submitted');
+    token.preparingStop=true;
+    try{
+    const inventory=await snapshot();current();if(token.stopping)throw Error('Worker shutdown already submitted');
+    const r=inventory.resources;
+    if(r.transfers.length||r.helpers.length||r.jobs.some(j=>!j.monitor_finished||!['completed','cancelled','timed_out','interrupted'].includes(j.state)))throw Error('Worker resources must be settled before shutdown');
+    const digest=hash(JSON.stringify(inventory));prepared(transactionId,digest);
+    const before=observeProcesses(inventory,options.readProcessFile);
+    if(Object.values(before.processes).some(p=>p&&p.observation!=='present'))throw Error('Worker process identity changed before shutdown');
+    current();prepared(transactionId,digest);token.stopping=true;
+    const shutdown=await owner.shutdown();
+    const exited=await waitForProcessExit(inventory,{read:options.readProcessFile});
+    if(admissionHold!==token||generation!==gen||channel!==owner||!running)throw Error('Handoff ownership changed during shutdown');
+    prepared(transactionId,digest);
+    return {transaction_id:transactionId,source_manifest_sha256:sourceVersion,inventory_sha256:digest,shutdown,exited};
+    }finally{token.preparingStop=false;}
    },
-   release:()=>{current();admissionHold=null;}
+   release:()=>{current();if(token.stopping||token.preparingStop)throw Error('Cannot release a pending shutdown');admissionHold=null;}
   };
  }
  return {status,start,stop,holdAdmission,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout))};

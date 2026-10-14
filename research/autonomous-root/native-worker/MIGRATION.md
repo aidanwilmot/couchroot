@@ -183,7 +183,11 @@ without native launch. A durable selection journal and service guards now track
 versions, transition phases and evidence hashes. Workers now expose bounded live
 resource inventories, and an internal service admission hold drains admitted
 requests before obtaining fresh inventory from the same worker connection. These
-are local foundations; they do not establish durable quiescence or stop a worker.
+are locally tested. A journal-bound managed shutdown now waits for authenticated
+acknowledgement/disconnect and independently observes original process identities
+exiting. It leaves selection pending and admission held. Detached work, retained
+resources and state installation still require reconciliation; process exit alone
+does not establish the full transition gate.
 The runtime controller, live
 state installation/rollback and real-device candidate acceptance are still required; this is not phase-three completion.
 

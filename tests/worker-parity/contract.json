@@ -34,7 +34,8 @@
       "worker_id",
       "app_launcher",
       "capabilities",
-      "resources"
+      "resources",
+      "processes"
     ],
     "exec": [
       "exit_code",
@@ -202,5 +203,15 @@
       "service admission state"
     ],
     "handoff": "Read fresh status after stopping service admissions and waiting for in-flight requests. Empty inventory alone is not evidence of quiescence; verify retained state and worker shutdown separately."
+  },
+  "process_identity": {
+    "capability": "worker-process-identity-v1",
+    "worker": [
+      "pid",
+      "start_ticks"
+    ],
+    "guardian": "null for managed; native guardian pid and start_ticks",
+    "identity": "Bind to boot_id, worker_id and authenticated worker PID. Preserve decimal start_ticks as a string.",
+    "exit": "BYE and disconnect precede cleanup. Observe original worker and guardian identities absent or replaced before treating process exit as verified. Mounts, detached descendants and retained state require separate reconciliation."
   }
 }

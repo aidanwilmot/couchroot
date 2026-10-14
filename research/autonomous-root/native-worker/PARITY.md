@@ -389,3 +389,52 @@ unchanged GLIBC 2.28 requirement; the independent launcher hash is unchanged.
 No TV was accessed, deployed to or rebooted. Live helper inventory, the service
 admission hold and this candidate still require qualification on both TVs. .NET
 remains deployed as the fallback.
+
+## Subsequent journal-bound shutdown and process observations — 2026-10-14
+
+The existing SHUTDOWN/BYE exchange now has a strict JavaScript client: it refuses
+pending requests, admits no new work after submission, requires an exact matching
+BYE and disconnect, and reports uncertain completion on malformed replies, missing
+acknowledgement, explicit server closure or the ten-second deadline. BYE is an
+acknowledgement before cleanup, not evidence of process exit.
+
+Both workers expose boot-bound PID/start-tick identities under the additive
+`worker-process-identity-v1` capability; native also identifies its guardian.
+The observer preserves tick strings, checks the authenticated worker PID, parses
+Linux comm fields containing spaces/parentheses/newlines, treats a matching zombie
+as present and accepts absence or a different start time as exit of the original
+identity. It never signals a PID. Permission/format failures or a changed boot do
+not establish exit. Native captures identities after the guardian fork, without
+adding a `/proc` open to each status request.
+
+The service hold can stop the current managed worker only after its inventory and
+source version are bound to a durable prepared selection transaction. It repeats
+the inventory, refuses live transfers/helpers and unfinished/uncertain jobs,
+verifies the processes are still present, submits shutdown once, then observes
+exit. Concurrent submissions cannot send two shutdowns. The returned observation
+binds the transaction, source manifest and inventory digest. Admission remains held
+and the journal remains pending. Retry acquisition and replacement connections are
+suppressed; a submitted shutdown cannot be released as if nothing happened.
+
+Local tests passed all 49 native ASAN/UBSAN, six file/record and seven differential
+checks. The combined service/selection/protocol run passed 77 Node tests with
+three skipped: the Linux process test passed separately in its container, and two
+previously qualified optional tests were not repeated. The repository Python suite
+passed 243 tests and skipped 75 separately enabled Linux checks. Eight Linux checks passed:
+six process-observer tests plus two real integration tests. The ordinary native
+worker/guardian passed actual wire shutdown, process-exit and journal/runtime
+cleanup checks. The managed production session passed through the real service
+hold, retained a completed job record byte-for-byte, and drained an active command.
+Its test-only entry bypasses TV launcher setup; this is not full managed Main or
+TV lifecycle qualification. The final source-version/concurrent-stop checks were
+rerun with the managed integration test after the combined run.
+
+Two ordinary ARM builds matched. Worker SHA-256 is
+`e17dee11cd459ce51e0f3f742b27cef624d352d4cf4c9232500f5553d7714009`
+(107792 bytes); launcher hash and GLIBC ceilings are unchanged.
+
+No TV was accessed or rebooted, and .NET remains deployed. This does not yet copy
+or install live state, commit native selection, or reconcile arbitrary detached
+managed descendants, mounts or ambiguous saved outcomes. Process disappearance
+alone is insufficient for those gates. TV service `/proc` access and the complete
+journal-bound stop path need qualification on both devices before live use.

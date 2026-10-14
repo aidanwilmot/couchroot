@@ -643,10 +643,41 @@ boot and worker identity. An uncertain drained result, missing inventory capabil
 invalid inventory or changed connection refuses the snapshot and leaves the hold
 in place. An explicit `release()` resumes that same worker; stop invalidates old
 handles. The hold never cancels jobs, closes transfers, releases helpers, migrates
-records or commits selection. It is process-local, so a future durable handoff must
-also use the selection journal to prevent admission after a service restart.
+records or commits selection. It is process-local; the selection journal is required
+to prevent admission after a service restart.
 
 The controller must separately reconcile prior unknown journal outcomes, saved
 records and resource ownership, then verify shutdown before state installation.
 The ordinary readiness path continues to accept older managed workers without
 this capability; those workers cannot provide a handoff inventory.
+
+Workers advertising `worker-process-identity-v1` also report `processes.worker`
+and `processes.guardian`: each identity contains a PID and decimal `start_ticks`
+string. The managed guardian is null. Native reports its supervising guardian.
+These identities are bound to boot and worker ID and checked against the
+authenticated worker PID. Start ticks remain strings to avoid integer rounding.
+
+An internal hold's `shutdown(transactionId)` supports the current managed selection.
+Initialize the selection journal before creating the hold. After inspection, bind
+the fresh snapshot's JSON SHA-256 to the pending prepared transaction's
+`quiescence_sha256` field. This field binds the pre-shutdown inventory; it is not
+itself proof of process exit or filesystem cleanup. Shutdown repeats the snapshot,
+requires its hash and source version to match that transaction, refuses open
+transfers/helpers and unfinished or uncertain jobs, and verifies current process
+identities before sending the existing authenticated `SHUTDOWN` frame once.
+
+The wire client requires a matching `BYE` and disconnect within ten seconds.
+Because `BYE` precedes cleanup, the hold then observes `/proc` for up to ten seconds
+to establish that the original process identities have gone. A different start
+time means that PID was reused; it is never signalled. A matching zombie remains
+present. Permission errors, malformed observations, boot changes and deadline
+expiry fail the check. Both worker and guardian must be gone for native process
+observations. No automatic reacquisition occurs while admission is held; a
+replacement connection during submitted shutdown is refused. The hold cannot be
+released after submission, including an uncertain result.
+
+The result binds transaction ID, source manifest, inventory hash, acknowledgement
+and process-exit observations. It does not advance selection, install data or prove
+that every detached managed descendant, mount or retained record is reconciled.
+Those are separate gates before state installation. `/proc` visibility from the
+TV service identity and both-TV shutdown behavior still need live qualification.

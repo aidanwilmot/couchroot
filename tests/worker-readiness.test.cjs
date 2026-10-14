@@ -6,7 +6,7 @@ const {validateReadiness,validateResourceInventory}=require('../research/autonom
 const BOOT='00000000-0000-0000-0000-000000000001',DIGEST='a'.repeat(64);
 function managed(){return {boot_id:BOOT,uptime_seconds:3,worker_id:'b'.repeat(32),capabilities:['file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1'],app_launcher:{implementation:'native',sha256:DIGEST}};}
 function native(){return {...managed(),implementation:'native-prototype',lifetime_mode:'production',lifetime_seconds:0,guardian_pid:42,capabilities:['prototype-production-files-v1','binary-upload-v1','binary-download-v1','prototype-app-exec-v1','prototype-jobs-v1','prototype-helper-lifecycle-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1','prototype-command-fault-diagnostics-v1'],app_launcher:{sha256:DIGEST,independently_staged:true}};}
-function inventoried(){const info=managed();info.capabilities.push('resource-inventory-v1');info.resources={schema:1,scope:'worker-owned',transfers:[],jobs:[],helpers:[]};return info;}
+function inventoried(){const info=managed();info.capabilities.push('resource-inventory-v1','worker-process-identity-v1');info.processes={worker:{pid:42,start_ticks:'123'},guardian:null};info.resources={schema:1,scope:'worker-owned',transfers:[],jobs:[],helpers:[]};return info;}
 test('managed deployed shape and additive diagnostics remain compatible',()=>{
  const info=managed();info.extra='diagnostic';info.capabilities.push('future-diagnostic-v1');
  assert.equal(validateReadiness(info,{implementation:'managed',bootId:BOOT}),info);
@@ -39,7 +39,7 @@ function fixture(options={}){
   execute(){this.executions++;return Promise.resolve({exit_code:0});}
   connect(){
    let resolve,reject;const pending=new Promise((yes,no)=>{resolve=yes;reject=no;});
-   const conn={identity:{uid:0},operation:()=>pending,_socket:{destroy:()=>{if(this._conn===conn){this._conn=null;this.options.onClose();}}}};
+   const conn={identity:{uid:0,pid:42},operation:()=>pending,_socket:{destroy:()=>{if(this._conn===conn){this._conn=null;this.options.onClose();}}}};
    this._conn=conn;this.options.onConnect(conn);return {resolve,reject,conn};
   }
  }
@@ -53,7 +53,7 @@ function fixture(options={}){
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('inventory requires explicit capability bounded identities and known shapes',()=>{
  const info=inventoried();assert.equal(validateResourceInventory(info),info.resources);
- const invalid=[v=>v.capabilities.pop(),v=>v.resources.scope='all',v=>v.resources.extra=true,
+ const invalid=[v=>v.capabilities=v.capabilities.filter(c=>c!=='resource-inventory-v1'),v=>v.resources.scope='all',v=>v.resources.extra=true,
   v=>v.resources.jobs.push({id:'valid-job-identity',state:'running',monitor_finished:'false'}),
   v=>v.resources.transfers.push({id:'a'.repeat(32),direction:'other'}),
   v=>v.resources.helpers=Array(9).fill('a'.repeat(32)),v=>v.resources.helpers=['a'.repeat(32),'a'.repeat(32)],
@@ -166,4 +166,53 @@ test('a newly pending selection blocks admission without silently killing active
   assert.equal(agent.status().phase,'selection-required');assert.equal(agent.status().worker_ready,false);assert.equal(agent.status().connected,true);
   await assert.rejects(agent.execute('true',100),e=>e.outcome==='rejected');await assert.rejects(agent.operation({op:'job.start'}),e=>e.outcome==='rejected');assert.equal(channels[0].executions,0);
  }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('handoff shutdown binds durable inventory, observes exit, and suppresses reacquisition',async()=>{
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handoff-stop-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
+ journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,stops=0;
+ const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(!live)throw Object.assign(Error('gone'),{code:'ENOENT'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';};
+ const {agent,channels,timers}=fixture({selectionFile:file,managedVersion:()=>DIGEST,readProcessFile});
+ agent.start();const channel=channels[0],ready=channel.connect();
+ try{
+  ready.resolve(managed());await flush();channel.operation=async()=>inventoried();
+  const hold=agent.holdAdmission(),inventory=await hold.snapshot();
+  await assert.rejects(hold.shutdown('unbound'),/Selection/);assert.equal(stops,0);
+  const digest=crypto.createHash('sha256').update(JSON.stringify(inventory)).digest('hex');
+  const state=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},digest);
+  channel.shutdown=async()=>{stops++;live=false;ready.conn._socket.destroy();return {acknowledged:true,disconnected:true};};
+  const outcomes=await Promise.allSettled([hold.shutdown(state.pending.id),hold.shutdown(state.pending.id)]);
+  assert.equal(outcomes.filter(r=>r.status==='fulfilled').length,1);assert.equal(outcomes.filter(r=>r.status==='rejected').length,1);
+  const result=outcomes.find(r=>r.status==='fulfilled').value;
+  assert.equal(result.transaction_id,state.pending.id);assert.equal(result.source_manifest_sha256,DIGEST);
+  assert.equal(result.inventory_sha256,digest);assert.equal(result.exited.processes.worker.observation,'absent');assert.equal(stops,1);
+  assert.equal(agent.status().connected,false);assert.equal(agent.status().admission_held,true);assert.equal(timers.length,0);
+  await assert.rejects(agent.execute('must not replay',100),e=>e.outcome==='rejected');
+  await assert.rejects(hold.shutdown(state.pending.id));assert.throws(()=>hold.release());
+  const unwanted=channel.connect();assert.equal(channel._conn,null);assert.equal(timers.length,0);unwanted.resolve(managed());await flush();assert.equal(agent.status().worker_ready,false);
+  assert.equal(journal.read().pending.phase,'prepared'); // No state installation or commit is implied.
+ }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('shutdown refuses active resources changed inventory and unreadable process identity',async()=>{
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ for(const mode of ['transfer','helper','running','unknown','not-monitored','changed-inventory','denied','reused']){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handoff-refuse-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
+  journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let stops=0;
+  const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(mode==='denied')throw Object.assign(Error('denied'),{code:'EACCES'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' '+(mode==='reused'?'124':'123')+' 0';};
+  const {agent,channels}=fixture({selectionFile:file,managedVersion:()=>DIGEST,readProcessFile});agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();const info=inventoried();
+   if(mode==='transfer')info.resources.transfers.push({id:'a'.repeat(32),direction:'upload'});
+   if(mode==='helper')info.resources.helpers.push('a'.repeat(32));
+   if(['running','unknown','not-monitored'].includes(mode))info.resources.jobs.push({id:'active-job-identity',state:mode==='not-monitored'?'completed':mode,monitor_finished:mode==='unknown'});
+   channel.operation=async()=>info;channel.shutdown=async()=>{stops++;throw Error('must not stop');};
+   const hold=agent.holdAdmission(),inventory=await hold.snapshot(),digest=crypto.createHash('sha256').update(JSON.stringify(inventory)).digest('hex');
+   const state=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},digest);
+   if(mode==='changed-inventory')info.resources.jobs.push({id:'completed-job-identity',state:'completed',monitor_finished:true});
+   await assert.rejects(hold.shutdown(state.pending.id));assert.equal(stops,0);assert.equal(agent.status().admission_held,true);
+   assert.equal(journal.read().pending.phase,'prepared');
+  }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
 });

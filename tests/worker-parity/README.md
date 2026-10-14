@@ -106,3 +106,28 @@ NATIVE_WORKER=/out/worker-io NATIVE_IO_DELAY=/out/delay.so \
 These checks do not reproduce TV storage or Smack helper staging. Startup before
 guardian activation and durable job-record writes retain their existing bounds;
 this is request-side storage progress, not a new storage or startup supervisor.
+
+## Handoff shutdown integration
+
+The disposable image also includes Node for the actual service/wire modules.
+Build the ordinary host worker as `/out/worker-io` using the slow-storage recipe
+above (no fault-control define), rebuild the managed harness, then run in the same
+isolated container:
+
+```sh
+COUCHROOT_PARITY_CONTAINER=1 NATIVE_WORKER=/out/worker-io \
+  MANAGED_PARITY=/out/managed/Harness.dll node --test \
+  tests/native-shutdown-integration.test.cjs \
+  tests/managed-handoff-integration.test.cjs tests/worker-processes.test.cjs
+```
+
+The native test uses the ordinary host worker and its guardian through the real
+JavaScript wire server. It requires both process identities to disappear, zero
+exit status, and removal of the guardian journal/runtime directory. The managed
+test uses the production `RunSession` through the real service admission hold,
+a real selection journal and Linux process observations. It preserves a completed
+job record while draining a foreground command, then refuses further admission.
+The harness-only `--parity-wire` entry bypasses TV launcher preparation and uses a
+fixture launcher digest. It is not the TV executable's complete startup/teardown
+path. These tests do not qualify Smack, TV `/proc` visibility, retained-state
+installation or native selection in the production service.

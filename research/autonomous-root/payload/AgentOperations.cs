@@ -81,7 +81,7 @@ internal static partial class SamsungTvRootAgent
     private static object Operation(JsonElement value, string staging, string runtime)
     {
         string op = Text(value, "op");
-        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, resources = ResourceInventory(), app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "binary-download-v1", "binary-upload-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1", "resource-inventory-v1" } };
+        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, processes = new { worker = new { pid = getpid(), start_ticks = ProcessIdentity(getpid()) }, guardian = (object)null }, resources = ResourceInventory(), app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "binary-download-v1", "binary-upload-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1", "resource-inventory-v1", "worker-process-identity-v1" } };
         if (op.StartsWith("helper.", StringComparison.Ordinal)) return HelperOperation(value);
         if (op.StartsWith("job.", StringComparison.Ordinal)) return JobOperation(value);
         if (op == "app.exec")

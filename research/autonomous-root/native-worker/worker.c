@@ -14,6 +14,7 @@ typedef struct {
 static Transfer transfers[8];
 static unsigned lifetime_seconds = 300;
 static int production_mode;
+static char worker_start_ticks[32], guardian_start_ticks[32];
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
 #include "file-policy.h"
@@ -481,6 +482,14 @@ static J *operation(J *request, Wire *w, const char *seq) {
     double uptime = (double)up.tv_sec + up.tv_nsec / 10000000 / 100.0;
     json_object_object_add(j, "uptime_seconds", json_object_new_double(uptime));
     str(j, "worker_id", worker_id);
+    J *processes = obj(), *worker = obj(), *guardian = obj();
+    num(worker, "pid", getpid());
+    str(worker, "start_ticks", worker_start_ticks);
+    num(guardian, "pid", guardian_pid);
+    str(guardian, "start_ticks", guardian_start_ticks);
+    json_object_object_add(processes, "worker", worker);
+    json_object_object_add(processes, "guardian", guardian);
+    json_object_object_add(j, "processes", processes);
     json_object_object_add(j, "resources", resource_inventory());
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
@@ -503,6 +512,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
                                             : "prototype-scoped-files-v1",
                            "binary-upload-v1",
                            "resource-inventory-v1",
+                           "worker-process-identity-v1",
                            "binary-download-v1",
                            "prototype-app-exec-v1",
                            "prototype-jobs-v1",
@@ -798,6 +808,9 @@ int main(int argc, char **argv) {
   startup_fault("ready");
   fault_events_init();
   guardian_start();
+  if (!job_identity(getpid(), worker_start_ticks) ||
+      !job_identity(guardian_pid, guardian_start_ticks))
+    fatal("worker process identities");
   jobs_init();
   Wire w = {0};
   int token = open(argv[3], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);

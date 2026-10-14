@@ -6,6 +6,18 @@ using System.Text;
 using System.Text.Json;
 internal static partial class SamsungTvRootAgent
 {
+    // Exercise the production session on Linux without TV launcher preparation.
+    // This bypass is compiled only into this harness, never the deployed worker.
+    internal static int ParityWire(int port, string root)
+    {
+        if (Environment.GetEnvironmentVariable("COUCHROOT_PARITY_CONTAINER") != "1")
+            throw new InvalidOperationException("Use an isolated disposable container");
+        byte[] secret=Convert.FromBase64String(File.ReadAllText(Path.Combine(root,"token")));
+        File.Delete(Path.Combine(root,"token"));
+        AppLauncherDigest=DigestPath("/bin/true");
+        try {RunSession("127.0.0.1",port,secret,root+"/",root+"/");return 0;}
+        finally {StopJobs();CloseTransfers();CloseHelpers();Zero(secret);}
+    }
     internal static int ParityBridge(string root)
     {
         if (Environment.GetEnvironmentVariable("COUCHROOT_PARITY_CONTAINER") != "1")
