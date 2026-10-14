@@ -15,7 +15,13 @@ function parseCredentials(status,label,pid){
  const field=name=>{const rows=status.split('\n').filter(line=>line.startsWith(name+':'));if(rows.length!==1)throw Error('Service credential evidence unavailable');return rows[0].slice(name.length+1).trim();};
  const ids=name=>field(name).split(/\s+/).map(Number);
  const uids=ids('Uid'),gids=ids('Gid'),groups=ids('Groups').sort((a,b)=>a-b);
- if(field('Pid')!==String(pid)||uids.length!==4||uids.some(id=>id!==5001)||gids.length!==4||gids.some(id=>id!==100)||groups.length<1||groups.length>32||groups.some(id=>!Number.isInteger(id)||id<1||id>2147483647)||new Set(groups).size!==groups.length||!groups.includes(100)||label!=='User::Pkg::MiniRoot01'||field('CapEff')!=='0000000000000000')throw Error('Kernel credentials do not match observer profile');
+ const requireMatch=(ok,name)=>{if(!ok)throw Error('Kernel credential mismatch: '+name+' for PID '+pid);};
+ requireMatch(field('Pid')===String(pid),'pid');
+ requireMatch(uids.length===4&&uids.every(id=>id===5001),'uids');
+ requireMatch(gids.length===4&&gids.every(id=>id===100),'gids');
+ requireMatch(groups.length>=1&&groups.length<=32&&groups.every(id=>Number.isInteger(id)&&id>=1&&id<=2147483647)&&new Set(groups).size===groups.length&&groups.includes(100),'groups');
+ requireMatch(label==='User::Pkg::MiniRoot01','label');
+ requireMatch(field('CapEff')==='0000000000000000','capabilities');
  return {uid:5001,gid:100,groups,label};
 }
 async function readCredentials(execute,pid,bootId){
@@ -29,7 +35,13 @@ async function readCredentials(execute,pid,bootId){
  if(parts.length!==2)throw Error('Malformed service credential observation');
  return parseCredentials(parts[0],parts[1].trim(),pid);
 }
-async function serviceCredentials(execute,bootId){return readCredentials(execute,process.pid,bootId);}
+async function serviceCredentials(execute,bootId){
+ // Resolve the caller's PID from the kernel rather than assuming the runtime
+ // initialized its process.pid property in this process.
+ const self=fs.readlinkSync('/proc/self');
+ if(typeof self!=='string'||!/^[1-9][0-9]{0,9}$/.test(self)||self.trim()!==self)throw Error('Current service PID unavailable');
+ return readCredentials(execute,Number(self),bootId);
+}
 function journalDirectory(directory){
  if(directory!==STATE)throw Error('Invalid service observer state path');
  const flags=fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW;

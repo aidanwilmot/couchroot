@@ -182,7 +182,12 @@ credential-matched pidfd sidecar tests. Direct observer child-process launch is
 now explicitly disabled for the deployed service. An external observer launch
 transport is required before S90D handoff and native selection can proceed; see
 the current [deployment evidence](../native-observer/DEPLOYMENT.md). The packaging
-and journal foundations below do not satisfy this remaining runtime gate.
+and journal foundations below do not satisfy this remaining runtime gate. The
+external transport is now integrated in a non-stopping probe, but S90D's
+credential preflight still rejects before launch. Kernel PID lookup and an exact
+native supplementary-group drop are required; systemd alone adds account-default
+groups. The installed 0.7.5 managed fallback remains ready. See DEPLOYMENT.md for
+verified outcomes; no native selection gate has passed.
 
 Local packaging foundation is implemented: `--native-candidate` includes three
 reproducibly built ordinary artifacts and a manifest while retaining managed

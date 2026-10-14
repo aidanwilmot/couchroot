@@ -260,7 +260,9 @@ This executor is intentionally limited to the non-stopping probe: it depends on
 the managed worker remaining alive. The internal shutdown guard stays enabled.
 A full handoff still requires an executor that can inspect and retire the observer
 unit after the old worker exits, plus restart reconciliation of pending journals.
-The service integration has not yet been deployed or qualified on either TV.
+The S90D integration has been deployed, but its credential preflight has not
+qualified. See DEPLOYMENT.md for the 0.7.3–0.7.5 outcomes and the required native
+credential-drop integration. QN90A retains its qualified proc-stat path.
 
 Local verification passed 59 Linux observer/service/managed-wire tests and seven
 host API tests. The API tests verify that the persisted request ID reaches the

@@ -294,3 +294,28 @@ PID's kernel record as the authoritative source, and compare the supervisor's
 kernel record against it. The fixed UID/GID, label, zero-capability and group
 constraints remain enforced. A regression test makes WRT group getters throw;
 credential validation must not consult them. Installed qualification remains open.
+
+
+The signed 0.7.5 kernel-record revision also rejected the credential profile before
+launch. This disproves attributing the failure solely to WRT credential getters.
+The exact lookup mismatch remains unresolved. Local source now resolves the caller
+PID using `readlink('/proc/self')` and reports the specific mismatching credential
+field and PID. Tests deliberately give the runtime a different `process.pid`;
+only the kernel link may determine the lookup. This PID correction is not deployed.
+
+A separate S90D systemd test under the matching UID, primary group and package label
+successfully read `/proc/self` as a link. It also demonstrated that systemd merges
+account-default supplementary groups with `SupplementaryGroups=`, producing extra
+groups and duplicates. The launch shell's exact-group check would reject that
+profile. Preserve the check: the native launcher must explicitly install the
+captured group list and drop credentials before observing processes. No such
+credential-drop mode is implemented yet. The diagnostic unit exited normally;
+raw identity output remains private.
+
+S90D remains on 0.7.5 with a ready managed worker. Each unsuccessful probe retains
+its submitted/unknown request record without replay. Neither TV rebooted, no
+observer launch was submitted, and native selection remains disabled. The 0.7.5
+package, enrollment, protected files, startup flags and loopback settings were
+verified; bounded collector evidence was archived and its owned files removed.
+The update journal accepts only the installed managed fallback, not the observer
+or migration. Local PID/profile validation passes all 61 focused Linux tests.

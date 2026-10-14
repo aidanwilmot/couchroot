@@ -11,8 +11,8 @@ test('observer transaction is stable and rejects absent or ambiguous request ide
 function credentials(change={}){
  const source=path.resolve(__dirname,'../research/autonomous-root/service/observer-runtime.js'),real=createRequire(source),module={exports:{}};
  const defaults={Pid:'42',Uid:'5001 5001 5001 5001',Gid:'100 100 100 100',Groups:'29 100 201',CapEff:'0000000000000000',...change};
- const fakeFs={readFileSync:file=>file.endsWith('status')?['Pid','Uid','Gid','Groups','CapEff'].map(key=>key+':\t'+defaults[key]).join('\n'):(change.label||'User::Pkg::MiniRoot01')};
- const fakeProcess={pid:42,getuid:()=>5001,geteuid:()=>5001,getgid:()=>100,getegid:()=>100,getgroups:()=>{throw Error('Do not consult WRT credential getters');}};
+ const fakeFs={readlinkSync:()=>change.self||'42',readFileSync:file=>file.endsWith('status')?['Pid','Uid','Gid','Groups','CapEff'].map(key=>key+':\t'+defaults[key]).join('\n'):(change.label||'User::Pkg::MiniRoot01')};
+ const fakeProcess={pid:9999,getuid:()=>5001,geteuid:()=>5001,getgid:()=>100,getegid:()=>100,getgroups:()=>{throw Error('Do not consult WRT credential getters');}};
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process:fakeProcess,require:name=>name==='fs'?fakeFs:real(name)});
  if(change.capture)return module.exports.serviceCredentials(change.capture,'00000000-0000-0000-0000-000000000001');
  return module.exports.parseCredentials(fakeFs.readFileSync('/proc/self/status'),fakeFs.readFileSync('/proc/self/attr/current'),42);
@@ -27,6 +27,7 @@ test('service credential capture uses the held executor and rejects incomplete e
  let calls=0;
  const result=await credentials({capture:async(command,timeout)=>{calls++;assert.match(command,/cat \/proc\/42\/status/);assert.doesNotMatch(command,/\/proc\/self\//);assert.equal(timeout,5000);return {exit_code:0,stdout};}});
  assert.equal(result.uid,5001);assert.equal(calls,1);
+ for(const self of ['0','../42','42\n','2147483648'])await assert.rejects(credentials({self,capture:async()=>{throw Error('Must not submit invalid PID');}}));
  for(const response of [{exit_code:1,stdout},{exit_code:0,stdout,timed_out:true},{exit_code:0,stdout,stderr:'denied'},{exit_code:0,stdout:stdout.replace('Pid: 42','Pid: 43')},{exit_code:0,stdout:stdout.replace('OBSERVER-SERVICE-LABEL','missing')}])await assert.rejects(credentials({capture:async()=>response}));
 });
 
@@ -35,8 +36,8 @@ test('runtime confirms actual supervisor credentials before fresh worker confirm
   const source=path.resolve(__dirname,'../research/autonomous-root/service/observer-runtime.js'),real=createRequire(source),module={exports:{}},events=[];
   const boot='00000000-0000-0000-0000-000000000001';
   const stat=()=>({isDirectory:()=>true,uid:5001,mode:0o40700,dev:1,ino:2});
-  const fakeFs={constants:fs.constants,openSync:()=>7,closeSync:()=>{},fstatSync:stat,lstatSync:stat,mkdirSync:()=>{},fchmodSync:()=>{},fsyncSync:()=>{}};
-  const fakeProcess={pid:42,getuid:()=>5001,geteuid:()=>5001,getgid:()=>100,getegid:()=>100,getgroups:()=>[29,100,201]};
+  const fakeFs={readlinkSync:()=> '42',constants:fs.constants,openSync:()=>7,closeSync:()=>{},fstatSync:stat,lstatSync:stat,mkdirSync:()=>{},fchmodSync:()=>{},fsyncSync:()=>{}};
+  const fakeProcess={pid:9999,getuid:()=>5001,geteuid:()=>5001,getgid:()=>100,getegid:()=>100,getgroups:()=>[29,100,201]};
   const unitModule={inspectObserverUnit:async o=>{events.push('inspect');assert.equal(o.bootId,boot);return {active_state:'active',sub_state:failure==='not-running'?'exited':'running',main_pid:77};},retireObserverUnit:async()=>{throw Error('Unexpected retirement');}};
   vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process:fakeProcess,require:name=>name==='fs'?fakeFs:name==='./observer-controller'?{prepareSupervisedExit:async o=>o}:name==='./observer-unit'?unitModule:real(name)});
   const options=await module.exports.prepareRuntimeObserver({directory:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',requestId:'runtime-probe-identity',staged:{binary:'/fixture',sha256:'a'.repeat(64),manifest_sha256:'b'.repeat(64)},bound:{boot_id:boot,processes:{worker:{pid:123},guardian:null}},confirm:async()=>{events.push('fresh-worker');return 'fresh';},execute:async command=>{
