@@ -602,6 +602,11 @@ protected files. Neither TV was rebooted. See [admission-results.json](admission
 
 ## Remaining production work
 
+The [native agent parity and .NET retirement plan](MIGRATION.md) maps the
+remaining contracts, managed dependencies, implementation order, rollback and
+release gates. It distinguishes a native worker default from a fully native
+agent installation and recovery path.
+
 - Capture kernel logs continuously during device runs. The ring buffer keeps
   only a few minutes, so endurance windows observed just the final extended
   suite. Both TVs passed the one-hour endurance run at `f9e6d0c`. Stopped-worker
