@@ -627,3 +627,31 @@ size, identity/unit drift, changed resources/records and lost ready-publication
 acknowledgement are covered. The private production listener, recovery of partial
 publication, controller adoption/rollback and both-TV stopping handoff remain
 open. Deployed packages and TV boots are unchanged.
+
+### Private production session and channel transfer — local follow-up
+
+A production session now owns the private loopback listener and random token,
+invokes the independent provider's launch/readiness operations, and validates the
+result against durable trial evidence. It removes unused token material only for
+failures before submission; all uncertain launch/readiness/disconnect outcomes
+retain ownership evidence. The listener deadline is distinct from the bounded
+readiness check. Transport closure never claims process or staging cleanup.
+
+The channel is available exactly once after the controller commits the matching
+trial, with the selected manifest, state receipt, readiness receipt and latest
+history entry all matching. Adoption rechecks the live worker identity and local
+ownership; a mismatch closes transport and requires reconciliation. This session
+does not itself commit selection, retire the provider, clear launch markers or
+implement rollback.
+
+The combined Linux suite passes 147 tests without skips. The real-process test
+now uses this listener/token/session through authenticated production readiness,
+a test-harness commit and channel transfer, then reads retained state and shuts
+down. Both ordinary and BOM-prefixed records survive. Host staging/systemd and
+Smack/mount boundaries remain fixtures. The exact app-state fixture is serialized
+across test processes. Timeout, listener failure, premature adoption, identity
+drift, duplicate adoption and disconnects are covered separately.
+
+Installed-controller adoption, interrupted-session recovery, rollback and both-TV
+stopping-handoff validation remain open. The TV packages and boots are unchanged;
+.NET remains deployed. The host-harness commit is not a native-default rollout.
