@@ -346,3 +346,46 @@ deployed. The next runtime controller must actually establish quiescence, retain
 rollback artifacts, verify/install state, stage the chosen executable, validate a
 trial and reconcile interruption. The journal merely binds its verified evidence;
 it does not prove single ownership or qualify live selection by itself.
+
+## Subsequent live inventory and admission hold — 2026-10-14
+
+Both managed and native workers now advertise `resource-inventory-v1` and return
+bounded worker-owned transfers, in-memory jobs and helper IDs in fresh status.
+Snapshots include completed jobs until forgotten. Job fields are read under their
+monitor lock; transfer/helper tables remain owned by the serialized request thread.
+Disk-only records are intentionally excluded. `monitor_finished` is the monitor's
+existing completion flag, not a new claim about detached descendants, fully drained
+output or persisted state. No command text, paths or output are exposed.
+
+The service's internal admission hold blocks new executions and operations, waits
+for already-admitted requests and obtains fresh status from the captured worker.
+Generation, connection, boot and worker identity must remain unchanged. Unknown
+or unclassified drained errors refuse a snapshot; known worker failures can proceed
+to inventory without replay. Inventory capability, shape, bounds and unique IDs
+are checked. An error leaves the hold active. Explicit release requires the same
+worker; stop invalidates the handle. Public readiness is false while held, and the
+status reports the hold and number of in-flight requests. Older managed workers
+remain usable normally but cannot supply this handoff inventory.
+
+The hold is process-local and has no HTTP or CLI exposure. It does not cancel or
+forget resources, stop the worker, reconcile earlier uncertain journal outcomes,
+install state or advance selection. The runtime controller must bind these checks
+to the durable selection journal, prove ownership/shutdown and install verified
+state before launching a replacement. Empty inventory alone cannot be used as a
+quiescence receipt.
+
+Local validation passed 49 native ASAN/UBSAN tests, six production file/record
+tests and seven managed/native differential groups. The new differential group
+observes both transfer directions, explicit close, running/cancelled job monitoring
+and forget; saved-record tests verify exclusion of disk-only records. The combined
+service/selection/protocol suite passed 59 Node tests with two previously qualified
+optional checks skipped. It includes held admission, pending-request drain, unknown
+results, stale connections/replies, malformed inventory, legacy-worker refusal and
+explicit release. These service tests use controlled channels, not TV processes.
+
+Two ordinary ARM builds matched byte-for-byte. The worker is 107512 bytes, SHA-256
+`77d3c4aaf8d9e0f4c5dd1ccd26236ce48b08013924f05776c7ebbf5aec922029`, with the
+unchanged GLIBC 2.28 requirement; the independent launcher hash is unchanged.
+No TV was accessed, deployed to or rebooted. Live helper inventory, the service
+admission hold and this candidate still require qualification on both TVs. .NET
+remains deployed as the fallback.

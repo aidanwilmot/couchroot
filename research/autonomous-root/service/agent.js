@@ -3,7 +3,7 @@ const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const sdb=require('./vendor/sdb'),{tarGz}=require('./vendor/tar'),{RootAgentServer}=require('./vendor/root-agent');
 const {read,hash,verifyFirmware,sdkRuntimeGuard}=require('./policy');
 const {candidateStatus}=require('./native-candidate');
-const {validateReadiness}=require('./worker-readiness');
+const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const {selectionStatus,managedVersion}=require('./worker-selection');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
@@ -20,7 +20,8 @@ function createAgent(config,options={}){
  const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
- let managedDigest=null;
+ let managedDigest=null,admissionHold=null;
+ const inFlight=new Set();
  function selection(refresh=false){
   if(!options.selectionFile)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
   const state=selectionStatus(options.selectionFile);
@@ -32,7 +33,7 @@ function createAgent(config,options={}){
  }
 
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&selected.launch_allowed,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!selected.launch_allowed?'selection-required':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&selected.launch_allowed&&!admissionHold,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -93,7 +94,36 @@ function createAgent(config,options={}){
   finally{if(gen===generation){launching=false;if(client){sdb.close(client);client=null;}if(!connected)schedule();}}
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
- function stop(){running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
- return {status,start,stop,operation:(value,data)=>{if(!running||!connected||!workerReady||!channel||!selection().launch_allowed)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value,data);},execute:(command,timeout)=>{if(!running||!connected||!workerReady||!channel||!selection().launch_allowed)return Promise.reject(Object.assign(Error('Root agent unavailable'),{outcome:'rejected'}));return channel.execute(command,timeout);}};
+ function stop(){admissionHold=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
+ function submit(call){
+  if(admissionHold||!running||!connected||!workerReady||!channel||!selection().launch_allowed)return Promise.reject(Object.assign(Error('Root worker unavailable or admission held'),{outcome:'rejected'}));
+  let request;try{request=Promise.resolve(call(channel));}catch(e){request=Promise.reject(e);}
+  // Keep a result classification, not command output, for the handoff drain.
+  // Transport errors without an explicit outcome are also uncertain.
+  const settled=request.then(()=>true,e=>!!e&&['failed','rejected'].includes(e.outcome));
+  inFlight.add(settled);settled.then(()=>inFlight.delete(settled));
+  return request;
+ }
+ function holdAdmission(){
+  if(admissionHold||!running||!connected||!workerReady||!channel||!selection().launch_allowed)throw Error('Ready worker required for handoff hold');
+  const token={},owner=channel,peer=channel._conn,gen=generation,worker=workerStatus.worker_id,boot=workerStatus.boot_id,pending=Array.from(inFlight);
+  admissionHold=token;
+  function current(){if(admissionHold!==token||generation!==gen||channel!==owner||owner._conn!==peer||!running||!connected||!workerReady||!workerStatus||workerStatus.worker_id!==worker)throw Error('Worker changed during handoff hold');}
+  return {
+   snapshot:async()=>{
+    current();const outcomes=await Promise.all(pending);current();
+    if(outcomes.some(known=>!known))throw Error('Uncertain request outcome during handoff drain');
+    const info=await owner.operation({op:'status'});current();
+    validateReadiness(info,{implementation:'managed',bootId:boot});
+    if(info.worker_id!==worker)throw Error('Worker identity changed during handoff inventory');
+    const resources=validateResourceInventory(info);
+    // This is a fresh inventory under a held service admission gate, not a
+    // durable quiescence receipt or proof that detached work has stopped.
+    return {boot_id:boot,worker_id:worker,resources:JSON.parse(JSON.stringify(resources))};
+   },
+   release:()=>{current();admissionHold=null;}
+  };
+ }
+ return {status,start,stop,holdAdmission,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout))};
 }
 module.exports={createAgent,launchRequest};

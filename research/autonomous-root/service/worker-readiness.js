@@ -20,4 +20,17 @@ function validateReadiness(info,expected){
  }else if(launcher.implementation!=='native')throw Error('Managed worker launcher implementation mismatch');
  return info;
 }
-module.exports={validateReadiness};
+function validateResourceInventory(info){
+ const r=info&&info.resources;
+ const object=v=>v&&typeof v==='object'&&!Array.isArray(v);
+ const exact=(v,keys)=>object(v)&&Object.keys(v).sort().join('|')===keys.slice().sort().join('|');
+ const list=(items,max,valid)=>Array.isArray(items)&&items.length<=max&&items.every(valid);
+ const id=v=>typeof v==='string'&&/^[a-f0-9]{32}$/.test(v);
+ if(!info||!Array.isArray(info.capabilities)||!info.capabilities.includes('resource-inventory-v1')||!exact(r,['schema','scope','transfers','jobs','helpers'])||r.schema!==1||r.scope!=='worker-owned'||
+  !list(r.transfers,8,t=>exact(t,['id','direction'])&&id(t.id)&&['upload','download'].includes(t.direction))||
+  !list(r.jobs,16,j=>exact(j,['id','state','monitor_finished'])&&typeof j.id==='string'&&/^[a-zA-Z0-9-]{16,64}$/.test(j.id)&&['starting','running','cancelling','completed','cancelled','timed_out','interrupted','unknown'].includes(j.state)&&typeof j.monitor_finished==='boolean')||
+  !list(r.helpers,8,id))throw Error('Worker resource inventory unavailable or invalid');
+ for(const ids of [r.transfers.map(t=>t.id),r.jobs.map(j=>j.id),r.helpers])if(new Set(ids).size!==ids.length)throw Error('Duplicate worker resource identity');
+ return r;
+}
+module.exports={validateReadiness,validateResourceInventory};

@@ -18,6 +18,10 @@ exit result rather than equating `timed_out` with a completed drain.
 Current differential groups cover file lifecycle/resume/status/ranges/conditional
 publication, path rejection/external reads, root execution/bytes/timeouts, job
 lifecycle/output/cancellation, job admission boundaries and legacy saved records.
+The resource-inventory group compares fresh empty status, upload/download handles,
+running and cancelled jobs, and explicit close/forget. Legacy-record fixtures
+also verify that disk-only records are excluded from the worker-owned inventory.
+Helper inventory on both actual TV runtimes remains a device qualification item.
 The native tests separately exercise production-path descriptor thresholds,
 parent replacement and cleanup, managed write roots, incomplete migration refusal
 and imported-record restart behavior. Offline migration tests cover atomic

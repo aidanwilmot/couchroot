@@ -622,3 +622,31 @@ but lacks production job, helper lifecycle and root-acquisition/recovery parity.
 It is not selected or packaged by the service. The deployed .NET 0.7.0 workers
 remain unchanged; neither TV was rebooted. See the experiment's aggregate metrics,
 capability matrix and limitations before considering a replacement.
+
+## Worker handoff inventory
+
+Workers advertising `resource-inventory-v1` add `resources` to their fresh wire
+`status` result. Schema 1 has scope `worker-owned`, up to eight transfers
+(`id`, `direction`), sixteen in-memory jobs (`id`, `state`, `monitor_finished`),
+and eight helper IDs. Array order is unspecified. Completed in-memory jobs remain
+listed until forgotten. Disk-only records and old helper directories are excluded.
+No paths, command text or output are included. `monitor_finished` means that job's
+monitor finished; it does not prove descendant cleanup, output draining or durable
+state reconciliation. Empty arrays alone do not establish quiescence.
+
+The service has an internal `holdAdmission()` interface for the upcoming handoff
+controller, with no HTTP route or CLI switch. It immediately blocks new requests,
+reports `admission_held`, `in_flight_requests`, phase `draining` and
+`worker_ready: false`. Its `snapshot()` waits for already-admitted requests, then
+requests and validates fresh inventory from the same connection, generation,
+boot and worker identity. An uncertain drained result, missing inventory capability,
+invalid inventory or changed connection refuses the snapshot and leaves the hold
+in place. An explicit `release()` resumes that same worker; stop invalidates old
+handles. The hold never cancels jobs, closes transfers, releases helpers, migrates
+records or commits selection. It is process-local, so a future durable handoff must
+also use the selection journal to prevent admission after a service restart.
+
+The controller must separately reconcile prior unknown journal outcomes, saved
+records and resource ownership, then verify shutdown before state installation.
+The ordinary readiness path continues to accept older managed workers without
+this capability; those workers cannot provide a handoff inventory.

@@ -73,6 +73,41 @@ class WorkerParityTests(unittest.TestCase):
         self.assertEqual(*values)
         return replies
     def paired(self,**kwargs):return [dict(kwargs),dict(kwargs)]
+    def resources(self,worker):
+        status=worker.call('status')
+        self.assertTrue(status['ok'],status)
+        self.assertIn('resource-inventory-v1',status['result']['capabilities'])
+        resources=status['result']['resources']
+        self.assertEqual(set(resources),{'schema','scope','transfers','jobs','helpers'})
+        self.assertEqual(resources['schema'],1)
+        self.assertEqual(resources['scope'],'worker-owned')
+        return resources
+    def test_resource_inventory_tracks_open_transfers_and_job_supervision(self):
+        for w in self.workers:
+            self.assertEqual(self.resources(w),dict(schema=1,scope='worker-owned',transfers=[],jobs=[],helpers=[]))
+        ids=self.transfer(b'pending')
+        for w,id in zip(self.workers,ids):
+            self.assertEqual(self.resources(w)['transfers'],[dict(id=id,direction='upload')])
+        self.compare('file.close',[dict(transfer_id=id) for id in ids])
+        for w in self.workers:
+            self.assertEqual(self.resources(w)['transfers'],[])
+            source=w.root/'download-source';source.write_bytes(b'data')
+            opened=w.call('file.open',path=str(source))
+            self.assertTrue(opened['ok'],opened)
+            id=opened['result']['transfer_id']
+            self.assertEqual(self.resources(w)['transfers'],[dict(id=id,direction='download')])
+            self.assertTrue(w.call('file.close',transfer_id=id)['ok'])
+        id='parity-inventory-job-001'
+        self.compare('job.start',self.paired(id=id,command='sleep 30',timeout_ms=60000,profile='root'),drop=('state','exit_code'))
+        for w in self.workers:
+            self.assertEqual(self.resources(w)['jobs'],[dict(id=id,state='running',monitor_finished=False)])
+        self.compare('job.cancel',self.paired(id=id),drop=('state',))
+        for w in self.workers:
+            self.wait(w,id)
+            self.assertEqual(self.resources(w)['jobs'],[dict(id=id,state='cancelled',monitor_finished=True)])
+        self.compare('job.forget',self.paired(id=id))
+        for w in self.workers:
+            self.assertEqual(self.resources(w)['jobs'],[])
     def transfer(self,data,name='nested/file',expected='absent'):
         requests=[]
         for w in self.workers:
@@ -161,6 +196,8 @@ class WorkerParityTests(unittest.TestCase):
             paths=[managed/(id+'.json'),self.workers[1].root/'.jobs'/(id+'.json')]
             try:
                 for p in paths:p.write_text(json.dumps(record));p.chmod(0o600)
+                # Disk-only outcomes are deliberately outside this live inventory.
+                for w in self.workers:self.assertEqual(self.resources(w)['jobs'],[])
                 results=self.compare('job.status',self.paired(id=id))
                 self.assertEqual(results[0]['result']['record'],results[1]['result']['record'])
                 self.assertFalse(self.compare('job.start',self.paired(id=id,command=':',timeout_ms=1000,profile='root'))[0]['ok'])

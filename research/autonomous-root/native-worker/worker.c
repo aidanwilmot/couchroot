@@ -410,6 +410,39 @@ static int operation_descriptors(const char *op) {
   return !strcmp(op, "file.begin") || !strcmp(op, "file.open") ||
          !strcmp(op, "file.commit") || !strcmp(op, "helper.release");
 }
+/* Transfer/helper tables are owned by the serialized request thread; the job
+ * monitor shares its table under jobs_mutex. Retained disk records and detached
+ * descendants are not inventoried here. Empty tables do not prove quiescence. */
+static J *resource_inventory(void) {
+  J *r = obj(), *ts = json_object_new_array(), *js = json_object_new_array(),
+    *hs = json_object_new_array();
+  num(r, "schema", 1);
+  str(r, "scope", "worker-owned");
+  for (int i = 0; i < 8; i++) {
+    if (transfers[i].fd >= 0) {
+      J *t = obj();
+      str(t, "id", transfers[i].id);
+      str(t, "direction", transfers[i].upload ? "upload" : "download");
+      json_object_array_add(ts, t);
+    }
+    if (helpers[i].id[0])
+      json_object_array_add(hs, json_object_new_string(helpers[i].id));
+  }
+  pthread_mutex_lock(&jobs_mutex);
+  for (int i = 0; i < 16; i++) {
+    if (!jobs[i].id[0]) continue;
+    J *j = obj();
+    str(j, "id", jobs[i].id);
+    str(j, "state", jobs[i].state);
+    boolean(j, "monitor_finished", jobs[i].finished);
+    json_object_array_add(js, j);
+  }
+  pthread_mutex_unlock(&jobs_mutex);
+  json_object_object_add(r, "transfers", ts);
+  json_object_object_add(r, "jobs", js);
+  json_object_object_add(r, "helpers", hs);
+  return r;
+}
 static J *operation(J *request, Wire *w, const char *seq) {
   const char *op = textval(request, "op");
   if (!op)
@@ -448,6 +481,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     double uptime = (double)up.tv_sec + up.tv_nsec / 10000000 / 100.0;
     json_object_object_add(j, "uptime_seconds", json_object_new_double(uptime));
     str(j, "worker_id", worker_id);
+    json_object_object_add(j, "resources", resource_inventory());
     str(j, "implementation", "native-prototype");
     num(j, "guardian_pid", guardian_pid);
     boolean(j, "stale_guardian_reconciled", guardian_reconciled);
@@ -468,6 +502,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     const char *names[] = {production_files ? "prototype-production-files-v1"
                                             : "prototype-scoped-files-v1",
                            "binary-upload-v1",
+                           "resource-inventory-v1",
                            "binary-download-v1",
                            "prototype-app-exec-v1",
                            "prototype-jobs-v1",

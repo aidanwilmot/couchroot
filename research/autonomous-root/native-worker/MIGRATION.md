@@ -180,7 +180,11 @@ Local packaging foundation is implemented: `--native-candidate` includes two
 reproducibly built ordinary artifacts and a manifest while retaining managed
 selection. See `PARITY.md` for build evidence. Service-side candidate manifest validation and diagnostics are also implemented,
 without native launch. A durable selection journal and service guards now track
-versions, transition phases and evidence hashes. The runtime controller, live
+versions, transition phases and evidence hashes. Workers now expose bounded live
+resource inventories, and an internal service admission hold drains admitted
+requests before obtaining fresh inventory from the same worker connection. These
+are local foundations; they do not establish durable quiescence or stop a worker.
+The runtime controller, live
 state installation/rollback and real-device candidate acceptance are still required; this is not phase-three completion.
 
 Package ordinary worker, guardian functionality and app launcher from reproducible

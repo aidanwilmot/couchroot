@@ -2,10 +2,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{EventEmitter}=require('node:events');
 const {createRequire}=require('node:module');
-const {validateReadiness}=require('../research/autonomous-root/service/worker-readiness');
+const {validateReadiness,validateResourceInventory}=require('../research/autonomous-root/service/worker-readiness');
 const BOOT='00000000-0000-0000-0000-000000000001',DIGEST='a'.repeat(64);
 function managed(){return {boot_id:BOOT,uptime_seconds:3,worker_id:'b'.repeat(32),capabilities:['file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1'],app_launcher:{implementation:'native',sha256:DIGEST}};}
 function native(){return {...managed(),implementation:'native-prototype',lifetime_mode:'production',lifetime_seconds:0,guardian_pid:42,capabilities:['prototype-production-files-v1','binary-upload-v1','binary-download-v1','prototype-app-exec-v1','prototype-jobs-v1','prototype-helper-lifecycle-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1','prototype-command-fault-diagnostics-v1'],app_launcher:{sha256:DIGEST,independently_staged:true}};}
+function inventoried(){const info=managed();info.capabilities.push('resource-inventory-v1');info.resources={schema:1,scope:'worker-owned',transfers:[],jobs:[],helpers:[]};return info;}
 test('managed deployed shape and additive diagnostics remain compatible',()=>{
  const info=managed();info.extra='diagnostic';info.capabilities.push('future-diagnostic-v1');
  assert.equal(validateReadiness(info,{implementation:'managed',bootId:BOOT}),info);
@@ -50,6 +51,71 @@ function fixture(options={}){
  return {agent,channels,timers};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
+test('inventory requires explicit capability bounded identities and known shapes',()=>{
+ const info=inventoried();assert.equal(validateResourceInventory(info),info.resources);
+ const invalid=[v=>v.capabilities.pop(),v=>v.resources.scope='all',v=>v.resources.extra=true,
+  v=>v.resources.jobs.push({id:'valid-job-identity',state:'running',monitor_finished:'false'}),
+  v=>v.resources.transfers.push({id:'a'.repeat(32),direction:'other'}),
+  v=>v.resources.helpers=Array(9).fill('a'.repeat(32)),v=>v.resources.helpers=['a'.repeat(32),'a'.repeat(32)],
+  v=>v.resources.jobs=Array(17).fill({id:'valid-job-identity',state:'running',monitor_finished:false})];
+ for(const change of invalid){const v=inventoried();change(v);assert.throws(()=>validateResourceInventory(v));}
+ assert.throws(()=>validateResourceInventory(managed()));
+});
+test('handoff hold drains admitted work and takes fresh inventory before explicit release',async()=>{
+ const {agent,channels}=fixture();agent.start();const channel=channels[0],ready=channel.connect();
+ try{
+  ready.resolve(managed());await flush();
+  let complete;channel.execute=()=>new Promise(resolve=>{complete=resolve;});
+  let reads=0;const info=inventoried();info.resources.jobs.push({id:'active-job-identity',state:'running',monitor_finished:false});
+  channel.operation=async value=>{assert.equal(value.op,'status');reads++;return info;};
+  const execution=agent.execute('running command',1000),hold=agent.holdAdmission();
+  assert.equal(agent.status().admission_held,true);assert.equal(agent.status().in_flight_requests,1);
+  assert.equal(agent.status().worker_ready,false);assert.equal(agent.status().phase,'draining');
+  assert.throws(()=>agent.holdAdmission());
+  await assert.rejects(agent.operation({op:'job.start'}),e=>e.outcome==='rejected');
+  await assert.rejects(agent.execute('must not run',100),e=>e.outcome==='rejected');
+  const inventory=hold.snapshot();await flush();assert.equal(reads,0);
+  complete({exit_code:0});await execution;const snapshot=await inventory;
+  assert.equal(reads,1);assert.equal(snapshot.worker_id,managed().worker_id);assert.equal(snapshot.resources.jobs[0].state,'running');
+  assert.equal(agent.status().in_flight_requests,0);assert.equal(agent.status().admission_held,true);
+  snapshot.resources.jobs.length=0;assert.equal(info.resources.jobs.length,1);
+  hold.release();assert.equal(agent.status().admission_held,false);assert.throws(()=>hold.release());
+  assert.equal(agent.status().worker_ready,true);
+  await agent.operation({op:'status'});assert.equal(reads,2);
+ }finally{agent.stop();}
+});
+test('uncertain drain and old workers leave admission held without reading or replaying',async()=>{
+ for(const outcome of ['unknown',undefined,'failed','rejected']){
+  const {agent,channels}=fixture();agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();let reject;
+   channel.execute=()=>new Promise((yes,no)=>{reject=no;});let reads=0;
+   channel.operation=async()=>{reads++;return inventoried();};
+   const request=agent.execute('once',1000);const failed=assert.rejects(request);
+   const hold=agent.holdAdmission(),snapshot=hold.snapshot();
+   const expected=['failed','rejected'].includes(outcome)?snapshot:assert.rejects(snapshot,/Uncertain request/);
+   reject(Object.assign(Error('failure'),{outcome}));await failed;await expected;
+   assert.equal(reads,['failed','rejected'].includes(outcome)?1:0);assert.equal(agent.status().admission_held,true);
+   hold.release();
+  }finally{agent.stop();}
+ }
+});
+test('handoff inventory refuses replacement connections late replies and legacy status',async()=>{
+ for(const mode of ['replacement','stop','legacy','wrong-worker']){
+  const {agent,channels}=fixture();agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();let finish;
+   channel.operation=()=>new Promise(resolve=>{finish=resolve;});
+   const hold=agent.holdAdmission(),snapshot=hold.snapshot(),refused=assert.rejects(snapshot);await flush();
+   if(mode==='replacement'){ready.conn._socket.destroy();const next=channel.connect();next.resolve(managed());await flush();}
+   if(mode==='stop')agent.stop();
+   const info=mode==='legacy'?managed():inventoried();if(mode==='wrong-worker')info.worker_id='c'.repeat(32);
+   finish(info);await refused;
+   if(['replacement','stop'].includes(mode))assert.throws(()=>hold.release());
+   else{assert.equal(agent.status().admission_held,true);hold.release();}
+  }finally{agent.stop();}
+ }
+});
 test('service blocks operations while checking and clears readiness on disconnect',async()=>{
  const {agent,channels}=fixture();agent.start();const channel=channels[0],pending=channel.connect();
  try{
