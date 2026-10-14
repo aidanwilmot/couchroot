@@ -109,9 +109,31 @@
     "legacy_exec_session_ended_without_running": true
    },
    "endurance": {
-    "status": "interrupted-observation",
+    "status": "interrupted-by-tv-power-off",
     "completed_rows_before_loss": 213,
-    "note": "The TV left the network 36 minutes into the soak (last packet 23:43:59 local; DHCP lease later lapsed). Telemetry showed it idle and healthy on the same boot until then. Its history shows similar silent gaps with uptime continuing, consistent with standby. The job result, kernel window, cleanup and verification are pending until the TV is reachable; it was not woken or rebooted."
+    "failed_rows_before_loss": 0,
+    "power_off_request_before_soak_end": true,
+    "note": "The TV logged a power-off request about 16 minutes into the soak, stayed in standby, then entered deep suspend about 36 minutes in. After it resumed, the root-agent service re-acquired a new .NET worker, which ended the managed job and its in-memory output. The native guardian completed recovery: no native processes, runtime views, freezer group or guardian journal remained. No endurance result exists for S90D at this revision."
+   },
+   "kernel_observations": {
+    "collector_wait_lines": 0,
+    "lines": 5823,
+    "worker_executable_dump_lines": 0,
+    "file_open_checker_events": 0,
+    "too_many_open_files_events": 0
+   },
+   "cleanup_and_preservation": {
+    "boot_unchanged": true,
+    "protected_files_unchanged": true,
+    "launcher_content_unchanged": true,
+    "execution_mount_kinds_unchanged": true,
+    "cgroup_membership_lines_unchanged": true,
+    "native_helper_storage_removed": true,
+    "prototype_freezer_groups_removed": true,
+    "helpers_removed_after_hash_and_mount_checks": true,
+    "files_removed": true,
+    "deployed_worker_replaced_by_service_after_resume": true,
+    "managed_endurance_record_retained": "Same-boot running record; the managed worker refuses to forget it until a reboot or inspection."
    }
   }
  }

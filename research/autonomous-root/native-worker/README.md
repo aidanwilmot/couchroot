@@ -573,17 +573,22 @@ window had no collector waits, worker dumps or file-open-checker events. Final
 checks preserved its .NET worker, PID, boot, mounts, cgroups and protected
 files, and all test resources were removed.
 
-**S90D's endurance result is pending.** The TV left the network 36 minutes into
-the soak. Telemetry showed it idle and healthy on the same boot until its last
-packet; its DHCP lease then lapsed. S90D's telemetry history shows similar
-silent gaps with uptime continuing, which is consistent with standby. It was
-not woken or rebooted. Its observation, kernel window, cleanup and verification
-resume once it is reachable. Its focused admission run had passed earlier. See
-[admission-results.json](admission-results.json).
+**S90D has no endurance result at this revision.** About 16 minutes into the
+soak, S90D logged a power-off request. It stayed in standby, then entered deep
+suspend about 36 minutes in. After it resumed, the root-agent service
+re-acquired a new .NET worker, which ended the managed acceptance job and its
+in-memory output. All 213 rows recorded before the suspend had passed. The
+native guardian completed recovery: no native processes, runtime views, freezer
+group or guardian journal remained. The stale helper views and experiment files
+were removed after hash and mount checks. Boot, protected files, launcher
+content, mount kinds and cgroup membership were unchanged. Neither TV was
+rebooted. The managed worker refuses to forget the same-boot running record, so
+it remains. Its focused admission run had passed earlier. See [admission-results.json](admission-results.json).
 
 ## Remaining production work
 
-- Complete S90D's interrupted endurance run at `f9e6d0c`. QN90A passed it, with
+- Rerun S90D's endurance at `f9e6d0c` while the TV stays powered on; a
+  power-off ended the last attempt. QN90A passed it, with
   1,069 ms stopped-worker recovery. S90D's earlier 2,188 ms post-endurance
   recovery has not been reproduced or explained against the unchanged
   two-second gate. Cross-boot, reboot and power-loss recovery remain unqualified.
