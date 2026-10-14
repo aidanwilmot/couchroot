@@ -759,3 +759,18 @@ This recovery requires the verified production channel to remain alive. Service
 restart/provider reacquisition, earlier launch/readiness reconciliation, rollback,
 native cold startup and both-TV qualification remain open. Deployed packages and
 TV boots are unchanged; .NET remains deployed as fallback.
+
+### Assembled package qualification — 2026-10-14
+
+Signed 0.7.14 candidate packages have been prepared privately for both TV profiles
+through the shared builder. Each contains 53 signed members. The signed inventories
+were reviewed against the installed 0.7.13 packages, and each assembled service
+loads successfully, verifies its packaged native candidate and retains managed
+selection. Seven API tests and six package-update tests pass. Private provisioning
+keys/client configuration were excluded from the signed packages.
+
+These artifacts are prepared, not installed. A fresh read-only status check found
+both TVs ready on managed selection with admission released and unchanged boot
+identities. The deployed baseline remains 0.7.13; no TV mutation or reboot was
+performed during preparation. This validates package assembly, not native cutover,
+rollback, restart recovery or the remaining sunset gates.
