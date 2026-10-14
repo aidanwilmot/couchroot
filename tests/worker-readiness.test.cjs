@@ -26,7 +26,7 @@ test('native readiness requires pinned launcher and production lifetime',()=>{
  assert.throws(()=>validateReadiness(native(),{implementation:'native-prototype',bootId:BOOT}));
  assert.throws(()=>validateReadiness(managed(),expected));
 });
-function fixture(){
+function fixture(options={}){
  const source=path.resolve(__dirname,'../research/autonomous-root/service/agent.js');
  const realRequire=createRequire(source),channels=[],timers=[];
  class Channel {
@@ -46,7 +46,7 @@ function fixture(){
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,__dirname:path.dirname(source),process,Buffer,
   setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},
   require:name=>name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name)});
- const agent=module.exports.createAgent({device:'qn90a'},{verifyFirmware:()=>{},readBootId:()=>BOOT});
+ const agent=module.exports.createAgent({device:'qn90a'},{verifyFirmware:()=>{},readBootId:()=>BOOT,...options});
  return {agent,channels,timers};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -87,4 +87,17 @@ test('late rejection from a closed peer cannot overwrite its replacement readine
   old.reject(Error('stale status failure'));await flush();
   assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().last_error,null);
  }finally{agent.stop();}
+});
+
+test('a newly pending selection blocks admission without silently killing active work',async()=>{
+ const os=require('node:os'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'selection-admission-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
+ const managedVersion='a'.repeat(64);journal.initialize({implementation:'managed',manifest_sha256:managedVersion});
+ const {agent,channels}=fixture({selectionFile:file,managedVersion:()=>managedVersion});agent.start();const pending=channels[0].connect();
+ try{
+  pending.resolve(managed());await flush();assert.equal(agent.status().worker_ready,true);
+  journal.begin(1,{implementation:'native-prototype',manifest_sha256:'b'.repeat(64)},'c'.repeat(64));
+  assert.equal(agent.status().phase,'selection-required');assert.equal(agent.status().worker_ready,false);assert.equal(agent.status().connected,true);
+  await assert.rejects(agent.execute('true',100),e=>e.outcome==='rejected');await assert.rejects(agent.operation({op:'job.start'}),e=>e.outcome==='rejected');assert.equal(channels[0].executions,0);
+ }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
 });

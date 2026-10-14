@@ -5,7 +5,7 @@ const {createBootLaunch}=require('./policy');
 let server,agent,bootTimer;
 function start(){
  const c=config(JSON.parse(read(DATA+'/config.json')));
- agent=createAgent(c);
+ agent=createAgent(c,{selectionFile:path.join(DATA,'worker-selection.json')});
  const boot=createBootLaunch(agent,c.boot_launcher===true);
  const originalStatus=agent.status;
  agent.status=()=>Object.assign(originalStatus(),{boot_launcher:boot.status()});

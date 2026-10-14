@@ -49,14 +49,24 @@ old connection cannot restore readiness or overwrite a replacement's status.
 Boot-launch inspection waits for worker validation. These checks require device
 qualification, including service access to the local boot ID, before deployment.
 
-The migration candidate also reports `selected_implementation: "managed"` and
-`native_candidate`. Candidate state is `absent`, `invalid`, or `verified`, with a
+The migration candidate reports `selected_implementation` (managed by default),
+`worker_selection` and `native_candidate`. Candidate state is `absent`, `invalid`, or `verified`, with a
 `checked_at` timestamp and a bounded reason code on failure. Verification reports
 the native manifest digest and `device_qualified: false`; it does not establish
 worker readiness, verify device libraries, or select native. Checks run at service
 creation and before an acquisition attempt. Legacy packages remain supported, and
 invalid optional candidate files do not disable managed fallback. These fields
 are local migration work and are not yet deployed to either TV.
+
+The optional private `worker-selection.json` record is an internal migration
+journal, not an exposed switching API. Its absence preserves legacy managed
+startup. Pending transitions, uncertain writes and mismatched managed package
+versions block acquisition and new command admission with `selection-required`.
+Existing work is not silently killed by a metadata change. A recorded native
+selection is currently blocked with `native-runtime-not-integrated`; it is not a
+working native launch switch. Record mutation requires the future controller to
+quiesce workers and verify artifact/state/readiness evidence. Do not create or
+edit this file as a shortcut to native deployment.
 
 `/v1/status` now includes `boot_id`, `uptime_seconds`, `worker_ready`, `worker_id`,
 `last_root_acquired_at`, and capability names. Readiness requires root authentication

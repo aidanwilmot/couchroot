@@ -305,3 +305,44 @@ both TVs before shipping this gate. Managed launcher digest format is checked;
 older packages do not have a separately pinned managed embedded-launcher digest.
 The native path requires an explicit digest supplied by future selected-artifact
 staging. Durable selection, retained-state installation and rollback remain open.
+
+## Subsequent selection journal and service guards — 2026-10-14
+
+The internal selection journal records selected/last-known-good artifact versions,
+revision, pending transaction and the last 32 completed transition receipts. Its
+phases separate preparation, state-copy evidence, trial-readiness evidence and
+commit. Aborting a trial requires new quiescence, rollback-state and readiness
+receipts before the old selection is committed. Completed receipts retain both
+artifact versions and state hashes, including after rollback. History continuity,
+transaction IDs, expected revisions and phase order are validated.
+
+Changes use an exclusive writer marker and fsynced atomic publication. Ordinary
+precondition failures leave the record unchanged. A publication failure retains
+the marker and blocks subsequent launch/writes for inspection, including when the
+new record became visible before the failure. The marker is never cleared using
+PID or age guesses. This is an unresolved-write guard, not an implemented automatic
+recovery controller. A reconciler must establish ownership and the durable result
+before removing it or advancing state.
+
+The service reads the optional journal from its existing private data directory.
+Absence preserves legacy managed behavior. Pending/invalid/uncertain selection,
+or a selected managed version that differs from the six verified managed package
+artifacts, blocks acquisition and new request admission. Existing work is not
+killed by a metadata write. A stable native selection also remains blocked because
+the native launch adapter is not integrated. The journal APIs are internal and
+have no HTTP endpoint or CLI switch; they never start processes or copy live state.
+
+The final combined service/protocol suite passed 55 Node tests with two previously
+qualified extended/artifact tests skipped. Tests include revision/phase errors,
+restart reads, failures before/after atomic publication, rollback receipts,
+invalid record shapes, symlinks/permissions, bounded history, version mismatch, pending
+admission, and the real Python offline importer/exporter. The latter preserves
+original managed bytes and a synthetic native-created record in rollback output,
+and binds the actual import/export manifest hashes to completed selection receipts.
+Readiness/quiescence receipts in these tests are fixtures, not device observations.
+
+No journal was created on a TV and no live job directory was copied. .NET remains
+deployed. The next runtime controller must actually establish quiescence, retain
+rollback artifacts, verify/install state, stage the chosen executable, validate a
+trial and reconcile interruption. The journal merely binds its verified evidence;
+it does not prove single ownership or qualify live selection by itself.

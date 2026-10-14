@@ -4,6 +4,7 @@ const sdb=require('./vendor/sdb'),{tarGz}=require('./vendor/tar'),{RootAgentServ
 const {read,hash,verifyFirmware,sdkRuntimeGuard}=require('./policy');
 const {candidateStatus}=require('./native-candidate');
 const {validateReadiness}=require('./worker-readiness');
+const {selectionStatus,managedVersion}=require('./worker-selection');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -19,8 +20,19 @@ function createAgent(config,options={}){
  const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
+ let managedDigest=null;
+ function selection(refresh=false){
+  if(!options.selectionFile)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
+  const state=selectionStatus(options.selectionFile);
+  if(state.launch_allowed&&state.phase==='stable'){
+   try{if(refresh||managedDigest===null)managedDigest=(options.managedVersion||managedVersion)(payload);if(state.selected_manifest_sha256!==managedDigest)throw Error('mismatch');}
+   catch(_){return {...state,phase:'inspection-required',launch_allowed:false,reason:'managed-package-version-mismatch'};}
+  }
+  return state;
+ }
+
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,selected_implementation:'managed',native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&selected.launch_allowed,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!selected.launch_allowed?'selection-required':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -54,7 +66,9 @@ function createAgent(config,options={}){
   return pkg;
  }
  async function launch(){
-  if(!running||connected||launching)return;launching=true;attempts++;const gen=++generation;let step='firmware verification';
+  if(!running||connected||launching)return;
+  if(!selection(true).launch_allowed){running=false;lastError='Worker selection requires reconciliation';return;}
+  launching=true;attempts++;const gen=++generation;let step='firmware verification';
   try{
    nativeCandidate=candidateStatus(payload,config.device);
    firmware(config);
@@ -80,6 +94,6 @@ function createAgent(config,options={}){
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
  function stop(){running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
- return {status,start,stop,operation:(value,data)=>{if(!running||!connected||!workerReady||!channel)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value,data);},execute:(command,timeout)=>{if(!running||!connected||!workerReady||!channel)return Promise.reject(Object.assign(Error('Root agent unavailable'),{outcome:'rejected'}));return channel.execute(command,timeout);}};
+ return {status,start,stop,operation:(value,data)=>{if(!running||!connected||!workerReady||!channel||!selection().launch_allowed)return Promise.reject(Object.assign(Error('Root worker unavailable'),{outcome:'rejected'}));return channel.operation(value,data);},execute:(command,timeout)=>{if(!running||!connected||!workerReady||!channel||!selection().launch_allowed)return Promise.reject(Object.assign(Error('Root agent unavailable'),{outcome:'rejected'}));return channel.execute(command,timeout);}};
 }
 module.exports={createAgent,launchRequest};
