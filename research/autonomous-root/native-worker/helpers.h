@@ -46,15 +46,9 @@ static void helpers_init(void) {
   helpers_available = 1;
 #endif
 }
-static int helper_storage(void) {
-  if (helper_owner >= 0)
+static int helper_parent_storage(void) {
+  if (helper_parent >= 0)
     return 1;
-  if (helper_owner_path[0])
-    return 0;
-  if (helper_parent >= 0) {
-    close(helper_parent);
-    helper_parent = -1;
-  }
 #ifdef NATIVE_WORKER_TEST
   helper_parent = helper_directory(directory, ".views", &helper_parent_created);
 #else
@@ -69,7 +63,12 @@ static int helper_storage(void) {
       helper_directory(agent, "native-helpers", &helper_parent_created);
   close(agent);
 #endif
-  if (helper_parent < 0)
+  return helper_parent >= 0;
+}
+static int helper_storage(void) {
+  if (helper_owner >= 0)
+    return 1;
+  if (helper_owner_path[0] || !helper_parent_storage())
     return 0;
   int scan = openat(helper_parent, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
   DIR *entries = scan < 0 ? NULL : fdopendir(scan);
@@ -90,6 +89,7 @@ static int helper_storage(void) {
    */
   if (mkdirat(helper_parent, worker_id, 0755))
     return 0;
+  startup_fault("runtime-created");
 #ifdef NATIVE_WORKER_TEST
   if (snprintf(helper_owner_path, sizeof helper_owner_path, "%s/.views/%s",
                root, worker_id) >= (int)sizeof helper_owner_path)
@@ -130,15 +130,27 @@ static void helpers_cleanup(void) {
     if (helper_owner_path[0] &&
         unlinkat(helper_parent, worker_id, AT_REMOVEDIR) && errno != ENOENT)
       fprintf(stderr, "prototype: retained helper owner directory\n");
+    /* The shared managed parent can be left empty by an interrupted creator
+     * or a different worker's final cleanup. Remove only the same directory
+     * we opened, and only when empty; never traverse or remove foreign data. */
+    struct stat opened, named;
+#ifdef NATIVE_WORKER_TEST
+    int same = !fstat(helper_parent, &opened) &&
+               !fstatat(directory, ".views", &named, AT_SYMLINK_NOFOLLOW) &&
+               S_ISDIR(named.st_mode) && opened.st_dev == named.st_dev &&
+               opened.st_ino == named.st_ino;
+    if (same)
+      unlinkat(directory, ".views", AT_REMOVEDIR);
+#else
+    int same = !fstat(helper_parent, &opened) &&
+               !lstat("/opt/couchroot-agent/native-helpers", &named) &&
+               S_ISDIR(named.st_mode) && opened.st_dev == named.st_dev &&
+               opened.st_ino == named.st_ino;
+    if (same)
+      rmdir("/opt/couchroot-agent/native-helpers");
+#endif
     close(helper_parent);
     helper_parent = -1;
-  }
-  if (helper_parent_created) {
-#ifdef NATIVE_WORKER_TEST
-    unlinkat(directory, ".views", AT_REMOVEDIR);
-#else
-    rmdir("/opt/couchroot-agent/native-helpers");
-#endif
   }
 }
 static J *helper_operation(J *request, const char *op) {

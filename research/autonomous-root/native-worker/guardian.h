@@ -5,6 +5,7 @@ static pid_t guardian_pid;
 static int guardian_fault_signal;
 static volatile sig_atomic_t guardian_stop;
 static int guardian_journal_owned, guardian_reconciled;
+static const char *guardian_temporary_owned;
 static const char *guardian_recovery_kind = "guardian-reaped-descendants";
 static void guardian_signal(int sig) {
   (void)sig;
@@ -16,7 +17,7 @@ static void guardian_journal(const char *phase) {
   if (!job_identity(getpid(), identity))
     fatal("guardian identity");
   J *j = obj();
-  num(j, "schema", 3);
+  num(j, "schema", 4);
   str(j, "phase", phase);
   boolean(j, "prepared", prepared);
   struct stat scope_stat, ns_stat, runtime_stat, freezer_stat;
@@ -26,6 +27,13 @@ static void guardian_journal(const char *phase) {
   num(j, "scope_ino", scope_stat.st_ino);
   num(j, "namespace_dev", ns_stat.st_dev);
   num(j, "namespace_ino", ns_stat.st_ino);
+  if (helper_parent >= 0) {
+    if (fstat(helper_parent, &runtime_stat))
+      fatal("guardian runtime parent binding");
+    num(j, "runtime_parent_dev", runtime_stat.st_dev);
+    num(j, "runtime_parent_ino", runtime_stat.st_ino);
+    boolean(j, "parent_created", helper_parent_created);
+  }
   if (helper_owner >= 0) {
     if (fstat(helper_owner, &runtime_stat))
       fatal("guardian runtime binding");
@@ -34,6 +42,12 @@ static void guardian_journal(const char *phase) {
     boolean(j, "parent_created", helper_parent_created);
   }
 #ifndef NATIVE_WORKER_TEST
+  if (freezer_root >= 0) {
+    if (fstat(freezer_root, &freezer_stat))
+      fatal("guardian freezer parent binding");
+    num(j, "freezer_parent_dev", freezer_stat.st_dev);
+    num(j, "freezer_parent_ino", freezer_stat.st_ino);
+  }
   if (freezer_dir >= 0) {
     if (fstat(freezer_dir, &freezer_stat))
       fatal("guardian freezer binding");
@@ -48,12 +62,49 @@ static void guardian_journal(const char *phase) {
   num(j, "pid", getpid());
   str(j, "process_start", identity);
   int replacing = guardian_journal_owned;
-  int fd = openat(jobs_dir, replacing ? "guardian.next" : "guardian",
+  const char *temporary = replacing ? "guardian.next" : "guardian.initial";
+  int fd = openat(jobs_dir, temporary,
                   O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (fd < 0)
     fatal("unresolved guardian journal; inspect before recovery");
-  guardian_journal_owned = 1;
+  guardian_temporary_owned = temporary;
   const char *s = json(j);
+  if (!replacing) {
+    startup_fault("initial-created");
+#ifdef NATIVE_WORKER_FAULT_TEST
+    const char *fault = getenv("COUCHROOT_NATIVE_STARTUP_FAULT");
+    if (fault && !strcmp(fault, "initial-partial")) {
+      if (!job_write(fd, s, strlen(s) / 2) || fsync(fd))
+        fatal("partial initial journal fixture");
+      startup_fault("initial-partial");
+    }
+#endif
+  }
+#ifdef NATIVE_WORKER_FAULT_TEST
+  if (replacing) {
+    char partial[80];
+    snprintf(partial, sizeof partial, "partial-%s", phase);
+    const char *fault = getenv("COUCHROOT_NATIVE_STARTUP_FAULT");
+    if (fault && !strcmp(fault, partial)) {
+      if (!job_write(fd, s, strlen(s) / 2) || fsync(fd))
+        fatal("partial successor journal fixture");
+      startup_fault(partial);
+    }
+  }
+#endif
+#ifdef NATIVE_WORKER_FAULT_TEST
+  char fail_at[80];
+  snprintf(fail_at, sizeof fail_at, "fail-%s", phase);
+  const char *failure = getenv("COUCHROOT_NATIVE_STARTUP_FAULT");
+  if (failure && !strcmp(failure, fail_at)) {
+    int wrote = job_write(fd, s, strlen(s) / 2);
+    (void)wrote;
+    close(fd);
+    json_object_put(j);
+    errno = ENOSPC;
+    fatal("injected journal persistence failure");
+  }
+#endif
   int good = job_write(fd, s, strlen(s)) && !fsync(fd);
   close(fd);
   json_object_put(j);
@@ -63,9 +114,12 @@ static void guardian_journal(const char *phase) {
     char checkpoint[64];
     snprintf(checkpoint, sizeof checkpoint, "journal-%s", phase);
     startup_fault(checkpoint);
-    if (renameat(jobs_dir, "guardian.next", jobs_dir, "guardian"))
-      fatal("guardian journal rename");
-  }
+  } else
+    startup_fault("initial-synced");
+  if (renameat(jobs_dir, temporary, jobs_dir, "guardian"))
+    fatal("guardian journal rename");
+  guardian_temporary_owned = NULL;
+  guardian_journal_owned = 1;
   if (fsync(jobs_dir))
     fatal("guardian journal persistence");
 }

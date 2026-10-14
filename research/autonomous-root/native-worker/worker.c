@@ -287,12 +287,20 @@ static void stop_signal(int sig);
 #include "guardian.h"
 #include "reconcile.h"
 static void runtime_cleanup(void) {
-  if (runtime_owned && runtime_sweep() && containment_cleanup() &&
-      guardian_journal_owned) {
-    unlinkat(jobs_dir, "guardian", 0);
-    fsync(jobs_dir);
+  if (!runtime_owned || !runtime_sweep() || !containment_cleanup())
+    return;
+  if (guardian_temporary_owned) {
+    if (unlinkat(jobs_dir, guardian_temporary_owned, 0) && errno != ENOENT)
+      return;
+    guardian_temporary_owned = NULL;
+  }
+  if (guardian_journal_owned) {
+    if (unlinkat(jobs_dir, "guardian", 0) && errno != ENOENT)
+      return;
     guardian_journal_owned = 0;
   }
+  if (jobs_dir >= 0)
+    fsync(jobs_dir);
 }
 static volatile sig_atomic_t signal_socket = -1;
 static void stop_signal(int sig) {
@@ -571,12 +579,20 @@ int main(int argc, char **argv) {
   helpers_init();
   guardian_journal("namespace");
   startup_fault("namespace");
+  if (!helper_parent_storage())
+    fatal("initial runtime parent");
+  startup_fault("runtime-parent-created");
+  guardian_journal("runtime-reserved");
+  startup_fault("runtime-reserved");
   if (!helper_storage())
     fatal("initial runtime storage");
   guardian_journal("runtime");
   startup_fault("runtime");
   launcher_stage(argv[5]);
   startup_fault("launcher");
+  containment_storage();
+  guardian_journal("freezer-reserved");
+  startup_fault("freezer-reserved");
   containment_prepare();
   guardian_journal("contained");
   startup_fault("contained");

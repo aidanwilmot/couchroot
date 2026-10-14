@@ -181,6 +181,34 @@ static int reconcile_no_mounts(const char *owner_path) {
   fclose(f);
   return good;
 }
+static int reconcile_reservation(J *j, const char *phase) {
+  int64_t schema;
+  const char *actual = textval(j, "phase");
+  return integer(j, "schema", &schema) && schema == 4 && actual &&
+         !strcmp(actual, phase);
+}
+static int reconcile_empty_directory(int fd) {
+  int scan = openat(fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  DIR *d = scan < 0 ? NULL : fdopendir(scan);
+  if (!d) {
+    if (scan >= 0)
+      close(scan);
+    return 0;
+  }
+  struct dirent *e;
+  int empty = 1;
+  errno = 0;
+  while ((e = readdir(d))) {
+    if (strcmp(e->d_name, ".") && strcmp(e->d_name, "..")) {
+      empty = 0;
+      break;
+    }
+  }
+  if (errno)
+    empty = 0;
+  closedir(d);
+  return empty;
+}
 static int reconcile_freezer(J *j) {
 #ifndef NATIVE_WORKER_TEST
   freezer_root = open("/sys/fs/cgroup/freezer",
@@ -192,12 +220,17 @@ static int reconcile_freezer(J *j) {
   if (freezer_dir < 0)
     return errno == ENOENT; /* A previous reconciliation may have removed it. */
   struct stat st;
-  if (fstat(freezer_dir, &st) || !reconcile_bound(j, "freezer", &st))
+  int reserved =
+      !get(j, "freezer_ino") && reconcile_reservation(j, "freezer-reserved");
+  if (reserved) {
+    if (fstat(freezer_root, &st) || !reconcile_bound(j, "freezer_parent", &st))
+      return 0;
+  } else if (fstat(freezer_dir, &st) || !reconcile_bound(j, "freezer", &st))
     return 0;
   /* EXITKILL is inherited by every released descendant. If the guardian died
    * during freezing, old kernels may retain their pending kills until thaw.
    * Thaw only this inode-bound leaf; never signal enumerated or saved PIDs. */
-  if (!freezer_write("freezer.state", "THAWED"))
+  if (!reserved && !freezer_write("freezer.state", "THAWED"))
     return 0;
   double deadline = stamp() + 5000;
   for (;;) {
@@ -216,8 +249,9 @@ static int reconcile_freezer(J *j) {
     }
     if (empty)
       return 1;
-    if (stamp() >= deadline)
-      return 0;
+    if (reserved || stamp() >= deadline)
+      return 0; /* An unbound reservation must already be empty; never thaw it.
+                 */
     usleep(10000);
   }
 #else
@@ -235,10 +269,12 @@ static int reconcile_resources(J *j) {
   if (!integer(j, "schema", &schema) || !prepared ||
       !json_object_is_type(prepared, 1) ||
       !((schema == 2 && json_object_get_boolean(prepared)) ||
-        (schema == 3 && phase &&
+        ((schema == 3 || schema == 4) && phase &&
          ((!strcmp(phase, "ready") && json_object_get_boolean(prepared)) ||
           ((!strcmp(phase, "namespace") || !strcmp(phase, "runtime") ||
-            !strcmp(phase, "contained")) &&
+            !strcmp(phase, "contained") ||
+            (schema == 4 && (!strcmp(phase, "runtime-reserved") ||
+                             !strcmp(phase, "freezer-reserved")))) &&
            !json_object_get_boolean(prepared))))) ||
       !hexvalid(id, 32) || !boot || strcmp(boot, current_boot) || !start ||
       !*start || !integer(j, "pid", &pid) || pid < 1 || pid > INT_MAX ||
@@ -277,9 +313,17 @@ static int reconcile_resources(J *j) {
     helper_owner = reconcile_dir(helper_parent, id);
     if (helper_owner < 0 && errno != ENOENT)
       return 0;
-    if (helper_owner >= 0 &&
-        (fstat(helper_owner, &st) || !reconcile_bound(j, "runtime", &st)))
-      return 0;
+    if (helper_owner >= 0) {
+      if (!get(j, "runtime_ino") &&
+          reconcile_reservation(j, "runtime-reserved")) {
+        if (fstat(helper_parent, &st) ||
+            !reconcile_bound(j, "runtime_parent", &st) ||
+            !reconcile_empty_directory(helper_owner))
+          return 0;
+      } else if (fstat(helper_owner, &st) ||
+                 !reconcile_bound(j, "runtime", &st))
+        return 0;
+    }
   }
   /* Bindings are validated before any cleanup. Missing resources are allowed
    * for idempotence; existing mismatched resources are never adopted. */
@@ -301,7 +345,7 @@ static int reconcile_resources(J *j) {
     return 0;
   return 1;
 }
-static J *reconcile_read_journal(const char *name) {
+static J *reconcile_read_journal(const char *name, int *partial) {
   struct stat st;
   int fd = openat(jobs_dir, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   if (fd < 0) {
@@ -311,8 +355,8 @@ static J *reconcile_read_journal(const char *name) {
   }
   char bytes[4096];
   if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
-      (st.st_mode & 077) || st.st_nlink != 1 || st.st_size < 1 ||
-      st.st_size >= (off_t)sizeof bytes)
+      (st.st_mode & 077) || st.st_nlink != 1 ||
+      st.st_size < (partial ? 0 : 1) || st.st_size >= (off_t)sizeof bytes)
     fatal("unresolved guardian journal metadata");
   ssize_t n = read(fd, bytes, sizeof bytes - 1);
   close(fd);
@@ -320,15 +364,28 @@ static J *reconcile_read_journal(const char *name) {
     fatal("unresolved guardian journal read");
   bytes[n] = 0;
   J *j = parse(bytes);
-  if (!j)
+  if (!j) {
+    if (partial) {
+      *partial = 1;
+      return NULL;
+    }
     fatal("unresolved guardian journal format");
+  }
   return j;
 }
 static int reconcile_phase(J *j) {
   int64_t schema;
   const char *phase = textval(j, "phase");
-  if (!integer(j, "schema", &schema) || schema != 3 || !phase)
+  if (!integer(j, "schema", &schema) || (schema != 3 && schema != 4) || !phase)
     return 0;
+  if (schema == 4) {
+    const char *phases[] = {"namespace",        "runtime-reserved", "runtime",
+                            "freezer-reserved", "contained",        "ready"};
+    for (int i = 0; i < 6; i++)
+      if (!strcmp(phase, phases[i]))
+        return i + 1;
+    return 0;
+  }
   const char *phases[] = {"namespace", "runtime", "contained", "ready"};
   for (int i = 0; i < 4; i++)
     if (!strcmp(phase, phases[i]))
@@ -345,9 +402,20 @@ static int reconcile_successor(J *old, J *next) {
     if (!x || !y || strcmp(x, y))
       return 0;
   }
-  const char *bindings[] = {"pid",           "scope_dev",     "scope_ino",
-                            "namespace_dev", "namespace_ino", "runtime_dev",
-                            "runtime_ino",   "freezer_dev",   "freezer_ino"};
+  const char *bindings[] = {"schema",
+                            "runtime_parent_dev",
+                            "runtime_parent_ino",
+                            "freezer_parent_dev",
+                            "freezer_parent_ino",
+                            "pid",
+                            "scope_dev",
+                            "scope_ino",
+                            "namespace_dev",
+                            "namespace_ino",
+                            "runtime_dev",
+                            "runtime_ino",
+                            "freezer_dev",
+                            "freezer_ino"};
   for (size_t i = 0; i < sizeof bindings / sizeof *bindings; i++) {
     int64_t x, y;
     if (get(old, bindings[i]) && (!integer(old, bindings[i], &x) ||
@@ -356,9 +424,53 @@ static int reconcile_successor(J *old, J *next) {
   }
   return 1;
 }
+/* This name is reserved exclusively for the first, unpublished journal.
+ * No runtime directory, freezer, descendant or command can exist from that
+ * startup until this file is renamed and its directory synced. The scope lock
+ * excludes a live writer. A published or successor journal makes it ambiguous.
+ */
+static void reconcile_initial(void) {
+  int fd =
+      openat(jobs_dir, "guardian.initial", O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) {
+    if (errno == ENOENT)
+      return;
+    fatal("unresolved guardian journal initial access");
+  }
+  struct stat st;
+  if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid ||
+      (st.st_mode & 077) || st.st_nlink != 1 || st.st_size < 0 ||
+      st.st_size > 4095)
+    fatal("unresolved guardian journal initial metadata");
+  close(fd);
+  const char *names[] = {"guardian", "guardian.next"};
+  for (size_t i = 0; i < sizeof names / sizeof *names; i++)
+    if (!fstatat(jobs_dir, names[i], &st, AT_SYMLINK_NOFOLLOW) ||
+        errno != ENOENT)
+      fatal(
+          "unresolved guardian journal initial conflicts with published state");
+  if (unlinkat(jobs_dir, "guardian.initial", 0) || fsync(jobs_dir))
+    fatal("unresolved guardian journal initial cleanup");
+  guardian_reconciled = 1;
+}
 static void guardian_reconcile(void) {
-  J *j = reconcile_read_journal("guardian");
-  J *next = reconcile_read_journal("guardian.next");
+  reconcile_initial();
+  int partial = 0;
+  J *j = reconcile_read_journal("guardian", NULL);
+  J *next = reconcile_read_journal("guardian.next", &partial);
+  int pending_next = next != NULL || partial;
+  if (partial) {
+    int64_t schema;
+    int phase = j ? reconcile_phase(j) : 0;
+    if (!j || !integer(j, "schema", &schema) ||
+        !((schema == 4 && phase >= 1 && phase < 6) ||
+          (schema == 3 && phase == 3)))
+      fatal("unresolved guardian journal partial successor without recoverable "
+            "base");
+    /* The committed base remains authoritative. Its bindings or empty-only
+     * reservations must independently prove cleanup; no partial data is used.
+     */
+  }
   if (next) {
     if (!j || !reconcile_successor(j, next))
       fatal("unresolved guardian journal temporary ownership");
@@ -378,7 +490,7 @@ static void guardian_reconcile(void) {
     signal(SIGALRM, SIG_DFL);
     alarm(15);
     int good = reconcile_resources(j);
-    if (good && next)
+    if (good && pending_next)
       good = !unlinkat(jobs_dir, "guardian.next", 0) && !fsync(jobs_dir);
     if (good)
       good = !unlinkat(jobs_dir, "guardian", 0) && !fsync(jobs_dir);

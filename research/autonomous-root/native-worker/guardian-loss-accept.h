@@ -275,13 +275,96 @@ static void guardian_loss_checks(int frozen) {
 }
 
 #ifdef NATIVE_WORKER_FAULT_TEST
+static void startup_reservation_refusal(const char *stage, const char *path,
+                                        const char *bytes, const char *owner,
+                                        const char *group) {
+  if (!strcmp(stage, "runtime-created")) {
+    char *sentinel = format("%s/unbound-sentinel", owner);
+    loss_journal_write(sentinel, "preserve", 1);
+    loss_rejected(parse(bytes), path);
+    char value[32];
+    readtext(sentinel, value, sizeof value);
+    if (strcmp(value, "preserve") || unlink(sentinel))
+      fatal("nonempty runtime reservation was changed");
+    free(sentinel);
+    J *wrong = parse(bytes);
+    num(wrong, "runtime_parent_ino", number(wrong, "runtime_parent_ino") + 1);
+    loss_rejected(wrong, path);
+    loss_journal_write(path, bytes, 0);
+    mark("runtime_reservation_rejects_foreign_content_and_parent_mismatch");
+  }
+  if (!strcmp(stage, "freezer-created")) {
+    J *wrong = parse(bytes);
+    num(wrong, "freezer_parent_ino", number(wrong, "freezer_parent_ino") + 1);
+    loss_rejected(wrong, path);
+    loss_journal_write(path, bytes, 0);
+    char membership[4096], controllers[128], original[PATH_MAX] = {0}, *save;
+    readtext("/proc/self/cgroup", membership, sizeof membership);
+    for (char *line = strtok_r(membership, "\n", &save); line;
+         line = strtok_r(NULL, "\n", &save)) {
+      char location[2048];
+      if (sscanf(line, "%*d:%127[^:]:%2047s", controllers, location) == 2 &&
+          !strcmp(controllers, "freezer")) {
+        snprintf(original, sizeof original,
+                 "/sys/fs/cgroup/freezer%s/cgroup.procs", location);
+        break;
+      }
+    }
+    char *target = format("%s/cgroup.procs", group),
+         *state = format("%s/freezer.state", group);
+    int restore = open(original, O_WRONLY | O_NOFOLLOW | O_CLOEXEC),
+        move = open(target, O_WRONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (!original[0] || restore < 0 || move < 0)
+      fatal("reservation test membership descriptors");
+    char before[32], after[32], pid[32];
+    readtext(state, before, sizeof before);
+    snprintf(pid, sizeof pid, "%d", getpid());
+    writeall(move, pid, strlen(pid));
+    close(move);
+    loss_rejected(parse(bytes), path);
+    writeall(restore, pid, strlen(pid));
+    close(restore);
+    readtext(state, after, sizeof after);
+    if (strcmp(before, after))
+      fatal("busy unbound freezer was modified");
+    free(target);
+    free(state);
+    mark("freezer_reservation_rejects_busy_group_and_parent_mismatch");
+  }
+}
 static void startup_recovery_checks(void) {
-  const char *stages[] = {"namespace",        "runtime",
-                          "launcher-created", "launcher-partial-copy",
-                          "launcher-copy",    "launcher",
-                          "contained",        "ready",
-                          "journal-runtime",  "journal-contained",
-                          "journal-ready"};
+  const char *stages[] = {"initial-created",
+                          "initial-partial",
+                          "initial-synced",
+                          "namespace",
+                          "runtime-parent-created",
+                          "runtime-reserved",
+                          "runtime-created",
+                          "runtime",
+                          "launcher-created",
+                          "launcher-partial-copy",
+                          "launcher-copy",
+                          "launcher",
+                          "freezer-reserved",
+                          "freezer-created",
+                          "contained",
+                          "ready",
+                          "journal-runtime-reserved",
+                          "journal-runtime",
+                          "journal-freezer-reserved",
+                          "journal-contained",
+                          "journal-ready",
+                          "partial-runtime-reserved",
+                          "partial-runtime",
+                          "partial-freezer-reserved",
+                          "partial-contained",
+                          "partial-ready",
+                          "fail-namespace",
+                          "fail-runtime-reserved",
+                          "fail-runtime",
+                          "fail-freezer-reserved",
+                          "fail-contained",
+                          "fail-ready"};
   for (size_t i = 0; i < sizeof stages / sizeof *stages; i++) {
     finish(0);
     pid_t probe = fork();
@@ -307,27 +390,46 @@ static void startup_recovery_checks(void) {
       waitpid(probe, NULL, 0);
       fatal("startup recovery probe hung");
     }
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 86)
+    int failed = !strncmp(stages[i], "fail-", 5),
+        initial = !strncmp(stages[i], "initial-", 8);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != (failed ? 1 : 86))
       fatal("startup recovery injection did not run");
     char *path = format("%s/.jobs/guardian", filescope), bytes[4096];
-    readtext(path, bytes, sizeof bytes);
+    char *old = NULL, *group = NULL;
+    struct stat st;
+    if (failed || initial) {
+      if (!lstat(path, &st) || errno != ENOENT ||
+          !lstat("/opt/couchroot-agent/native-helpers", &st) || errno != ENOENT)
+        fatal("unpublished startup retained runtime or final journal");
+      char *temp = format("%s/.jobs/guardian.initial", filescope);
+      int present = !lstat(temp, &st);
+      if (present != initial || (!present && errno != ENOENT))
+        fatal("initial journal cleanup state");
+      free(temp);
+      temp = format("%s/.jobs/guardian.next", filescope);
+      if (!lstat(temp, &st) || errno != ENOENT)
+        fatal("journal write error left successor temporary");
+      free(temp);
+    } else {
+      readtext(path, bytes, sizeof bytes);
+      J *journal = parse(bytes);
+      const char *id = journal ? textval(journal, "worker_id") : NULL;
+      if (!hexvalid(id, 32))
+        fatal("startup recovery journal identity");
+      old = format("/opt/couchroot-agent/native-helpers/%s", id);
+      group = format("/sys/fs/cgroup/freezer/couchroot-native-%s", id);
+      startup_reservation_refusal(stages[i], path, bytes, old, group);
+      discard(journal);
+    }
     free(path);
-    J *journal = parse(bytes);
-    const char *id = journal ? textval(journal, "worker_id") : NULL;
-    if (!hexvalid(id, 32))
-      fatal("startup recovery journal identity");
-    char *old = format("/opt/couchroot-agent/native-helpers/%s", id),
-         *group = format("/sys/fs/cgroup/freezer/couchroot-native-%s", id);
-    discard(journal);
     launch();
     J *r = call(req("status"));
-    if (!json_object_get_boolean(
-            get(get(r, "result"), "stale_guardian_reconciled")))
+    if (!failed && !json_object_get_boolean(
+                       get(get(r, "result"), "stale_guardian_reconciled")))
       fatal("startup reconciliation not reported");
     discard(r);
-    struct stat st;
-    if (!lstat(old, &st) || errno != ENOENT || !lstat(group, &st) ||
-        errno != ENOENT)
+    if (old && (!lstat(old, &st) || errno != ENOENT || !lstat(group, &st) ||
+                errno != ENOENT))
       fatal("startup reconciliation retained resources");
     free(old);
     free(group);

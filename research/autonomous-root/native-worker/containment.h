@@ -20,15 +20,20 @@ static int freezer_write(const char *file, const char *value) {
   return good;
 #endif
 }
-static void containment_prepare(void) {
+static void containment_storage(void) {
 #ifndef NATIVE_WORKER_TEST
   freezer_root = open("/sys/fs/cgroup/freezer",
                       O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   if (freezer_root < 0)
     fatal("prototype freezer controller unavailable");
+#endif
+}
+static void containment_prepare(void) {
+#ifndef NATIVE_WORKER_TEST
   snprintf(freezer_name, sizeof freezer_name, "couchroot-native-%s", worker_id);
   if (mkdirat(freezer_root, freezer_name, 0700))
     fatal("exclusive prototype freezer group");
+  startup_fault("freezer-created");
   freezer_dir = openat(freezer_root, freezer_name,
                        O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   if (freezer_dir < 0)

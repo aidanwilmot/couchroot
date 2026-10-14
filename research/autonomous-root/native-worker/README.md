@@ -186,20 +186,37 @@ files. Preserve credentials, raw measurements and signed artifacts outside Git.
 ## Guardian loss and stale journals
 
 The guardian alone holds the scope lock. Before releasing its traced worker it
-persists a schema-3 journal with namespace, runtime, contained and ready phases.
+persists a schema-4 journal with namespace, runtime-reserved, runtime,
+freezer-reserved, contained and ready phases.
 Each checkpoint binds the boot, scope and mount namespace, plus runtime and
-freezer inodes as those resources are created. Runtime ownership is persisted
-before launcher content is copied. Updates use atomic rename and directory fsync.
+freezer inodes as those resources are created. Before each resource is created,
+a reservation binds its parent and generated worker-specific name. An unbound
+runtime reservation must be empty; an unbound freezer reservation must have no
+processes or tasks and is never thawed. Populated, busy or mismatched reservations
+remain blocked. Runtime ownership is persisted before launcher content is copied.
+Empty managed helper parents are removed only after their named inode matches the
+opened directory; nonempty shared parents are left alone.
+
+The initial journal is written to `guardian.initial`, synced, renamed and directory
+synced before any runtime resources can be created. An abandoned initial temporary
+can be removed under the scope lock only when neither a published nor successor
+journal exists and its ownership, type, links, mode and size are valid. Conflicting
+or unsafe initial files remain blocked. Updates also use atomic rename and directory fsync.
 A complete `guardian.next` can recover an interrupted rename only when it advances
 the same owner's phase by exactly one step and preserves all existing identity
-and inode bindings. Invalid, truncated, foreign or non-advancing temporary files
-block startup. Fully prepared schema-2 journals remain supported.
+and inode bindings. Foreign or non-advancing complete temporaries block startup. A truncated update
+can be discarded only after the committed base independently proves resource
+cleanup through its bindings and empty-only reservations. Schema-3 contained
+checkpoints have sufficient bindings for this too; ambiguous older checkpoints
+and a temporary after ready remain blocked. Fully prepared schema-2 journals and
+supported schema-3 checkpoints remain readable.
 
 An interrupted launcher copy or mount can be swept using the durable runtime
-binding after its old namespace disappears. A crash between resource creation
-and persistence of its inode binding remains blocked: recovery never adopts an
-existing unbound directory or freezer group. Initial truncated journals and
-cross-boot recovery likewise remain unqualified. Startup fault injection exists
+binding after its old execution views disappear. Resource-creation-before-binding
+windows now have empty-only reservations. A malformed published journal still
+requires inspection, and cross-boot recovery remains unqualified. Ordinary
+journal-write errors clean only this startup's owned temporary after owned runtime
+cleanup succeeds; abrupt exits leave recoverable checkpoints. Startup fault injection exists
 only in the separate fault-test binary; the ordinary binary ignores its test
 environment variable.
 
@@ -379,10 +396,11 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 
 ## Remaining production work
 
-- Finish recovery for the resource-creation-before-binding and truncated initial
-  journal windows. Schema-3 startup checkpoints and complete interrupted updates
-  are recoverable, but unbound resources still require inspection. Cross-boot,
-  reboot and power-loss recovery remain unqualified.
+- Validate the schema-4 initial-journal, resource-reservation and partial-update
+  recovery on both TVs. Forty sanitizer host tests and ARM builds pass; the expanded
+  device suite is prepared while the prior build's endurance run continues.
+  Reconcile orphan initial job-intent temporaries as part of crash qualification.
+  Cross-boot, reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
 - Qualify resource exhaustion, further storage failures and substantially longer

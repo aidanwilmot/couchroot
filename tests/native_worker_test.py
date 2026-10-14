@@ -408,20 +408,85 @@ class NativeWorkerTests(unittest.TestCase):
         self.restart();self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
     @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
     def test_startup_checkpoint_recovery(self):
-        for stage in ['namespace','runtime','launcher-created','launcher-partial-copy','launcher-copy','launcher','contained','ready','journal-runtime','journal-contained','journal-ready']:
+        for stage in ['namespace','runtime-parent-created','runtime-reserved','runtime-created','runtime','launcher-created','launcher-partial-copy','launcher-copy','launcher','freezer-reserved','contained','ready','journal-runtime-reserved','journal-runtime','journal-freezer-reserved','journal-contained','journal-ready','partial-runtime-reserved','partial-runtime','partial-freezer-reserved','partial-contained','partial-ready']:
             with self.subTest(stage=stage):
                 self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
                 self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
                 result=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':stage},capture_output=True,timeout=5)
                 self.assertEqual(result.returncode,86,result.stderr)
                 journal=json.loads((self.root/'.jobs/guardian').read_text())
-                self.assertEqual(journal['schema'],3)
+                self.assertEqual(journal['schema'],4)
                 old=self.root/'.views'/journal['worker_id']
                 self.restart()
                 self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
                 self.assertFalse(old.exists())
                 self.start_job('exit 9');self.assertEqual(self.completed()['exit_code'],9)
                 self.assertTrue(self.job('job.forget')['ok'])
+
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
+    def test_initial_journal_interruption_recovery(self):
+        for stage in ['initial-created','initial-partial','initial-synced']:
+            with self.subTest(stage=stage):
+                self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+                result=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':stage},capture_output=True,timeout=5)
+                self.assertEqual(result.returncode,86,result.stderr)
+                initial=self.root/'.jobs/guardian.initial'
+                self.assertTrue(initial.is_file());self.assertFalse((self.root/'.jobs/guardian').exists())
+                self.assertFalse((self.root/'.views').exists())
+                self.restart()
+                self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+                self.assertFalse(initial.exists())
+
+    def test_initial_journal_conflicts_and_unsafe_metadata_refused(self):
+        _,journal=self.guardian_loss()
+        initial=self.root/'.jobs/guardian.initial';initial.write_bytes(b'{');initial.chmod(0o600)
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertTrue(initial.exists())
+        initial.unlink();self.restart()
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        initial.write_bytes(b'{');initial.chmod(0o644)
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertEqual(initial.read_bytes(),b'{')
+        initial.chmod(0o600)
+        linked=self.root/'initial-link';os.link(initial,linked)
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertTrue(linked.exists());linked.unlink()
+        backup=self.root/'initial-backup';initial.rename(backup);initial.symlink_to(backup)
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertTrue(initial.is_symlink());initial.unlink();backup.rename(initial)
+        self.restart();self.assertTrue(self.op('status')['result']['stale_guardian_reconciled'])
+
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
+    def test_runtime_reservation_rejects_nonempty_or_wrong_parent(self):
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        r=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':'runtime-created'},capture_output=True,timeout=5)
+        self.assertEqual(r.returncode,86,r.stderr)
+        path=self.root/'.jobs/guardian';raw=path.read_bytes();journal=json.loads(raw)
+        owner=self.root/'.views'/journal['worker_id'];foreign=owner/'keep';foreign.write_bytes(b'foreign')
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertEqual(foreign.read_bytes(),b'foreign');self.assertEqual(path.read_bytes(),raw)
+        foreign.unlink();journal['runtime_parent_ino']+=1;path.write_text(json.dumps(journal))
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertTrue(owner.exists())
+        path.write_bytes(raw);self.restart();self.assertFalse(owner.exists())
+
+    def test_partial_successor_after_ready_is_not_discarded(self):
+        _,journal=self.guardian_loss()
+        temp=self.root/'.jobs/guardian.next';temp.write_bytes(b'{');temp.chmod(0o600)
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertEqual(temp.read_bytes(),b'{')
+        temp.unlink();self.restart()
+
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
+    def test_journal_write_errors_cleanup_owned_temporaries(self):
+        for stage in ['namespace','runtime-reserved','runtime','freezer-reserved','contained','ready']:
+            self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+            r=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':'fail-'+stage},capture_output=True,timeout=5)
+            self.assertEqual(r.returncode,1,r.stderr)
+            self.assertIn(b'injected journal persistence failure',r.stderr)
+            self.assertEqual(sorted(p.name for p in (self.root/'.jobs').iterdir()),['lock'])
+            self.assertFalse((self.root/'.views').exists())
+            self.restart();self.assertTrue(self.op('status')['ok'])
 
     def test_legacy_prepared_schema_two_recovery(self):
         _,journal=self.guardian_loss()

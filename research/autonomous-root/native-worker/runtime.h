@@ -67,8 +67,12 @@ static int runtime_remove_view(const char *id, const char *binary_name) {
   return good;
 }
 static int runtime_sweep(void) {
-  if (helper_owner < 0)
-    return 1;
+  if (helper_owner < 0) {
+    helpers_cleanup();
+    struct stat st;
+    return !helper_owner_path[0] ||
+           (lstat(helper_owner_path, &st) < 0 && errno == ENOENT);
+  }
   /* Called only after all worker descendants have been reaped. Never scan or
    * remove another worker's directory, even if it appears stale. */
   int scan = openat(helper_owner, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
