@@ -308,3 +308,20 @@ builds matched at 23,016 bytes, SHA-256
 `4677bef3f0137b792d6de2dd22fa91d32476db5b48c26213db8699b596e4e574`,
 with maximum GLIBC requirement 2.17. The profile header is pinned in the candidate
 source manifest. Hardware qualification remains separate.
+
+
+### Independent cleanup boundary
+
+`prepareRuntimeObserver` defaults to the deployed non-stopping probe. An internal
+caller can request `purpose: 'handoff'` only with independent `inspectUnit` and
+`retireUnit` callbacks. They receive a frozen unit/boot/artifact-digest binding;
+the departing worker's execute callback is not forwarded. Probe and handoff
+transaction IDs have separate namespaces. Missing or partial providers are
+rejected before credential reads, staging or journal publication.
+
+The service's internal shutdown path stages and binds the observer before
+shutdown, rechecks the journal-bound inventory, then uses that independent
+cleanup boundary after disconnect. Success still leaves selection prepared and
+admission held; it does not start a native worker or commit a migration. The
+installed service supplies no provider and keeps shutdown disabled. Current
+local tests use controlled provider fixtures, not a qualified on-TV replacement.

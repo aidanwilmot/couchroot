@@ -34,22 +34,27 @@ test('service credential capture uses the held executor and rejects incomplete e
 });
 
 test('runtime confirms actual supervisor credentials before fresh worker confirmation',async()=>{
- for(const failure of [false,'credentials','not-running']){
+ for(const failure of [false,'credentials','not-running','handoff']){
   const source=path.resolve(__dirname,'../research/autonomous-root/service/observer-runtime.js'),real=createRequire(source),module={exports:{}},events=[];
+  let departed=false;
   const boot='00000000-0000-0000-0000-000000000001';
   const stat=()=>({isDirectory:()=>true,uid:5001,mode:0o40700,dev:1,ino:2});
   const fakeFs={readlinkSync:()=> '41/task/42',constants:fs.constants,openSync:()=>7,closeSync:()=>{},fstatSync:stat,lstatSync:stat,mkdirSync:()=>{},fchmodSync:()=>{},fsyncSync:()=>{}};
   const fakeProcess={pid:9999,getuid:()=>5001,geteuid:()=>5001,getgid:()=>100,getegid:()=>100,getgroups:()=>[29,100,201]};
   const unitModule={inspectObserverUnit:async o=>{events.push('inspect');assert.equal(o.bootId,boot);return {active_state:'active',sub_state:failure==='not-running'?'exited':'running',main_pid:77};},retireObserverUnit:async()=>{throw Error('Unexpected retirement');}};
   vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process:fakeProcess,require:name=>name==='fs'?fakeFs:name==='./observer-controller'?{prepareSupervisedExit:async o=>o}:name==='./observer-unit'?unitModule:real(name)});
-  const options=await module.exports.prepareRuntimeObserver({directory:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',requestId:'runtime-probe-identity',staged:{binary:'/fixture',sha256:'a'.repeat(64),manifest_sha256:'b'.repeat(64)},bound:{boot_id:boot,processes:{worker:{pid:123},guardian:null}},confirm:async()=>{events.push('fresh-worker');return 'fresh';},execute:async command=>{
+  const retirement={inspectUnit:async identity=>{assert.equal(departed,true);assert.equal(identity.execute,undefined);assert.equal(identity.sha256,'a'.repeat(64));events.push('independent-inspect');return 'independent';},retireUnit:async identity=>{assert.equal(departed,true);assert.equal(identity.execute,undefined);events.push('independent-retire');return 'retired';}};
+  const options=await module.exports.prepareRuntimeObserver({...(failure==='handoff'?{purpose:'handoff',retirement}:{}),directory:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',requestId:'runtime-probe-identity',staged:{binary:'/fixture',sha256:'a'.repeat(64),manifest_sha256:'b'.repeat(64)},bound:{boot_id:boot,processes:{worker:{pid:123},guardian:null}},confirm:async()=>{events.push('fresh-worker');return 'fresh';},execute:async command=>{
+   assert.equal(departed,false,'departed worker must never execute cleanup');
    const pid=command.includes('/proc/77/status')?77:42;events.push('credentials-'+pid);
    const label=failure==='credentials'&&pid===77?'User':'User::Pkg::MiniRoot01';
    return {exit_code:0,stdout:'Pid: '+pid+'\nTgid: '+(pid===42?41:pid)+'\nUid: 5001 5001 5001 5001\nGid: 100 100 100 100\nGroups: 29 100 201\nCapEff: 0000000000000000\nOBSERVER-SERVICE-LABEL\n'+label+'\n'};
   }});
   assert.equal(options.credentials.uid,5001);assert.equal(options.manifestSha256,'b'.repeat(64));
-  if(failure){await assert.rejects(options.confirm());assert.equal(events.includes('fresh-worker'),false);}
-  else{assert.equal(await options.confirm(),'fresh');assert.deepEqual(events,['credentials-42','inspect','credentials-77','fresh-worker']);}
+  if(failure==='credentials'||failure==='not-running'){await assert.rejects(options.confirm());assert.equal(events.includes('fresh-worker'),false);}
+  else{assert.equal(await options.confirm(),'fresh');assert.deepEqual(events,['credentials-42','inspect','credentials-77','fresh-worker']);
+   if(failure==='handoff'){departed=true;assert.equal(await options.inspectUnit('unit'),'independent');assert.equal(await options.retireUnit('unit'),'retired');}
+  }
  }
 });
 
@@ -58,4 +63,12 @@ test('privileged broker credentials never replace package thread credentials',()
  assert.throws(()=>credentials(context),/label/);
  assert.throws(()=>credentials({...context,label:'User::Pkg::MiniRoot01'}),/capabilities/);
  assert.throws(()=>credentials({Tgid:'9999'}),/thread-group/);
+});
+
+test('handoff rejects incomplete independent cleanup before any worker use',async()=>{
+ let calls=0;const execute=()=>{calls++;throw Error('must not execute');};
+ for(const retirement of [undefined,{}, {inspectUnit:()=>{}}, {retireUnit:()=>{}}])await assert.rejects(runtime.prepareRuntimeObserver({purpose:'handoff',retirement,execute}),/Independent observer retirement/);
+ await assert.rejects(runtime.prepareRuntimeObserver({purpose:'probe',retirement:{},execute}),/Probe retirement/);
+ assert.equal(calls,0);
+ assert.notEqual(runtime.observerTransactionId('same-transaction-identity','handoff'),runtime.observerTransactionId('same-transaction-identity','probe'));
 });

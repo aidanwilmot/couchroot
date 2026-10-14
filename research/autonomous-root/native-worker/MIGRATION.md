@@ -176,18 +176,30 @@ migration fixtures.
 
 ### 3 Integrate packaging and service selection
 
-Installed-runtime update: QN90A's proc-stat probe is qualified on 0.7.2. S90D's
-installed 0.7.1 probe crashed in the JavaScript service runtime, despite the earlier
-credential-matched pidfd sidecar tests. Direct observer child-process launch is
-now explicitly disabled for the deployed service. An external observer launch
-transport is required before S90D handoff and native selection can proceed; see
-the current [deployment evidence](../native-observer/DEPLOYMENT.md). The packaging
-and journal foundations below do not satisfy this remaining runtime gate. The
-external transport is now integrated in a non-stopping probe, but S90D's
-credential preflight still rejects before launch. Kernel PID lookup and an exact
-native supplementary-group drop are required; systemd alone adds account-default
-groups. The installed 0.7.5 managed fallback remains ready. See DEPLOYMENT.md for
-verified outcomes; no native selection gate has passed.
+Installed-runtime update: QN90A's proc-stat path remains qualified. S90D's
+0.7.11 external observer passed two complete non-stopping service probes,
+including exact package-thread credentials, independent copied execution staging,
+native termination receipts, non-blocking unit retirement and owned-file cleanup.
+Both TVs retained their managed workers and boot identities. Direct WRT
+child-process launch remains disabled. See the current
+[deployment evidence](../native-observer/DEPLOYMENT.md).
+
+The remaining handoff dependency is cleanup after the source worker exits.
+The runtime now distinguishes probe and handoff purposes: a handoff requires an
+explicit independent inspection/retirement provider before any launch intent.
+Launch and fresh readiness checks still use the held source worker; cleanup gets
+only the bound unit, boot and artifact digest, never its departing executor.
+The internal shutdown path can use this boundary and keeps the selection pending
+and admission held after shutdown. The installed service does not supply such a
+provider, so its shutdown guard remains active. Local tests cover disconnect,
+changed inventory, missing provider and uncertain cleanup. They do not qualify a
+production provider or an on-TV stopping handoff.
+
+Next, implement and validate the independent provider, then exercise the real
+external observer across managed shutdown with retained records, followed by
+live state installation/native trial and managed rollback. Do not substitute a
+Mac-only controller for the deployed runtime or use the non-stopping probe as
+proof of this gate. No native selection gate has passed.
 
 Local packaging foundation is implemented: `--native-candidate` includes three
 reproducibly built ordinary artifacts and a manifest while retaining managed

@@ -171,7 +171,8 @@ function createAgent(config,options={}){
    },
    shutdown:async transactionId=>{
     current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Worker shutdown or observer staging requires reconciliation');
-    if(options.observerChildProcess===false&&(options.processObserver||options.stagePackagedObserver))throw Object.assign(Error('Process observer requires an external launch transport'),{outcome:'rejected'});
+    const externalHandoff=config.device==='s90d'&&options.externalObserverDirectory&&options.externalObserverRetirement&&typeof options.externalObserverRetirement.inspectUnit==='function'&&typeof options.externalObserverRetirement.retireUnit==='function';
+    if(options.observerChildProcess===false&&(options.processObserver||options.stagePackagedObserver)&&!externalHandoff)throw Object.assign(Error('Process observer requires an external launch transport with independent retirement'),{outcome:'rejected'});
     token.preparingStop=true;
     let observer=null,stagedObserver=null;
     try{
@@ -193,7 +194,18 @@ function createAgent(config,options={}){
      }});
      token.observerStaging=false;observerOptions=stagedObserver;
     }
-    if(observerOptions){
+    if(externalHandoff){
+     if(!stagedObserver)throw Error('External handoff requires a packaged observer');
+     observer=await prepareRuntimeObserver({purpose:'handoff',directory:options.externalObserverDirectory,requestId:transactionId,staged:stagedObserver,bound:inventory,retirement:options.externalObserverRetirement,
+      execute:async(command,timeout)=>{current();prepared(transactionId,digest);const result=await owner.execute(command,timeout);current();prepared(transactionId,digest);return result;},
+      confirm:async()=>{
+       const info=await snapshot(true);current();prepared(transactionId,digest);
+       const fresh={...processIdentities(info,peer.identity.pid),resources:JSON.parse(JSON.stringify(validateResourceInventory(info)))};
+       if(hash(JSON.stringify(fresh))!==digest)throw Error('Worker inventory changed after external process binding');
+       return info;
+      }});
+     observer.assertReady();
+    }else if(observerOptions){
      observer=await preparePidfdExit({...observerOptions,bound:inventory,confirm:async()=>{
       const fresh=await snapshot();current();prepared(transactionId,digest);
       if(hash(JSON.stringify(fresh))!==digest)throw Error('Worker inventory changed after process handle binding');

@@ -348,3 +348,38 @@ test('external service probe confirms fresh status and cleans up while retaining
   }finally{agent.stop();}
  }
 });
+
+test('external handoff uses independent cleanup after disconnect and retains pending ownership',async()=>{
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ for(const failure of [false,'cleanup','drift']){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'external-handoff-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
+  journal.initialize({implementation:'managed',manifest_sha256:DIGEST});
+  let departed=false,stops=0,cleanup=0;const info=inventoried();
+  const retirement={inspectUnit:async()=>{assert.equal(departed,true);cleanup++;return {};},retireUnit:async()=>{assert.equal(departed,true);cleanup++;if(failure==='cleanup')throw Error('Independent cleanup unknown');}};
+  const modules={
+   './observer-stage':{stageObserver:async o=>{await o.execute('stage',1000);return {sha256:DIGEST,manifest_sha256:'c'.repeat(64)};}},
+   './pidfd-observer':{preparePidfdExit:()=>{throw Error('Forbidden WRT child launch');}},
+   './observer-runtime':{prepareRuntimeObserver:async o=>{
+    assert.equal(o.purpose,'handoff');assert.equal(o.retirement,retirement);assert.equal(o.staged.manifest_sha256,'c'.repeat(64));
+    await o.execute('submit',1000);
+    if(failure==='drift')info.resources.jobs.push({id:'late-job-identity',state:'running',monitor_finished:false});
+    const fresh=await o.confirm();assert.equal(fresh.worker_id,info.worker_id);
+    return {assertReady:()=>assert.equal(departed,false),waitForExit:async()=>{assert.equal(departed,true);return {method:'external-fixture'};},cancel:async()=>{await o.retirement.inspectUnit();await o.retirement.retireUnit();}};
+   }}
+  };
+  const {agent,channels}=fixture({selectionFile:file,managedVersion:()=>DIGEST,observerChildProcess:false,stagePackagedObserver:true,externalObserverDirectory:'/fixture',externalObserverRetirement:retirement},modules,'s90d');
+  agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();channel.operation=async()=>info;
+   channel.execute=async()=>{assert.equal(departed,false);return {exit_code:0};};
+   channel.shutdown=async()=>{stops++;departed=true;ready.conn._socket.destroy();return {acknowledged:true};};
+   const hold=agent.holdAdmission(),inventory=await hold.snapshot();
+   const prepared=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},crypto.createHash('sha256').update(JSON.stringify(inventory)).digest('hex'));
+   if(failure)await assert.rejects(hold.shutdown(prepared.pending.id),failure==='drift'?/inventory changed/:/cleanup unknown/);
+   else assert.equal((await hold.shutdown(prepared.pending.id)).exited.method,'external-fixture');
+   assert.equal(stops,failure==='drift'?0:1);assert.equal(cleanup,failure==='drift'?0:2);
+   assert.equal(agent.status().admission_held,true);assert.equal(journal.read().pending.phase,'prepared');
+   await assert.rejects(agent.execute('must not replay',100),e=>e.outcome==='rejected');
+  }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
+});
