@@ -201,7 +201,12 @@ ordinary native binaries, including real unit inspection/retirement and verified
 provider/guardian exit. These were host-orchestrated tests with the managed source
 left running, not installed-service handoffs. See the observer deployment record.
 
-Next, integrate journaled provider launch and teardown into the service, then
+Durable provider submission is now implemented locally: exclusive launch and
+pending records precede root mutation, candidate/token/source identities are
+bound, and uncertain results block all replacement IDs. Listener/readiness
+coordination and journal-driven teardown remain unintegrated.
+
+Next, integrate the provider listener, submission and teardown into the service, then
 exercise the real external observer across managed shutdown with retained records, followed by
 live state installation/native trial and managed rollback. Do not substitute a
 Mac-only controller for the deployed runtime or use the non-stopping probe as

@@ -353,3 +353,22 @@ setup and unit operations. Independent tests on both TVs used ordinary packaged
 binaries, real System authentication, actual systemd unit inspection/retirement,
 and root-owned staging cleanup; their managed workers stayed running. Neither
 test substitutes for the installed-service stopping handoff gate.
+
+### Durable provider submission
+
+`retirement-launch.js` constructs and submits a native maintenance launch on
+loopback. It revalidates the ordinary candidate manifest, binds all three native
+artifact digests, verifies the source boot and process start identities before
+staging and again before launching, and copies the launcher into the private
+experiment scope. The token is copied from a private service-owned file into the
+root-owned scope; the record contains only its digest, not the secret. Both the
+native lifetime and systemd runtime are bounded to 300 seconds.
+
+An exclusive per-transaction record and a directory-wide pending marker are
+flushed before the executor is called. Submission acknowledgement advances only
+to `submitted`; it proves neither connection readiness nor completion. Lost,
+failed or ambiguous results retain `unknown` ownership and block every new ID.
+Partial local intent publication also blocks retry. No age-based cleanup or
+automatic relaunch is permitted. The caller still needs to coordinate the
+listener, verify the native peer, and reconcile teardown against this record.
+The installed service does not yet call this submission module.
