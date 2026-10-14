@@ -246,11 +246,11 @@ The S90D service now routes an explicit `/v1/observer/probe` request through the
 external supervised observer. It does not launch an observer at service startup.
 The API's persisted request ID deterministically names the external transaction;
 unknown submissions cannot acquire a fresh identity by retrying that request.
-The service captures its own real/effective/saved/filesystem IDs, supplementary
-groups, label and effective capabilities. The recognized WRT broker context is
-normalized to the fixed package label and zero capabilities for the observer; its
-exact group list is retained. The launched supervisor must match that derived
-profile, not the broker's elevated label or capability.
+The service resolves `/proc/thread-self`, binds both kernel task and thread-group
+IDs, and reads that calling thread's credentials through the held worker. It
+requires the fixed package label and zero capabilities and preserves the exact
+group list. The calling thread must remain unchanged across capture. The launched
+supervisor must match that profile; the broker main-thread profile is rejected.
 Observer launch records live in a private `worker-state/observer-launches` directory.
 
 The managed admission hold supplies staging, submission, fresh identity confirmation,

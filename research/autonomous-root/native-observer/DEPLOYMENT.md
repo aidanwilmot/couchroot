@@ -339,10 +339,13 @@ Earlier preflight had inspected the stub and incorrectly treated its profile as
 the JavaScript controller's. A stale `process.pid` value has not been established
 as the cause. The kernel-derived PID remains useful for explicit lookup binding.
 
-The controller parser now recognizes only the observed broker identity (fixed
-UID/GID, known label and exactly CAP_MAC_ADMIN) or the existing package context.
-It derives an observer profile retaining the controller's exact group list while
-requiring the fixed package label and zero capabilities. The native helper never
-inherits the broker label or capability. Supervisor credential confirmation still
-rejects a privileged broker profile. All 62 focused Linux service/observer tests
-pass; the corrected role distinction still needs installed qualification.
+Subsequent per-thread inspection found package-labelled, zero-capability tasks
+inside the same broker, alongside its privileged main thread. Process-level
+`/proc/self` credentials therefore do not identify the calling JavaScript thread.
+The local broker-normalization exception was removed before deployment. Source
+now resolves `/proc/thread-self`, reads the exact task's status/label through the
+held worker, verifies both PID and Tgid, and confirms the calling thread did not
+change across capture. It requires the package label and zero capabilities for
+both controller and supervisor. Tests distinguish process and task IDs, reject
+privileged broker records, and reject thread changes. All 62 focused Linux tests
+pass; installed qualification of this thread-bound correction remains open.

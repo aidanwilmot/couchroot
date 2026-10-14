@@ -9,46 +9,44 @@ function observerTransactionId(requestId){
  if(typeof requestId!=='string'||requestId.length<16||requestId.length>64||!/^[-a-zA-Z0-9]+$/.test(requestId))throw Error('Persistent observer request identity required');
  return crypto.createHash('sha256').update('observer-probe:'+requestId).digest('hex').slice(0,32);
 }
-// The explicit current service PID is the binding. Kernel credential records
-// are authoritative; WRT's process credential getters are not a second source.
-function parseCredentials(status,label,pid,role='observer'){
- if(!['observer','controller'].includes(role))throw Error('Unknown observer credential role');
+// Bind kernel records to the explicit task and thread-group IDs. WRT can give
+// package threads different credentials from their broker's main thread.
+function parseCredentials(status,label,pid,tgid=pid){
  const field=name=>{const rows=status.split('\n').filter(line=>line.startsWith(name+':'));if(rows.length!==1)throw Error('Service credential evidence unavailable');return rows[0].slice(name.length+1).trim();};
  const ids=name=>field(name).split(/\s+/).map(Number);
  const uids=ids('Uid'),gids=ids('Gid'),groups=ids('Groups').sort((a,b)=>a-b);
  const requireMatch=(ok,name)=>{if(!ok)throw Error('Kernel credential mismatch: '+name+' for PID '+pid);};
  requireMatch(field('Pid')===String(pid),'pid');
+ requireMatch(field('Tgid')===String(tgid),'thread-group');
  requireMatch(uids.length===4&&uids.every(id=>id===5001),'uids');
  requireMatch(gids.length===4&&gids.every(id=>id===100),'gids');
  requireMatch(groups.length>=1&&groups.length<=32&&groups.every(id=>Number.isInteger(id)&&id>=1&&id<=2147483647)&&new Set(groups).size===groups.length&&groups.includes(100),'groups');
- // S90D hosts JavaScript in a privileged WRT broker, separate from the
- // package launch stub. Recognize that controller context without copying its
- // label or CAP_MAC_ADMIN into the observer. Supervisor checks stay strict.
- if(role==='controller'&&label==='System::Privileged')requireMatch(field('CapEff')==='0000000200000000','broker-capabilities');
- else{
-  requireMatch(label==='User::Pkg::MiniRoot01','label');
-  requireMatch(field('CapEff')==='0000000000000000','capabilities');
- }
- return {uid:5001,gid:100,groups,label:'User::Pkg::MiniRoot01'};
+ requireMatch(label==='User::Pkg::MiniRoot01','label');
+ requireMatch(field('CapEff')==='0000000000000000','capabilities');
+ return {uid:5001,gid:100,groups,label};
 }
-async function readCredentials(execute,pid,bootId,role='observer'){
- if(!Number.isInteger(pid)||pid<=1||pid>2147483647||typeof bootId!=='string'||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(bootId)||bootId.length!==36)throw Error('Invalid credential observation identity');
- const base='/proc/'+pid;
+async function readCredentials(execute,pid,bootId,tgid=pid){
+ if(!Number.isInteger(pid)||pid<=1||pid>2147483647||!Number.isInteger(tgid)||tgid<=1||tgid>2147483647||typeof bootId!=='string'||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(bootId)||bootId.length!==36)throw Error('Invalid credential observation identity');
+ const base='/proc/'+tgid+(tgid===pid?'':'/task/'+pid);
  const guard='test "$(cat /proc/sys/kernel/random/boot_id)" = '+bootId+'\n';
  const command='set -eu\n'+guard+'cat '+base+'/status\nprintf "OBSERVER-SERVICE-LABEL\\n"\ncat '+base+'/attr/current\n'+guard;
  const result=await execute(command,5000);
  if(!result||result.exit_code!==0||result.timed_out||result.stderr||typeof result.stdout!=='string'||result.stdout.length>16384)throw Error('Service credential observation unavailable');
  const parts=result.stdout.split('OBSERVER-SERVICE-LABEL\n');
  if(parts.length!==2)throw Error('Malformed service credential observation');
- return parseCredentials(parts[0],parts[1].trim(),pid,role);
+ return parseCredentials(parts[0],parts[1].trim(),pid,tgid);
 }
 async function serviceCredentials(execute,bootId){
- // Resolve the caller's PID from the kernel rather than assuming the runtime
- // initialized its process.pid property in this process.
- const self=fs.readlinkSync('/proc/self');
- if(typeof self!=='string'||!/^[1-9][0-9]{0,9}$/.test(self)||self.trim()!==self)throw Error('Current service PID unavailable');
- return readCredentials(execute,Number(self),bootId,'controller');
+ // WRT hosts package-labelled JavaScript threads in a broker whose main
+ // thread has a different label and capabilities. Bind the calling thread.
+ const self=fs.readlinkSync('/proc/thread-self');
+ const match=typeof self==='string'&&self.match(/^([1-9][0-9]{0,9})\/task\/([1-9][0-9]{0,9})$/);
+ if(!match||self.trim()!==self)throw Error('Current service thread unavailable');
+ const profile=await readCredentials(execute,Number(match[2]),bootId,Number(match[1]));
+ if(fs.readlinkSync('/proc/thread-self')!==self)throw Error('Service thread changed during credential capture');
+ return profile;
 }
+
 function journalDirectory(directory){
  if(directory!==STATE)throw Error('Invalid service observer state path');
  const flags=fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW;
