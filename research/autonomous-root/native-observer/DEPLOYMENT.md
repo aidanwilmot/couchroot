@@ -217,3 +217,45 @@ Local validation passed 30 focused Linux tests, including actual managed-worker
 handoff, pidfd protocol and retained-record checks. The tracked-file privacy audit
 reported no findings across 548 files. Raw evidence and signed artifacts remain
 outside Git.
+
+## S90D installed-runtime qualification — 2026-10-14
+
+The signed 0.7.1 candidate was installed through the shared updater with managed
+selection retained. Before its one-shot probe, independent bounded kernel/process
+capture, service-start and SDK recovery timers were confirmed active. The request
+lost its response. Captured kernel evidence identifies SIGSEGV in `wrt-service`
+inside `libchromium-impl.so`, followed by approximately 21 seconds waiting for
+the platform core-dump configuration. This establishes the failing runtime, not
+the exact underlying instruction or cause on S90D.
+
+The managed service recovered on the same boot with a new worker. The independent
+service-start timer produced a successful-launch receipt. Recovery timers were
+disarmed after managed readiness and loopback SDK readback. All 60 kernel and 60
+process snapshots, the completion marker and restart receipt were archived and
+digest-verified before removing the collector's named files. The uncertain probe
+record remains submitted and must not be replayed or treated as passed.
+
+Direct child-process observation is therefore unavailable in the installed TV
+runtime. `main.js` explicitly disables that transport. S90D probe and internal
+handoff now reject before staging, spawning or stopping the worker; probe admission
+is released with a known rejection. Host-only pipe-bridge tests remain useful for
+the observer protocol, but do not override this installed-runtime restriction.
+QN90A continues using its qualified proc-stat path.
+
+The next integration must provide an external observer launch transport that
+survives worker shutdown. It must preserve manifest-bound executable identity,
+bounded authenticated communication, bind-before-confirm-before-arm sequencing,
+service-equivalent observation credentials, and cancellation of the observer only.
+Neither a bare PID nor a worker's shutdown acknowledgement can replace independent
+exit observation. No native selection or .NET retirement is accepted by these tests.
+
+The guard was deployed as S90D 0.7.2 through the shared updater. Its installed probe
+returned a known rejection with a completed failure journal entry, unchanged worker
+and boot, and released admission. A following managed command succeeded. All 34
+tracked package members, enrollment, protected files, startup flags and restored
+loopback SDK setting verified. Recovery remained armed through the probe and was
+then disarmed. Both TVs ended ready on managed workers, without an agent-requested
+reboot. The S90D update journal is complete for the guard only, explicitly leaving
+observer launch and native migration unqualified. Local Linux tests passed 31
+focused service/observer/managed-wire checks. The tracked-file privacy audit
+reported no findings across 548 files.

@@ -136,6 +136,7 @@ function createAgent(config,options={}){
    snapshot:async()=>{if(token.preparingStop)throw Error('Worker shutdown preparation in progress');return snapshot();},
    probeObserver:async expectedManifest=>{
     current();if(token.preparingStop||token.stopping||token.observerStaging||token.observerProbe)throw Error('Observer probe already pending');
+    if(config.device==='s90d'&&options.observerChildProcess===false)throw Object.assign(Error('Process observer requires an external launch transport'),{outcome:'rejected'});
     if(typeof expectedManifest!=='string'||expectedManifest.length!==64||!/^[a-f0-9]{64}$/.test(expectedManifest))throw Error('Candidate manifest digest required');
     token.preparingStop=true;
     try{
@@ -163,6 +164,7 @@ function createAgent(config,options={}){
    },
    shutdown:async transactionId=>{
     current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Worker shutdown or observer staging requires reconciliation');
+    if(options.observerChildProcess===false&&(options.processObserver||options.stagePackagedObserver))throw Object.assign(Error('Process observer requires an external launch transport'),{outcome:'rejected'});
     token.preparingStop=true;
     let observer=null,stagedObserver=null;
     try{

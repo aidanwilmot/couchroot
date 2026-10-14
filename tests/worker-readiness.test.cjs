@@ -299,3 +299,19 @@ test('QN90A proc-stat probe refuses unreadable or replaced workers without launc
   }finally{agent.stop();}
  }
 });
+
+test('unqualified service child-process transport rejects before staging or shutdown and releases admission',async()=>{
+ let mutations=0;
+ const forbidden=()=>{mutations++;throw Error('Unexpected mutation');};
+ const modules={'./observer-stage':{stageObserver:forbidden},'./pidfd-observer':{probeExecutable:forbidden,preparePidfdExit:forbidden}};
+ const {agent,channels}=fixture({observerChildProcess:false,stagePackagedObserver:true},modules,'s90d');
+ agent.start();const channel=channels[0],ready=channel.connect();
+ try{
+  ready.resolve(managed());await flush();channel.execute=forbidden;channel.shutdown=forbidden;
+  await assert.rejects(agent.probeObserver(DIGEST),e=>e.outcome==='rejected'&&/external launch transport/.test(e.message));
+  assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().admission_held,false);
+  const hold=agent.holdAdmission();
+  await assert.rejects(hold.shutdown('unused'),e=>e.outcome==='rejected'&&/external launch transport/.test(e.message));
+  hold.release();assert.equal(agent.status().worker_ready,true);assert.equal(mutations,0);
+ }finally{agent.stop();}
+});

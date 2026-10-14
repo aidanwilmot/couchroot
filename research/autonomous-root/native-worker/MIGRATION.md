@@ -176,6 +176,14 @@ migration fixtures.
 
 ### 3 Integrate packaging and service selection
 
+Installed-runtime update: QN90A's proc-stat probe is qualified on 0.7.2. S90D's
+installed 0.7.1 probe crashed in the JavaScript service runtime, despite the earlier
+credential-matched pidfd sidecar tests. Direct observer child-process launch is
+now explicitly disabled for the deployed service. An external observer launch
+transport is required before S90D handoff and native selection can proceed; see
+the current [deployment evidence](../native-observer/DEPLOYMENT.md). The packaging
+and journal foundations below do not satisfy this remaining runtime gate.
+
 Local packaging foundation is implemented: `--native-candidate` includes three
 reproducibly built ordinary artifacts and a manifest while retaining managed
 selection (worker, app launcher and process observer). See `PARITY.md` for build evidence. Service-side candidate manifest validation and diagnostics are also implemented,
