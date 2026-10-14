@@ -28,13 +28,13 @@ class NativeWorkerTests(unittest.TestCase):
         self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
         self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')
         auth=self.receive().split('\t');self.assertEqual(auth[0],'AUTH');self.worker_pid=int(auth[1]);self.assertNotEqual(self.worker_pid,self.proc.pid)
-    def restart(self):
+    def restart(self, extra_env=None):
         self.stream.close();self.sock.close()
         _,stderr=self.proc.communicate(timeout=5)
         self.assertNotRegex(stderr.decode(errors='replace'),r'ERROR: AddressSanitizer|runtime error:|SUMMARY:')
         self.secret=os.urandom(32);self.nonce=os.urandom(32);self.seq=0
         self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
-        self.proc=subprocess.Popen(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        self.proc=subprocess.Popen(self.worker_args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={**os.environ,**(extra_env or {})})
         self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
         self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')
         auth=self.receive().split('\t');self.assertEqual(auth[0],'AUTH');self.worker_pid=int(auth[1])
@@ -487,6 +487,62 @@ class NativeWorkerTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in (self.root/'.jobs').iterdir()),['lock'])
             self.assertFalse((self.root/'.views').exists())
             self.restart();self.assertTrue(self.op('status')['ok'])
+
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
+    def test_orphan_initial_intents_recover_without_replay(self):
+        for stage in ['created','partial','synced','linked']:
+            with self.subTest(stage=stage):
+                self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+                self.restart({'COUCHROOT_NATIVE_JOB_INTENT_FAULT':stage})
+                self.seq+=1
+                request=dict(op='job.start',id='native-orphan-intent',command='touch '+str(self.root/'unexpected-intent'),profile='root',timeout_ms=1000)
+                self.send(f'OP\t{self.seq}\t'+base64.b64encode(json.dumps(request).encode()).decode())
+                self.proc.wait(timeout=5);self.assertEqual(self.proc.returncode,86)
+                self.assertFalse((self.root/'unexpected-intent').exists())
+                self.restart()
+                result=self.job('job.status','native-orphan-intent')['result']
+                self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
+                if stage!='linked':self.assertFalse(result['record']['launch_started'])
+                self.assertFalse(self.job('job.start','native-orphan-intent',command='true',profile='root',timeout_ms=1000)['ok'])
+                self.assertFalse(any(p.name.startswith(('.intent-','.repair-')) for p in (self.root/'.jobs').iterdir()))
+                self.assertTrue(self.job('job.forget','native-orphan-intent')['ok'])
+
+    def test_owned_orphan_metadata_refusal_and_foreign_preservation(self):
+        _,journal=self.guardian_loss()
+        owned=self.root/'.jobs'/('.intent-'+journal['worker_id']+'-native-orphan-intent')
+        foreign=self.root/'.jobs'/('.intent-'+'f'*32+'-native-foreign-intent')
+        foreign.write_bytes(b'preserve');foreign.chmod(0o600)
+        owned.write_bytes(b'{');owned.chmod(0o644)
+        result=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(result.returncode,0);self.assertEqual(owned.read_bytes(),b'{');self.assertEqual(foreign.read_bytes(),b'preserve')
+        owned.chmod(0o600);linked=self.root/'orphan-link';os.link(owned,linked)
+        result=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(result.returncode,0);self.assertTrue(linked.exists());linked.unlink()
+        self.restart()
+        self.assertFalse(owned.exists());self.assertEqual(foreign.read_bytes(),b'preserve')
+        result=self.job('job.status','native-orphan-intent')['result']
+        self.assertEqual(result['state'],'interrupted');self.assertFalse(result['record']['launch_started'])
+
+    def test_orphan_repair_resumes_and_preserves_existing_records(self):
+        _,journal=self.guardian_loss();owner=journal['worker_id'];jobs=self.root/'.jobs'
+        id='native-repair-intent';intent=jobs/('.intent-'+owner+'-'+id);intent.write_bytes(b'{');intent.chmod(0o600)
+        repair=jobs/('.repair-'+owner+'-'+id);repair.write_bytes(b'{');repair.chmod(0o644)
+        r=subprocess.run(self.worker_args,capture_output=True,timeout=5)
+        self.assertNotEqual(r.returncode,0);self.assertTrue(intent.exists());self.assertEqual(repair.read_bytes(),b'{')
+        repair.chmod(0o600)
+        existing='native-existing-record';existing_path=jobs/(existing+'.json')
+        original=json.dumps(dict(worker_id='f'*32,id=existing,boot_id=journal['boot_id'],state='completed',exit_code=23)).encode()
+        existing_path.write_bytes(original);existing_path.chmod(0o600)
+        orphan=jobs/('.intent-'+owner+'-'+existing);orphan.write_bytes(b'{');orphan.chmod(0o600)
+        linked='native-linked-repair';final=jobs/(linked+'.json');final.write_text(json.dumps(dict(worker_id=owner,id=linked,boot_id=journal['boot_id'],state='interrupted',exit_code=None,launch_started=False)));final.chmod(0o600)
+        os.link(final,jobs/('.repair-'+owner+'-'+linked))
+        orphan_linked=jobs/('.intent-'+owner+'-'+linked);orphan_linked.write_bytes(b'{');orphan_linked.chmod(0o600)
+        self.restart()
+        self.assertEqual(existing_path.read_bytes(),original)
+        self.assertFalse(any(p.name.startswith(('.intent-','.repair-')) for p in jobs.iterdir()))
+        self.assertEqual(final.stat().st_nlink,1)
+        for id in ['native-repair-intent','native-linked-repair']:
+            self.assertEqual(self.job('job.status',id)['result']['state'],'interrupted')
 
     def test_legacy_prepared_schema_two_recovery(self):
         _,journal=self.guardian_loss()

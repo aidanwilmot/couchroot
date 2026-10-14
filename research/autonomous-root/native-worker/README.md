@@ -22,7 +22,14 @@ memory and 64 records on disk. Records live under the experiment's private `.job
 directory, locked to one native worker. Initial intents are written and synced to
 an exclusive temporary file, then published with a non-replacing hard link and
 directory fsync before a child can execute. Failed writes cannot publish partial
-initial records. Terminal-result save failures remain visible as
+initial records. Initial temporary names include the generated worker identity.
+After same-boot ownership reconciliation, an unpublished intent becomes an
+interrupted record with unknown exit status and `launch_started=false`; its ID
+stays reserved until explicitly forgotten. Recovery resumes interrupted repair
+writes and preserves existing final records and foreign-owner intents. Invalid
+owned metadata fails closed. Legacy orphan `.json.next` files without a final
+record lack this ownership proof and remain preserved for inspection.
+Terminal-result save failures remain visible as
 `persistence_failed`; the supervisor retries the known result at most once per
 second per retained job, without rerunning commands. Restarted workers report saved outcomes
 and refuse to replay starts. Logs are in-memory only. Cancellation of a saved,
@@ -397,9 +404,10 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 ## Remaining production work
 
 - Validate the schema-4 initial-journal, resource-reservation and partial-update
-  recovery on both TVs. Forty sanitizer host tests and ARM builds pass; the expanded
-  device suite is prepared while the prior build's endurance run continues.
-  Reconcile orphan initial job-intent temporaries as part of crash qualification.
+  recovery and owner-tagged orphan job-intent recovery on both TVs. All 43 native
+  sanitizer host tests and ARM builds pass; the repository suite passes 226 tests
+  with the 43 native tests skipped by that runner. The expanded device suite is
+  prepared while the prior build's endurance run continues.
   Cross-boot, reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.

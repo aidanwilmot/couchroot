@@ -71,9 +71,12 @@ static int job_write(int fd, const void *buf, size_t n) {
  * validated identifiers, kernel integers and generated timestamps, never
  * command text. */
 static int job_save(Job *j, int exclusive) {
-  char name[80], temp[85], bytes[768], code[24];
+  char name[80], temp[128], bytes[768], code[24];
   snprintf(name, sizeof name, "%s.json", j->id);
-  snprintf(temp, sizeof temp, "%s.next", name);
+  if (exclusive)
+    snprintf(temp, sizeof temp, ".intent-%s-%s", worker_id, j->id);
+  else
+    snprintf(temp, sizeof temp, "%s.next", name);
   if (j->finished)
     snprintf(code, sizeof code, "%d", j->code);
   else
@@ -91,6 +94,18 @@ static int job_save(Job *j, int exclusive) {
                   O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (fd < 0)
     return 0;
+#ifdef NATIVE_WORKER_FAULT_TEST
+  const char *intent_fault = getenv("COUCHROOT_NATIVE_JOB_INTENT_FAULT");
+  if (exclusive && intent_fault) {
+    if (!strcmp(intent_fault, "created"))
+      _exit(86);
+    if (!strcmp(intent_fault, "partial")) {
+      int wrote = job_write(fd, bytes, n / 2);
+      (void)wrote;
+      _exit(86);
+    }
+  }
+#endif
   int good = job_write(fd, bytes, n) && !fsync(fd);
   if (close(fd))
     good = 0;
@@ -98,8 +113,16 @@ static int job_save(Job *j, int exclusive) {
    * write must never become the durable job record, and no child is released
    * before both the complete record and directory entry have been synced. */
   if (good && exclusive) {
+#ifdef NATIVE_WORKER_FAULT_TEST
+    if (intent_fault && !strcmp(intent_fault, "synced"))
+      _exit(86);
+#endif
     if (linkat(jobs_dir, temp, jobs_dir, name, 0))
       good = 0;
+#ifdef NATIVE_WORKER_FAULT_TEST
+    if (good && intent_fault && !strcmp(intent_fault, "linked"))
+      _exit(86);
+#endif
     if (unlinkat(jobs_dir, temp, 0))
       good = 0;
   } else if (good && renameat(jobs_dir, temp, jobs_dir, name))

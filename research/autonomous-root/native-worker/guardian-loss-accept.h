@@ -275,6 +275,77 @@ static void guardian_loss_checks(int frozen) {
 }
 
 #ifdef NATIVE_WORKER_FAULT_TEST
+static void orphan_intent_checks(void) {
+  const char *stages[] = {"created", "partial", "synced", "linked"};
+  for (size_t i = 0; i < sizeof stages / sizeof *stages; i++) {
+    finish(0);
+    if (setenv("COUCHROOT_NATIVE_JOB_INTENT_FAULT", stages[i], 1))
+      fatal("intent fault environment");
+    launch();
+    if (unsetenv("COUCHROOT_NATIVE_JOB_INTENT_FAULT"))
+      fatal("intent fault environment reset");
+    char *marker = format("%s/unexpected-intent-command", scope),
+         *command_text = format("touch '%s'", marker);
+    J *j = job_req("job.start", "native-orphan-intent");
+    str(j, "command", command_text);
+    str(j, "profile", "root");
+    num(j, "timeout_ms", 1000);
+    char *body = base64(json(j), strlen(json(j))),
+         *frame = format("OP\t%d\t%s", ++sequence, body);
+    sendframe(&w, frame);
+    free(body);
+    free(frame);
+    free(command_text);
+    discard(j);
+    close(w.fd);
+    w.fd = -1;
+    double deadline = stamp() + 15000;
+    int status;
+    pid_t got;
+    do {
+      got = waitpid(child, &status, WNOHANG);
+      if (!got)
+        usleep(10000);
+    } while (!got && stamp() < deadline);
+    if (got != child || !WIFEXITED(status) || WEXITSTATUS(status) != 86)
+      fatal("intent publication crash did not recover");
+    child = 0;
+    struct stat st;
+    if (!lstat(marker, &st) || errno != ENOENT)
+      fatal("unpublished intent executed a command");
+    free(marker);
+    launch();
+    J *r = call(job_req("job.status", "native-orphan-intent")),
+      *result = get(r, "result"), *record = get(result, "record");
+    if (strcmp(textval(result, "state"), "interrupted") ||
+        get(record, "exit_code") != NULL ||
+        (i < 3 && (!get(record, "launch_started") ||
+                   json_object_get_boolean(get(record, "launch_started")))))
+      fatal("orphan intent record did not preserve unknown exit and nonlaunch");
+    discard(r);
+    j = job_req("job.start", "native-orphan-intent");
+    str(j, "command", ":");
+    str(j, "profile", "root");
+    num(j, "timeout_ms", 1000);
+    rejected(j);
+    discard(call(job_req("job.forget", "native-orphan-intent")));
+    char *directory = format("%s/.jobs", filescope);
+    DIR *d = opendir(directory);
+    free(directory);
+    if (!d)
+      fatal("intent recovery directory");
+    struct dirent *entry;
+    while ((entry = readdir(d)))
+      if (!strncmp(entry->d_name, ".intent-", 8) ||
+          !strncmp(entry->d_name, ".repair-", 8))
+        fatal("orphan intent temporary retained");
+    closedir(d);
+    char check[128];
+    snprintf(check, sizeof check, "orphan_intent_%s_interrupted_without_replay",
+             stages[i]);
+    mark(check);
+  }
+}
 static void startup_reservation_refusal(const char *stage, const char *path,
                                         const char *bytes, const char *owner,
                                         const char *group) {

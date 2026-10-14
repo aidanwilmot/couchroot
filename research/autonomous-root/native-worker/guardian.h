@@ -123,7 +123,104 @@ static void guardian_journal(const char *phase) {
   if (fsync(jobs_dir))
     fatal("guardian journal persistence");
 }
+/* Initial intent names carry the owner's generated identity, even when their
+ * contents were never written. A missing final record proves the execution
+ * gate was not released. Preserve the ID as interrupted instead of replaying.
+ */
+static int guardian_private_file(const char *name, struct stat *st) {
+  int fd = openat(jobs_dir, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0)
+    return 0;
+  int good = !fstat(fd, st) && S_ISREG(st->st_mode) && !st->st_uid &&
+             !(st->st_mode & 077) && st->st_size >= 0 && st->st_size < 2048;
+  close(fd);
+  if (!good)
+    errno = EINVAL;
+  return good;
+}
+static int guardian_remove_temporary(const char *name,
+                                     const struct stat *final) {
+  struct stat st;
+  if (!guardian_private_file(name, &st))
+    return errno == ENOENT;
+  if (st.st_nlink != 1 &&
+      !(st.st_nlink == 2 && final && st.st_dev == final->st_dev &&
+        st.st_ino == final->st_ino))
+    return 0;
+  return !unlinkat(jobs_dir, name, 0);
+}
+static int guardian_recover_intents(void) {
+  int scan = openat(jobs_dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  DIR *d = scan < 0 ? NULL : fdopendir(scan);
+  if (!d) {
+    if (scan >= 0)
+      close(scan);
+    return 0;
+  }
+  char prefix[48];
+  snprintf(prefix, sizeof prefix, ".intent-%s-", worker_id);
+  size_t length = strlen(prefix);
+  struct dirent *entry;
+  int good = 1;
+  while ((entry = readdir(d))) {
+    if (strncmp(entry->d_name, prefix, length))
+      continue;
+    const char *id = entry->d_name + length;
+    struct stat intent, final;
+    if (!job_valid_id(id) || !guardian_private_file(entry->d_name, &intent)) {
+      good = 0;
+      continue;
+    }
+    char name[80], repair[128];
+    snprintf(name, sizeof name, "%s.json", id);
+    snprintf(repair, sizeof repair, ".repair-%s-%s", worker_id, id);
+    int exists = !fstatat(jobs_dir, name, &final, AT_SYMLINK_NOFOLLOW);
+    if ((!exists && errno != ENOENT) ||
+        (exists && !guardian_private_file(name, &final)) ||
+        (intent.st_nlink != 1 &&
+         !(exists && intent.st_nlink == 2 && intent.st_dev == final.st_dev &&
+           intent.st_ino == final.st_ino))) {
+      good = 0;
+      continue;
+    }
+    if (!guardian_remove_temporary(repair, exists ? &final : NULL)) {
+      good = 0;
+      continue;
+    }
+    if (!exists) {
+      J *r = obj();
+      str(r, "worker_id", worker_id);
+      str(r, "id", id);
+      str(r, "boot_id", current_boot);
+      str(r, "state", "interrupted");
+      str(r, "recovery", "initial-intent-not-published");
+      boolean(r, "launch_started", 0);
+      boolean(r, "output_available", 0);
+      boolean(r, "timed_out", 0);
+      json_object_object_add(r, "exit_code", NULL);
+      int fd =
+          openat(jobs_dir, repair,
+                 O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+      const char *bytes = json(r);
+      int saved = fd >= 0 && job_write(fd, bytes, strlen(bytes)) && !fsync(fd);
+      if (fd >= 0 && close(fd))
+        saved = 0;
+      json_object_put(r);
+      if (!saved || linkat(jobs_dir, repair, jobs_dir, name, 0) ||
+          unlinkat(jobs_dir, repair, 0) || fsync(jobs_dir)) {
+        good = 0;
+        continue;
+      }
+    }
+    if (unlinkat(jobs_dir, entry->d_name, 0) || fsync(jobs_dir))
+      good = 0;
+  }
+  closedir(d);
+  return good;
+}
 static int guardian_recover_records(void) {
+  if (!guardian_recover_intents())
+    return 0;
   int scan = openat(jobs_dir, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
   DIR *d = scan < 0 ? NULL : fdopendir(scan);
   if (!d) {

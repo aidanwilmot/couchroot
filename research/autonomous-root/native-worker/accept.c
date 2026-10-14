@@ -744,6 +744,7 @@ int main(int argc, char **argv) {
   guardian_loss_checks(1);
 #ifdef NATIVE_WORKER_FAULT_TEST
   startup_recovery_checks();
+  orphan_intent_checks();
 #endif
   storage_recovery_checks();
   finish(0);
