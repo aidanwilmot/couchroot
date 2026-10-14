@@ -475,15 +475,71 @@ tests and skipped those 47 native tests. See
 [focused validation evidence](descriptor-recovery-results.json). The earlier
 [failure evidence](resource-failure-results.json) remains as a historical record.
 
+## Event-driven waits and lifecycle cleanup — 2026-10-13
+
+Revision `43ec7bc` replaces fixed polling passes without changing the protocol,
+job records, helper lifecycle or recovery semantics. The guardian previously
+slept 10 ms between passes. Every traced fork, clone, exec and signal-delivery
+stop of a command therefore waited for the next pass. It now blocks in `ppoll`
+on the heartbeat pipe, with SIGCHLD and lifecycle signals unblocked only inside
+that wait. Timed wakes come from the heartbeat and stop deadlines. Containment
+and forced stop keep the former 10 ms pass. The job monitor polls retained job
+pipes plus an eventfd signaled by start, cancel and shutdown. Active jobs are
+still rechecked every 100 ms, because descendants can hold a leader's pipes.
+Continuous output keeps the former 10 ms batching, and an idle queue wakes once
+per second for its progress lease. Foreground commands wait for output, EOF or
+their deadline.
+
+The descriptor-capacity checks from `4e40d47` and their order are unchanged.
+The eventfd is a permanent startup descriptor; the acceptance fixture counts it
+from the live descriptor table. Failures after a published intent now name
+descriptors, memory or launch. Every such path still closes only the descriptors
+it allocated and keeps the ID unreplayable. A new host test checks unchanged
+worker and guardian descriptor sets across completed, drained, timed-out and
+cancelled jobs. Group kills, wait-status decoding, directory scans, saved-record
+reads, job slot release and signal-masked thread starts now share one
+implementation each.
+
+Before/after probes alternated the `6aebc0a` worker bytes with this build as a
+root job on each TV; host figures use five fresh workers per build.
+
+| Median | Host | QN90A | S90D |
+| --- | ---: | ---: | ---: |
+| Foreground cost per spawned process | 50.9 → 0.25 ms | 40.9 → 3.4 ms | 40.8 → 3.1 ms |
+| Idle guardian context switches/s | 79 → 9.6 | 99 → 10 | 100 → 10 |
+| Idle worker context switches/s | 26 → 10.8 | 28 → 11 | 29 → 12 |
+| Worker switches/s, quiet foreground command | 107 → 13 | 128 → 15 | 130 → 15 |
+| Worker switches/s, quiet background job | 94 → 36 | 124 → 56 | 150 → 66 |
+| Exit-0 job, start response to visible exit | — | 45.7 → 29.5 ms | 45.1 → 33.0 ms |
+
+Job-start responses remained bound by durable writes, at roughly 45–54 ms median.
+Both builds showed occasional storage stalls above one second on both TVs. In
+60 jobs per build per TV, the stall counts were similar, so these tails are not
+attributed to either build. Guardian wakeups are now bounded by the 10 Hz
+heartbeat itself.
+
+The complete extended suite passed on **both TVs**, with 74 distinct checks
+(78 rows) and zero controller exit codes. It covered startup checkpoints,
+guardian loss, storage failure, orphan intents, descriptor exhaustion, command
+and helper faults, and both progress watchdogs. Every gated worker-fault
+recovery stayed within the unchanged two-second limit. The stopped-worker
+watchdog recovered in 1,131 ms on QN90A and 1,206 ms on S90D. This was not a
+repeat of the one-hour exercise, so S90D's earlier 2,188 ms post-endurance
+result is not closed. Neither kernel window contained collector waits, worker
+dumps or file-open-checker events. Final checks preserved both original .NET
+process/worker identities, boot IDs, launcher and protected-file hashes, mounts
+and cgroups. All temporary helpers, jobs and files were removed. Neither TV was
+rebooted. Local validation passed 48 native tests under ASAN/UBSAN in three
+runs. The repository runner passed 274 tests, skipping the 48 native tests.
+See [cleanup-results.json](cleanup-results.json).
+
 ## Remaining production work
 
-- Rerun the complete expanded suite on the fixed revision. Earlier runs passed
-  schema-4 initial-journal, resource-reservation, partial-update and orphan-intent
-  checks on both TVs before the descriptor abort. The focused run closes that
-  abort and the subsequent fault-history/JSON checks; it is not a new full-suite
-  or endurance result. Investigate S90D's earlier 2,188 ms post-endurance stopped
-  worker recovery against the unchanged two-second gate. Cross-boot, reboot and
-  power-loss recovery remain unqualified.
+- Repeat the one-hour endurance run on the current revision. The complete
+  extended suite passed on both TVs at `43ec7bc`. S90D's earlier 2,188 ms
+  post-endurance stopped-worker recovery has not been reproduced or explained
+  against the unchanged two-second gate. Cross-boot, reboot and power-loss
+  recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
 - Extend resource-exhaustion qualification beyond job-start admission, storage
@@ -496,8 +552,8 @@ tests and skipped those 47 native tests. See
 - Reconcile the narrower file policy with the current public API, then repeat
   whole-process CPU/memory/startup comparisons. Legacy READFILE/WRITEFILE frames
   are outside the current public replacement contract. Worker-protocol JSON
-  uploads now pass host and focused device checks. Measure guardian polling and
-  job-monitor wakeups in the final comparison.
+  uploads now pass host and focused device checks. Guardian, job-monitor and
+  foreground wait wakeups are now measured; include them in that comparison.
 
 ## Historical crash delay and test-mount cleanup fix — 2026-10-13
 
