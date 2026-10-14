@@ -411,6 +411,7 @@ static void soak(int seconds) {
   discard(r);
 }
 #include "guardian-loss-accept.h"
+#include "storage-accept.h"
 int main(int argc, char **argv) {
   if (argc != 7) {
     fprintf(stderr,
@@ -744,6 +745,7 @@ int main(int argc, char **argv) {
 #ifdef NATIVE_WORKER_FAULT_TEST
   startup_recovery_checks();
 #endif
+  storage_recovery_checks();
   finish(0);
   if (unlink(app))
     fatal("remove launcher source");

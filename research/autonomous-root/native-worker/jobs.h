@@ -13,7 +13,7 @@ typedef struct {
   char id[65], boot[80], started[40], identity[32], state[20];
   pid_t pid;
   int pipes[2], finished, reaped, code, timed, save_failed;
-  double deadline, drain_deadline;
+  double deadline, drain_deadline, save_retry;
   JobLog logs[2];
 } Job;
 static Job jobs[16];
@@ -87,16 +87,24 @@ static int job_save(Job *j, int exclusive) {
       code, j->timed ? "true" : "false");
   if (n < 0 || n >= (int)sizeof bytes)
     return 0;
-  int fd = openat(jobs_dir, exclusive ? name : temp,
+  int fd = openat(jobs_dir, temp,
                   O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (fd < 0)
     return 0;
   int good = job_write(fd, bytes, n) && !fsync(fd);
   if (close(fd))
     good = 0;
-  if (!exclusive && good && renameat(jobs_dir, temp, jobs_dir, name))
+  /* Publish the first intent without replacing an existing ID. A partial
+   * write must never become the durable job record, and no child is released
+   * before both the complete record and directory entry have been synced. */
+  if (good && exclusive) {
+    if (linkat(jobs_dir, temp, jobs_dir, name, 0))
+      good = 0;
+    if (unlinkat(jobs_dir, temp, 0))
+      good = 0;
+  } else if (good && renameat(jobs_dir, temp, jobs_dir, name))
     good = 0;
-  if (!exclusive && !good)
+  if (!good)
     unlinkat(jobs_dir, temp, 0);
   if (good && fsync(jobs_dir))
     good = 0;
@@ -163,9 +171,19 @@ static void *job_monitor(void *unused) {
     int stop = jobs_stop;
     for (int i = 0; i < 16; i++) {
       Job *j = &jobs[i];
-      if (!j->id[0] || j->finished)
+      if (!j->id[0])
         continue;
       double now = stamp();
+      if (j->finished) {
+        /* Keep the known terminal result in memory and retry its atomic save
+         * at a bounded rate after a transient storage failure. Never rerun it.
+         */
+        if (j->save_failed && (stop || now >= j->save_retry)) {
+          j->save_failed = !job_save(j, 0);
+          j->save_retry = now + 1000;
+        }
+        continue;
+      }
       if (stop || (now >= j->deadline && !strcmp(j->state, "running"))) {
         j->timed = !stop;
         strcpy(j->state, stop ? "interrupted" : "timed_out");
@@ -231,6 +249,7 @@ static void *job_monitor(void *unused) {
             j->pipes[s] = -1;
           }
         j->save_failed = !job_save(j, 0);
+        j->save_retry = now + 1000;
       }
     }
     int active = 0;
@@ -266,8 +285,8 @@ static void jobs_storage(void) {
   struct stat st;
   if (jobs_dir < 0 || fstat(jobs_dir, &st) || st.st_uid || (st.st_mode & 077))
     fatal("private jobs directory");
-  jobs_lock =
-      openat(jobs_dir, "lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+  jobs_lock = openat(jobs_dir, "lock",
+                     O_RDONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (jobs_lock < 0 || fstat(jobs_lock, &st) || !S_ISREG(st.st_mode) ||
       st.st_uid || (st.st_mode & 077) || flock(jobs_lock, LOCK_EX | LOCK_NB))
     fatal("exclusive job ownership");

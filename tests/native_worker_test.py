@@ -85,6 +85,66 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertEqual((self.root/'file').read_bytes(),data)
         id=self.begin(b'replacement',expected=hashlib.sha256(data).hexdigest());self.assertTrue(self.upload(id,b'replacement')['ok']);self.assertTrue(self.op('file.commit',transfer_id=id)['ok'])
         self.assertEqual((self.root/'file').read_bytes(),b'replacement')
+    @unittest.skipUnless(os.environ.get('NATIVE_WORKER_STORAGE_TEST'), 'isolated mount-capable container required')
+    def test_full_and_readonly_job_intent_storage(self):
+        import errno
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        launcher=(self.root/'launcher-source').read_bytes()
+        subprocess.run(['mount','-t','tmpfs','-o','size=2m,nr_inodes=1024,mode=0700','tmpfs',str(self.root)],check=True)
+        try:
+            (self.root/'launcher-source').write_bytes(launcher);(self.root/'launcher-source').chmod(0o600)
+            self.restart()
+            with tempfile.TemporaryDirectory(prefix='native-storage-witness-') as outside:
+                marker=Path(outside)/'executed'
+                counter=Path(outside)/'run-count'
+                self.start_job('printf x >> '+str(counter)+'; sleep 1; exit 19',id='native-storage-finish')
+                filler=self.root/'filler'
+                with filler.open('wb',buffering=0) as f:
+                    with self.assertRaises(OSError) as error:
+                        while True:f.write(b'x'*65536)
+                self.assertEqual(error.exception.errno,errno.ENOSPC)
+                result=self.job('job.start',command='touch '+str(marker),profile='root',timeout_ms=1000)
+                self.assertFalse(result['ok']);self.assertFalse(marker.exists())
+                self.assertFalse((self.root/'.jobs/native-test-job-01.json').exists())
+                self.assertFalse((self.root/'.jobs/native-test-job-01.json.next').exists())
+                terminal=self.completed('native-storage-finish')
+                self.assertEqual(terminal['exit_code'],19);self.assertTrue(terminal['persistence_failed'])
+                filler.unlink()
+                deadline=time.monotonic()+5
+                while self.job('job.status','native-storage-finish')['result']['persistence_failed']:
+                    self.assertLess(time.monotonic(),deadline);time.sleep(.05)
+                saved=json.loads((self.root/'.jobs/native-storage-finish.json').read_text())
+                self.assertEqual(saved['state'],'completed');self.assertEqual(saved['exit_code'],19)
+                self.assertEqual(counter.read_bytes(),b'x')
+                self.assertTrue(self.job('job.forget','native-storage-finish')['ok'])
+                self.start_job('exit 7');self.assertEqual(self.completed()['exit_code'],7)
+                self.assertTrue(self.job('job.forget')['ok'])
+                subprocess.run(['mount','-o','remount,ro',str(self.root)],check=True)
+                result=self.job('job.start',command='touch '+str(marker),profile='root',timeout_ms=1000)
+                self.assertFalse(result['ok']);self.assertFalse(marker.exists())
+                subprocess.run(['mount','-o','remount,rw',str(self.root)],check=True)
+                self.start_job('exit 8');self.assertEqual(self.completed()['exit_code'],8)
+                self.assertTrue(self.job('job.forget')['ok'])
+                old=Path(self.op('status')['result']['app_launcher']['path'])
+                self.start_job('sleep 30',timeout=60000,id='native-storage-crash')
+                with filler.open('wb',buffering=0) as f:
+                    with self.assertRaises(OSError) as error:
+                        while True:f.write(b'x'*65536)
+                self.assertEqual(error.exception.errno,errno.ENOSPC)
+                os.kill(self.worker_pid,signal.SIGKILL);self.proc.wait(timeout=5)
+                self.assertEqual(self.proc.returncode,125)
+                self.assertFalse(old.exists());self.assertTrue((self.root/'.jobs/guardian').exists())
+                filler.unlink();self.restart()
+                self.assertEqual(self.job('job.status','native-storage-crash')['result']['state'],'interrupted')
+                self.assertTrue(self.job('job.forget','native-storage-crash')['ok'])
+            self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        finally:
+            subprocess.run(['mount','-o','remount,rw',str(self.root)],check=True)
+            if self.proc.poll() is None:
+                self.stream.close();self.sock.close();self.proc.wait(timeout=5)
+            subprocess.run(['umount',str(self.root)],check=True)
+        self.restart()
+
     def test_bounds_paths_and_unsupported(self):
         for path in ['/etc/passwd',str(self.root/'../escape'),str(self.root/'nested/file')]:
             self.assertFalse(self.op('file.open',path=path)['ok'])

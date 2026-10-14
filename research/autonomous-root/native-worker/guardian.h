@@ -403,8 +403,17 @@ static void guardian_start(void) {
   if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
     fprintf(stderr, "prototype: guardian drain %.0f ms\n",
             stamp() - recovery_started);
-  if (!drained || !guardian_recover_records() || !runtime_sweep() ||
-      !containment_cleanup() || containment_failed) {
+  /* Once descendants are proven gone, a metadata write failure must not keep
+   * executable views or an empty cgroup alive. Retain the journal for metadata
+   * reconciliation, but attempt each independent resource cleanup. */
+  int records_good = 0, runtime_good = 0, containment_good = 0;
+  if (drained) {
+    records_good = guardian_recover_records();
+    runtime_good = runtime_sweep();
+    containment_good = containment_cleanup();
+  }
+  if (!drained || !records_good || !runtime_good || !containment_good ||
+      containment_failed) {
     fputs("prototype: guardian recovery incomplete; journal retained\n",
           stderr);
     _exit(125);

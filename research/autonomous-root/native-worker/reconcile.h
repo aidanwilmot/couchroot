@@ -52,6 +52,32 @@ static int reconcile_mount_namespace_refs(long pid, int64_t ino) {
   fclose(f);
   return good;
 }
+/* nsfs inode numbers may be recycled after the original namespace dies.
+ * A same-number live namespace is relevant only if it still contains an owned
+ * execution view. Check both mount roots and targets so moved bind mounts also
+ * retain ownership. Descriptor-only and anonymous bind pins stay conservative.
+ */
+static int reconcile_namespace_without_views(long pid) {
+  char path[80], needle[96], line[8192];
+  if (!hexvalid(worker_id, 32))
+    return 0;
+  snprintf(path, sizeof path, "/proc/%ld/mountinfo", pid);
+  snprintf(needle, sizeof needle, "/native-helpers/%s", worker_id);
+  FILE *f = fopen(path, "r");
+  if (!f)
+    return 0;
+  int good = 1;
+  while (fgets(line, sizeof line, f)) {
+    if (!strchr(line, '\n') || strstr(line, needle)) {
+      good = 0;
+      break;
+    }
+  }
+  if (ferror(f))
+    good = 0;
+  fclose(f);
+  return good;
+}
 static int reconcile_namespace_unused(J *journal) {
 #ifndef NATIVE_WORKER_TEST
   int64_t dev, ino;
@@ -78,7 +104,8 @@ static int reconcile_namespace_unused(J *journal) {
     snprintf(path, sizeof path, "/proc/%ld/ns/mnt", pid);
     if (!stat(path, &st)) {
       if ((uint64_t)st.st_dev == (uint64_t)dev &&
-          (uint64_t)st.st_ino == (uint64_t)ino) {
+          (uint64_t)st.st_ino == (uint64_t)ino &&
+          !reconcile_namespace_without_views(pid)) {
         good = 0;
         break;
       }

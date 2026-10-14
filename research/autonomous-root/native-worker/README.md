@@ -19,7 +19,12 @@ The lifecycle extension adds `job.start/status/output/cancel/forget` with a
 supervisor thread, root/app profiles, exclusive durable launch intents, bounded
 1 MiB rings per stream and 64 KiB cursor windows. Sixteen jobs can be retained in
 memory and 64 records on disk. Records live under the experiment's private `.jobs`
-directory, locked to one native worker. Restarted workers report saved outcomes
+directory, locked to one native worker. Initial intents are written and synced to
+an exclusive temporary file, then published with a non-replacing hard link and
+directory fsync before a child can execute. Failed writes cannot publish partial
+initial records. Terminal-result save failures remain visible as
+`persistence_failed`; the supervisor retries the known result at most once per
+second per retained job, without rerunning commands. Restarted workers report saved outcomes
 and refuse to replay starts. Logs are in-memory only. Cancellation of a saved,
 previous-worker job is deliberately refused on these older kernels: process-group
 ownership cannot be established atomically from a saved PID. Unknown records
@@ -31,6 +36,9 @@ sets Smack `User`, and creates a read-only, nosuid/nodev bind view. The native w
 unshares its mount namespace before starting threads. It owns at most eight views;
 release is refused while any of its jobs are active. A separate native guardian kills/reaps remaining descendants before unmounting
 helpers and its independently staged launcher. Failed unmounts retain their backing files.
+After descendants are drained, metadata-save failures no longer skip execution-view
+and cgroup cleanup: each cleanup is attempted, and the journal remains for a later
+metadata reconciliation.
 Worker SIGKILL/crashes are recovered by that guardian. Guardian loss terminates
 its traced descendants; the next launch can reconcile a same-boot ownership journal
 with durable resource bindings before starting a new worker. Ambiguous state remains blocked. There is no durable log recovery. The
@@ -200,7 +208,13 @@ bounded child process, before staging a new launcher or accepting commands. It
 refuses a still-present guardian identity, mismatched directory/device bindings,
 legacy/different-boot journals, symlinks, hard-linked or permissive journals,
 unexpected mounts, inaccessible namespace evidence and retained namespace pins.
-Saved PIDs are inspected only: reconciliation never signals them.
+Saved PIDs are inspected only: reconciliation never signals them. Namespace inode
+numbers can be reused on these kernels. If a live process has the saved number,
+recovery checks its mount table for the old worker's owned execution views before
+treating it as a retained old namespace. Both mount roots and targets are checked,
+including moved bind views. Descriptor-only matches, unclassifiable pins and
+unreadable evidence remain conservative refusals. No unrelated process is signaled
+or moved into another namespace.
 
 Guardian death applies `PTRACE_O_EXITKILL` to the worker and its traced descendants.
 If the guardian died while its private group was frozen, recovery thaws only the
@@ -341,8 +355,10 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
   reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
-- Qualify resource exhaustion, storage failures and substantially longer runs.
-  Decide whether durable output is required; current job logs remain in memory.
+- Qualify resource exhaustion, further storage failures and substantially longer
+  runs. Preserve bounded, in-memory output as the public contract, matching the
+  deployed .NET implementation; durable output is not required for parity.
+  Job outcomes remain durable metadata and must recover after transient failures.
 - Decide command signal-handler compatibility and expose original command-fault
   diagnostics separately from actual termination status.
 - Reconcile the narrower file policy and omitted legacy operations with the

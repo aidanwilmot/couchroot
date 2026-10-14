@@ -214,6 +214,15 @@ static void guardian_loss_checks(int frozen) {
   j = parse(journal_bytes);
   num(j, "pid", getpid());
   str(j, "process_start", "0");
+  if (frozen) {
+    /* Model a namespace number reused by an unrelated, still-live process.
+     * This controller namespace has none of the old worker's owned mounts. */
+    struct stat ns;
+    if (stat("/proc/self/ns/mnt", &ns))
+      fatal("namespace reuse fixture");
+    num(j, "namespace_dev", ns.st_dev);
+    num(j, "namespace_ino", ns.st_ino);
+  }
   loss_journal_write(journal_path, json(j), 0);
   discard(j);
   launch();
@@ -222,6 +231,8 @@ static void guardian_loss_checks(int frozen) {
           get(get(r, "result"), "stale_guardian_reconciled")))
     fatal("guardian journal was not reconciled");
   discard(r);
+  if (frozen)
+    mark("stale_namespace_number_reuse_preserves_unrelated_process");
   if (!access(helper_path, F_OK) || !access(old_launcher, F_OK))
     fatal("guardian loss left runtime storage");
   char *old_group = format("/sys/fs/cgroup/freezer/%s", group);
