@@ -533,17 +533,65 @@ rebooted. Local validation passed 48 native tests under ASAN/UBSAN in three
 runs. The repository runner passed 274 tests, skipping the 48 native tests.
 See [cleanup-results.json](cleanup-results.json).
 
+## Descriptor admission for every protocol allocation — 2026-10-14
+
+Revision `f9e6d0c` extends the `4e40d47` capacity check beyond job start. Before
+allocating, each protocol-thread operation checks its peak descriptor use. It
+also keeps one slot in reserve for the job monitor, which opens at most one
+record at a time. The check runs under the job mutex, which excludes those
+record writes.
+
+| Operation | Peak descriptors |
+| --- | ---: |
+| Legacy `EXEC`, `app.exec` | 5 (two pipes and the child's `/dev/null`) |
+| `helper.prepare` | 3 (source, directory, target) |
+| `file.begin`, `file.open`, `file.commit`, `helper.release`, saved job read | 1 |
+| `status` | 0 |
+
+Rejected operations return a structured failure and allocate nothing. A legacy
+`EXEC` frame has no failure result. The worker therefore ends the session
+without running the command, as the managed worker does when it cannot start a
+process. `status` reads `CLOCK_BOOTTIME`, the clock behind `/proc/uptime`, to
+centisecond precision, so it works with no descriptor free. External limit
+changes during an operation, system-wide `ENFILE` and the guardian's own
+descriptors remain outside this admission.
+
+Host tests and the TV resource fixture run each operation one slot short of
+admission and again at the threshold. On these kernels, an undercounted
+allocation at the threshold would abort the worker. The focused resource suite
+passed on both TVs, including `operation_descriptor_admission_without_abort`.
+Each worker logged exactly one session-ending legacy `EXEC` rejection. Locally,
+49 native tests passed under ASAN/UBSAN. The repository runner passed 274 tests
+and skipped those 49.
+
+The repeated one-hour endurance run passed on **QN90A**. It ran 347
+root/app/helper cycles in 3,606 s with stable descriptors, threads and mounts.
+Worker RSS was 764–952 KiB; guardian RSS peaked at 1,124 KiB. The extended
+suite that followed passed 76 distinct checks. Stopped-worker recovery took
+1,069 ms, and every gated fault recovered in at most 204 ms. QN90A's kernel
+window had no collector waits, worker dumps or file-open-checker events. Final
+checks preserved its .NET worker, PID, boot, mounts, cgroups and protected
+files, and all test resources were removed.
+
+**S90D's endurance result is pending.** The TV left the network 36 minutes into
+the soak. Telemetry showed it idle and healthy on the same boot until its last
+packet; its DHCP lease then lapsed. S90D's telemetry history shows similar
+silent gaps with uptime continuing, which is consistent with standby. It was
+not woken or rebooted. Its observation, kernel window, cleanup and verification
+resume once it is reachable. Its focused admission run had passed earlier. See
+[admission-results.json](admission-results.json).
+
 ## Remaining production work
 
-- Repeat the one-hour endurance run on the current revision. The complete
-  extended suite passed on both TVs at `43ec7bc`. S90D's earlier 2,188 ms
-  post-endurance stopped-worker recovery has not been reproduced or explained
-  against the unchanged two-second gate. Cross-boot, reboot and power-loss
-  recovery remain unqualified.
+- Complete S90D's interrupted endurance run at `f9e6d0c`. QN90A passed it, with
+  1,069 ms stopped-worker recovery. S90D's earlier 2,188 ms post-endurance
+  recovery has not been reproduced or explained against the unchanged
+  two-second gate. Cross-boot, reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
   existing production machinery; the experiment still borrows those services.
-- Extend resource-exhaustion qualification beyond job-start admission, storage
-  failures and longer runs. Preserve bounded in-memory output as the public
+- Extend resource-exhaustion qualification beyond protocol descriptor
+  admission, storage failures and longer runs: external limit changes,
+  system-wide `ENFILE` and guardian descriptors. Preserve bounded in-memory output as the public
   contract, matching .NET; durable output is not required for parity. Job outcomes
   remain durable metadata and must recover after transient failures.
 - Decide command signal-handler compatibility. The strict policy is explicit in
