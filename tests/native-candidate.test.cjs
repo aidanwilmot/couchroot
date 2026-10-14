@@ -116,3 +116,13 @@ test('schema two refuses missing changed incompatible or unbound observers',()=>
   assert.throws(()=>loadCandidate(f.dir,'s90d'),/package-incomplete/);
  }finally{f.close();}
 });
+
+test('service-profile source is allowed and required by observers exposing the fixed profile mode',()=>{
+ const f=fixture(2);try{
+  const name='native-process-observer',bytes=Buffer.concat([artifact(),Buffer.from('--service-supervise')]);
+  fs.writeFileSync(path.join(f.dir,name),bytes);Object.assign(f.m.artifacts[name],{sha256:hash(bytes),size:bytes.length});f.seal();
+  assert.throws(()=>loadCandidate(f.dir,'s90d'),/candidate-source-missing/);
+  f.m.source['native-observer/service-profile.h']='c'.repeat(64);f.seal();assert.ok(loadCandidate(f.dir,'s90d'));
+  f.m.source['native-observer/other-profile.h']='c'.repeat(64);f.seal();assert.throws(()=>loadCandidate(f.dir,'s90d'),/candidate-source-manifest/);
+ }finally{f.close();}
+});

@@ -31,7 +31,7 @@ function validateManifest(m,device){
  requireValue(keys(m,['schema','kind','implementation','selection','device_qualified','candidate_profiles','source','toolchain','reproducible_builds','artifacts','runtime_loads']),'candidate-manifest-fields');
  requireValue([1,2].includes(m.schema)&&m.kind==='native-worker-candidate'&&m.implementation==='native-prototype'&&m.selection==='managed'&&m.device_qualified===false&&m.reproducible_builds===2,'candidate-manifest-contract');
  requireValue(['qn90a','s90d'].includes(device)&&Array.isArray(m.candidate_profiles)&&m.candidate_profiles.includes(device)&&new Set(m.candidate_profiles).size===m.candidate_profiles.length&&m.candidate_profiles.every(p=>['qn90a','s90d'].includes(p)),'candidate-profile');
- requireValue(record(m.source)&&Object.keys(m.source).length<=128&&Object.keys(m.source).every(p=>(/^(native-worker\/[a-z0-9-]+\.(c|h)|native-worker\/build\.sh|native-launcher\/(app-launcher\.c|build\.sh))$/.test(p)||(m.schema===2&&/^native-observer\/(process-observer\.c|build\.sh)$/.test(p)))&&typeof m.source[p]==='string'&&HEX.test(m.source[p])),'candidate-source-manifest');
+ requireValue(record(m.source)&&Object.keys(m.source).length<=128&&Object.keys(m.source).every(p=>(/^(native-worker\/[a-z0-9-]+\.(c|h)|native-worker\/build\.sh|native-launcher\/(app-launcher\.c|build\.sh))$/.test(p)||(m.schema===2&&/^native-observer\/(process-observer\.c|service-profile\.h|build\.sh)$/.test(p)))&&typeof m.source[p]==='string'&&HEX.test(m.source[p])),'candidate-source-manifest');
  for(const name of ['native-worker/worker.c','native-worker/build.sh','native-launcher/app-launcher.c','native-launcher/build.sh'])requireValue(Object.prototype.hasOwnProperty.call(m.source,name),'candidate-source-missing');
  if(m.schema===2)for(const name of ['native-observer/process-observer.c','native-observer/build.sh'])requireValue(Object.prototype.hasOwnProperty.call(m.source,name),'candidate-source-missing');
  requireValue(keys(m.toolchain,['image','compiler'])&&typeof m.toolchain.image==='string'&&typeof m.toolchain.compiler==='string'&&/^sha256:[a-f0-9]{64}$/.test(m.toolchain.image)&&/^\d+(?:\.\d+){1,2}$/.test(m.toolchain.compiler),'candidate-toolchain');
@@ -61,6 +61,7 @@ function loadCandidate(payload,device){
   const bytes=readBounded(path.join(payload,name),4*1024*1024),a=manifest.artifacts[name];
   requireValue(bytes.length===a.size&&hash(bytes)===a.sha256&&packageManifest[name]===a.sha256,'candidate-artifact-digest');
   requireValue(bytes.subarray(0,7).equals(Buffer.from([127,69,76,70,1,1,1]))&&[2,3].includes(bytes.readUInt16LE(16))&&bytes.readUInt16LE(18)===40&&(bytes.readUInt32LE(36)>>>24)===5&&!(bytes.readUInt32LE(36)&0x400),'candidate-artifact-header');
+  if(name==='native-process-observer'&&bytes.includes(Buffer.from('--service-supervise')))requireValue(Object.prototype.hasOwnProperty.call(manifest.source,'native-observer/service-profile.h'),'candidate-source-missing');
   for(const marker of ['--test-child-fault','COUCHROOT_NATIVE_JOB_INTENT_FAULT','host-test-without-Smack','COUCHROOT_IO_TEST_PATH'])requireValue(!bytes.includes(Buffer.from(marker)),'candidate-test-controls');
   artifacts[name]=Object.freeze({sha256:a.sha256,size:a.size});
  }

@@ -73,11 +73,11 @@ currently selected by the installed service.
 `service/observer-launch.js` supplies an internal S90D-only submission boundary.
 It restricts the executable to the installed package observer, pins its digest,
 checks boot, package ownership/mode/parent paths and the private listener files,
-and submits a uniquely named transient systemd service. The child shell checks
-real/effective UID, primary and supplementary groups, package label and zero
-effective capabilities before entering `--supervise`. Group membership comes from
-the caller's verified service identity, not an HTTP parameter. No direct Node
-child-process call is used.
+and submits a uniquely named transient systemd service. The fixed native
+`--service-supervise` entry point installs the exact groups and drops to the
+service identity before entering ordinary supervision (see below). Group membership
+comes from the caller's verified kernel identity, not an HTTP parameter. No direct
+Node child-process call is used.
 
 The adapter syncs an exclusive transaction record and a shared pending marker
 before command submission. Transport loss, timeout or an unexpected command result
