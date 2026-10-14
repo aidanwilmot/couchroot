@@ -137,3 +137,43 @@ last acquisition time. No package was installed and neither TV was rebooted.
 Installation still requires the shared update transaction, preservation of the
 current enrollment/configuration, verified maintenance access and signed recovery
 material. Successful preparation is not installed-service qualification.
+
+## QN90A installed-service failure — 2026-10-14
+
+The first update preflight rejected the saved 0.6.0 baseline before installation:
+the TV actually had 0.7.0. A retained signed 0.7.0 package matched every installed
+member. Both candidates were rebuilt as 0.7.1 against that baseline; the unused
+0.6.1 candidates are obsolete. QN90A's 0.7.1 update and installed-content readback
+passed, with managed selection and original enrollment preserved. S90D remains
+on 0.7.0; its 0.7.1 candidate has not been installed.
+
+The first QN90A observer probe lost its response and left the request journal at
+`submitted`. HTTPS became unavailable. The owner subsequently rebooted the TV;
+the service acquired a ready managed worker on the new boot. This was not an
+agent-requested reboot. Subsequent readback verified all 34 tracked package
+members, enrollment, protected files, startup flags and the restored loopback
+SDK host setting. Neither the old request nor its outcome was rewritten.
+
+A separate diagnostic request on the recovered boot reproduced the disconnect.
+Before submission, independent systemd log capture, service-start and SDK-rescue
+timers were confirmed active. The managed endpoint recovered on the same boot
+with a new worker identity. Both recovery timers were then disarmed. There is no
+service-start timer receipt, so recovery must not be attributed to that timer.
+The original workflow had disarmed SDK rescue too early; future qualification
+must retain independent recovery through the probe and its post-checks.
+
+Bounded kernel snapshots identify SIGSEGV in `MiniRoot01.Service` / `wrt-service`,
+with the faulting PC in `libchromium-impl.so` at image offset `0x004d446a` and link
+register offset `0x00545595`. A digest-verified copy of the 55,212,354-byte library
+was retained privately (SHA-256
+`23bee1f3f9ceeae89e273971a6696dd0518365503815ce7eaffa6bdf5fa8e192`).
+The observer's installed mode is 755, confirming staging progressed at least to
+the permission change. These observations establish a service-runtime crash,
+not an observer executable crash or its exact underlying cause. Nearby exported
+symbols do not identify the faulting function. No successful probe receipt exists.
+
+All 60 kernel snapshots, 60 process snapshots and the collector completion marker
+were archived privately and digest-verified before removing the owned diagnostic
+files from the TV. Managed access is restored; native service qualification and
+the package update's acceptance remain pending. Do not run the same probe on
+S90D based on the local tests or describe the observer launch gate as passed.
