@@ -12,6 +12,32 @@ python3 research/autonomous-root/client.py --config /private/client.json status
 
 ## Results and readiness
 
+The migration candidate adds `POST /v1/observer/probe`, using the same enrolled
+client and serialized administrative admission as other mutations. Its body is
+exactly `{id, manifest_sha256}`: no PID, path or command is accepted. The manifest
+must match the installed native candidate. The service journals the request before
+staging permission on the fixed observer package member, then launches it in the
+service context. S90D binds/cancels a pidfd observation after fresh worker identity
+confirmation; QN90A uses proc-stat and checks executable launch separately. Neither
+path submits worker shutdown or selects native.
+
+```sh
+python3 research/autonomous-root/client.py --config /private/client.json \
+  observer-probe --manifest-sha256 CANDIDATE_MANIFEST_SHA256 \
+  --request-id UNIQUE_REQUEST_ID
+```
+
+Success reports `verified`, `method`, manifest/observer digests, boot/worker IDs
+and `worker_stopped: false`. It establishes observation setup and cancellation,
+not target exit, native selection or cleanup parity. The HTTPS idle response
+budget is 120 seconds and client timeout 130 seconds; underlying request and
+observer deadlines remain bounded separately. Request IDs are not replayed after
+success or uncertainty. Confirmed executable failures are `failed`; uncertain
+staging or observer state retains the admission hold for inspection. Known probe
+failure after confirmed staging/child completion can release the hold while
+preserving the executable mode change. These behaviors have local tests only;
+actual TV service execution is not yet qualified.
+
 `exec` returns `exit_code`, `timed_out`, `stdout`, and `stderr`, including on a
 nonzero exit. A received timeout result is a known result. HTTP failures include
 `outcome`: `rejected` means admission failed, `failed` means the worker returned an

@@ -43,12 +43,12 @@ test('wrong owner hardlinks modes and boot mismatch refuse before chmod',{skip:!
   if(kind==='mode')fs.chmodSync(binary,0o666);
   if(kind==='boot')options.bootId='00000000-0000-0000-0000-000000000001';
   const before=fs.statSync(binary);
-  await assert.rejects(stageObserver(options));assert.equal(fs.statSync(binary).mode,before.mode);
+  await assert.rejects(stageObserver(options),e=>e.outcome==='failed');assert.equal(fs.statSync(binary).mode,before.mode);
  });
 });
 test('changed package or ambiguous root result never triggers automatic retry',{skip:!enabled},async()=>fixture(async({binary,options,execute})=>{
  let calls=0;
- await assert.rejects(stageObserver({...options,expectedManifest:'0'.repeat(64),execute:async()=>{calls++;}}));assert.equal(calls,0);
+ await assert.rejects(stageObserver({...options,expectedManifest:'0'.repeat(64),execute:async()=>{calls++;}}),e=>e.outcome==='rejected');assert.equal(calls,0);
  await assert.rejects(stageObserver({...options,execute:async command=>{calls++;await execute(command);throw Error('lost reply');}}),/lost reply/);
  assert.equal(calls,1);assert.equal(fs.statSync(binary).mode&0o777,0o755);
  calls=0;

@@ -46,6 +46,8 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   const downloadBytes=Buffer.from([0,10,13,128,255]);
   const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async (op,data)=>{operationCalls++;if(operationUncertain)throw Object.assign(Error('Operation outcome unknown'),{outcome:'unknown'});if(op.op==='file.read')return {data:downloadBytes,offset:7,sha256:badChunk?'0'.repeat(64):hash(downloadBytes)};if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(op.data,undefined);assert.equal(op.length,5);assert.ok(Buffer.isBuffer(data));assert.equal(data.toString(),'chunk');return {offset:5};}return {state:'running'};}};
   const journal=new Journal(dir+'/requests.json');
+  let probeCalls=0,probeLost=false;
+  agent.probeObserver=async digest=>{probeCalls++;assert.equal(digest,'a'.repeat(64));assert.ok(journal.rows.some(r=>r.state==='submitted'&&r.sha256===hash('observer.probe:'+digest)));if(probeLost==='failed')throw Object.assign(Error('probe execution refused'),{outcome:'failed'});if(probeLost)throw Error('probe result unknown');return {verified:true,worker_stopped:false};};
   server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
   function request(route,body,credentials=clientCert,extra={},reuse=false){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:reuse?pool:false,headers:{'Content-Type':'application/json',...extra}},res=>{const socket=res.socket;let parts=[];res.on('data',d=>parts.push(d));res.on('end',()=>{const data=Buffer.concat(parts);resolve({socket,status:res.statusCode,headers:res.headers,body:res.headers['content-type']==='application/octet-stream'?data:JSON.parse(data)});});});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
@@ -79,6 +81,21 @@ with api.Session(c) as session:
   await assert.rejects(request('/v1/status',undefined,{}));await assert.rejects(request('/v1/status',undefined,foreign));
   assert.equal((await request('/v1/status')).status,200);
   assert.equal((await request('/v1/status',undefined,clientCert,{Origin:'https://example.invalid'})).status,403);
+  const probe={id:crypto.randomUUID(),manifest_sha256:'a'.repeat(64)};
+  await assert.rejects(request('/v1/observer/probe',probe,foreign));
+  assert.equal((await request('/v1/observer/probe',probe,clientCert,{Origin:'https://example.invalid'})).status,403);
+  for(const invalid of [{...probe,pid:42},{...probe,manifest_sha256:'a'.repeat(64)+'\n'},{...probe,id:'short'}])assert.equal((await request('/v1/observer/probe',invalid)).body.outcome,'rejected');
+  assert.equal(probeCalls,0);
+  const probed=await request('/v1/observer/probe',probe);assert.equal(probed.status,200);assert.equal(probed.body.worker_stopped,false);
+  assert.equal(journal.rows.find(r=>r.id===probe.id).state,'completed');
+  assert.equal((await request('/v1/observer/probe',probe)).status,409);assert.equal(probeCalls,1);
+  probeLost=true;const lostProbe={...probe,id:crypto.randomUUID()};
+  assert.equal((await request('/v1/observer/probe',lostProbe)).body.outcome,'unknown');
+  assert.equal(journal.rows.find(r=>r.id===lostProbe.id).state,'submitted');
+  assert.equal((await request('/v1/observer/probe',lostProbe)).status,409);assert.equal(probeCalls,2);
+  probeLost='failed';const failedProbe={...probe,id:crypto.randomUUID()};
+  assert.equal((await request('/v1/observer/probe',failedProbe)).body.outcome,'failed');
+  assert.equal(journal.rows.find(r=>r.id===failedProbe.id).state,'completed');
   const v=command();assert.equal((await request('/v1/exec',v)).body.stdout,'uid=0');assert.equal(calls,1);assert.equal((await request('/v1/exec',v)).status,409);assert.equal(calls,1);
   exitCode=1;const nonzero=await request('/v1/exec',command());assert.equal(nonzero.status,200);assert.equal(nonzero.body.exit_code,1);assert.equal(nonzero.body.stdout,'uid=0');calls=1;
   const operationId=crypto.randomUUID();

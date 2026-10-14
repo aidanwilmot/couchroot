@@ -10,6 +10,7 @@ import uuid
 import os
 import time
 import sys
+import re
 
 
 class OperationError(RuntimeError):
@@ -197,10 +198,19 @@ def wait_ready(config, previous_boot_id=None, timeout=180):
     raise TimeoutError('No ready root worker on the requested boot before the deadline')
 
 
+def probe_observer(config, manifest_sha256, request_id, session=None):
+    if not isinstance(manifest_sha256,str) or not re.fullmatch('[a-f0-9]{64}',manifest_sha256):
+        raise ValueError('Candidate manifest digest required')
+    if not isinstance(request_id,str) or not re.fullmatch('[-a-zA-Z0-9]{16,64}',request_id):
+        raise ValueError('Persistent request ID required')
+    return request(config,'POST','/v1/observer/probe',dict(id=request_id,manifest_sha256=manifest_sha256),timeout=130,session=session)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config',required=True,type=Path)
-    parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal','upload','download','op','wait-ready','app-exec','job-start','job-status','job-tail','job-cancel','job-forget','helper-prepare','helper-release'])
+    parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal','upload','download','op','wait-ready','app-exec','job-start','job-status','job-tail','job-cancel','job-forget','helper-prepare','helper-release','observer-probe'])
+    parser.add_argument('--manifest-sha256')
     parser.add_argument('--command-file',type=Path)
     parser.add_argument('--timeout-ms',type=int,default=20000)
     parser.add_argument('--request-id',default=None)
@@ -238,6 +248,11 @@ def main():
     elif args.operation=='op':
         if not args.operation_file:parser.error('--operation-file required')
         result=operation(config,json.loads(args.operation_file.read_text()))
+    elif args.operation=='observer-probe':
+        if not args.manifest_sha256:parser.error('--manifest-sha256 required')
+        identity=args.request_id or str(uuid.uuid4())
+        print('Request ID: '+identity,file=sys.stderr)
+        result=probe_observer(config,args.manifest_sha256,identity)
     elif args.operation=='wait-ready':result=wait_ready(config,args.previous_boot_id,args.wait_seconds)
     elif args.operation=='exec':
         if not args.command_file:parser.error('exec requires --command-file')

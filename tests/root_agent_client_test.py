@@ -11,6 +11,19 @@ client=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)
 
 class RootAgentClientTests(unittest.TestCase):
+    def test_observer_probe_binds_request_and_manifest_without_retry(self):
+        with patch.object(client,'request',return_value={'verified':True}) as request:
+            self.assertTrue(client.probe_observer({},'a'*64,'observer-request-001')['verified'])
+            self.assertEqual(request.call_args.args,({},'POST','/v1/observer/probe',{'id':'observer-request-001','manifest_sha256':'a'*64}))
+            self.assertEqual(request.call_args.kwargs['timeout'],130)
+        with patch.object(client,'request',side_effect=OSError('lost reply')) as request:
+            with self.assertRaises(OSError):client.probe_observer({},'a'*64,'observer-request-001')
+            self.assertEqual(request.call_count,1)
+        with patch.object(client,'request') as request:
+            for digest,identity in [('a'*64+'\n','observer-request-001'),('a'*64,'short'),(None,'observer-request-001')]:
+                with self.assertRaises(ValueError):client.probe_observer({},digest,identity)
+            request.assert_not_called()
+
     def test_wait_requires_new_boot_and_ready_worker(self):
         observations=iter([
             dict(boot_id='old',worker_ready=True,identity={'uid':0}),

@@ -5,6 +5,29 @@ const {spawn}=require('child_process');
 const fs=require('fs'),crypto=require('crypto');
 const {processIdentities}=require('./worker-processes');
 
+function verifyArtifact(binary,sha256){
+ if(typeof binary!=='string'||!binary.startsWith('/')||binary.includes('\0')||typeof sha256!=='string'||sha256.length!==64||!/^[a-f0-9]{64}$/.test(sha256))throw Error('Invalid observer artifact identity');
+  // Package/staging owner must keep this executable immutable through spawn.
+  // The digest is supplied by that trusted manifest, never by a request body.
+  const fd=fs.openSync(binary,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
+  try{
+   const stat=fs.fstatSync(fd);
+   if(!stat.isFile()||stat.size<1||stat.size>128*1024)throw Error('Invalid observer artifact');
+   const bytes=Buffer.alloc(stat.size+1);let used=0;
+   while(used<bytes.length){const n=fs.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
+   if(used!==stat.size||crypto.createHash('sha256').update(bytes.subarray(0,used)).digest('hex')!==sha256)throw Error('Observer artifact digest mismatch');
+  }finally{fs.closeSync(fd);}
+}
+async function probeExecutable({binary,sha256}){
+ try{verifyArtifact(binary,sha256);}catch(error){throw Object.assign(error,{outcome:'rejected'});}
+ return new Promise((resolve,reject)=>{
+  require('child_process').execFile(binary,[],{cwd:'/',env:{PATH:'/usr/bin:/bin',LANG:'C'},timeout:5000,maxBuffer:256,killSignal:'SIGKILL'},(error,stdout,stderr)=>{
+   if(error&&error.code===1&&!error.killed&&!error.signal&&stdout===''&&stderr==='observer: invalid arguments\n')resolve({executed:true});
+   else reject(Object.assign(Error('Observer executable probe not confirmed'),{outcome:'failed'}));
+  });
+ });
+}
+
 function preparePidfdExit({binary,sha256,bound,confirm}){
  if(typeof binary!=='string'||!binary.startsWith('/')||binary.includes('\0')||typeof sha256!=='string'||!/^[a-f0-9]{64}$/.test(sha256)||typeof confirm!=='function')return Promise.reject(Error('Invalid process observer configuration'));
  let identity;
@@ -18,16 +41,7 @@ function preparePidfdExit({binary,sha256,bound,confirm}){
  }
  try{
   identity=normalized(bound);
-  // Package/staging owner must keep this executable immutable through spawn.
-  // The digest is supplied by that trusted manifest, never by a request body.
-  const fd=fs.openSync(binary,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
-  try{
-   const stat=fs.fstatSync(fd);
-   if(!stat.isFile()||stat.size<1||stat.size>128*1024)throw Error('Invalid observer artifact');
-   const bytes=Buffer.alloc(stat.size+1);let used=0;
-   while(used<bytes.length){const n=fs.readSync(fd,bytes,used,bytes.length-used,null);if(!n)break;used+=n;}
-   if(used!==stat.size||crypto.createHash('sha256').update(bytes.subarray(0,used)).digest('hex')!==sha256)throw Error('Observer artifact digest mismatch');
-  }finally{fs.closeSync(fd);}
+  verifyArtifact(binary,sha256);
  }catch(e){return Promise.reject(e);}
  const expected=JSON.stringify(identity);
  let readyResolve,readyReject,exitResolve,exitReject,closedResolve;
@@ -89,4 +103,4 @@ function preparePidfdExit({binary,sha256,bound,confirm}){
  });
  return ready;
 }
-module.exports={preparePidfdExit};
+module.exports={preparePidfdExit,probeExecutable};

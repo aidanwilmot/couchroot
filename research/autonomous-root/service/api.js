@@ -23,7 +23,7 @@ function createApi(options){
   if(count>128){reply(429,{error:'Connection request limit reached'});return;}
   if(req.method==='GET'&&req.url==='/v1/status'){reply(200,agent.status());return;}
   if(req.method==='GET'&&req.url==='/v1/requests'){reply(200,{requests:journal.rows,sha256:journal.digest()});return;}
-  if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable','/v1/journal/archive','/v1/op','/v1/files/read','/v1/files/write'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
+  if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable','/v1/journal/archive','/v1/op','/v1/files/read','/v1/files/write','/v1/observer/probe'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
   if(busy){reply(409,{error:'Another administrative operation is in progress'});return;}
   busy=true;
   let submitted=false,operationId=null;
@@ -31,6 +31,14 @@ function createApi(options){
    let bytes=0,chunks=[];for await(const part of req){bytes+=part.length;if(bytes>(req.url==='/v1/files/write'?1048576:20000)){reply(413,{error:'Request too large'});req.destroy();return;}chunks.push(part);}
    const raw=Buffer.concat(chunks);
    const value=JSON.parse(req.url==='/v1/files/write'?(req.headers['x-operation']||'{}'):(raw.toString()||'{}'));
+   if(req.url==='/v1/observer/probe'){
+    if(!value||Array.isArray(value)||Object.keys(value).sort().join('|')!=='id|manifest_sha256'||typeof value.id!=='string'||value.id.length<16||value.id.length>64||!/^[-a-zA-Z0-9]+$/.test(value.id)||typeof value.manifest_sha256!=='string'||value.manifest_sha256.length!==64||!/^[a-f0-9]{64}$/.test(value.manifest_sha256))throw Error('Observer probe identity required');
+    if(!agent.status().connected||agent.status().worker_ready===false){reply(503,{outcome:'rejected',error:'Root agent unavailable'});return;}
+    journal.begin({id:value.id,command:'observer.probe:'+value.manifest_sha256,timeout_ms:25000});operationId=value.id;submitted=true;
+    req.setTimeout(120000);
+    const result=await agent.probeObserver(value.manifest_sha256);
+    journal.finish(operationId,{exit_code:0,timed_out:false});reply(200,{id:value.id,...result});return;
+   }
    if(['/v1/op','/v1/files/read','/v1/files/write'].includes(req.url)){
     const operation=value.operation;
     if(!/^[-a-zA-Z0-9]{16,64}$/.test(value.id)||!operation||typeof operation!=='object'||Array.isArray(operation))throw Error('Invalid operation envelope');

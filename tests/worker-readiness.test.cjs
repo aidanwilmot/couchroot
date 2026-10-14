@@ -27,7 +27,7 @@ test('native readiness requires pinned launcher and production lifetime',()=>{
  assert.throws(()=>validateReadiness(native(),{implementation:'native-prototype',bootId:BOOT}));
  assert.throws(()=>validateReadiness(managed(),expected));
 });
-function fixture(options={},modules={}){
+function fixture(options={},modules={},device='qn90a'){
  const source=path.resolve(__dirname,'../research/autonomous-root/service/agent.js');
  const realRequire=createRequire(source),channels=[],timers=[];
  class Channel {
@@ -47,7 +47,7 @@ function fixture(options={},modules={}){
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,__dirname:path.dirname(source),process,Buffer,
   setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},
   require:name=>modules[name]||(name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name))});
- const agent=module.exports.createAgent({device:'qn90a'},{verifyFirmware:()=>{},readBootId:()=>BOOT,...options});
+ const agent=module.exports.createAgent({device},{verifyFirmware:()=>{},readBootId:()=>BOOT,...options});
  return {agent,channels,timers};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -250,5 +250,27 @@ test('packaged observer staging binds target transaction and never retries uncer
     assert.equal(agent.status().connected,true);
    }
   }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
+});
+test('observer probe runs in held service context and releases without stopping the worker',async()=>{
+ for(const device of ['qn90a','s90d'])for(const failure of [false,true,'known']){
+  const events=[],modules={
+   './observer-stage':{stageObserver:async input=>{events.push('stage');assert.equal(input.expectedManifest,DIGEST);await input.execute('stage fixture',25000);return {binary:'/fixture',sha256:'d'.repeat(64),manifest_sha256:DIGEST};}},
+   './pidfd-observer':{probeExecutable:async()=>{events.push('execute-observer');if(failure)throw Object.assign(Error('probe refused'),failure==='known'?{outcome:'failed'}:{});},preparePidfdExit:async input=>{events.push('bind');await input.confirm();return {assertReady:()=>{},cancel:async()=>events.push('cancel')};}}
+  };
+  const readProcessFile=p=>p.endsWith('boot_id')?BOOT:'42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';
+  const {agent,channels}=fixture({readProcessFile},modules,device);agent.start();const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();channel.operation=async()=>inventoried();channel.execute=async()=>{events.push('stage-command');return {exit_code:0};};
+   channel.shutdown=async()=>{throw Error('Probe must not submit shutdown');};
+   if(failure){await assert.rejects(agent.probeObserver(DIGEST),/probe refused/);assert.equal(agent.status().admission_held,failure!=='known');if(failure!=='known')await assert.rejects(agent.probeObserver(DIGEST));}
+   else{
+    const result=await agent.probeObserver(DIGEST);assert.equal(result.worker_stopped,false);assert.equal(result.manifest_sha256,DIGEST);
+    assert.equal(result.method,device==='s90d'?'pidfd-bind-cancel':'proc-stat');
+    assert.equal(agent.status().admission_held,false);assert.equal(agent.status().worker_ready,true);
+   }
+   assert.equal(agent.status().connected,true);assert.equal(events.filter(e=>e==='stage-command').length,1);
+   assert.equal(events.includes('cancel'),!failure&&device==='s90d');
+  }finally{agent.stop();}
  }
 });

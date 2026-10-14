@@ -29,15 +29,21 @@ function stageCommand(binary,sha256,bootId){
   'printf "OBSERVER-STAGED %s 755\\n" "$before"\n';
 }
 async function stageObserver({payload,device,bootId,expectedManifest,execute}){
- if(!PAYLOADS.includes(payload)||typeof execute!=='function')throw Error('Installed observer package required');
- const before=loadCandidate(payload,device),artifact=before&&before.artifacts['native-process-observer'];
- if(!artifact||before.manifest_sha256!==expectedManifest)throw Error('Expected verified packaged observer unavailable');
- const binary=path.join(payload,'native-process-observer');
- const result=await execute(stageCommand(binary,artifact.sha256,bootId),25000);
+ let before,artifact,binary,command;
+ try{
+  if(!PAYLOADS.includes(payload)||typeof execute!=='function')throw Error('Installed observer package required');
+  before=loadCandidate(payload,device);artifact=before&&before.artifacts['native-process-observer'];
+  if(!artifact||before.manifest_sha256!==expectedManifest)throw Error('Expected verified packaged observer unavailable');
+  binary=path.join(payload,'native-process-observer');command=stageCommand(binary,artifact.sha256,bootId);
+ }catch(error){throw Object.assign(error,{outcome:'rejected'});}
+ const result=await execute(command,25000);
  // Any failed/unknown execution may have changed mode; never replay it here.
- if(!result||result.exit_code!==0||result.timed_out||result.stderr||!['OBSERVER-STAGED 644 755\n','OBSERVER-STAGED 755 755\n'].includes(result.stdout))throw Error('Observer permission staging not confirmed');
- const after=loadCandidate(payload,device);
- if(!after||after.manifest_sha256!==before.manifest_sha256||after.artifacts['native-process-observer'].sha256!==artifact.sha256)throw Error('Observer package changed during staging');
+ if(!result||!Number.isInteger(result.exit_code))throw Error('Observer staging command outcome unavailable');
+ try{
+  if(result.exit_code!==0||result.timed_out||result.stderr||!['OBSERVER-STAGED 644 755\n','OBSERVER-STAGED 755 755\n'].includes(result.stdout))throw Error('Observer permission staging not confirmed');
+  const after=loadCandidate(payload,device);
+  if(!after||after.manifest_sha256!==before.manifest_sha256||after.artifacts['native-process-observer'].sha256!==artifact.sha256)throw Error('Observer package changed during staging');
+ }catch(error){throw Object.assign(error,{outcome:'failed'});}
  return Object.freeze({binary,sha256:artifact.sha256,manifest_sha256:before.manifest_sha256,prior_mode:result.stdout.split(' ')[1],mode:'755',boot_id:bootId});
 }
 module.exports={stageObserver,stageCommand};

@@ -6,7 +6,7 @@ const {candidateStatus}=require('./native-candidate');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const {selectionStatus,managedVersion}=require('./worker-selection');
 const {processIdentities,observeProcesses,waitForProcessExit}=require('./worker-processes');
-const {preparePidfdExit}=require('./pidfd-observer');
+const {preparePidfdExit,probeExecutable}=require('./pidfd-observer');
 const {stageObserver}=require('./observer-stage');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
@@ -134,6 +134,30 @@ function createAgent(config,options={}){
   }
   return {
    snapshot:async()=>{if(token.preparingStop)throw Error('Worker shutdown preparation in progress');return snapshot();},
+   probeObserver:async expectedManifest=>{
+    current();if(token.preparingStop||token.stopping||token.observerStaging||token.observerProbe)throw Error('Observer probe already pending');
+    if(typeof expectedManifest!=='string'||expectedManifest.length!==64||!/^[a-f0-9]{64}$/.test(expectedManifest))throw Error('Candidate manifest digest required');
+    token.preparingStop=true;
+    try{
+     const bound=await snapshot();current();
+     const staged=await stageObserver({payload,device:config.device,bootId:boot,expectedManifest,execute:async(command,timeout)=>{
+      current();token.observerStaging=true;const result=await owner.execute(command,timeout);current();return result;
+     }});
+     token.observerStaging=false;token.observerProbe=true;
+     try{await probeExecutable(staged);}catch(error){if(['failed','rejected'].includes(error.outcome))token.observerProbe=false;throw error;}current();
+     if(config.device==='s90d'){
+      const observer=await preparePidfdExit({...staged,bound,confirm:snapshot});
+      try{observer.assertReady();}finally{await observer.cancel();}
+     }else{
+      const result=observeProcesses(bound,options.readProcessFile);
+      if(Object.values(result.processes).some(p=>p&&p.observation!=='present'))throw Error('Worker identity changed during observer probe');
+     }
+     const final=await snapshot();current();
+     if(hash(JSON.stringify({boot_id:final.boot_id,worker_id:final.worker_id,processes:final.processes}))!==hash(JSON.stringify({boot_id:bound.boot_id,worker_id:bound.worker_id,processes:bound.processes})))throw Error('Worker changed during observer probe');
+     token.observerProbe=false;
+     return {verified:true,method:config.device==='s90d'?'pidfd-bind-cancel':'proc-stat',manifest_sha256:staged.manifest_sha256,observer_sha256:staged.sha256,boot_id:boot,worker_id:worker,worker_stopped:false};
+    }finally{token.preparingStop=false;}
+   },
    shutdown:async transactionId=>{
     current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Worker shutdown or observer staging requires reconciliation');
     token.preparingStop=true;
@@ -176,9 +200,14 @@ function createAgent(config,options={}){
     return {transaction_id:transactionId,source_manifest_sha256:sourceVersion,inventory_sha256:digest,shutdown,exited,...(stagedObserver?{observer_stage:stagedObserver}:{})};
     }finally{try{if(observer)await observer.cancel();}finally{token.preparingStop=false;}}
    },
-   release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging)throw Error('Cannot release a pending shutdown or unresolved observer staging');admissionHold=null;}
+   release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
   };
  }
- return {status,start,stop,holdAdmission,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout))};
+ async function probeObserver(expectedManifest){
+  let hold;try{hold=holdAdmission();}catch(error){throw Object.assign(error,{outcome:'rejected'});}
+  try{const result=await hold.probeObserver(expectedManifest);hold.release();return result;}
+  catch(error){try{hold.release();}catch(_){}throw error;}
+ }
+ return {status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout))};
 }
 module.exports={createAgent,launchRequest};

@@ -93,7 +93,7 @@ that worker shutdown would remove. Installer write permission is preserved.
 Staging runs only after a prepared transaction and drained inventory are bound to
 the held worker. Target/version changes, an uncertain command result or failed
 readback leave admission held and prevent staging retry. The prepared journal
-still blocks acquisition after service restart. This is not a public staging API
+still blocks acquisition after service restart. There is no arbitrary staging API
 or native selection activation. QN90A keeps its proc-stat observation path.
 
 Local tests cover real mode changes on an installer-owned, source-built candidate
@@ -103,3 +103,23 @@ handoff-target drift test passed in the 15-check readiness rerun. Twelve real-wi
 observer/shutdown checks also passed. The staged ARM binary was not executed in
 those staging tests; wire tests use the ordinary host build. TV service execution
 and its signature/label rules remain unqualified. No TV was contacted in this step.
+
+## Non-disruptive service probe
+
+The new enrolled-client `observer-probe` command invokes `/v1/observer/probe` with
+a request ID and expected installed manifest hash. The service journals it before
+staging, holds admission, and exercises its own observer launch. S90D binds pidfds,
+confirms current identity, then cancels/reaps only the observer. QN90A checks the
+observer's fixed invalid-arguments response and observes the current worker using
+proc-stat. Fresh status confirms the same worker remains after the probe, then
+admission is released. The operation never invokes worker shutdown or changes
+selection. An unknown staging/observer outcome leaves admission held; a confirmed
+child-execution failure is reported separately and can release the hold.
+
+Local validation passed 30 API/readiness/state tests, 17 Linux staging/observer/
+wire tests, and a five-case managed-session rerun including both probe methods.
+The probe integration uses the actual managed session and host-built observer;
+only package permission staging is substituted there, and tested separately on
+ARM candidate bytes. The repository runner passed 248 tests and skipped 88
+environment-dependent checks. These results do not qualify TV service execution.
+Rebuild and review signed candidates containing this endpoint before deployment.

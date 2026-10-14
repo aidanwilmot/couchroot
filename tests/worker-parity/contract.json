@@ -214,5 +214,13 @@
     "guardian_confirmation": "guardian-parent-identity-v1 means this status request freshly checked the kernel parent PID against the direct guardian parent established at startup. Cached start ticks remain bound to that original parent; this does not promise future liveness or observe both pidfd exits.",
     "identity": "Bind to boot_id, worker_id and authenticated worker PID. Preserve decimal start_ticks as a string.",
     "exit": "BYE and disconnect precede cleanup. Observe original worker and guardian identities absent or replaced before treating process exit as verified. Mounts, detached descendants and retained state require separate reconciliation."
+  },
+  "observer_probe": {
+    "route": "POST /v1/observer/probe",
+    "fields": ["id", "manifest_sha256"],
+    "admission": "Enrolled client; serialized and journaled before staging; no caller-supplied PID, path or command.",
+    "effect": "Enable execution of the exact installed observer package member; verify service-context launch; bind/cancel on S90D or use proc-stat on QN90A; confirm the managed worker remains and release admission on success.",
+    "unknown": "Never replay; preserve submitted request and unresolved admission hold.",
+    "not_proven": ["target process exit", "native selection", "resource cleanup parity", "TV qualification from host tests"]
   }
 }
