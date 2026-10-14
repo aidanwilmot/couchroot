@@ -1,6 +1,7 @@
 /* Experimental sidecar, not installed or selected by the production service.
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
 #include "common.h"
+#include "fault-events.h"
 #include "progress.h"
 typedef struct {
   int fd, upload;
@@ -351,6 +352,8 @@ static J *operation(J *request, Wire *w, const char *seq) {
     num(j, "guardian_pid", guardian_pid);
     boolean(j, "stale_guardian_reconciled", guardian_reconciled);
     str(j, "fault_supervision", "ptrace-owned-descendants");
+    str(j, "command_fault_policy", "terminate-core-signals-before-handlers");
+    json_object_object_add(j, "command_faults", fault_events_snapshot());
     num(j, "worker_dumpable", prctl(PR_GET_DUMPABLE));
     str(j, "freezer_group", freezer_name);
     num(j, "heartbeat_timeout_ms", 1000);
@@ -368,7 +371,8 @@ static J *operation(J *request, Wire *w, const char *seq) {
                            "prototype-jobs-v1",
                            "prototype-helper-lifecycle-v1",
                            "prototype-independent-launcher-v1",
-                           "prototype-crash-guardian-v1"};
+                           "prototype-crash-guardian-v1",
+                           "prototype-command-fault-diagnostics-v1"};
     for (size_t i = 0; i < sizeof names / sizeof *names; i++)
       json_object_array_add(caps, json_object_new_string(names[i]));
     json_object_object_add(j, "capabilities", caps);
@@ -598,6 +602,7 @@ int main(int argc, char **argv) {
   startup_fault("contained");
   guardian_journal("ready");
   startup_fault("ready");
+  fault_events_init();
   guardian_start();
   jobs_init();
   Wire w = {0};

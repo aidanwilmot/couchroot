@@ -79,9 +79,15 @@ Before allowing that child to create threads, the guardian attaches with
 threads. SIGSEGV, SIGBUS, SIGILL, SIGFPE and SIGABRT delivery stops terminate the
 faulting thread group before the TV's default crash collector. A command fault
 does not kill the healthy worker: its parent receives the actual SIGKILL exit
-status, 137. The original command signal is currently diagnostic stderr only,
-not per-job metadata. Supervision intentionally prevents handlers for these
-signals from running in commands; software that uses them for its own recovery
+status, 137. Native status exposes `command_fault_policy` and a bounded
+`command_faults` history of the latest 64 events: sequence, process/thread IDs,
+original signal and signal code, actual termination signal, action and monotonic
+time. The guardian writes a small shared-memory ring; the worker and its children
+have read-only mappings. Overwrites, concurrent snapshot omissions and counter
+saturation are explicit. These are session diagnostics, not durable per-job
+metadata, and reset when a new worker starts. PIDs in these historical events
+must never be used as authority to signal a process. Supervision intentionally
+prevents handlers for these signals from running in commands; software that uses them for its own recovery
 needs a separate compatibility decision before production adoption. The original signal is saved separately as
 `worker_fault_signal`; interrupted jobs still have an unknown exit code. Normal
 signals are forwarded, group stops remain stopped for the heartbeat watchdog,
@@ -404,9 +410,9 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
 ## Remaining production work
 
 - Validate the schema-4 initial-journal, resource-reservation and partial-update
-  recovery and owner-tagged orphan job-intent recovery on both TVs. All 45 native
+  recovery and owner-tagged orphan job-intent recovery on both TVs. All 46 native
   sanitizer host tests and ARM builds pass; the repository suite passes 226 tests
-  with the 45 native tests skipped by that runner. The expanded device suite is
+  with the 46 native tests skipped by that runner. The expanded device suite is
   prepared while the prior build's endurance run continues.
   Cross-boot, reboot and power-loss recovery remain unqualified.
 - Integrate acquisition, enrollment, service selection and rollback through the
@@ -421,8 +427,10 @@ mount sets were unchanged. Neither TV was rebooted; .NET remains deployed.
   the controller, guardian and deployed fallback retain their original limits. Preserve bounded, in-memory output as the public contract, matching the
   deployed .NET implementation; durable output is not required for parity.
   Job outcomes remain durable metadata and must recover after transient failures.
-- Decide command signal-handler compatibility and expose original command-fault
-  diagnostics separately from actual termination status.
+- Decide command signal-handler compatibility. The current strict policy is now
+  explicit in native status. Original command-fault diagnostics are exposed
+  separately from actual termination status and pass host tests; the matching
+  device probe remains pending.
 - Reconcile the narrower file policy and omitted legacy operations with the
   desired public API, then repeat whole-process CPU/memory/startup comparisons.
   The guardian's polling and the job monitor's periodic wakeups need measurement.

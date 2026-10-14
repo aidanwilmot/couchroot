@@ -179,7 +179,12 @@ class NativeWorkerTests(unittest.TestCase):
             self.seq+=1
             self.send(f'EXEC\t{self.seq}\t2000\t'+base64.b64encode(f'kill -{sig} $$'.encode()).decode())
             self.assertEqual(self.receive().split('\t')[:4],['RESULT',str(self.seq),'137','0'])
-            self.assertTrue(self.op('status')['ok'])
+            status=self.op('status')['result']
+            self.assertEqual(status['command_fault_policy'],'terminate-core-signals-before-handlers')
+            event=status['command_faults']['events'][-1]
+            self.assertEqual(event['original_signal'],getattr(signal,'SIG'+sig))
+            self.assertEqual(event['termination_signal'],signal.SIGKILL)
+            self.assertNotEqual(event['pid'],self.worker_pid)
         self.start_job('kill -SEGV $$')
         self.assertEqual(self.completed()['exit_code'],137)
         self.assertTrue(self.job('job.forget')['ok'])
@@ -188,10 +193,30 @@ class NativeWorkerTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'),'requires separate fault-injection build')
     def test_exec_helper_memory_fault_keeps_worker_alive(self):
         for arg in ['--test-child-fault','--test-child-thread-fault']:
-            self.start_job('exec '+os.environ['NATIVE_WORKER']+' '+arg)
+            started=self.start_job('exec '+os.environ['NATIVE_WORKER']+' '+arg)
             self.assertEqual(self.completed()['exit_code'],137)
+            state=self.op('status')['result'];event=state['command_faults']['events'][-1]
+            self.assertIn('prototype-command-fault-diagnostics-v1',state['capabilities'])
+            self.assertEqual(event['pid'],started['pid']);self.assertEqual(event['original_signal'],signal.SIGSEGV)
+            self.assertGreater(event['signal_code'],0);self.assertEqual(event['termination_signal'],signal.SIGKILL)
+            self.assertEqual(event['thread_id']==event['pid'],arg=='--test-child-fault')
             self.assertTrue(self.job('job.forget')['ok'])
-            self.assertTrue(self.op('status')['ok'])
+    def test_fault_diagnostics_bound_and_reset_without_changing_exit(self):
+        for i in range(70):
+            started=self.start_job('kill -ABRT $$')
+            done=self.completed();self.assertEqual(done['exit_code'],137)
+            state=self.op('status')['result']['command_faults']
+            self.assertEqual(state['total'],i+1);self.assertEqual(state['overwritten'],max(0,i+1-64))
+            self.assertFalse(state['durable']);self.assertFalse(state['snapshot_incomplete']);self.assertFalse(state['saturated'])
+            events=state['events'];self.assertEqual(len(events),min(i+1,64))
+            self.assertEqual([e['sequence'] for e in events],list(range(max(1,i+2-64),i+2)))
+            last=events[-1];self.assertEqual(last['pid'],started['pid']);self.assertEqual(last['thread_id'],started['pid'])
+            self.assertEqual(last['original_signal'],signal.SIGABRT);self.assertEqual(last['termination_signal'],signal.SIGKILL)
+            self.assertEqual(last['signal_code'],0);self.assertGreater(last['monotonic_ms'],0)
+            self.assertTrue(self.job('job.forget')['ok'])
+        self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5);self.restart()
+        state=self.op('status')['result']['command_faults'];self.assertEqual(state['total'],0);self.assertEqual(state['events'],[])
+
     def test_job_results_duplicate_and_retention(self):
         started=self.start_job('printf stdout; printf stderr >&2; exit 7')
         self.assertGreater(started['pid'],0)

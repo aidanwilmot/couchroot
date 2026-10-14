@@ -410,6 +410,7 @@ static void soak(int seconds) {
   fflush(stdout);
   discard(r);
 }
+#include "fault-events-accept.h"
 #include "guardian-loss-accept.h"
 #include "resource-accept.h"
 #include "storage-accept.h"
@@ -749,6 +750,7 @@ int main(int argc, char **argv) {
 #endif
   storage_recovery_checks();
   resource_limit_checks();
+  fault_diagnostic_checks();
   finish(0);
   if (unlink(app))
     fatal("remove launcher source");

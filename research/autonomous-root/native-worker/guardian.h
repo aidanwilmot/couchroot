@@ -405,6 +405,12 @@ static void guardian_trace_stop(pid_t thread, int status, pid_t worker) {
   } else if (sig == SIGSEGV || sig == SIGBUS || sig == SIGILL ||
              sig == SIGFPE || sig == SIGABRT) {
     pid_t target = guardian_tgid(thread);
+    if (target != worker) {
+      siginfo_t info;
+      if (ptrace(PTRACE_GETSIGINFO, thread, NULL, &info))
+        fatal("command fault signal information");
+      fault_event_save(target, thread, sig, info.si_code);
+    }
     if (target == worker && !guardian_fault_signal)
       guardian_fault_signal = sig;
     if (getenv("COUCHROOT_NATIVE_RECOVERY_TIMING"))
@@ -442,6 +448,7 @@ static void guardian_start(void) {
   if (pid < 0)
     fatal("fork native worker");
   if (!pid) {
+    fault_events_readonly();
     /* The guardian alone owns the scope lock. A frozen, EXITKILL-doomed worker
      * must not prevent the next owner from thawing the bound stale cgroup. */
     close(jobs_lock);
