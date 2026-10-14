@@ -177,3 +177,43 @@ were archived privately and digest-verified before removing the owned diagnostic
 files from the TV. Managed access is restored; native service qualification and
 the package update's acceptance remain pending. Do not run the same probe on
 S90D based on the local tests or describe the observer launch gate as passed.
+
+## QN90A crash remediation — 2026-10-14
+
+Disassembly of the captured library resolves the caller more precisely than its
+exported symbols: the assertion descriptor referenced by the function at
+`0x00545574` names `node::HandleWrap::Close(v8::Local<v8::Value>)` and
+`third_party/electron_node/src/handle_wrap.cc:75`. Its call at `0x00545590`
+enters the handle-close routine at `0x004d43c8`. The faulting instruction reads
+offset 196 through the handle's loop pointer. This matches libuv's pending-close
+list update. The runtime's handle cleanup is the observed failure boundary;
+the truncated kernel snapshot does not establish why that pointer was invalid.
+
+The application defect was running an unnecessary `execFile` smoke test before
+QN90A's proc-stat qualification. Its production handoff already uses proc-stat;
+native subprocess execution is not a prerequisite for that method. The probe now
+uses the same process observation as the handoff, retaining manifest-bound
+staging, held admission, and fresh worker/boot identity checks on both sides.
+It does not claim to qualify native executable launch on QN90A. S90D's distinct
+pidfd launch path remains unchanged and requires its own device qualification.
+
+Regression tests require no executable or pidfd launch for QN90A, even when
+those launch functions would fail, and reject unreadable or replaced processes.
+They retain the existing uncertain-outcome admission hold and S90D launch checks.
+
+The signed 0.7.2 remediation was installed on QN90A through the shared update
+engine. Three separately journaled probes passed with method `proc-stat`, the
+same managed worker and boot, and admission released after each probe. A subsequent
+managed command succeeded. Readback verified all 34 tracked package members,
+enrollment, protected files, startup flags and the loopback SDK setting. Independent
+SDK recovery remained armed through validation and was then disarmed. The two
+earlier submitted/unknown probe records were preserved without replay or rewriting.
+Neither TV was rebooted during remediation. S90D remains healthy on 0.7.0.
+
+The prior 0.7.1 installation was reconciled as an installed managed fallback with
+observer qualification explicitly failed. The 0.7.2 journal is complete for this
+proc-stat remediation only; native launch and full migration are not accepted.
+Local validation passed 30 focused Linux tests, including actual managed-worker
+handoff, pidfd protocol and retained-record checks. The tracked-file privacy audit
+reported no findings across 548 files. Raw evidence and signed artifacts remain
+outside Git.

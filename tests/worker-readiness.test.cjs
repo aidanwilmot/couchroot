@@ -263,14 +263,39 @@ test('observer probe runs in held service context and releases without stopping 
   try{
    ready.resolve(managed());await flush();channel.operation=async()=>inventoried();channel.execute=async()=>{events.push('stage-command');return {exit_code:0};};
    channel.shutdown=async()=>{throw Error('Probe must not submit shutdown');};
-   if(failure){await assert.rejects(agent.probeObserver(DIGEST),/probe refused/);assert.equal(agent.status().admission_held,failure!=='known');if(failure!=='known')await assert.rejects(agent.probeObserver(DIGEST));}
+   if(failure&&device==='s90d'){await assert.rejects(agent.probeObserver(DIGEST),/probe refused/);assert.equal(agent.status().admission_held,failure!=='known');if(failure!=='known')await assert.rejects(agent.probeObserver(DIGEST));}
    else{
     const result=await agent.probeObserver(DIGEST);assert.equal(result.worker_stopped,false);assert.equal(result.manifest_sha256,DIGEST);
     assert.equal(result.method,device==='s90d'?'pidfd-bind-cancel':'proc-stat');
     assert.equal(agent.status().admission_held,false);assert.equal(agent.status().worker_ready,true);
    }
    assert.equal(agent.status().connected,true);assert.equal(events.filter(e=>e==='stage-command').length,1);
+   assert.equal(events.includes('execute-observer'),device==='s90d');
    assert.equal(events.includes('cancel'),!failure&&device==='s90d');
+  }finally{agent.stop();}
+ }
+});
+
+test('QN90A proc-stat probe refuses unreadable or replaced workers without launching a child',async()=>{
+ for(const kind of ['unreadable','replaced']){
+  let launches=0;
+  const modules={
+   './observer-stage':{stageObserver:async()=>({manifest_sha256:DIGEST,sha256:'d'.repeat(64)})},
+   './pidfd-observer':{probeExecutable:async()=>{launches++;throw Error('Unexpected child launch');},preparePidfdExit:async()=>{launches++;throw Error('Unexpected pidfd launch');}}
+  };
+  const readProcessFile=p=>{
+   if(p.endsWith('boot_id'))return BOOT;
+   if(kind==='unreadable')throw Object.assign(Error('denied'),{code:'EACCES'});
+   return '42 (replacement) S '+Array(18).fill('0').join(' ')+' 999 0';
+  };
+  const {agent,channels}=fixture({readProcessFile},modules,'qn90a');agent.start();
+  const channel=channels[0],ready=channel.connect();
+  try{
+   ready.resolve(managed());await flush();channel.operation=async()=>inventoried();
+   channel.shutdown=async()=>{throw Error('Probe must not stop worker');};
+   await assert.rejects(agent.probeObserver(DIGEST));
+   assert.equal(launches,0);assert.equal(agent.status().connected,true);
+   assert.equal(agent.status().admission_held,true);
   }finally{agent.stop();}
  }
 });

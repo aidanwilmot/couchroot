@@ -144,11 +144,14 @@ function createAgent(config,options={}){
       current();token.observerStaging=true;const result=await owner.execute(command,timeout);current();return result;
      }});
      token.observerStaging=false;token.observerProbe=true;
-     try{await probeExecutable(staged);}catch(error){if(['failed','rejected'].includes(error.outcome))token.observerProbe=false;throw error;}current();
      if(config.device==='s90d'){
+      try{await probeExecutable(staged);}catch(error){if(['failed','rejected'].includes(error.outcome))token.observerProbe=false;throw error;}current();
       const observer=await preparePidfdExit({...staged,bound,confirm:snapshot});
       try{observer.assertReady();}finally{await observer.cancel();}
      }else{
+      // QN90A uses the service's proc-stat reader for the real handoff. Its WRT
+      // child-process cleanup crashes in HandleWrap::Close; an unused native
+      // executable smoke test must not take down the administration service.
       const result=observeProcesses(bound,options.readProcessFile);
       if(Object.values(result.processes).some(p=>p&&p.observation!=='present'))throw Error('Worker identity changed during observer probe');
      }
