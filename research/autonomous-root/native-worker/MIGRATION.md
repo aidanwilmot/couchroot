@@ -1356,3 +1356,22 @@ including lost-response plus failed-observation refusal. Coordinator restart and
 independent-provider loss still require further reconciliation work; this change
 only handles acknowledgement loss while the bound observer remains available.
 No TV was changed or rebooted, and .NET remains deployed.
+
+### Fresh signed rehearsal candidates
+
+Read-only device inspection confirms both TVs are reachable on 0.7.13, with
+managed selected, ready workers, no admission hold and no pending shared setup
+operation. Current runtime hashes and SDK settings were captured privately.
+
+The shared setup builder prepared separate signed 0.7.15 candidates from commit
+`10a7171` for QN90A and S90D. Update review verified each device's target/signing
+binding, forward version and inventory against its installed 0.7.13 signed
+artifact. All packaged service bytes match source; all 47 service JavaScript
+files pass syntax checks and the packaged API, agent, task and migration modules
+load successfully. No private provisioning material is included in either WGT.
+Signed artifacts, manifests and raw device evidence remain outside Git.
+
+These are preparation checks only: 0.7.15 has not been installed, no rehearsal
+has run on hardware, and neither TV was rebooted. Installation must preserve the
+existing enrollment and use the current 0.7.13 package as its recovery baseline;
+older private deployment script source pointers are stale and must not be reused.
