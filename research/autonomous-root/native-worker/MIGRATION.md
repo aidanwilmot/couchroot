@@ -1,9 +1,37 @@
 # Native agent parity and .NET retirement plan
 
-Status: proposed implementation and acceptance plan, 2026-10-14. Reviewed baseline:
-`f3f911e`, including runtime changes `43ec7bc` and `f9e6d0c`. The installed .NET
-worker remains the deployed fallback. This plan does not authorize a deployment,
-reboot, change to device configuration, or removal of the fallback.
+Status: migration in progress, 2026-10-15. The original review below used baseline
+`f3f911e`, including runtime changes `43ec7bc` and `f9e6d0c`. Historical progress
+entries retain their original qualification limits; use the current snapshot
+below for installed state. The plan itself does not authorize device changes.
+
+## Current qualification snapshot
+
+Both TVs are on signed 0.7.21 packages from `6080415`, with .NET selected and ready.
+Each completed an installed-service managed/native/managed rehearsal, including
+native readiness/adoption, managed return/activation, byte-identical retention of
+one completed job, current-trial provider/native staging removal and unchanged
+boot identity. No recovery timer or setup operation is pending. See
+[bounded hardware evidence](roundtrip-results.json).
+
+This is a handoff-and-return milestone, not native-default or .NET-free completion.
+The trial held public admission while native was selected. Remaining work includes:
+
+- Public native operation parity and native-created retained results through the
+  installed service and enrolled client.
+- Recovery from earlier handoff failures, coordinator restart and provider loss,
+  including durable reconciliation without replaying operations.
+- Handoff/rollback from an already active native worker and selected-native startup,
+  reconnect and maintenance lifecycle.
+- Replacing agent-required managed acquisition, installation and recovery utilities.
+- Final production-binary performance, resource-pressure and endurance validation
+  on both TVs; reboot and standby/resume gates remain unqualified.
+- Native-default rollout, fallback observation, verified retirement of old staging,
+  public release review and eventual removal of managed agent dependencies.
+
+The no-reboot constraint and deployed managed fallback remain in force. Earlier
+failed journals and staging are preserved separately, not marked successful by
+these later rehearsals.
 
 ## Decision and scope
 
@@ -1631,3 +1659,29 @@ boots, with no pending setup operation. S90D remains on 0.7.17 and was not rehea
 Seven focused exit-observer tests and all three isolated real-process rehearsals
 pass. The observer correction is local pending hardware validation; no completed
 both-TV round trip or automatic earlier-phase recovery is claimed.
+
+
+### Both-TV 0.7.21 round trip accepted
+
+QN90A and S90D received separately signed 0.7.21 packages built from `6080415`.
+Each installation retained enrollment, verified installed members and protected
+files, restored startup flags and loopback SDK access, and completed its shared
+setup journal only after managed readiness. The actual previous signed package
+was used for each device's update baseline.
+
+Each TV then completed one installed-service rehearsal: managed admission drain,
+independent provider and source-exit observation, native retained-state install,
+native readiness and committed adoption, native shutdown, exact managed-state
+restoration, managed readiness/adoption, provider/native retirement and final
+managed activation. Selection history contains both committed transitions; final
+admission is open on the managed worker. Readback confirmed current-trial staging
+and transition markers absent and activation receipts present. The completed test
+job retained its original bytes and exit code 7, then was explicitly forgotten.
+Both recovery timers are disarmed and both boot IDs are unchanged.
+
+The final read-only status checks confirmed the same restored managed workers,
+completed rehearsal endpoints and no pending setup operations. Raw identities,
+credentials, signed packages and receipts remain private. The sanitized evidence
+in `roundtrip-results.json` explicitly excludes full public native parity,
+native-created job migration, failure injection, restart/endurance and power-cycle
+qualification. .NET remains deployed and selected; migration is not complete.
