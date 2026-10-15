@@ -7,9 +7,20 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.41 packages with native service acquisition enabled,
-managed selected and ready. QN90A has 28 settled history entries (22 committed,
-six rolled back); S90D has 29 (22 committed, seven rolled back).
+Both TVs are on signed 0.7.42 packages with native service acquisition enabled,
+managed selected and ready. QN90A has 32 settled history entries (26 committed,
+six rolled back); S90D has 31 (24 committed, seven rolled back).
+Both passed committed guardian SIGKILL with live work: the unchanged coordinator
+reacquired native through the held bootstrap, preserved committed receipts and
+terminal records, and reconciled the live job as interrupted with unknown exit
+status without replay. Normal return preserved the interrupted record in managed.
+All owned units are inactive and old/replacement native runtime and freezer scopes
+are absent. The service now permits a bound complete stale guardian journal to
+reach native reconciliation; managed-return snapshots remain strict. See
+[committed guardian evidence](active-guardian-results.json).
+The unchanged managed API refuses same-boot interrupted `job.forget`; only owned
+test records were retired through hash-bound maintenance after process-exit
+verification. Closing that managed fallback limitation remains a follow-up.
 Both also passed a bounded per-worker address-space pressure round on unchanged
 0.7.41 bytes: new allocation refusal preserved a live job and saved result,
 restored limits admitted fresh app work, and restart reconciled the refused
@@ -105,7 +116,8 @@ Native public admission and same-boot recovery are qualified for the bounded
 rounds above. Native-default and .NET-free completion still require:
 - Wider interruption boundaries and maintenance lifecycle coverage beyond
   same-boot startup, active return, provider-ready/state-ready interruption and
-  pre-commit provider/production guardian loss. Those bounded recovery cases now
+  pre-commit provider/production guardian loss and committed guardian SIGKILL.
+  Those bounded recovery cases now
   have both-TV evidence without operation replay.
 - Establishing a .NET-free capability entry, then adopting it in agent-required
   setup/acquisition and recovery callers. The setup-control audit is complete;
@@ -1450,7 +1462,9 @@ it owns the real `/opt/couchroot-agent` fixture directory. Enable
 `NATIVE_WORKER` and `MANAGED_PARITY` host test builds, and run
 `node --test tests/native-rehearsal-integration.test.cjs`. The container needs the
 existing SYS_PTRACE capability, disabled seccomp filter and disabled core dumps.
-The native host build stubs Smack/mount setup and must never be deployed.
+The restart suite also needs Docker's `--init` to reap orphaned EXITKILL victims
+after guardian loss. The native host build stubs Smack/mount setup and must never
+be deployed.
 
 Boundaries remain explicit: artifact staging and process launch substitute host
 binaries for signed TV packages; systemd inspection/stop uses a fixture tied to
@@ -2971,3 +2985,79 @@ sustained pressure. Process-launch injection is locally qualified only. Broader
 pressure, post-commit lifecycle interruption, endurance and native-only entry
 remain open. The .NET entry bridge, worker fallback and independent rescue remain
 available; no reboot, standby or global-policy change occurred.
+
+### Committed guardian-loss recovery — 2026-10-15
+
+Signed 0.7.42 separates selected-native restart snapshots from managed-return
+snapshots. A committed guardian killed without cleanup leaves its ownership
+journal behind. Startup previously required that journal to be absent, so it
+refused before the native worker could perform its existing reconciliation.
+
+Selected-native startup now reads a complete ready journal, binds its boot,
+worker ID, guardian PID and start time to the last accepted runtime, and pins its
+bytes throughout the retained-record snapshot. The old process identities must
+already be gone and the unit must be idle. Native alone validates the scope/runtime bindings and
+reconciles the journal under its exclusive lock; startup requires its explicit
+reconciliation report before admission. No coordinator code removes the journal
+or replays commands. Managed-return snapshots still refuse any guardian journal.
+Malformed, mismatched or partial journals, extra persistence metadata, live old
+identities, changed records and changed import manifests remain fail-closed.
+Recovery from partial startup/persistence metadata through this service path is
+still unqualified and held for reconciliation.
+
+The new fresh-container integration case reproduces the preceding refusal and
+passes with the fix: SIGKILL targets the committed guardian while a command is
+live; the same coordinator reacquires native, preserves commitment and terminal
+record bytes, records the live job as interrupted with an unknown exit code, and
+returns both retained results to managed without replay. Docker's --init option
+is required for this case to reap the orphaned EXITKILL victims, as the TVs' init
+does; without it the original process identities remain unreaped and correctly
+block startup. Three focused snapshot tests cover the new admission and refusal
+boundaries. The full local run passed 20 restart cases, six rehearsals, 48
+retained-state/startup cases with one optional managed-fixture skip, and 404 Node
+tests with 147 platform/fixture skips. Native and managed scratch fixtures were
+rebuilt. No client or setup implementation changed.
+
+Both installed TVs passed the same bounded fault case on their ordinary native
+binary. Each migrated, retained a completed native result, and started a command
+that wrote one witness before sleeping. A separate transient unit delivered one
+SIGKILL after fresh boot/PID/start-time/executable/unit checks. The original
+coordinator reacquired native through a retired held bootstrap under the same
+committed transaction. The job reported `stale-guardian-reconciled`, interrupted
+with a null exit code, and its witness remained singular. Production/activation
+receipts and the completed record stayed byte-identical. Normal managed return
+preserved all tested outcomes. Original retained jobs, enrollment and protected
+hashes survived the update and trials. QN90A ended with 32 history entries
+(26 committed, six rolled back), S90D with 31 (24 committed, seven rolled back).
+Both remain on their original boots, managed-ready and settled with SDK on
+loopback; all 20 QN90A and 10 S90D milestone units are inactive, and old/replacement
+native processes, helper scopes and freezer groups are absent. See
+[committed guardian evidence](active-guardian-results.json).
+
+An initial QN90A private trial was not accepted: its status probe used an
+unexposed public operation, then its guarded timer exited before sending the
+signal. The original guardian remained alive with the same start identity.
+The trial returned normally to managed and removed only its fixtures. A further
+migration was refused by the one-task-per-coordinator API gate; that preflight
+fixture and rescue were also cleaned. A service restart preceded the fresh
+qualified trial. The original requests and failed evidence were retained; no
+migration or signal was blindly replayed. A second guarded timer also exited
+before signalling; the same read-only guards passed through the worker. Its terminal failure and unchanged guardian
+identity were verified before a separately journaled signal. The corrected timer
+sets the firmware system-bus address and uses the existing base64 shell wrapper
+to preserve shell parameters through systemd argument processing. These were
+private harness errors, not evidence of failed native guardian recovery.
+
+The returned interrupted fixture exposed an existing managed API limitation:
+`job.forget` refuses same-boot saved `interrupted` records. The native API supports
+forgetting them. This milestone preserves the managed fallback bytes and records
+that gap; after acceptance of the returned record, private maintenance removes
+only the owned fixture with its exact digest and an original-process-disappearance
+guard. Prior retained records are untouched. Managed interrupted-job retirement
+needs a focused follow-up.
+
+The ordinary native binary and all three managed DLLs are unchanged from
+0.7.41; this is a service startup change. The .NET entry bridge, worker fallback
+and independent 300-second rescue remain deployed. No reboot, standby or global
+policy change occurred. Native-only entry, broader interruptions and pressure,
+performance/endurance and native-default rollout remain open.

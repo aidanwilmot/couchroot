@@ -4,8 +4,8 @@ These changes require rebuilding the service and worker together. Existing insta
 0.1.x workers do not expose the new operations. Source validation is separate from
 TV installation and firmware-specific acceptance; no deployment is implicit.
 
-Current qualification: signed 0.7.28 has passed bounded native public-operation
-rounds and same-boot return recovery on both TVs. Managed is selected and ready
+Current qualification: signed 0.7.42 has passed bounded native public-operation,
+same-boot startup/return and committed guardian-loss recovery on both TVs. Managed is selected and ready
 after acceptance. Historical versioned observations below retain their original
 limits; see the current native recovery and parity sections for newer evidence.
 
@@ -39,6 +39,18 @@ live and saved jobs survived, and restored capacity admitted fresh app work.
 Allocation-site and fork failures are covered by local fixtures only. These
 results do not establish whole-TV OOM or sustained pressure behavior. See
 [launch-pressure evidence](native-worker/launch-pressure-results.json).
+
+Signed 0.7.42 admits a complete stale guardian journal for selected-native restart
+only when it binds to the last accepted runtime. Native performs its existing
+ownership reconciliation; startup verifies that report before admission.
+Managed-return snapshots still reject guardian journals. Both TVs passed a
+committed guardian SIGKILL with a live job, automatic native reacquisition through
+the same coordinator, preserved receipts/results and normal managed return.
+The interrupted job retained an unknown exit code and was not replayed. The
+unchanged managed API cannot forget a same-boot interrupted saved job; the owned
+test record required hash-bound maintenance cleanup after process-exit checks.
+Partial journals and other unresolved metadata remain held. See
+[committed guardian evidence](native-worker/active-guardian-results.json).
 
 All examples use the existing enrolled, certificate-pinned client:
 

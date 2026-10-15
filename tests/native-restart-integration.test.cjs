@@ -1,6 +1,7 @@
 'use strict';
 // Run separately in an otherwise idle disposable container, like the rehearsal
-// fixture: it owns the real managed job directory. A service restart is modelled
+// fixture, with docker --init to reap orphaned EXITKILL victims: it owns the real
+// managed job directory. A service restart is modelled
 // by closing every listener of the first agent and starting a second agent with
 // fresh module instances; TV signing, systemd and SDK acquisition are fixtures.
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events'),{createRequire}=require('node:module');
@@ -8,7 +9,7 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
@@ -136,13 +137,27 @@ done
   if(mode.startsWith('native-')||mode.startsWith('return-')){
    await first.migrateNative(native,runtimeSha);const before=first.status(),id=before.native_runtime.transaction_id,history=JSON.stringify(before.worker_selection.history),committed=fs.readFileSync(state+'/'+id+'.production.json'),activation=fs.readFileSync(state+'/'+id+'.activation.json');
    await first.operation({op:'job.start',id:'native-keep-00001',profile:'root',timeout_ms:1000,command:'exit 9'});await until(async()=>(await first.operation({op:'status'})).resources.jobs.every(j=>j.monitor_finished));
+   const guardianLoss=mode==='native-guardian-lost',production=JSON.parse(committed),nativeSaved=fs.readFileSync(production.scope+'/.jobs/native-keep-00001.json');
+   if(guardianLoss){
+    await first.operation({op:'job.start',id:'native-live-00001',profile:'root',timeout_ms:60000,command:'printf x >> '+root+'/effect; sleep 50'});
+    await until(()=>fs.existsSync(root+'/effect'));assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
+    assert.equal((await first.operation({op:'job.status',id:'native-live-00001'})).state,'running');
+   }
    let returnId=null;
    if(mode.startsWith('return-')){
     const hold=first.holdAdmission;first.holdAdmission=o=>{const h=hold(o);if(mode==='return-prepared')h.openReturnProvider=async()=>{throw injected;};if(mode==='return-stopped'){const stop=h.shutdownNative;h.shutdownNative=async(...a)=>{await stop(...a);throw injected;};}return h;};
     await assert.rejects(first.returnManaged(runtimeSha,'original-return-request-0001'));returnId=first.status().worker_selection.pending.id;
    }
    const old=children.slice();
-   if(mode==='native-lost')servers[servers.length-1]._conn._socket.destroy();else{first.stop();for(const s of servers.slice())s.close();}
+   if(guardianLoss){
+    const current=await first.operation({op:'status'}),guardian=units.get(production.unit);assert(guardian);
+    assert.equal(current.processes.guardian.pid,guardian.child.pid);
+    // The real owned guardian dies without cleanup; EXITKILL must terminate
+    // its worker and command, then ordinary selected-native startup reconciles.
+    const journal=fs.readFileSync(production.scope+'/.jobs/guardian');
+    guardian.child.kill('SIGKILL');await guardian.ended;
+    assert.deepEqual(fs.readFileSync(production.scope+'/.jobs/guardian'),journal);
+   }else if(mode==='native-lost')servers[servers.length-1]._conn._socket.destroy();else{first.stop();for(const s of servers.slice())s.close();}
    await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
    second=mode==='native-committed'||mode.startsWith('return-')?createAgent(loader(new Map())):first;await acquire(second);
    await until(()=>second.status().worker_ready,15000);
@@ -153,8 +168,20 @@ done
    const after=second.status();assert.equal(after.selected_implementation,'native-prototype');assert.notEqual(after.worker_id,before.worker_id);assert.equal(after.native_runtime.transaction_id,id);assert.equal(JSON.stringify(after.worker_selection.history),history);
    assert.deepEqual(fs.readFileSync(state+'/'+id+'.production.json'),committed);assert.deepEqual(fs.readFileSync(state+'/'+id+'.activation.json'),activation);
    assert.equal((await second.execute('printf restarted',1000)).stdout,'restarted');assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);
+   if(guardianLoss){
+    const interrupted=await second.operation({op:'job.status',id:'native-live-00001'});
+    assert.equal(interrupted.record.state,'interrupted');assert.equal(interrupted.record.exit_code,null);
+    assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
+    assert.deepEqual(fs.readFileSync(production.scope+'/.jobs/native-keep-00001.json'),nativeSaved);
+    await assert.rejects(second.operation({op:'job.start',id:'native-live-00001',profile:'root',timeout_ms:1000,command:'printf replay >> '+root+'/effect'}));
+   }
    await second.returnManaged(runtimeSha).catch(e=>{for(let c=e;c;c=c.cause)console.error(c.stack);throw e;});assert.equal(second.status().worker_ready,true);assert.equal(second.status().selected_implementation,'managed');
    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
+   if(guardianLoss){
+    const interrupted=await second.operation({op:'job.status',id:'native-live-00001'});
+    assert.equal(interrupted.record.state,'interrupted');assert.equal(interrupted.record.exit_code,null);
+    assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
+   }
    assert.equal(second.restartInventory().boundary,'settled');return;
   }
   await assert.rejects(first.rehearseNative(native,runtimeSha),e=>{if(mode==='live-provider-loss'||mode==='live-production-loss'||observerLoss)return e.outcome==='unknown'&&/^[a-f0-9]{32}$/.test(e.recovery_transaction_id);for(let c=e;c;c=c.cause)if(c===injected)return true;return false;});

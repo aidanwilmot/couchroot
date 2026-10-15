@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const {snapshotNativeJobs,planNativeSnapshot}=require('../research/autonomous-root/service/native-retained-state');
+const {snapshotNativeJobs,snapshotNativeRestartJobs,planNativeSnapshot}=require('../research/autonomous-root/service/native-retained-state');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex'),sha='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
 const linux={skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||process.geteuid()!==0};
 async function fixture(fn,count=2){
@@ -36,6 +36,35 @@ test('inventory changes during reads are detected and forgotten jobs are not res
 test('wrong installation binding and metadata are refused',linux,()=>fixture(async f=>{
  await assert.rejects(snapshotNativeJobs({...f.options,installation:{...f.options.installation,installed_manifest_sha256:'f'.repeat(64)}}));assert.equal(f.commands.length,0);
  fs.chmodSync(f.jobs+'/lock',0o644);await assert.rejects(snapshotNativeJobs(f.options));
+}));
+
+function staleGuardian(f){
+ const i=f.options.record.worker_identity,journal={schema:4,phase:'ready',prepared:true,worker_id:i.worker_id,boot_id:i.boot_id,pid:i.processes.guardian.pid,process_start:i.processes.guardian.start_ticks};
+ fs.writeFileSync(f.jobs+'/guardian',JSON.stringify(journal),{mode:0o600});return journal;
+}
+test('native restart snapshots preserve a bound stale guardian for native reconciliation only',linux,()=>fixture(async f=>{
+ const clean=await snapshotNativeRestartJobs(f.options);assert.equal(clean.guardian_sha256,null);
+ staleGuardian(f);const before=fs.readFileSync(f.jobs+'/guardian'),result=await snapshotNativeRestartJobs(f.options);
+ assert.equal(result.guardian_sha256,hash(before));assert.deepEqual(result.snapshot,clean.snapshot);assert.deepEqual(fs.readFileSync(f.jobs+'/guardian'),before);
+ await assert.rejects(snapshotNativeJobs(f.options));
+}));
+test('native restart refuses foreign or partial journals, live owners and unexpected metadata',linux,async()=>{
+ for(const mode of ['worker','boot','pid','ticks','schema','phase','prepared','link','mode','partial','extra','live'])await fixture(async f=>{
+  const j=staleGuardian(f);
+  if(mode==='worker')j.worker_id='e'.repeat(32);if(mode==='boot')j.boot_id='00000000-0000-0000-0000-000000000002';
+  if(mode==='pid')j.pid++;if(mode==='ticks')j.process_start='201';if(mode==='schema')j.schema=3;if(mode==='phase')j.phase='contained';if(mode==='prepared')j.prepared=false;
+  fs.writeFileSync(f.jobs+'/guardian',JSON.stringify(j));
+  if(mode==='link'){fs.unlinkSync(f.jobs+'/guardian');fs.symlinkSync('/dev/null',f.jobs+'/guardian');}
+  if(mode==='mode')fs.chmodSync(f.jobs+'/guardian',0o644);
+  if(mode==='partial')fs.writeFileSync(f.jobs+'/guardian','{');
+  if(mode==='extra')fs.writeFileSync(f.jobs+'/guardian.next','unfinished',{mode:0o600});
+  if(mode==='live'){fs.mkdirSync(f.root+'/proc/51');fs.writeFileSync(f.root+'/proc/51/stat','51 (worker) S '+Array(18).fill('0').join(' ')+' 199 0\n');}
+  const before=fs.readdirSync(f.jobs).sort();await assert.rejects(snapshotNativeRestartJobs(f.options));assert.deepEqual(fs.readdirSync(f.jobs).sort(),before);
+ });
+});
+test('native restart refuses a guardian journal changed during the snapshot',linux,()=>fixture(async f=>{
+ staleGuardian(f);let changed=false;
+ await assert.rejects(snapshotNativeRestartJobs({...f.options,execute:async c=>{const r=await f.execute(c);if(!changed&&c.includes('base64 '+f.options.record.scope+'/.jobs/guardian')){changed=true;fs.appendFileSync(f.jobs+'/guardian',' ');}return r;}}));assert(changed);
 }));
 
 const {planManagedRestore}=require('../research/autonomous-root/service/managed-restore-plan');
