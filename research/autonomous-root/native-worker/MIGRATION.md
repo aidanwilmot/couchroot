@@ -1771,3 +1771,45 @@ coordinator and bounded provider remain available. Publication failure, transpor
 closure and provider loss are qualified locally only. Service-restart
 reconciliation, earlier-phase recovery, public parity, native default and agent
 .NET sunset remain open; no reboot was performed and .NET remains selected.
+
+### Durable restart inventory and first reconciliation case — local
+
+A service restart closes the transports of the bounded provider, native production
+worker and managed worker, which all exit on disconnect. In-memory recovery handles
+are lost, and a pending selection blocks every launch. `restart-inventory.js` now
+reconstructs progress from durable journals alone. It reads; it never launches,
+signals, deletes or rewrites. It reports each mutation as `not-submitted`,
+`submitted-unknown` or `verified-complete`, the first unresolved boundary, remaining
+ownership markers and bounded diagnostics. `GET /v1/native/status` returns it as
+`durable`. A missing acknowledgement is always unknown, never replayable.
+
+| Boundary | Durable evidence | Classification |
+| --- | --- | --- |
+| Forward begun | Selection `prepared`; no marker or file naming the transaction or its provider | Nothing submitted: abandoned at startup |
+| Provider launch | `retirement-launch.pending`, provider record `submitting`/`submitted` | Unknown until an independent executor inspects the unit |
+| Provider ready | Provider record `ready` or later | Verified |
+| Source stop | No durable stop record; a retained snapshot proves verified exit | Unknown after a provider launch until the snapshot exists |
+| State install | `state-install.pending`, install receipt | Verified only once the selection is `state-ready` |
+| Production launch/readiness | `production-launch.pending`, production record, readiness intent | Verified only once the selection is `trial-ready` |
+| Native commit | Committed history entry | Verified; native cold start is not integrated, so a return needs the durable native state |
+| Native stop (return) | `.native-stop.json` `submitting` / `stopped` | Unknown / verified |
+| Managed restore and launch | Restore and launch markers and records | Verified only at `state-ready` / `trial-ready` |
+| Retirement and activation | Production-retirement, provider retirement and managed-activation receipts | Verified only with the final receipt; teardown intents are unknown |
+
+Only the first row is reconciled automatically. When no live coordinator exists in
+the process, startup abandons a forward `prepared` transition, but only if no marker,
+writer lock or file names the transaction or its provider. Every mutation after
+`begin` writes such a marker before its first remote command. The journal records
+outcome `abandoned` with no state or readiness evidence, and managed acquisition
+then follows its normal readiness gate. Every other boundary stays blocked with the
+inventory as actionable diagnostics. Those boundaries need a freshly verified
+independent executor under held admission, and that is not implemented.
+
+Tests walk every listed boundary with real journals and private files, confirm the
+inventory leaves the directory byte-identical, and cover refusal for markers,
+provider records, transaction-named files, later phases, return transitions and
+writer locks. They also cover idempotent repetition and journal validation. The
+real-process rehearsals assert the interrupted inventory (`native-stop` unknown)
+and a settled inventory after recovery. Read-only copies of both TVs' current
+journals classify as settled with no diagnostics. A real restart at the abandonment
+boundary has not been exercised on either TV.

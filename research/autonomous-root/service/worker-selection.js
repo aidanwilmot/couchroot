@@ -12,7 +12,7 @@ function same(a,b){return a.implementation===b.implementation&&a.manifest_sha256
 function validate(s){
  check(exact(s,['schema','revision','selected','last_known_good','pending','history']));
  check(s.schema===1&&Number.isSafeInteger(s.revision)&&s.revision>=1&&version(s.selected)&&version(s.last_known_good));
- check(Array.isArray(s.history)&&s.history.length<=32&&s.history.every(h=>exact(h,['id','from','to','quiescence_sha256','state_sha256','readiness_sha256','outcome'])&&typeof h.id==='string'&&/^[a-f0-9]{32}$/.test(h.id)&&version(h.from)&&version(h.to)&&!same(h.from,h.to)&&['committed','rolled-back'].includes(h.outcome)&&['quiescence_sha256','state_sha256','readiness_sha256'].every(k=>typeof h[k]==='string'&&HEX.test(h[k]))));
+ check(Array.isArray(s.history)&&s.history.length<=32&&s.history.every(h=>exact(h,['id','from','to','quiescence_sha256','state_sha256','readiness_sha256','outcome'])&&typeof h.id==='string'&&/^[a-f0-9]{32}$/.test(h.id)&&version(h.from)&&version(h.to)&&!same(h.from,h.to)&&['committed','rolled-back','abandoned'].includes(h.outcome)&&typeof h.quiescence_sha256==='string'&&HEX.test(h.quiescence_sha256)&&['state_sha256','readiness_sha256'].every(k=>h.outcome==='abandoned'?h[k]===null:typeof h[k]==='string'&&HEX.test(h[k]))));
  check(new Set(s.history.map(h=>h.id)).size===s.history.length);
  let prior=null;
  for(const h of s.history){if(prior)check(same(h.from,prior));prior=h.outcome==='committed'?h.to:h.from;}
@@ -69,6 +69,9 @@ class SelectionJournal {
   else throw Error('Invalid worker selection phase');
   p.phase=phase;return s;
  });}
+ // Only a prepared transition with no state or readiness evidence may be abandoned.
+ // The caller must independently prove that no remote mutation was submitted.
+ abandon(revision,id){return this.change(revision,s=>{check(s&&s.pending&&s.pending.id===id&&s.pending.phase==='prepared'&&s.pending.state_sha256===null&&s.pending.readiness_sha256===null);const {phase,...receipt}=s.pending;return {...s,pending:null,history:s.history.concat({...receipt,outcome:'abandoned'}).slice(-32)};});}
  commit(revision,id){return this.change(revision,s=>{check(s&&s.pending&&s.pending.id===id&&s.pending.phase==='trial-ready');const {phase,...receipt}=s.pending;return {...s,selected:s.pending.to,last_known_good:s.pending.to,pending:null,history:s.history.concat({...receipt,outcome:'committed'}).slice(-32)};});}
  commitRollback(revision,id,readiness){check(typeof readiness==='string'&&HEX.test(readiness));return this.change(revision,s=>{check(s&&s.pending&&s.pending.id===id&&s.pending.phase==='rollback-state-ready');const {phase,...receipt}=s.pending;receipt.readiness_sha256=readiness;return {...s,selected:s.pending.from,last_known_good:s.pending.from,pending:null,history:s.history.concat({...receipt,outcome:'rolled-back'}).slice(-32)};});}
 }

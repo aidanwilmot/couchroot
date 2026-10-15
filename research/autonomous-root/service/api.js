@@ -23,7 +23,7 @@ function createApi(options){
   if(req.headers.origin){reply(403,{error:'Browser access is disabled'});return;}
   if(count>128){reply(429,{error:'Connection request limit reached'});return;}
   if(req.method==='GET'&&req.url==='/v1/status'){reply(200,agent.status());return;}
-  if(req.method==='GET'&&req.url==='/v1/native/status'){reply(200,{operation:nativeTasks.status(),migration:agent.status().native_migration||null});return;}
+  if(req.method==='GET'&&req.url==='/v1/native/status'){reply(200,{operation:nativeTasks.status(),migration:agent.status().native_migration||null,durable:typeof agent.restartInventory==='function'?agent.restartInventory():null});return;}
   if(req.method==='GET'&&req.url==='/v1/requests'){reply(200,{requests:journal.rows,sha256:journal.digest()});return;}
   if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable','/v1/journal/archive','/v1/op','/v1/files/read','/v1/files/write','/v1/observer/probe','/v1/native/rehearse','/v1/native/resume-managed'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
   if(busy||nativeTasks.busy()){reply(409,{error:'Another administrative operation is in progress'});return;}

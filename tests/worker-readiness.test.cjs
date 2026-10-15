@@ -575,3 +575,23 @@ test('live fallback verification must succeed on the same ready worker before mi
   if(['mismatch','timeout','transport'].includes(mode)){channel.execute=async()=>({exit_code:0});assert.equal((await agent.execute('true',100)).exit_code,0);}
  }
 });
+
+test('restart abandons only a provably unsubmitted transition before acquiring managed',async()=>{
+ const os=require('node:os'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{providerId}=require('../research/autonomous-root/service/restart-inventory');
+ for(const mode of ['unsubmitted','provider-submitted']){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'restart-abandon-'));fs.chmodSync(dir,0o700);const file=dir+'/selection.json',journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});
+  const id=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},'d'.repeat(64)).pending.id;
+  if(mode==='provider-submitted')fs.writeFileSync(dir+'/retirement-launch.pending',providerId(id)+'\n',{mode:0o600});
+  const {agent,channels}=fixture({selectionFile:file,managedVersion:()=>DIGEST});agent.start();
+  try{
+   await flush();const durable=agent.restartInventory();
+   if(mode==='unsubmitted'){
+    assert.equal(durable.startup_reconciliation.abandoned,true);assert.equal(durable.startup_reconciliation.transaction_id,id);assert.equal(durable.action,'none');assert.equal(journal.read().history.at(-1).outcome,'abandoned');
+    assert.equal(channels.length,1);const ready=channels[0].connect();ready.resolve(managed());await flush();assert.equal(agent.status().worker_ready,true);
+   }else{
+    assert.equal(durable.startup_reconciliation.abandoned,false);assert.equal(durable.action,'pending-reconciliation');assert.equal(durable.mutations.find(m=>m.name==='provider-launch').status,'submitted-unknown');
+    assert.equal(channels.length,0);assert.match(agent.status().last_error,/requires reconciliation/);assert.equal(journal.read().pending.id,id);
+   }
+  }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
+});

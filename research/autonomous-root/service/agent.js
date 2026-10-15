@@ -10,6 +10,7 @@ const {preparePidfdExit,probeExecutable}=require('./pidfd-observer');
 const {stageObserver}=require('./observer-stage');
 const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime');
 const {openRetirementSession}=require('./retirement-session');
+const {inventoryRestart,abandonUnsubmitted}=require('./restart-inventory');
 const {validateLaunch}=require('./production-readiness');
 const {validateManagedLaunch}=require('./managed-readiness');
 const {privateRead}=require('./private-state');
@@ -32,7 +33,7 @@ function createAgent(config,options={}){
  const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
- let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null;
+ let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null,reconciliation=null;
  const inFlight=new Set();
  function selection(refresh=false){
   if(!options.selectionFile)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
@@ -85,6 +86,9 @@ function createAgent(config,options={}){
  }
  async function launch(){
   if(!running||connected||launching||admissionHold)return;
+  // A restarted service has no live coordinator handles. Only a transition proven
+  // to have submitted nothing remote is abandoned; anything else stays blocked.
+  if(!selection(true).launch_allowed&&!migration&&options.selectionFile){try{reconciliation=abandonUnsubmitted(options.selectionFile);}catch(error){reconciliation={abandoned:false,error:String(error.message).slice(0,160)};}}
   if(!selection(true).launch_allowed){running=false;lastError='Worker selection requires reconciliation';return;}
   launching=true;attempts++;const gen=++generation;let step='firmware verification';
   try{
@@ -449,6 +453,8 @@ function createAgent(config,options={}){
   if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});
   return migration.run(manifestSha256,{returnToManaged:true,runtimeSha256});
  }
- const api={status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative,migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
+ // Durable evidence only; live coordinator handles are reported separately.
+ const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
+ const api={status,start,stop,holdAdmission,probeObserver,restartInventory,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative,migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
 }
 module.exports={createAgent,launchRequest};

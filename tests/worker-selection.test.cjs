@@ -76,14 +76,19 @@ test('managed artifact version binds the six managed package bytes',()=>{
   fs.appendFileSync(path.join(f.dir,'SamsungTvRootAgent.dll'),'changed');assert.throws(()=>managedVersion(f.dir));
  }finally{f.close();}
 });
-test('service does not acquire through pending native or mismatched selection',async()=>{
- for(const kind of ['pending','native','mismatch','managed']){
+test('service does not acquire through submitted pending native or mismatched selection',async()=>{
+ // A restarted service abandons only a prepared transition with no submission
+ // evidence; a submitted provider launch keeps acquisition blocked.
+ for(const kind of ['pending-submitted','native','mismatch','managed','pending-unsubmitted']){
   const f=fixture();let agent,calls=0;try{
    let s=f.j.initialize(M);
-   if(['pending','native'].includes(kind)){s=f.j.begin(s.revision,N,Q);if(kind==='native'){s=advance(f.j,s,'state-ready',S);s=advance(f.j,s,'trial-ready',R);s=f.j.commit(s.revision,s.pending.id);}}
+   if(kind.startsWith('pending')||kind==='native'){s=f.j.begin(s.revision,N,Q);if(kind==='native'){s=advance(f.j,s,'state-ready',S);s=advance(f.j,s,'trial-ready',R);s=f.j.commit(s.revision,s.pending.id);}}
+   if(kind==='pending-submitted')fs.writeFileSync(path.dirname(f.file)+'/retirement-launch.pending','submitted\n',{mode:0o600});
    agent=createAgent({device:'qn90a'},{selectionFile:f.file,managedVersion:()=>kind==='mismatch'?'9'.repeat(64):M.manifest_sha256,verifyFirmware:()=>{calls++;throw Error('fixture-stop');}});
-   agent.start();await new Promise(r=>setImmediate(r));assert.equal(calls,kind==='managed'?1:0);assert.equal(agent.status().worker_ready,false);
-   if(kind!=='managed'){assert.equal(agent.status().phase,'selection-required');assert.equal(agent.status().attempts,0);await assert.rejects(agent.operation({op:'file.commit'}));}
+   const acquires=['managed','pending-unsubmitted'].includes(kind);
+   agent.start();await new Promise(r=>setImmediate(r));assert.equal(calls,acquires?1:0,kind);assert.equal(agent.status().worker_ready,false);
+   if(kind==='pending-unsubmitted'){assert.equal(f.j.read().pending,null);assert.equal(f.j.read().history.at(-1).outcome,'abandoned');}
+   if(!acquires){assert.equal(agent.status().phase,'selection-required');assert.equal(agent.status().attempts,0);await assert.rejects(agent.operation({op:'file.commit'}));}
   }finally{if(agent)agent.stop();f.close();}
  }
 });
