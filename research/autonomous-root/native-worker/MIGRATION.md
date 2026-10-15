@@ -1320,3 +1320,20 @@ normal return and lost final activation acknowledgement with explicit recovery.
 The host fixture now supplies its actual managed runtime pin. These results do
 not qualify TV execution. Both deployed TVs are unchanged; .NET remains fallback,
 and neither TV was rebooted.
+
+### Early live fallback runtime verification
+
+Rehearsal now hashes the fixed `/usr/bin/dotnet` path through the current managed
+worker before creating the migration controller. The enrolled pin, firmware
+version, regular non-symlink file, successful command result and unchanged worker
+generation must all agree. This is a read-only preflight: failure refuses migration
+before admission hold, selection intent, provider staging or source shutdown.
+Managed launch retains its later byte verification to detect subsequent drift.
+
+Focused tests cover hash mismatch, timeout, transport uncertainty and worker
+replacement; no migration starts on these failures. For failures that leave the
+channel connected, ordinary commands remain available. Both real-process Linux
+rehearsals pass with the actual host runtime hashed through the managed wire;
+the fixture substitutes only the host runtime pathname for this new check.
+No device changes or reboots were performed. Earlier-phase and service-restart
+recovery, both-TV qualification and the remaining sunset gates are still open.

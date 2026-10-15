@@ -405,6 +405,20 @@ function createAgent(config,options={}){
   try{const result=await hold.probeObserver(expectedManifest,requestId);hold.release();return result;}
   catch(error){try{hold.release();}catch(_){}throw error;}
  }
- const api={status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative:(manifestSha256,runtimeSha256)=>{try{if(typeof runtimeSha256!=='string'||!/^[a-f0-9]{64}$/.test(runtimeSha256)||runtimeSha256.length!==64||!config.hashes||config.hashes['/usr/bin/dotnet']!==runtimeSha256)throw Error('Managed fallback runtime must match the configured digest');firmware(config);}catch(error){error.outcome='rejected';return Promise.reject(error);}if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256,{returnToManaged:true,runtimeSha256});},migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
+ async function rehearseNative(manifestSha256,runtimeSha256){
+  try{
+   if(typeof runtimeSha256!=='string'||runtimeSha256.length!==64||!/^[a-f0-9]{64}$/.test(runtimeSha256)||!config.hashes||config.hashes['/usr/bin/dotnet']!==runtimeSha256)throw Error('Managed fallback runtime must match the configured digest');
+   firmware(config);
+   const owner=channel,peer=owner&&owner._conn,gen=generation;
+   // Verify through the existing worker: the service label cannot read this
+   // runtime on every firmware. This command only reads the fixed runtime path.
+   const command="set -eu\ntest -f /usr/bin/dotnet\ntest ! -L /usr/bin/dotnet\ntest \"$(sha256sum /usr/bin/dotnet | cut -d ' ' -f 1)\" = '"+runtimeSha256+"'\nprintf 'FALLBACK-RUNTIME-VERIFIED\\n'\n";
+   const result=await submit(worker=>worker.execute(command,10000));
+   if(!running||!connected||!workerReady||channel!==owner||!owner||owner._conn!==peer||generation!==gen||!result||result.exit_code!==0||result.timed_out||result.stdout!=='FALLBACK-RUNTIME-VERIFIED\n')throw Error('Managed fallback runtime verification failed');
+  }catch(cause){throw Object.assign(Error('Native rehearsal rejected before handoff'),{outcome:'rejected',cause});}
+  if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});
+  return migration.run(manifestSha256,{returnToManaged:true,runtimeSha256});
+ }
+ const api={status,start,stop,holdAdmission,probeObserver,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative,migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
 }
 module.exports={createAgent,launchRequest};

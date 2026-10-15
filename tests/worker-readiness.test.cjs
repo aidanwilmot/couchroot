@@ -541,6 +541,25 @@ test('rehearsal rejects missing or mismatched fallback pins before migration cre
 test('rehearsal checks firmware before creating its controller',async()=>{
  let created=0;
  const {agent}=fixture({verifyFirmware:()=>{throw Error('Firmware mismatch');}},{'./native-migration':{createNativeMigration:()=>{created++;}}},'qn90a',{hashes:{'/usr/bin/dotnet':DIGEST}});
- await assert.rejects(agent.rehearseNative(DIGEST,DIGEST),e=>e.outcome==='rejected'&&e.message==='Firmware mismatch');
+ await assert.rejects(agent.rehearseNative(DIGEST,DIGEST),e=>e.outcome==='rejected'&&e.cause.message==='Firmware mismatch');
  assert.equal(created,0);assert.equal(agent.status().admission_held,false);
+});
+
+test('live fallback verification must succeed on the same ready worker before migration starts',async()=>{
+ for(const mode of ['match','mismatch','timeout','transport','disconnect']){
+  let started=0;
+  const {agent,channels}=fixture({}, {'./native-migration':{createNativeMigration:()=>({status:()=>({phase:'fixture'}),run:async()=>{started++;return 'started';}})}},'qn90a',{hashes:{'/usr/bin/dotnet':DIGEST}});
+  agent.start();const channel=channels[0],ready=channel.connect();ready.resolve(managed());await flush();
+  channel.execute=async command=>{
+   assert(command.includes('sha256sum /usr/bin/dotnet'));assert(command.includes(DIGEST));
+   assert.equal(agent.status().admission_held,false);
+   if(mode==='transport')throw Error('lost reply');
+   if(mode==='disconnect')ready.conn._socket.destroy();
+   return {exit_code:mode==='mismatch'?1:0,timed_out:mode==='timeout',stdout:'FALLBACK-RUNTIME-VERIFIED\n'};
+  };
+  if(mode==='match'){assert.equal(await agent.rehearseNative(DIGEST,DIGEST),'started');assert.equal(started,1);}
+  else{await assert.rejects(agent.rehearseNative(DIGEST,DIGEST),e=>e.outcome==='rejected');assert.equal(started,0);}
+  assert.equal(agent.status().admission_held,false);
+  if(['mismatch','timeout','transport'].includes(mode)){channel.execute=async()=>({exit_code:0});assert.equal((await agent.execute('true',100)).exit_code,0);}
+ }
 });

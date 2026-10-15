@@ -42,6 +42,7 @@ fi
   constructor(options){super({...options,onConnect:peer=>{peer.identity.smack='System';options.onConnect(peer);}});servers.push(this);}
   async execute(command,timeout){
    syncUnits();
+   if(command.includes('FALLBACK-RUNTIME-VERIFIED'))command=command.replaceAll('/usr/bin/dotnet','/opt/dotnet/bin/dotnet');
    if(command.includes('MANAGED-VERIFIED')){
     // The harness uses a host runtime/launcher and no TV mount namespace. Keep
     // actual identity, retained-state and wire checks; substitute only this gate.

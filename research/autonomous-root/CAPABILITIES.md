@@ -15,8 +15,10 @@ python3 research/autonomous-root/client.py --config /private/client.json status
 
 `POST /v1/native/rehearse` accepts exactly `{id, manifest_sha256,
 runtime_sha256}`. It requires a ready managed worker and a fallback runtime digest
-matching the enrolled `/usr/bin/dotnet` pin. Firmware preflight runs before the
-migration controller starts; managed launch independently verifies runtime bytes.
+matching the enrolled `/usr/bin/dotnet` pin. Firmware preflight and a read-only hash check through the existing managed worker
+run before the migration controller starts. The response must come from the same
+worker generation. A mismatch, timeout or unconfirmed check refuses the rehearsal
+without stopping the source; managed launch independently rechecks runtime bytes.
 The request is durably journaled before dispatch and returns HTTP 202 with
 `state: submitted` and `status_url: /v1/native/status`. This acknowledgement does
 not mean migration succeeded. The controller performs a held managed → native →
