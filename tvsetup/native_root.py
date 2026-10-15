@@ -37,7 +37,7 @@ def inspect_library(data, report):
     return dict(abi='armv7-eabi5-softfp', needed=needed, glibc_max='.'.join(map(str, max(versions))))
 
 
-def build(profile, destination, command):
+def build(profile, destination, command, *, service=False):
     probe_name(profile)
     folder = Path(destination).resolve()
     if folder.exists():
@@ -45,7 +45,8 @@ def build(profile, destination, command):
     folder.mkdir(mode=0o700, parents=True)
     source = folder/'source'; source.mkdir()
     hashes = {}
-    for name in ('acquire.c', 'build.sh', 'NativeEntry.cs'):
+    entry = 'ServiceEntry.cs' if service else 'NativeEntry.cs'
+    for name in ('acquire.c', 'build.sh', entry):
         path = SOURCE/name
         if path.is_symlink() or not path.is_file():
             raise Refused('Native acquisition source must be regular')
@@ -59,9 +60,9 @@ def build(profile, destination, command):
     for number in (1, 2):
         work = folder/str(number); work.mkdir()
         command(base + ['-v', str(source)+':/src:ro', '-v', str(work)+':/out', image,
-                        'sh', '/src/build.sh', '/out/native', profile['id']])
+                        'sh', '/src/build.sh', '/out/native', 'service' if service else profile['id']])
         project = work/'managed'; project.mkdir()
-        shutil.copyfile(source/'NativeEntry.cs', project/'Program.cs')
+        shutil.copyfile(source/entry, project/'Program.cs')
         csproj = project/'NativeEntry.csproj'
         csproj.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
                           '<OutputType>Exe</OutputType><UseAppHost>false</UseAppHost>'
@@ -85,7 +86,7 @@ def build(profile, destination, command):
     artifacts = folder/'artifacts'; artifacts.mkdir()
     for name in FILES:
         shutil.copyfile(folder/'1'/('native' if name.endswith('.so') else 'bridge')/name, artifacts/name)
-    manifest = dict(schema=1, kind='native-acquisition-managed-entry', model=profile['id'],
+    manifest = dict(schema=1, kind='native-service-acquisition' if service else 'native-acquisition-managed-entry', model=profile['id'],
                     framework=profile['framework'], runtime=profile['runtime'], source=hashes,
                     toolchain=dict(image=image, compiler=compiler), reproducible_builds=2, artifacts=rounds[0])
     atomic_json(folder/'manifest.json', manifest)

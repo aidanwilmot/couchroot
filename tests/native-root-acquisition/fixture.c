@@ -18,7 +18,9 @@ static int fake_execv(const char *, char *const []);
 #define mount fake_mount
 #define umount2 fake_umount
 #define execv fake_execv
+#ifndef SERVICE_ACQUISITION
 #define PROBE_NAME "couchroot-native-root-qn90a"
+#endif
 #include "../../research/native-root-acquisition/acquire.c"
 #undef open
 #undef unshare
@@ -36,8 +38,8 @@ static int fake_open(const char *path, int flags, ...) {
     if (!strcmp(path, "/proc/self/status")) path = "status";
     else if (!strcmp(path, "/proc/self/mountinfo")) path = "mountinfo";
     else if (!strcmp(path, "/etc/passwd")) path = "passwd";
-    else if (!strcmp(path, PREFIX "/passwd-view")) path = "passwd-view";
-    else if (!strcmp(path, PREFIX "/operation.sh")) path = "operation.sh";
+    else if (!strcmp(path, VIEW)) path = "passwd-view";
+    else if (!strcmp(path, OPERATION)) path = "operation.sh";
     return open(path, flags, mode);
 }
 static int fake_unshare(int flags) {
@@ -53,11 +55,11 @@ static int fake_mount(const char *source, const char *target, const char *fs, un
     }
     assert(flags == MS_BIND);
     if (!strcmp(target,"/etc/passwd")) {
-        assert(!strcmp(source,PREFIX "/passwd-view")); event("bind-passwd");
+        assert(!strcmp(source,VIEW)); event("bind-passwd");
         if (!strcmp(scenario,"passwd-bind-fail")) return -1;
         root_mounted = 1;
     } else {
-        assert(!strcmp(target,"/usr/share/sdbd/public.pem") && !strcmp(source,PREFIX "/public.pem")); event("bind-key");
+        assert(!strcmp(target,"/usr/share/sdbd/public.pem") && !strcmp(source,KEY)); event("bind-key");
         if (!strcmp(scenario,"key-bind-fail")) return -1;
     }
     return 0;
@@ -70,7 +72,7 @@ static int fake_umount(const char *path, int flags) {
 static int fake_execv(const char *path, char *const argv[]) {
     if (!strcmp(path,"/usr/sbin/sdbd-tarlauncher")) {
         assert(!strcmp(argv[1],"--package_name") && !strcmp(argv[2],PROBE_NAME) && !strcmp(argv[4],ARCHIVE));
-        assert(!strcmp(argv[5],"--to-command=/usr/bin/dotnet " PREFIX "/NativeEntry.dll identity"));
+        assert(!strcmp(argv[5],IDENTITY_COMMAND));
         event(root_mounted ? "root-launch" : "baseline-launch");
         const char *message = root_mounted ? "NATIVE_IDENTITY root\n" : "NATIVE_IDENTITY owner\n";
         if (!strcmp(scenario,"wrong-identity")) message = "NATIVE_IDENTITY root\n";
@@ -82,6 +84,12 @@ static int fake_execv(const char *path, char *const argv[]) {
 }
 int main(int argc, char **argv) {
     assert(argc >= 2); scenario = argv[1];
+#ifdef SERVICE_ACQUISITION
+    const char *package = "archive-root-0123456789abcdef";
+    if (!strcmp(scenario,"bad-package")) return native_service_entry(0, argc > 2 ? argv[2] : NULL);
+    /* Set paths without executing a mode. */
+    assert(native_service_entry(7, package) == 2);
+#endif
     if (!strcmp(scenario,"parse")) {
         char *text = read_file("passwd"); char *view = text ? passwd_view(text) : NULL;
         free(text); if (!view) return 2; fputs(view,stdout); free(view); return 0;

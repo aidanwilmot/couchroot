@@ -957,3 +957,45 @@ output stream, exact owner UID 5001/GID 100 checks, full root credential checks,
 and exclusive passwd-view creation. Allowlisted app cleanup remains managed.
 No HTTP API, persistent capability, platform policy, package version, reboot or
 standby behavior changed. See the [aggregate evidence](../native-root-acquisition/results.json).
+
+## Native service acquisition and held startup
+
+Packages prepared with `--native-candidate --native-acquisition` use the shared
+C archive/namespace adapter through `NativeEntry.dll`. The signed-package manifest
+binds the model, runtime and all adapter bytes. The loader accepts only the unique
+service stage and its canonical `/opt/usr/home` alias, creates a private read-only
+code bind, then enters C. C verifies SDK credentials/capabilities, the exact staged
+passwd view, baseline owner credentials and full root credentials before running
+the bounded launch operation. Runtime/launcher hashes remain checked in SDK context.
+
+For a committed native selection without a retained return/rollback recovery
+context, the launch starts a separate authenticated
+`--held-bootstrap` worker in a root-owned systemd scope. Its lifetime is fixed at
+300 seconds; it accepts only loopback, status, bounded exec, ping and shutdown.
+Jobs, helpers, app execution and file transfers are refused. Public admission
+stays closed while it verifies the existing selection and retained state, launches
+selected native, and verifies the replacement worker and unit. The bootstrap is
+then shut down; its boot/PID/start-time/unit identities and exact staging contents
+are checked before retirement and public admission. It never becomes a selected
+public worker.
+
+`bootstrap-launch.pending` and the private bootstrap receipt precede submission.
+An interrupted bootstrap requires independent inspection and cleanup; the service
+will not automatically launch another or silently switch acquisition paths.
+Interrupted returns and forward rollback retain the managed held executor and
+original transaction receipts. There is no new public operation or fault hook.
+
+The original managed acquisition adapter and worker remain packaged. Omitting
+`--native-acquisition` retains the prior path. Private configuration may explicitly
+select `service_acquisition: "managed"` or `"native"` for a subsequent service
+start; `"native"` requires the corresponding package. This is an operator choice,
+not an automatic retry after an uncertain native result. The small trusted managed
+entry bridge still requires .NET, even when the selected worker and held bootstrap
+are native. Native-default, reboot, standby and .NET-free capability entry remain
+separate qualification gates.
+
+Signed 0.7.30 passed native disable/enable, transport loss and service restart
+on both TVs, with three verified bootstrap retirements per TV and preserved jobs.
+Both ended managed-ready on SDK loopback. This round qualified interrupted return
+on QN90A and normal return on S90D; see
+[service acquisition results](native-worker/service-acquisition-results.json).

@@ -7,8 +7,19 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.28 packages, with .NET selected and ready after native
-public-operation parity and interrupted-return acceptance. Each transferred an
+Both TVs are on signed 0.7.30 packages with native service acquisition enabled,
+managed selected and ready, and settled histories of 18 committed entries on
+QN90A and 20 on S90D. Each passed native disable/enable, worker transport loss
+and service restart using three separately verified native held bootstraps.
+Every bootstrap was retired before public admission; its processes and root scope
+were confirmed absent. Retained jobs, enrollment and the .NET recovery bytes were
+preserved. SDK is on loopback and all owned test/rescue units are inactive.
+QN90A recovered an interrupted return; S90D's return completed before the restart
+stimulus interrupted it, so that round qualifies a normal return only. See
+[service acquisition evidence](service-acquisition-results.json).
+
+On 0.7.28, both passed public-operation parity and interrupted-return acceptance.
+Each transferred an
 8 MiB-plus file through HTTPS, exercised command/job/app/helper operations,
 refused a return with a live job, explicitly cancelled it, then recovered a service
 restart during the return under the original transaction. Completed and cancelled
@@ -49,13 +60,14 @@ rounds above. Native-default and .NET-free completion still require:
 The standalone [native SDK-host recovery utility](../recovery/native/README.md)
 now restores external SDK access independently of a suspended coordinator and
 disabled worker on both TVs, then restores loopback. The original .NET utility
-remains installed and unchanged; signed agent packages remain 0.7.28.
+remains installed and unchanged.
 
 The [native setup acquisition pilot](../../native-root-acquisition/README.md)
 also passes independent SDK acquisition and bounded failure cleanup on both TVs
 with the worker disabled. Namespace/archive and command logic now run in C under
 an explicit opt-in. A small managed capability-entry/read-only-code-mount bridge
-is still required; default setup and service acquisition remain managed.
+is still required; default setup acquisition remains managed. Service acquisition
+now has a separately packaged native opt-in and explicit managed fallback.
 
 The no-reboot constraint and deployed managed fallback remain in force. Earlier
 failed journals and staging are preserved separately, not marked successful by
@@ -2230,3 +2242,62 @@ the existing transaction-recovery model. Fully native capability entry, broader
 lifecycle qualification and removal of the managed fallback remain open.
 See [contract](../../native-root-acquisition/README.md) and
 [aggregate results](../../native-root-acquisition/results.json).
+
+### Native service acquisition and held bootstrap — 2026-10-15
+
+The service adapter shares the setup pilot's C namespace/archive state machine,
+with independently validated unique stage names and an exact pre-created passwd
+view. Both model-specific adapters and the updated worker were built twice with
+identical artifacts. Signed package metadata binds the model, runtime and bytes;
+incomplete or mismatched opt-in metadata refuses acquisition. The trusted managed
+loader still provides capability entry and a private read-only code bind.
+
+Selected-native reacquisition now uses a fixed 300-second native held bootstrap.
+It exposes status and bounded exec for selection/retained-state verification and
+launch, while public admission remains closed. Shutdown, process and unit identity,
+artifact hashes and exact directory contents must agree before retirement opens
+admission. An exclusive durable marker blocks another acquisition after uncertainty.
+Managed selection and pending return/rollback recovery keep the managed worker;
+the original archive adapter remains explicitly selectable and packaged.
+
+Both signed 0.7.30 installations passed installed-content verification and one
+managed/native/managed round. Native public exec and jobs worked, original retained
+job bytes survived, and native-created jobs survived the return. Disable/enable,
+identity-bound worker termination and service restart each produced a new native
+worker under unchanged selection history and boot identity, using a distinct native
+bootstrap. All six bootstrap receipts reached retired; their units, processes and
+root scopes were verified inactive or absent. Final history is 18/20 committed
+entries, managed is ready, no setup or selection operation is pending, and SDK is
+on loopback. Fixture jobs were forgotten only after preservation checks.
+
+QN90A recovered its interrupted return under the original transaction. On S90D,
+the original return completed normally before the intended interruption was
+observed. Its observation script therefore timed out waiting for a restart-return
+receipt; inspection proved completion and acceptance continued from that evidence
+without replay. S90D's interrupted-return hardware evidence remains the earlier
+0.7.28 round, with current fresh-container recovery tests passing separately.
+
+The preceding QN90A 0.7.29 attempt rejected the runtime's canonical assembly path
+before C entry. The independent 300-second .NET rescue fired and restored SDK;
+that attempt remains failed qualification. The loader now accepts only the exact
+service stage or its canonical alias. Installed bytes and preserved state were
+reconciled before the forward 0.7.30 install. S90D retained an old in-memory WRT
+coordinator after package update and wrapper restart. Under a fresh rescue timer,
+recovery terminated only the observed endpoint listener bound to its boot, PID and
+start time, then relaunched the service. The new coordinator reported native
+acquisition before qualification began. No shared WRT parent or unrelated app was
+terminated. Private journals retain those recovery details and historical staging.
+
+Validation: Node passed 369 tests with 129 skips; Python discovery passed 258 with
+131 skips. Linux acquisition passed 19 focused groups, held-bootstrap protocol
+integration passed four, and fresh-container rehearsal/restart suites passed six
+and eleven cases. Tests cover malformed metadata, explicit managed fallback,
+held admission through retirement, uncertainty, cancellation during retirement,
+restricted bootstrap operations and lifetime, and staged passwd-view failures.
+
+Automatic reconciliation of a coordinator crash during bootstrap remains open:
+the marker deliberately refuses another acquisition until independent inspection.
+Native-default rollout, endurance, reboot/standby and fully native capability
+entry remain unqualified. The next step is durable interrupted-bootstrap
+reconciliation without launch replay, followed by the remaining setup-control
+dependency audit. The .NET fallback remains installed and available.

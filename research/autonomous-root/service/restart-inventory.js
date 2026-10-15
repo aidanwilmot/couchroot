@@ -6,7 +6,7 @@ const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {privateRead}=require('./private-state');
 const {selectionStatus,SelectionJournal}=require('./worker-selection');
 const ID=/^[a-f0-9]{32}$/;
-const MARKERS=['retirement-launch.pending','production-launch.pending','state-install.pending','managed-restore.pending','managed-launch.pending','observer-launch.pending'];
+const MARKERS=['bootstrap-launch.pending','retirement-launch.pending','production-launch.pending','state-install.pending','managed-restore.pending','managed-launch.pending','observer-launch.pending'];
 const providerId=id=>crypto.createHash('sha256').update('observer-handoff:'+id).digest('hex').slice(0,32);
 function inventoryRestart(selectionFile){
  const directory=path.dirname(selectionFile),diagnostics=[];
@@ -75,7 +75,7 @@ function inventoryRestart(selectionFile){
  if(selection.phase==='inspection-required')diagnostics.push('selection journal requires inspection: '+selection.reason);
  if(unknown.length)diagnostics.push('submitted with unknown outcome: '+unknown.join(', ')+'; verify through an independent executor before any further mutation');
  if(pending&&!unknown.length)diagnostics.push('transition '+pending.phase+' has no unknown submission; '+(open?'next unsubmitted step: '+open.name:'all steps verified; selection publication remains'));
- if(!pending&&selection.phase==='stable'&&selection.selected_implementation!=='managed')diagnostics.push(open?'native selected without verified activation; return to managed requires the durable native state':'native active; startup verifies the committed receipts and reacquires through a held managed bootstrap');
+ if(!pending&&selection.phase==='stable'&&selection.selected_implementation!=='managed')diagnostics.push(open?'native selected without verified activation; return to managed requires the durable native state':'native active; startup verifies the committed receipts and reacquires through a held authenticated bootstrap');
  for(const name of markers)diagnostics.push('ownership marker present: '+name);
  const settled=selection.phase==='stable'&&selection.selected_implementation==='managed'&&!markers.length&&!unknown.length;
  const nativeActive=selection.phase==='stable'&&selection.selected_implementation==='native-prototype'&&direction==='to-native'&&!markers.length&&!unknown.length&&!open;

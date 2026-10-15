@@ -13,7 +13,7 @@ typedef struct {
 } Transfer;
 static Transfer transfers[8];
 static unsigned lifetime_seconds = 300;
-static int production_mode;
+static int production_mode, bootstrap_mode;
 static char worker_start_ticks[32], guardian_start_ticks[32];
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
@@ -448,6 +448,8 @@ static J *operation(J *request, Wire *w, const char *seq) {
   const char *op = textval(request, "op");
   if (!op)
     return failure("Invalid operation");
+  if (bootstrap_mode && strcmp(op, "status"))
+    return failure("Held bootstrap supports status and bounded exec only");
   int needed = operation_descriptors(op);
   if (needed && !descriptor_admission(needed))
     return failure("Insufficient descriptors; operation not started");
@@ -498,7 +500,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     json_object_object_add(processes, "guardian", guardian);
     json_object_object_add(j, "processes", processes);
     json_object_object_add(j, "resources", resource_inventory());
-    str(j, "implementation", "native-prototype");
+    str(j, "implementation", bootstrap_mode ? "native-bootstrap" : "native-prototype");
     num(j, "guardian_pid", guardian_pid);
     boolean(j, "stale_guardian_reconciled", guardian_reconciled);
     str(j, "fault_supervision", "ptrace-owned-descendants");
@@ -509,7 +511,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     num(j, "heartbeat_timeout_ms", 1000);
     num(j, "progress_timeout_ms", PROGRESS_GRACE_MS);
     num(j, "lifetime_seconds", lifetime_seconds);
-    str(j, "lifetime_mode", production_mode ? "production" : "bounded");
+    str(j, "lifetime_mode", bootstrap_mode ? "held-bootstrap" : production_mode ? "production" : "bounded");
     J *app = obj();
     str(app, "path", launcher);
     str(app, "sha256", launcher_sha);
@@ -528,7 +530,11 @@ static J *operation(J *request, Wire *w, const char *seq) {
                            "prototype-independent-launcher-v1",
                            "prototype-crash-guardian-v1",
                            "prototype-command-fault-diagnostics-v1"};
-    for (size_t i = 0; i < sizeof names / sizeof *names; i++)
+    if (bootstrap_mode) {
+      const char *held[] = {"held-bootstrap-v1", "resource-inventory-v1", "worker-process-identity-v1", "guardian-parent-identity-v1"};
+      for (size_t i = 0; i < sizeof held / sizeof *held; i++)
+        json_object_array_add(caps, json_object_new_string(held[i]));
+    } else for (size_t i = 0; i < sizeof names / sizeof *names; i++)
       json_object_array_add(caps, json_object_new_string(names[i]));
     json_object_object_add(j, "capabilities", caps);
     return success(j);
@@ -731,12 +737,13 @@ int main(int argc, char **argv) {
     fault_test_execute();
   }
 #endif
+  bootstrap_mode = argc == 8 && !strcmp(argv[7], "--held-bootstrap");
   production_mode = argc == 8 && !strcmp(argv[7], "--production");
   production_files = production_mode ||
                      (argc == 8 && !strcmp(argv[7], "--production-files"));
-  if (argc != 7 && !production_files) {
+  if (argc != 7 && !production_files && !bootstrap_mode) {
     fputs("usage: worker HOST PORT TOKEN EXPERIMENT_DIRECTORY "
-          "LAUNCHER_SOURCE SHA256 [--production-files|--production]\n",
+          "LAUNCHER_SOURCE SHA256 [--production-files|--production|--held-bootstrap]\n",
           stderr);
     return 64;
   }
@@ -748,6 +755,8 @@ int main(int argc, char **argv) {
   signal(SIGALRM, stop_signal);
   const char *lifetime = getenv("COUCHROOT_NATIVE_LIFETIME_SECONDS");
   int64_t seconds;
+  if (bootstrap_mode && (lifetime || strcmp(argv[1], "127.0.0.1")))
+    fatal("held bootstrap requires loopback and fixed lifetime");
   if (production_mode && lifetime)
     fatal("production mode cannot use an experiment lifetime");
   if (production_mode)
@@ -918,6 +927,8 @@ int main(int argc, char **argv) {
       break;
     }
     J *reply = NULL;
+    if (bootstrap_mode && !strcmp(f[0], "OPWRITE"))
+      fatal("held bootstrap has no upload channel");
     if (!strcmp(f[0], "OPWRITE")) {
       int64_t offset, length;
       if (count != 6 || !hexvalid(f[2], 32) || !decimal(f[3], &offset) ||
@@ -947,7 +958,7 @@ int main(int argc, char **argv) {
       int64_t timeout;
       size_t len;
       unsigned char *command = decode(f[3], &len);
-      if (!decimal(f[2], &timeout) || timeout < 100 || timeout > 300000 ||
+      if (!decimal(f[2], &timeout) || timeout < 100 || timeout > (bootstrap_mode ? 25000 : 300000) ||
           !command || !len || len > 65536 || strlen((char *)command) != len)
         fatal("exec input");
       /* Like a managed worker that cannot start a process, end the session

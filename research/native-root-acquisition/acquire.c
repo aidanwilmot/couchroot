@@ -16,11 +16,26 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef SERVICE_ACQUISITION
+static char service_package[30], service_prefix[96], service_archive[128];
+static char service_view[128], service_key[128], service_operation[128], service_command[256];
+#define PROBE_NAME service_package
+#define ARCHIVE service_archive
+#define VIEW service_view
+#define KEY service_key
+#define OPERATION service_operation
+#define IDENTITY_COMMAND service_command
+#else
 #ifndef PROBE_NAME
 #error A model-specific PROBE_NAME is required
 #endif
 #define PREFIX "/home/owner/share/tmp/sdk_tools/" PROBE_NAME
 #define ARCHIVE "/home/owner/share/tmp/sdk_tools/on-demand/" PROBE_NAME ".tar.gz"
+#define VIEW PREFIX "/passwd-view"
+#define KEY PREFIX "/public.pem"
+#define OPERATION PREFIX "/operation.sh"
+#define IDENTITY_COMMAND "--to-command=/usr/bin/dotnet " PREFIX "/NativeEntry.dll identity"
+#endif
 #define LIMIT 65536
 
 static char *read_file(const char *path) {
@@ -73,7 +88,14 @@ static char *passwd_view(const char *original) {
 }
 
 static int write_view(const char *data) {
-    int fd = open(PREFIX "/passwd-view", O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+#ifdef SERVICE_ACQUISITION
+    /* SDK cannot write the app-owned directory. Validate the coordinator's
+       exclusive staged view byte-for-byte before any bind. */
+    char *staged = read_file(VIEW);
+    int result = staged && !strcmp(staged, data) ? 0 : -1;
+    free(staged); return result;
+#else
+    int fd = open(VIEW, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
     size_t left = strlen(data);
     while (left) {
@@ -84,6 +106,7 @@ static int write_view(const char *data) {
     }
     int result = fsync(fd); if (close(fd)) result = -1;
     return result;
+#endif
 }
 
 static long long milliseconds(void) {
@@ -164,7 +187,7 @@ static int run_identity(void) {
     if (identity(5001, 100)) { puts("NATIVE_IDENTITY owner"); fflush(stdout); return 0; }
     if (!identity(0, 0)) { fputs("Archive child identity refused\n", stderr); return 2; }
     puts("NATIVE_IDENTITY root"); fflush(stdout);
-    char *script = read_file(PREFIX "/operation.sh");
+    char *script = read_file(OPERATION);
     if (!script) { fputs("Operation bytes unavailable\n", stderr); return 9; }
     /* Match the managed runner's inline shell command contract. The vendor
        shell refuses an unsigned staging file as its script argument. */
@@ -178,7 +201,7 @@ static int run_identity(void) {
 
 static int launcher(int root) {
     char *const args[] = {"/usr/sbin/sdbd-tarlauncher", "--package_name", PROBE_NAME,
-        "-xzf", ARCHIVE, "--to-command=/usr/bin/dotnet " PREFIX "/NativeEntry.dll identity", NULL};
+        "-xzf", ARCHIVE, IDENTITY_COMMAND, NULL};
     char *output = NULL; int rc = child(args, 30000, &output);
     const char *receipt = root ? "NATIVE_IDENTITY root\n" : "NATIVE_IDENTITY owner\n";
     /* Stock launcher can print diagnostics before the child's receipt. */
@@ -209,10 +232,10 @@ __attribute__((visibility("default"))) int native_entry(int mode) {
     if (!mounts) { fputs("Mount inventory unavailable\n", stderr); goto done; }
     int shared = strstr(mounts, " shared:") != NULL; free(mounts);
     if (shared) { fputs("Shared mount propagation remains\n", stderr); goto done; }
-    if (mount(PREFIX "/public.pem", "/usr/share/sdbd/public.pem", NULL, MS_BIND, NULL)) { perror("Private key bind"); goto done; }
+    if (mount(KEY, "/usr/share/sdbd/public.pem", NULL, MS_BIND, NULL)) { perror("Private key bind"); goto done; }
     key = 1;
     if (launcher(0)) goto done;
-    if (mount(PREFIX "/passwd-view", "/etc/passwd", NULL, MS_BIND, NULL)) { perror("Private passwd bind"); goto done; }
+    if (mount(VIEW, "/etc/passwd", NULL, MS_BIND, NULL)) { perror("Private passwd bind"); goto done; }
     passwd = 1;
     if (launcher(1)) goto done;
     result = 0;
@@ -223,3 +246,20 @@ done:
     puts(result ? "NATIVE_ACQUISITION unconfirmed" : "NATIVE_ACQUISITION verified");
     fflush(stdout); fflush(stderr); return result;
 }
+
+#ifdef SERVICE_ACQUISITION
+/* The loader and C entry independently restrict the unique service stage. */
+__attribute__((visibility("default"))) int native_service_entry(int mode, const char *package) {
+    if (!package || strlen(package) != 29 || strncmp(package, "archive-root-", 13)) return 2;
+    for (unsigned i = 13; i < 29; i++)
+        if (!((package[i] >= '0' && package[i] <= '9') || (package[i] >= 'a' && package[i] <= 'f'))) return 2;
+    strcpy(service_package, package);
+    snprintf(service_prefix, sizeof service_prefix, "/home/owner/share/tmp/sdk_tools/%s", package);
+    snprintf(service_archive, sizeof service_archive, "/home/owner/share/tmp/sdk_tools/on-demand/%s.tar.gz", package);
+    snprintf(service_view, sizeof service_view, "%s/passwd", service_prefix);
+    snprintf(service_key, sizeof service_key, "%s/public.pem", service_prefix);
+    snprintf(service_operation, sizeof service_operation, "%s/operation.sh", service_prefix);
+    snprintf(service_command, sizeof service_command, "--to-command=/usr/bin/dotnet %s/NativeEntry.dll identity %s", service_prefix, package);
+    return native_entry(mode);
+}
+#endif

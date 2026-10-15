@@ -104,3 +104,52 @@ class NativeAcquisitionTests(unittest.TestCase):
                 self.assertLess(time.monotonic()-started,2)
 
 if __name__=='__main__':unittest.main()
+
+
+@unittest.skipUnless(sys.platform == 'linux' and shutil.which('cc'), 'Linux service syscall fixtures')
+class ServiceAcquisitionTests(unittest.TestCase):
+    setUp = NativeAcquisitionTests.setUp
+    set_identity = NativeAcquisitionTests.set_identity
+    run_case = NativeAcquisitionTests.run_case
+    events = NativeAcquisitionTests.events
+
+    @classmethod
+    def setUpClass(cls):
+        cls.build = tempfile.TemporaryDirectory()
+        cls.binary = Path(cls.build.name)/'fixture'
+        subprocess.run(['cc','-std=c99','-O2','-Wall','-Wextra','-Werror','-DSERVICE_ACQUISITION',
+                        str(ROOT/'tests/native-root-acquisition/fixture.c'),'-o',str(cls.binary)],check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.build.cleanup()
+
+    def stage(self):
+        (self.work/'passwd-view').write_text((self.work/'passwd').read_text().replace(':5001:100:', ':0:0:'))
+
+    def test_service_uses_verified_existing_view_and_two_identity_launches(self):
+        self.stage()
+        before=(self.work/'passwd-view').read_bytes()
+        result=self.run_case()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual((self.work/'passwd-view').read_bytes(),before)
+        self.assertEqual(self.events(),['unshare','private','bind-key','baseline-launch','bind-passwd','root-launch','unmount-passwd','unmount-key'])
+
+    def test_missing_changed_and_symlinked_views_fail_before_namespace(self):
+        self.assertNotEqual(self.run_case().returncode,0)
+        self.stage(); (self.work/'passwd-view').write_text('foreign')
+        self.assertNotEqual(self.run_case().returncode,0)
+        (self.work/'passwd-view').unlink(); (self.work/'passwd-view').symlink_to('passwd')
+        self.assertNotEqual(self.run_case().returncode,0)
+        self.assertEqual(self.events(),[])
+
+    def test_invalid_unique_stage_names_rejected_before_reads(self):
+        for value in ['', 'archive-root-0123456789abcdef/../x', 'archive-root-0123456789abcdeF', 'other-0123456789abcdef']:
+            self.assertEqual(self.run_case('bad-package',value).returncode,2)
+        self.assertEqual(self.events(),[])
+
+    def test_baseline_failure_cannot_run_root_operation(self):
+        self.stage(); result=self.run_case('wrong-identity')
+        self.assertNotEqual(result.returncode,0)
+        self.assertNotIn('root-launch',self.events())
+        self.assertEqual(self.events()[-1],'unmount-key')

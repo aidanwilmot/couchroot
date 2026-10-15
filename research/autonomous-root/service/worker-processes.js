@@ -7,7 +7,7 @@ function identity(v){
   Number.isInteger(v.pid)&&v.pid>0&&v.pid<=2147483647&&typeof v.start_ticks==='string'&&/^(0|[1-9][0-9]{0,19})$/.test(v.start_ticks);
 }
 function processIdentities(info,authenticatedPid){
- const p=info&&info.processes,native=info&&info.implementation==='native-prototype';
+ const p=info&&info.processes,native=info&&['native-prototype','native-bootstrap'].includes(info.implementation);
  if(!info||!BOOT.test(info.boot_id)||typeof info.worker_id!=='string'||!/^[a-f0-9]{32}$/.test(info.worker_id)||
   !Array.isArray(info.capabilities)||!info.capabilities.includes('worker-process-identity-v1')||
   !p||Object.keys(p).sort().join('|')!=='guardian|worker'||!identity(p.worker)||p.worker.pid!==authenticatedPid||

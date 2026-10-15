@@ -1,7 +1,7 @@
 'use strict';
 // Read-only, single-attempt query. Caller chooses a live, authenticated executor;
 // a disconnected worker cannot establish its former supervisor's unit state.
-const UNITS={managed:/^couchroot-managed-[a-f0-9]{32}\.service$/,worker:/^couchroot-worker-[a-f0-9]{32}\.service$/,observer:/^couchroot-observer-[a-f0-9]{32}\.service$/,retirement:/^couchroot-retirement-[a-f0-9]{32}\.service$/};
+const UNITS={bootstrap:/^couchroot-bootstrap-[a-f0-9]{32}\.service$/,managed:/^couchroot-managed-[a-f0-9]{32}\.service$/,worker:/^couchroot-worker-[a-f0-9]{32}\.service$/,observer:/^couchroot-observer-[a-f0-9]{32}\.service$/,retirement:/^couchroot-retirement-[a-f0-9]{32}\.service$/};
 const BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 async function inspectOwnedUnit({unit,bootId,execute,allowMissing=false},kind){
  if(typeof unit!=='string'||unit.length!==('couchroot-'+kind+'-').length+40||!UNITS[kind].test(unit)||typeof bootId!=='string'||bootId.length!==36||!BOOT.test(bootId)||typeof execute!=='function')throw Error('Invalid observer unit inspection');
@@ -56,4 +56,4 @@ async function retireObserverUnit(options){
  if(!r||r.exit_code!==0||r.timed_out||r.stdout!=='OBSERVER-UNIT-RETIRED\n')throw Error('Observer unit retirement requires reconciliation: '+(r&&r.timed_out?'timeout':r&&typeof r.stderr==='string'&&r.stderr.match(/OBSERVER-RETIRE-FAILED:([a-z]+)/)?r.stderr.match(/OBSERVER-RETIRE-FAILED:([a-z]+)/)[1]:'response')+' (exit '+(r?r.exit_code:'missing')+')');
  return {unit,boot_id:bootId,retired:true};
 }
-module.exports={inspectManagedUnit,inspectObserverUnit,inspectRetirementUnit,inspectProductionUnit,retireObserverUnit};
+module.exports={inspectBootstrapUnit:options=>inspectOwnedUnit(options,'bootstrap'),inspectManagedUnit,inspectObserverUnit,inspectRetirementUnit,inspectProductionUnit,retireObserverUnit};

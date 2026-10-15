@@ -24,6 +24,8 @@ const {retireProduction}=require('./production-retirement');
 const {activateManaged}=require('./managed-activation');
 const {createNativeMigration}=require('./native-migration');
 const {createManagedReturn}=require('./managed-return');
+const {loadAcquisition,stageAcquisition}=require('./service-acquisition');
+const {prepareBootstrap,validateBootstrap,bindBootstrap,retireBootstrap}=require('./held-bootstrap');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -39,6 +41,7 @@ function createAgent(config,options={}){
  const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
+ let acquisitionMode=null;
  let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null,managedReturn=null,reconciliation=null,restartRollback=null,nativeStartup=null,restartReturn=null;
  const inFlight=new Set();
  function selection(refresh=false){
@@ -57,12 +60,16 @@ function createAgent(config,options={}){
   return !!(nativeRuntime&&running&&connected&&workerReady&&generation===nativeRuntime.generation&&channel===nativeRuntime.channel&&JSON.stringify(selected)===nativeRuntime.selection&&selected.phase==='stable'&&selected.selected_implementation==='native-prototype'&&selected.selected_manifest_sha256===nativeRuntime.record.manifest_sha256&&h&&h.id===nativeRuntime.record.id&&h.outcome==='committed'&&h.readiness_sha256===nativeRuntime.activation.readiness_sha256);
  }
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,native_migration:migration?migration.status():null,managed_return:managedReturn?managedReturn.status():null,native_runtime:nativeRuntime&&runtimeAllowed(selected)?{transaction_id:nativeRuntime.record.id,manifest_sha256:nativeRuntime.record.manifest_sha256,activation_sha256:nativeRuntime.activation.receipt_sha256}:null,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold&&!restartHeld(),worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:restartHeld()&&connected?'reconciling':!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,root_acquisition:acquisitionMode,native_migration:migration?migration.status():null,managed_return:managedReturn?managedReturn.status():null,native_runtime:nativeRuntime&&runtimeAllowed(selected)?{transaction_id:nativeRuntime.record.id,manifest_sha256:nativeRuntime.record.manifest_sha256,activation_sha256:nativeRuntime.activation.receipt_sha256}:null,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold&&!restartHeld(),worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:restartHeld()&&connected?'reconciling':!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
+  if(fs.existsSync(stage+'/code')&&fs.lstatSync(stage+'/code').isDirectory()&&!fs.lstatSync(stage+'/code').isSymbolicLink()){
+   for(const n of ['libacquire.so','native-worker','native-app-launcher']){const p=stage+'/code/'+n;if(fs.existsSync(p)&&fs.lstatSync(p).isFile())fs.unlinkSync(p);}
+   try{fs.rmdirSync(stage+'/code');}catch(_){}
+  }
   for(const n of fs.readdirSync(stage)){
-   if(!/^(SamsungTv(RootAgent|ArchiveRoot)\.(dll|runtimeconfig\.json|deps\.json)|public\.pem|passwd|root-agent\.(token|log|status)|launcher\.log|launch-sdk\.sh)$/.test(n))continue;
+   if(!/^(SamsungTv(RootAgent|ArchiveRoot)\.(dll|runtimeconfig\.json|deps\.json)|NativeEntry\.(dll|runtimeconfig\.json|deps\.json)|operation\.sh|public\.pem|passwd|root-agent\.(token|log|status)|launcher\.log|launch-sdk\.sh)$/.test(n))continue;
    const p=path.join(stage,n);if(fs.lstatSync(p).isFile())fs.unlinkSync(p);
   }
   try{fs.rmdirSync(stage+'/launch-once');}catch(_){}
@@ -70,22 +77,34 @@ function createAgent(config,options={}){
   try{fs.rmdirSync(stage);stage=null;}catch(_){}try{fs.rmdirSync(BASE+'/on-demand');}catch(_){}
  }
  function schedule(){if(!running||timer||connected||admissionHold)return;if(attempts>=8){lastError='Acquisition retry budget exhausted; use authenticated disable/enable after diagnosis';return;}timer=setTimeout(()=>{timer=null;launch();},Math.min(60000,5000*Math.pow(2,Math.max(0,attempts-1))));}
- function prepare(port,secret){
+ function prepare(port,secret,attempt){
   firmware(config);
+  if(options.selectionFile){const marker=path.join(path.dirname(options.selectionFile),'bootstrap-launch.pending');try{fs.lstatSync(marker);throw Error('Uncertain bootstrap requires independent reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}}
   const pkg='archive-root-'+crypto.randomBytes(8).toString('hex');stage=BASE+'/'+pkg;
   fs.mkdirSync(stage,{mode:0o755});
   const onDemand=BASE+'/on-demand';try{fs.mkdirSync(onDemand,{mode:0o755});}catch(e){if(e.code!=='EEXIST')throw e;const s=fs.lstatSync(onDemand);if(!s.isDirectory()||s.isSymbolicLink())throw Error('Unsafe staging directory');}
   const manifest=JSON.parse(read(payload+'/manifest.json'));
+  attempt.acquisition=config.service_acquisition==='managed'?null:loadAcquisition(payload,config.device);
+  if(config.service_acquisition==='native'&&!attempt.acquisition)throw Error('Native acquisition package required');
+  acquisitionMode=attempt.acquisition?'native-managed-entry':'managed';
+  if(attempt.acquisition)stageAcquisition(stage,attempt.acquisition);
   for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const suffix of ['dll','runtimeconfig.json','deps.json']){
    const file=name+'.'+suffix,bytes=read(payload+'/'+file,4*1024*1024);if(hash(bytes)!==manifest[file])throw Error('Payload mismatch');fs.writeFileSync(stage+'/'+file,bytes,{mode:0o644,flag:'wx'});
   }
   const keys=crypto.generateKeyPairSync('rsa',{modulusLength:2048});
   fs.writeFileSync(stage+'/public.pem',keys.publicKey.export({type:'spki',format:'pem'}),{mode:0o644,flag:'wx'});
   const passwd=read('/etc/passwd').toString().split('\n');let changed=0;
-  const view=passwd.map(line=>{const parts=line.split(':');if(parts[0]==='owner'){if(parts.length!==7||parts[2]!=='5001')throw Error('Unexpected owner identity');parts[2]='0';parts[3]='0';changed++;return parts.join(':');}return line;}).join('\n');
+  const view=passwd.map(line=>{const parts=line.split(':');if(parts[0]==='owner'){if(parts.length!==7||parts[2]!=='5001'||parts[3]!=='100')throw Error('Unexpected owner identity');parts[2]='0';parts[3]='0';changed++;return parts.join(':');}return line;}).join('\n');
   if(changed!==1)throw Error('Missing owner identity');fs.writeFileSync(stage+'/passwd',view,{mode:0o644,flag:'wx'});
   fs.writeFileSync(stage+'/root-agent.token',secret.toString('base64')+'\n',{mode:0o600,flag:'wx'});
-  const script='/usr/bin/dotnet '+stage+'/SamsungTvRootAgent.dll 127.0.0.1 '+port+' '+stage+'/root-agent.token '+stage+' </dev/null >'+stage+'/root-agent.log 2>&1 &\n';
+  let script='/usr/bin/dotnet '+stage+'/SamsungTvRootAgent.dll 127.0.0.1 '+port+' '+stage+'/root-agent.token '+stage+' </dev/null >'+stage+'/root-agent.log 2>&1 &\n';
+  if(attempt.acquisition){
+   if(nativeStartup&&nativeStartup.phase!=='complete'&&!restartReturn&&!restartRollback){
+    const prepared=prepareBootstrap({payload,device:config.device,stage,port,bootId:currentBoot(),journalDirectory:path.dirname(options.selectionFile)});
+    attempt.bootstrap=prepared.record;script=prepared.command;
+   }
+   fs.writeFileSync(stage+'/operation.sh',script,{mode:0o644,flag:'wx'});
+  }
   const archive=tarGz([{name:'launch.sh',data:script,mode:0o700}]);
   fs.writeFileSync(onDemand+'/'+pkg+'.tar.gz',archive,{mode:0o644,flag:'wx'});fs.writeFileSync(onDemand+'/'+pkg+'.tar.gz.signature',crypto.sign('RSA-SHA256',archive,keys.privateKey),{mode:0o644,flag:'wx'});
   return pkg;
@@ -102,21 +121,27 @@ function createAgent(config,options={}){
   if(options.selectionFile&&!managedReturn){const c=restartReturnCandidate(options.selectionFile,(options.managedVersion||managedVersion)(payload));if(c)restartReturn={...c,phase:'acquiring',attempts:0,error:null};}
   if(options.selectionFile&&selection().selected_implementation==='native-prototype'&&selection().phase==='stable'){try{const c=startupCandidate(options.selectionFile);if(c)nativeStartup={id:c.record.id,phase:'acquiring',error:null};}catch(e){lastError=e.message;}}
   if(!selection(true).launch_allowed&&!restartHeld()){running=false;lastError='Worker selection requires reconciliation';return;}
-  launching=true;attempts++;const gen=++generation;let step='firmware verification';
+  launching=true;attempts++;const gen=++generation,attempt={acquisition:null,bootstrap:null};let step='firmware verification';
   try{
    nativeCandidate=candidateStatus(payload,config.device);
    firmware(config);
    const secret=crypto.randomBytes(32);
    if(channel)channel.close();
-   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation||(admissionHold&&admissionHold.stopping)){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();if(restartReturn&&restartReturn.phase!=='complete')runRestartReturn(conn,gen);else if(nativeStartup&&nativeStartup.phase!=='complete')runNativeStartup(conn,gen);else if(restartHeld())runRestartRollback(conn,gen);}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
+   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation||(admissionHold&&admissionHold.stopping)){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;if(attempt.bootstrap)validateBootstrap(info,{bootId:currentBoot(),launcherSha256:attempt.bootstrap.launcher_sha256});else validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();if(restartReturn&&restartReturn.phase!=='complete')runRestartReturn(conn,gen);else if(nativeStartup&&nativeStartup.phase!=='complete')runNativeStartup(conn,gen,attempt.bootstrap);else if(restartHeld())runRestartRollback(conn,gen);}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation||(attempt.bootstrap&&nativeStartup&&nativeStartup.retiring))return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
    await new Promise((resolve,reject)=>{channel.start(resolve);channel._server.once('error',reject);});
    if(!running||gen!==generation)return;
    step='loopback connection';
    const opened=await sdb.connect({host:'127.0.0.1',port:26101,timeout:8000});
    if(!running||gen!==generation){sdb.close(opened);return;}
    client=opened;
-   step='payload staging';clean();const pkg=prepare(channel.listeningPort(),secret);
-   const command='/usr/bin/dotnet '+quote(stage+'/SamsungTvArchiveRoot.dll')+' '+quote(pkg);
+   step='payload staging';clean();const pkg=prepare(channel.listeningPort(),secret,attempt);
+   let command=attempt.acquisition?'env -i PATH=/usr/bin:/bin DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus /usr/bin/dotnet '+quote(stage+'/NativeEntry.dll')+' probe '+quote(pkg):'/usr/bin/dotnet '+quote(stage+'/SamsungTvArchiveRoot.dll')+' '+quote(pkg);
+   if(attempt.acquisition){
+    // SDK may append diagnostics but cannot replace the app-owned stage entry.
+    // This transcript is diagnostic only, never readiness or cleanup authority.
+    fs.writeFileSync(stage+'/launcher.log','',{mode:0o622,flag:'wx'});fs.chmodSync(stage+'/launcher.log',0o622);
+    command+=' > '+quote(stage+'/launcher.log')+' 2>&1';
+   }
    // SDK UID 901 cannot create a marker in the app-owned staging directory.
    const gate='/tmp/'+pkg+'-launch-once';
    fs.writeFileSync(stage+'/launch-sdk.sh','set -eu\n'+sdkRuntimeGuard(config)+command+'\n',{mode:0o644,flag:'wx'});
@@ -139,14 +164,16 @@ function createAgent(config,options={}){
   }finally{r.running=false;}
   return r.result;
  }
- async function runNativeStartup(conn,gen){
+ async function runNativeStartup(conn,gen,bootstrap){
   const r=nativeStartup,owner=channel;
   const owned=()=>{if(!running||gen!==generation||channel!==owner||owner._conn!==conn||!connected||nativeStartup!==r)throw Error('Native bootstrap executor changed');};
   r.phase='verifying';let result;
   try{
-   result=await startSelectedNative({selectionFile:options.selectionFile,executor:{pid:conn.identity.pid,status:async()=>{owned();const info=await conn.operation({op:'status'});owned();return info;},execute:async(c,t)=>{owned();const value=await owner.execute(c,t);owned();return value;}}});
+   if(bootstrap){bootstrap=await bindBootstrap(bootstrap,owner,currentBoot());owned();r.bootstrap={id:bootstrap.id,implementation:'native-bootstrap',phase:'ready'};}
+   result=await startSelectedNative({selectionFile:options.selectionFile,executor:{implementation:bootstrap?'native-bootstrap':'managed',launcherSha256:bootstrap&&bootstrap.launcher_sha256,pid:conn.identity.pid,status:async()=>{owned();const info=await conn.operation({op:'status'});owned();return info;},execute:async(c,t)=>{owned();const value=await owner.execute(c,t);owned();return value;}}});
    owned();const next=result.channel,peer=next._conn;
    if(!peer)throw Error('Native startup transport changed');
+   if(bootstrap){r.retiring=true;await retireBootstrap(bootstrap,owner,next);if(!running||gen!==generation||channel!==owner||nativeStartup!==r||owner._conn!==null||next._conn!==peer)throw Error('Retired bootstrap ownership changed');r.bootstrap.phase='retired';}
    const adoptedGeneration=++generation;channel=next;connected=true;workerReady=true;workerStatus=result.info;workerStatusAt=process.uptime();identity=peer.identity;launching=false;lastError=null;
    nativeRuntime={...result,generation:adoptedGeneration};r.phase='complete';migration=null;managedReturn=null;
    const previousClose=next.onClose;next.onClose=error=>{try{if(previousClose)previousClose(error);}finally{nativeDisconnected(next,adoptedGeneration);}};

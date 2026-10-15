@@ -1,5 +1,5 @@
 'use strict';
-// Bootstrap selected native through a held managed executor. No public request
+// Bootstrap selected native through a held authenticated executor. No public request
 // is replayed. Old processes and the unit must be idle before a new launch.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {RootAgentServer}=require('./vendor/root-agent');
@@ -8,6 +8,7 @@ const {hash,atomic}=require('./policy');
 const {selectionStatus}=require('./worker-selection');
 const {readRuntime}=require('./native-runtime');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
+const {validateBootstrap}=require('./held-bootstrap');
 const {processIdentities}=require('./worker-processes');
 const {observeCommand,parseObservation}=require('./restart-rollback');
 const {inspectProductionUnit}=require('./observer-unit');
@@ -47,7 +48,7 @@ function launchCommand(record,attempt){
 async function startSelectedNative({selectionFile,executor}){
  const candidate=startupCandidate(selectionFile);check(candidate);const {record,activation,installation,selected}=candidate,directory=path.dirname(selectionFile),intent=path.join(directory,record.id+'.startup.json');
  const bound=()=>check(JSON.stringify(startupCandidate(selectionFile))===JSON.stringify(candidate));
- const confirm=async()=>{bound();const info=await executor.status();validateReadiness(info,{implementation:'managed',bootId:record.boot_id});const r=validateResourceInventory(info);check(!r.jobs.length&&!r.transfers.length&&!r.helpers.length);return processIdentities(info,executor.pid);};
+ const confirm=async()=>{bound();const info=await executor.status();if(executor.implementation==='native-bootstrap')validateBootstrap(info,{bootId:record.boot_id,launcherSha256:executor.launcherSha256});else validateReadiness(info,{implementation:'managed',bootId:record.boot_id});const r=validateResourceInventory(info);check(!r.jobs.length&&!r.transfers.length&&!r.helpers.length);return processIdentities(info,executor.pid);};
  const own=await confirm(),run=async(c,t)=>{check(JSON.stringify(await confirm())===JSON.stringify(own));const result=await executor.execute(c,t);check(JSON.stringify(await confirm())===JSON.stringify(own));return result;};
  const evidence={source:record.source,known:Object.entries(record.worker_identity.processes),units:[record.unit]};
  const observe=async()=>{const r=await run(observeCommand(evidence),10000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr);parseObservation(r.stdout,evidence.units);};

@@ -1,6 +1,7 @@
 # Agent .NET dependency inventory
 
-Inspected 2026-10-15 after signed 0.7.28 qualification on QN90A and S90D.
+Inspected 2026-10-15; updated after signed 0.7.30 service acquisition qualification
+on QN90A and S90D.
 This is a source/caller inventory and removal plan, not a native-only qualification.
 The deployed managed payloads, SDK rescue utility and runtime remain available.
 See [migration status](MIGRATION.md) and [public contract](../CAPABILITIES.md).
@@ -14,16 +15,22 @@ The [native acquisition pilot](../../native-root-acquisition/README.md) now port
 the bounded setup probe and command runner to C behind an explicit
 `root.execute(..., native_bundle=...)` selection. Its small `NativeEntry.dll`
 still uses the trusted host to create a private read-only code bind and load the
-library. Native acquisition is therefore not yet a .NET removal. Default setup,
-allowlisted cleanup, service acquisition and held bootstrap keep their managed
+library. Native acquisition is therefore not yet a .NET removal. Default setup and allowlisted cleanup keep their managed
 implementations; uncertain native operations never trigger a fallback replay.
+
+The service integration now packages an explicit native adapter opt-in. The
+same trusted loader supplies capability entry; the archive and namespace logic
+runs in C. Selected-native startup uses a bounded native held bootstrap. Managed
+selection, interrupted returns and forward rollback retain the managed worker;
+the managed acquisition adapter remains an explicit fallback. See the
+[service contract](../CAPABILITIES.md#native-service-acquisition-and-held-startup).
 
 ## Dependency paths
 
 | Entry point | Required managed path today | Why native selection does not remove it |
 | --- | --- | --- |
 | Fresh install, SDK maintenance, setup rollback | `Transport.root` → `tvsetup.worker` → `root.execute` → `NamespaceRootProbe.dll` → `RootIdentity.dll` | Setup must acquire root even when no enrolled worker is available. |
-| Service start, worker loss, selected-native reacquisition | `agent.js` SDK launch → `SamsungTvArchiveRoot.dll` → `SamsungTvRootAgent.dll` → authenticated held bootstrap | Native is launched only after the bootstrap verifies the existing selection, process absence and retained state. |
+| Service start and worker loss (native acquisition opt-in) | `agent.js` SDK launch → `NativeEntry.dll` → `libacquire.so` → managed worker or bounded native held bootstrap | Trusted managed capability entry remains; selected-native startup verifies selection, process absence and retained state through native bootstrap. The original `SamsungTvArchiveRoot.dll` path remains explicitly selectable. |
 | Normal return to managed | `managed-launch.js` → pinned `/usr/bin/dotnet` → `SamsungTvRootAgent.dll` | This is the deliberately retained fallback. |
 | Interrupted active return | `agent.js` acquisition → managed bootstrap → `restart-return.js` | Recovery adopts the fresh managed executor under the original return transaction. |
 | SDK rescue / maintenance host restoration | Private deployment and acceptance scripts → `/usr/bin/dotnet Recovery.dll set/watch …` → `libvconf` | The independent rescue must work when Couchroot admission is closed or unavailable. |
@@ -133,17 +140,30 @@ launcher completion, and detaches private mounts on exit. Unlike the setup probe
 it does not perform a baseline identity launch or impose its own child deadline.
 Root authentication and readiness are subsequently checked by the service.
 
-**Dependencies and replacement.** It depends on the same firmware-specific trusted
-runtime/capability entry as the setup probe, libc mount calls, the stock archive
-launcher and shell. Merely translating this class into C does not establish those
-capabilities. Even after an acquisition adapter is replaced, `agent.js.prepare`
-still starts `SamsungTvRootAgent.dll`; selected-native startup uses that executor
-for process/retained-state checks and native launch. A native authenticated bootstrap
-must replace that role too, preserving held admission, token ownership, boot/PID
-start-time binding, exact staging checks and current transaction recovery. Reuse
-protocol and native-launch primitives without turning the bootstrap into an
-unrestricted persistent second worker. The managed branch must stay independently
-verifiable during the fallback window.
+**Integrated native branch.** `prepare(..., native_acquisition=True)` additionally
+builds the shared C adapter and `ServiceEntry.cs` loader twice and packages their
+model-bound manifest. The service verifies these bytes, stages a unique launch,
+and retains SDK-context runtime guards. The loader creates the read-only code
+bind; C checks capabilities, validates the staged passwd view, proves baseline
+owner/root identities and applies bounded archive/operation deadlines. The trusted
+managed host remains the capability entry, so this is not .NET-free acquisition.
+
+For a committed native selection, `held-bootstrap.js` starts the packaged worker
+with `--held-bootstrap`: loopback only, fixed 300-second lifetime, status and
+bounded exec only, and no public admission. Startup verifies the original
+selection, retired processes and retained state before launching native. It then
+shuts down and verifies the bootstrap's boot/PID/start-time/unit identities,
+removes exact staging, and opens public admission. A durable bootstrap marker
+blocks another acquisition after uncertainty. Automatic reconciliation of that
+marker after a coordinator crash remains a separate boundary.
+
+Managed selection, pending returns and forward rollback still acquire a managed
+worker, preserving the existing same-transaction adoption rules. The original
+archive adapter is retained; `service_acquisition: "managed"` explicitly selects
+it on a subsequent service start. There is no automatic fallback after a native
+submission. Both managed payloads remain signed and packaged. Removing the final
+bridge needs a separately qualified native capability entry on each firmware,
+without relaxing platform policy or granting persistent capabilities.
 
 ## Removal order and concrete next step
 
@@ -155,10 +175,10 @@ verifiable during the fallback window.
    are implemented in the native acquisition pilot. Preserve the independent
    managed path and explicit opt-in. A fully native capability entry remains
    open; the read-only code bind and trusted runtime cannot simply be omitted.
-3. Replace the service archive adapter and held managed bootstrap with the qualified
-   native acquisition path. Exercise selected-native service start, disable/enable,
-   transport loss and pending-return reconciliation using the existing receipt
-   model; broaden interruption boundaries before default selection changes.
+3. The opt-in service archive adapter and selected-native held bootstrap now use
+   the shared native acquisition path and bounded native protocol mode. Keep
+   managed pending-return/rollback adoption and explicit acquisition fallback.
+   Broaden bootstrap-interruption reconciliation before default selection changes.
 4. Audit remaining agent-required setup controls. `Driver.prepare_control` and
    `control_call` still build/invoke `tvsetup/native/Control.dll` for settings,
    home operations and reloads, even over an enrolled agent transport. Separate
@@ -171,9 +191,9 @@ verifiable during the fallback window.
 
 The inventory itself installed no utility; the subsequent native SDK recovery
 milestone completed step 1. The acquisition pilot advances step 2 through an
-explicitly managed entry bridge. Next, integrate the qualified adapter into
-service acquisition and replace the held managed bootstrap while preserving
-transaction recovery; keep .NET-free capability entry as a separate open boundary. The
+explicitly managed entry bridge. The service adapter and selected-native held bootstrap are now integrated;
+next broaden interrupted-bootstrap reconciliation and audit remaining agent-required
+setup controls. Keep .NET-free capability entry as a separate open boundary. The
 prerequisites delivered by the preceding milestones—immutable selection binding,
 fresh runtime receipts, held startup, same-transaction return recovery and operation parity—remain reusable
 regardless of the eventual acquisition adapter.

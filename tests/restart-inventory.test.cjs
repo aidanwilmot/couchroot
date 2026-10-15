@@ -28,7 +28,7 @@ test('forward transition distinguishes not-submitted, unknown and verified steps
  f.write(obs+'.retirement.json',{phase:'complete'});f.write(id+'.activation.json.pending','x');r=f.state();assert.equal(statuses(r)['provider-retirement'],'verified-complete');assert.equal(statuses(r)['native-activation'],'submitted-unknown');assert.equal(r.action,'pending-reconciliation');
  f.write(id+'.activation.json',{phase:'active'});assert.equal(statuses(f.state())['native-activation'],'submitted-unknown','a published receipt with its intent is not finished');
  for(const n of [id+'.activation.json.pending','production-launch.pending','state-install.pending','retirement-launch.pending'])fs.rmSync(f.dir+'/'+n,{force:true});
- r=f.state();assert(Object.values(statuses(r)).every(s=>s==='verified-complete'));assert.equal(r.boundary,'native-active');assert.equal(r.action,'none');assert.match(r.diagnostics.join('\n'),/held managed bootstrap/);
+ r=f.state();assert(Object.values(statuses(r)).every(s=>s==='verified-complete'));assert.equal(r.boundary,'native-active');assert.equal(r.action,'none');assert.match(r.diagnostics.join('\n'),/held authenticated bootstrap/);
 }));
 test('return transition classifies native stop, restoration, managed launch, retirement and activation',()=>fixture(f=>{
  const origin=f.journal.begin(1,native,d('c')).pending.id;f.journal.advance(2,origin,'state-ready',d('d'));f.journal.advance(3,origin,'trial-ready',d('e'));f.journal.commit(4,origin);
@@ -104,4 +104,9 @@ test('journal validation accepts abandonment only without state or readiness evi
  const s=f.journal.read(),entry={id,from:managed,to:native,quiescence_sha256:d('c'),state_sha256:d('d'),readiness_sha256:null,outcome:'abandoned'};
  assert.throws(()=>validate({...s,pending:null,history:[entry]}));assert.doesNotThrow(()=>validate({...s,pending:null,history:[{...entry,state_sha256:null}]}));
  assert.throws(()=>validate({...s,pending:null,history:[{...entry,state_sha256:null,outcome:'committed'}]}));
+}));
+
+test('an uncertain bootstrap prevents settled inventory and abandonment without replay',()=>fixture(f=>{
+ const id='e'.repeat(32);f.write('bootstrap-launch.pending',id+'\n');const r=f.state();assert.equal(r.action,'pending-reconciliation');assert(r.markers.includes('bootstrap-launch.pending'));
+ const {abandonUnsubmitted}=require('../research/autonomous-root/service/restart-inventory');f.journal.begin(1,native,d('c'));const before=f.listing();assert.equal(abandonUnsubmitted(f.file).abandoned,false);assert.deepEqual(f.listing(),before);
 }));

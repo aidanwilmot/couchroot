@@ -4,6 +4,7 @@ const hash=data=>crypto.createHash('sha256').update(data).digest('hex');
 function read(file,limit=65536){const stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>limit)throw Error('Invalid configuration file');return fs.readFileSync(file);}
 function atomic(file,value){const tmp=file+'.new-'+crypto.randomBytes(8).toString('hex');const fd=fs.openSync(tmp,'wx',0o600);try{fs.writeFileSync(fd,JSON.stringify(value));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(tmp,file);const parent=fs.openSync(path.dirname(file),'r');try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}}
 function config(data){
+ if(data&&data.service_acquisition!==undefined&&!['managed','native'].includes(data.service_acquisition))throw Error('Invalid service acquisition selection');
  if(data&&data.boot_launcher!==undefined&&(typeof data.boot_launcher!=='boolean'||(data.boot_launcher&&data.device!=='qn90a')))throw Error('Boot launcher is QN90A-only');
  if(!data||data.schema!==1||!['qn90a','s90d'].includes(data.device)||typeof data.enabled!=='boolean'||!Number.isInteger(data.port)||data.port<1024||data.port>65535)throw Error('Invalid agent configuration');
  if(!/^[a-f0-9]{64}$/.test(data.client_sha256)||!data.firmware||!data.hashes||!Object.keys(data.hashes).length)throw Error('Missing identity guards');
