@@ -10,6 +10,14 @@ implements the conditional setting contract and has independent-rescue acceptanc
 on both TVs. The .NET recovery bytes remain unchanged; older private deployment
 kits still use them until their callers explicitly adopt the native unit launch.
 
+The [native acquisition pilot](../../native-root-acquisition/README.md) now ports
+the bounded setup probe and command runner to C behind an explicit
+`root.execute(..., native_bundle=...)` selection. Its small `NativeEntry.dll`
+still uses the trusted host to create a private read-only code bind and load the
+library. Native acquisition is therefore not yet a .NET removal. Default setup,
+allowlisted cleanup, service acquisition and held bootstrap keep their managed
+implementations; uncertain native operations never trigger a fallback replay.
+
 ## Dependency paths
 
 | Entry point | Required managed path today | Why native selection does not remove it |
@@ -19,6 +27,7 @@ kits still use them until their callers explicitly adopt the native unit launch.
 | Normal return to managed | `managed-launch.js` → pinned `/usr/bin/dotnet` → `SamsungTvRootAgent.dll` | This is the deliberately retained fallback. |
 | Interrupted active return | `agent.js` acquisition → managed bootstrap → `restart-return.js` | Recovery adopts the fresh managed executor under the original return transaction. |
 | SDK rescue / maintenance host restoration | Private deployment and acceptance scripts → `/usr/bin/dotnet Recovery.dll set/watch …` → `libvconf` | The independent rescue must work when Couchroot admission is closed or unavailable. |
+| Explicit native setup pilot | `root.execute(native_bundle=…)` → `NativeEntry.dll` → `libacquire.so` | The trusted managed host supplies capability entry and the private read-only native-code mount; namespace/archive and command execution run in C. |
 
 The host SDK is separately required by `Builder.build_managed`, generated setup
 probes, managed parity fixtures, `scripts/build-native.py` and
@@ -142,11 +151,10 @@ verifiable during the fallback window.
    reproducible ARM build and independent rescue on both TVs. Keep the managed
    utility available and migrate individual private rescue callers only through
    their journaled workflows and verified read-only code mounts.
-2. Establish the native capability-entry strategy on each supported firmware.
-   Port the shared private-mount/archive mechanics and bounded setup runner, then
-   qualify NamespaceRootProbe's replacement without depending on a running agent.
-   A minimal managed adapter may be an intermediate bridge, but is still a .NET
-   dependency and must be recorded as such.
+2. The intermediate managed capability-entry bridge and C setup probe/runner
+   are implemented in the native acquisition pilot. Preserve the independent
+   managed path and explicit opt-in. A fully native capability entry remains
+   open; the read-only code bind and trusted runtime cannot simply be omitted.
 3. Replace the service archive adapter and held managed bootstrap with the qualified
    native acquisition path. Exercise selected-native service start, disable/enable,
    transport loss and pending-return reconciliation using the existing receipt
@@ -162,8 +170,10 @@ verifiable during the fallback window.
    system runtime or unrelated applications' managed components.
 
 The inventory itself installed no utility; the subsequent native SDK recovery
-milestone completed step 1. The next work is step 2: establish the capability-entry
-strategy before replacing the setup and service acquisition adapters. The
+milestone completed step 1. The acquisition pilot advances step 2 through an
+explicitly managed entry bridge. Next, integrate the qualified adapter into
+service acquisition and replace the held managed bootstrap while preserving
+transaction recovery; keep .NET-free capability entry as a separate open boundary. The
 prerequisites delivered by the preceding milestones—immutable selection binding,
 fresh runtime receipts, held startup, same-transaction return recovery and operation parity—remain reusable
 regardless of the eventual acquisition adapter.

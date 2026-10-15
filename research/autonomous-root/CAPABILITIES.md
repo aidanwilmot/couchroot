@@ -935,3 +935,25 @@ Earlier S90D harness-resumption failures used the preserved backup; see the
 separately, leaving signed agent 0.7.28 unchanged. This closes the utility's runtime
 dependency, not the managed acquisition/bootstrap dependencies or all existing
 private rescue callers. Reboot and standby remain outside this qualification.
+
+## Native setup acquisition pilot
+
+The [native acquisition pilot](../native-root-acquisition/README.md) implements
+private namespace/archive orchestration and bounded commands in C. It is selected
+explicitly through `root.execute(native_bundle=...)`; default setup and service
+acquisition remain managed. `NativeEntry.dll` still supplies trusted capability
+entry and a private read-only code bind before loading the native library.
+This intermediate bridge is not .NET-free acquisition.
+
+Both TVs passed SDK acquisition with the Couchroot worker disabled, owner/root
+identity checks, one root command, nonzero-exit refusal and a 25-second command
+deadline with cleanup. The managed path was exercised separately after confirmed
+native cleanup. Original system resources, SDK archives, enrollment, selection
+and retained jobs were preserved; both ended managed-ready on SDK loopback with
+trial timers disarmed and the 300-second .NET rescue unused.
+
+Intentional native limits include a NUL-free script below 64 KiB, a 64 KiB merged
+output stream, exact owner UID 5001/GID 100 checks, full root credential checks,
+and exclusive passwd-view creation. Allowlisted app cleanup remains managed.
+No HTTP API, persistent capability, platform policy, package version, reboot or
+standby behavior changed. See the [aggregate evidence](../native-root-acquisition/results.json).

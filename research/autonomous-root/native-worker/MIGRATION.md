@@ -51,6 +51,12 @@ now restores external SDK access independently of a suspended coordinator and
 disabled worker on both TVs, then restores loopback. The original .NET utility
 remains installed and unchanged; signed agent packages remain 0.7.28.
 
+The [native setup acquisition pilot](../../native-root-acquisition/README.md)
+also passes independent SDK acquisition and bounded failure cleanup on both TVs
+with the worker disabled. Namespace/archive and command logic now run in C under
+an explicit opt-in. A small managed capability-entry/read-only-code-mount bridge
+is still required; default setup and service acquisition remain managed.
+
 The no-reboot constraint and deployed managed fallback remain in force. Earlier
 failed journals and staging are preserved separately, not marked successful by
 these later rehearsals.
@@ -2170,3 +2176,57 @@ Linux-only cases exercised separately). The utility does not replace root
 acquisition, migrate every older deployment-kit caller, or qualify reboot/standby.
 See [contract and launch procedure](../recovery/native/README.md) and
 [aggregate evidence](../recovery/native/results.json).
+
+
+### Native acquisition through a trusted managed entry — 2026-10-15
+
+The opt-in setup adapter builds a model-bound native library and minimal managed
+loader twice, verifies identical artifacts and ARM softfp/GLIBC 2.17 compatibility,
+then uses the existing physical/model/firmware/runtime/launcher guards, disposable
+archive signing, original-resource hashes and exact staging cleanup. Bundle and
+source drift refuse before device contact. A lost native reply never resubmits
+the operation or silently invokes the managed path.
+
+The trusted loader creates a private read-only code bind before loading C. Native
+code then checks SDK credentials/capabilities, creates its own private mount
+namespace, verifies private propagation, binds the disposable key, proves owner
+identity, binds the narrowly edited passwd view, proves full root identity and
+runs the bounded operation. It checks both owner fields against the observed
+UID 5001/GID 100 contract. Command and archive deadlines are 25 and 30 seconds;
+nonzero exits, signal death, output overflow, unconfirmed identity or cleanup
+all refuse success. Code-bind setup still depends on the trusted managed host;
+this is an intermediate capability-entry strategy, not .NET-free acquisition.
+
+Both QN90A and S90D passed acquisition directly from SDK with the enrolled worker
+disabled/disconnected. Each verified a distinct mount namespace, one root-only
+command, nonzero-exit refusal, deadline expiry and absence of probe children after
+cleanup. The original system passwd/key hashes remained unchanged outside the
+namespace. Each then separately exercised the retained managed acquisition path.
+Known service SDK archives were preserved by journaled rename and restored
+byte-for-byte before the managed worker was re-enabled.
+
+The final rounds returned to SDK loopback and managed readiness on the same boot,
+with unchanged enrollment, selection and retained-job bytes. All trial timers
+were disarmed within the 300-second window; the independent .NET rescue did not
+fire. Signed agents remain 0.7.28; the acquisition bundles are temporary setup
+artifacts, not WGT or service-selection changes.
+
+Earlier QN90A trials established four boundaries: occupied shared SDK staging
+must be preserved, writable native mappings are refused, the owner's GID is 100,
+and Samsung's shell refuses an unsigned script-path argument. The final adapter
+uses the private read-only code mount and the managed runner's verified-text
+`sh -c` contract. Failed attempts were cleaned and restored separately, without
+counting them as accepted or replaying an uncertain operation.
+
+S90D's synchronous timer-stop command timed out after disarming the .NET backup.
+Inspection confirmed both native units had completed and SDK remained on loopback.
+The remaining owned timers were stopped without blocking and verified inactive;
+acceptance continued from those receipts without replaying acquisition.
+
+Validation: 15 focused Linux groups passed; Python discovery passed 258 tests
+with 127 platform/environment skips, and Node passed 360 with 125 skips. The
+next adapter work is service acquisition and held-bootstrap integration with
+the existing transaction-recovery model. Fully native capability entry, broader
+lifecycle qualification and removal of the managed fallback remain open.
+See [contract](../../native-root-acquisition/README.md) and
+[aggregate results](../../native-root-acquisition/results.json).
