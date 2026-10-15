@@ -1298,3 +1298,25 @@ This establishes integrated wire/process/state behavior, not TV runtime, signing
 mount-policy or power-lifecycle qualification. Both TVs remain unchanged on .NET;
 neither was restarted or rebooted. Both-TV rehearsal and unresolved earlier-phase
 recovery remain open before native-default or sunset decisions.
+
+### Journaled asynchronous rehearsal administration
+
+The candidate API now journals rehearsal intent before asynchronous dispatch and
+returns HTTP 202. Authenticated status and journal reads stay available while
+other administrative writes are refused. Explicit final managed-activation
+recovery binds a distinct request ID to the original uncertain rehearsal. Unknown
+original entries remain submitted even after a separately recorded recovery.
+Restart preserves journal replay protection, not live controller handles.
+
+The Python client exposes rehearsal, status and activation recovery without
+submission retries. Agent preflight rejects missing or mismatched enrolled
+managed-runtime pins and firmware mismatch before creating the controller or
+holding admission. This is a configuration-pin check; runtime byte verification
+remains in managed launch, and earlier live-byte preflight remains to be added.
+
+Validation: 38 Node API/readiness/task tests, seven Python client tests and both
+isolated real-process Linux rehearsal cases pass with no skips. The latter cover
+normal return and lost final activation acknowledgement with explicit recovery.
+The host fixture now supplies its actual managed runtime pin. These results do
+not qualify TV execution. Both deployed TVs are unchanged; .NET remains fallback,
+and neither TV was rebooted.

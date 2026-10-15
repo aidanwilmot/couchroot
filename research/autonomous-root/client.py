@@ -81,7 +81,7 @@ class Session:
             raw = response.read(4 * 1024 * 1024 + 1)
             if len(raw) > 4 * 1024 * 1024:
                 raise RuntimeError('Oversized response')
-            if response.status != 200:
+            if response.status != 200 and not (response.status == 202 and method == 'POST' and route in ('/v1/native/rehearse','/v1/native/resume-managed')):
                 raise OperationError(json.loads(raw))
             if raw_response:
                 if len(raw) > 1024 * 1024 or hashlib.sha256(raw).hexdigest() != response.getheader('X-SHA256'):
@@ -206,11 +206,26 @@ def probe_observer(config, manifest_sha256, request_id, session=None):
     return request(config,'POST','/v1/observer/probe',dict(id=request_id,manifest_sha256=manifest_sha256),timeout=130,session=session)
 
 
+
+def rehearse_native(config, manifest_sha256, runtime_sha256, request_id, session=None):
+    if not all(isinstance(v,str) and re.fullmatch('[a-f0-9]{64}',v) for v in (manifest_sha256,runtime_sha256)):
+        raise ValueError('Candidate and managed runtime digests required')
+    if not isinstance(request_id,str) or not re.fullmatch('[-a-zA-Z0-9]{16,64}',request_id):
+        raise ValueError('Persistent request ID required')
+    return request(config,'POST','/v1/native/rehearse',dict(id=request_id,manifest_sha256=manifest_sha256,runtime_sha256=runtime_sha256),session=session)
+
+
+def resume_managed_activation(config, rehearsal_id, request_id, session=None):
+    if not all(isinstance(v,str) and re.fullmatch('[-a-zA-Z0-9]{16,64}',v) for v in (rehearsal_id,request_id)) or rehearsal_id == request_id:
+        raise ValueError('Distinct rehearsal and recovery request IDs required')
+    return request(config,'POST','/v1/native/resume-managed',dict(id=request_id,rehearsal_id=rehearsal_id),session=session)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config',required=True,type=Path)
-    parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal','upload','download','op','wait-ready','app-exec','job-start','job-status','job-tail','job-cancel','job-forget','helper-prepare','helper-release','observer-probe'])
-    parser.add_argument('--manifest-sha256')
+    parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal','upload','download','op','wait-ready','app-exec','job-start','job-status','job-tail','job-cancel','job-forget','helper-prepare','helper-release','observer-probe','native-rehearse','native-status','native-resume-managed'])
+    parser.add_argument('--manifest-sha256');parser.add_argument('--runtime-sha256');parser.add_argument('--rehearsal-id')
     parser.add_argument('--command-file',type=Path)
     parser.add_argument('--timeout-ms',type=int,default=20000)
     parser.add_argument('--request-id',default=None)
@@ -248,6 +263,15 @@ def main():
     elif args.operation=='op':
         if not args.operation_file:parser.error('--operation-file required')
         result=operation(config,json.loads(args.operation_file.read_text()))
+    elif args.operation=='native-status':result=request(config,'GET','/v1/native/status')
+    elif args.operation=='native-rehearse':
+        if not args.manifest_sha256 or not args.runtime_sha256 or not args.request_id:parser.error('--manifest-sha256, --runtime-sha256 and --request-id required')
+        print('Request ID: '+args.request_id,file=sys.stderr)
+        result=rehearse_native(config,args.manifest_sha256,args.runtime_sha256,args.request_id)
+    elif args.operation=='native-resume-managed':
+        if not args.rehearsal_id or not args.request_id:parser.error('--rehearsal-id and --request-id required')
+        print('Request ID: '+args.request_id,file=sys.stderr)
+        result=resume_managed_activation(config,args.rehearsal_id,args.request_id)
     elif args.operation=='observer-probe':
         if not args.manifest_sha256:parser.error('--manifest-sha256 required')
         identity=args.request_id or str(uuid.uuid4())

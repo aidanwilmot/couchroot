@@ -24,6 +24,20 @@ class RootAgentClientTests(unittest.TestCase):
                 with self.assertRaises(ValueError):client.probe_observer({},digest,identity)
             request.assert_not_called()
 
+    def test_native_rehearsal_and_recovery_do_not_retry(self):
+        with patch.object(client,'request',return_value={'state':'submitted'}) as request:
+            self.assertEqual(client.rehearse_native({},'a'*64,'b'*64,'native-request-0001')['state'],'submitted')
+            self.assertEqual(request.call_args.args,({},'POST','/v1/native/rehearse',{'id':'native-request-0001','manifest_sha256':'a'*64,'runtime_sha256':'b'*64}))
+            client.resume_managed_activation({},'native-request-0001','native-recovery-0001')
+            self.assertEqual(request.call_args.args,({},'POST','/v1/native/resume-managed',{'id':'native-recovery-0001','rehearsal_id':'native-request-0001'}))
+        with patch.object(client,'request',side_effect=OSError('lost reply')) as request:
+            with self.assertRaises(OSError):client.rehearse_native({},'a'*64,'b'*64,'native-request-0001')
+            self.assertEqual(request.call_count,1)
+        with patch.object(client,'request') as request:
+            with self.assertRaises(ValueError):client.rehearse_native({},'a'*64,'bad','native-request-0001')
+            with self.assertRaises(ValueError):client.resume_managed_activation({},'native-request-0001','native-request-0001')
+            request.assert_not_called()
+
     def test_wait_requires_new_boot_and_ready_worker(self):
         observations=iter([
             dict(boot_id='old',worker_ready=True,identity={'uid':0}),

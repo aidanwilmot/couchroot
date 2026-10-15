@@ -72,7 +72,7 @@ fi
  }
  const until=async predicate=>{const end=Date.now()+5000;while(!await predicate()){if(Date.now()>end)throw Error('Rehearsal deadline '+children.map(c=>c.stderr()).join('\n'));await pause();}};
  try{
-  agent=load('agent').createAgent({device:'qn90a'},{selectionFile,verifyFirmware:()=>{},managedVersion:()=>managed});agent.start();await until(()=>servers[0]&&servers[0].listeningPort());
+  agent=load('agent').createAgent({device:'qn90a',hashes:{'/usr/bin/dotnet':runtimeSha}},{selectionFile,verifyFirmware:()=>{},managedVersion:()=>managed});agent.start();await until(()=>servers[0]&&servers[0].listeningPort());
   fs.writeFileSync(root+'/token',servers[0].secret.toString('base64'),{mode:0o600});const original=start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(servers[0].listeningPort()),root]);await until(()=>agent.status().worker_ready);
   for(const id of ['retained-keep-0001','retained-forget-0001']){await agent.operation({op:'job.start',id,profile:'root',timeout_ms:1000,command:'exit 7'});await until(async()=>{const s=await agent.operation({op:'status'});return s.resources.jobs.every(j=>j.monitor_finished);});}
   const saved=fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json');

@@ -27,7 +27,7 @@ test('native readiness requires pinned launcher and production lifetime',()=>{
  assert.throws(()=>validateReadiness(native(),{implementation:'native-prototype',bootId:BOOT}));
  assert.throws(()=>validateReadiness(managed(),expected));
 });
-function fixture(options={},modules={},device='qn90a'){
+function fixture(options={},modules={},device='qn90a',config={}){
  const source=path.resolve(__dirname,'../research/autonomous-root/service/agent.js');
  const realRequire=createRequire(source),channels=[],timers=[];
  class Channel {
@@ -47,7 +47,7 @@ function fixture(options={},modules={},device='qn90a'){
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,__dirname:path.dirname(source),process,Buffer,
   setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},
   require:name=>modules[name]||(name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name))});
- const agent=module.exports.createAgent({device},{verifyFirmware:()=>{},readBootId:()=>BOOT,...options});
+ const agent=module.exports.createAgent({device,...config},{verifyFirmware:()=>{},readBootId:()=>BOOT,...options});
  return {agent,channels,timers};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -528,4 +528,19 @@ test('held handoff adopts managed rollback with admission closed and stale callb
    }else{await assert.rejects(hold.adoptManaged(session),e=>e.outcome==='unknown');assert.equal(closed,1);assert.equal(agent.status().admission_held,true);assert.equal(taken,1);await assert.rejects(hold.adoptManaged(session));}
   }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
  }
+});
+
+test('rehearsal rejects missing or mismatched fallback pins before migration creation',async()=>{
+ for(const hashes of [undefined,{}, {'/usr/bin/dotnet':'b'.repeat(64)}]){
+  let checked=0,created=0;
+  const {agent}=fixture({verifyFirmware:()=>{checked++;}},{'./native-migration':{createNativeMigration:()=>{created++;throw Error('must not create');}}},'qn90a',{hashes});
+  await assert.rejects(agent.rehearseNative(DIGEST,DIGEST),e=>e.outcome==='rejected');
+  assert.equal(checked,0);assert.equal(created,0);assert.equal(agent.status().admission_held,false);
+ }
+});
+test('rehearsal checks firmware before creating its controller',async()=>{
+ let created=0;
+ const {agent}=fixture({verifyFirmware:()=>{throw Error('Firmware mismatch');}},{'./native-migration':{createNativeMigration:()=>{created++;}}},'qn90a',{hashes:{'/usr/bin/dotnet':DIGEST}});
+ await assert.rejects(agent.rehearseNative(DIGEST,DIGEST),e=>e.outcome==='rejected'&&e.message==='Firmware mismatch');
+ assert.equal(created,0);assert.equal(agent.status().admission_held,false);
 });

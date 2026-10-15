@@ -10,6 +10,36 @@ All examples use the existing enrolled, certificate-pinned client:
 python3 research/autonomous-root/client.py --config /private/client.json status
 ```
 
+
+## Held native rehearsal (migration candidate)
+
+`POST /v1/native/rehearse` accepts exactly `{id, manifest_sha256,
+runtime_sha256}`. It requires a ready managed worker and a fallback runtime digest
+matching the enrolled `/usr/bin/dotnet` pin. Firmware preflight runs before the
+migration controller starts; managed launch independently verifies runtime bytes.
+The request is durably journaled before dispatch and returns HTTP 202 with
+`state: submitted` and `status_url: /v1/native/status`. This acknowledgement does
+not mean migration succeeded. The controller performs a held managed → native →
+managed rehearsal. Administrative writes are refused while it runs; status and
+request-journal reads remain available.
+
+Use `native-rehearse --request-id UNIQUE_REQUEST_ID --manifest-sha256
+CANDIDATE_MANIFEST_SHA256 --runtime-sha256 ENROLLED_RUNTIME_SHA256` with the client.
+Use `native-status` to inspect the operation and migration phase. IDs must be
+persisted before submission; neither the client nor service retries a submission.
+
+`POST /v1/native/resume-managed` accepts exactly `{id, rehearsal_id}`. The new ID
+must differ from the original rehearsal ID and bind to the live coordinator's
+unknown rehearsal. The controller permits only its final managed-activation
+recovery boundary; this is not general rollback or restart recovery. The client
+command is `native-resume-managed --request-id NEW_REQUEST_ID --rehearsal-id
+ORIGINAL_REQUEST_ID`. Recovery has a separate journal entry, and a successful
+recovery does not rewrite an unknown original request as completed.
+
+Only one rehearsal is admitted per live coordinator. A service restart retains
+request replay protection but does not reconstruct in-memory recovery handles.
+These routes are locally qualified and are not yet deployed to either TV.
+
 ## Results and readiness
 
 The migration candidate adds `POST /v1/observer/probe`, using the same enrolled

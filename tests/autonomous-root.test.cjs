@@ -96,6 +96,17 @@ with api.Session(c) as session:
   probeLost='failed';const failedProbe={...probe,id:crypto.randomUUID()};
   assert.equal((await request('/v1/observer/probe',failedProbe)).body.outcome,'failed');
   assert.equal(journal.rows.find(r=>r.id===failedProbe.id).state,'completed');
+  let nativeCalls=0,rejectNative;const originalStatus=agent.status;
+  agent.status=()=>({...originalStatus(),worker_ready:true,selected_implementation:'managed',admission_held:false});
+  agent.rehearseNative=async(m,r)=>{nativeCalls++;assert.equal(m,'a'.repeat(64));assert.equal(r,'b'.repeat(64));return new Promise((_,reject)=>{rejectNative=reject;});};
+  agent.resumeManagedActivation=async()=>{nativeCalls++;return {selected_implementation:'managed',admission_held:false};};
+  const rehearsal={id:crypto.randomUUID(),manifest_sha256:'a'.repeat(64),runtime_sha256:'b'.repeat(64)};
+  await assert.rejects(request('/v1/native/rehearse',rehearsal,foreign));assert.equal((await request('/v1/native/rehearse',rehearsal,clientCert,{Origin:'https://example.invalid'})).status,403);
+  assert.equal((await request('/v1/native/rehearse',{...rehearsal,extra:true})).body.outcome,'rejected');assert.equal(nativeCalls,0);
+  assert.equal((await request('/v1/native/rehearse',rehearsal)).status,202);assert.equal((await request('/v1/native/status')).body.operation.state,'submitted');assert.equal((await request('/v1/disable',{})).status,409);assert.equal((await request('/v1/exec',command())).status,409);assert.equal((await request('/v1/status')).status,200);assert.equal(nativeCalls,1);
+  rejectNative(Error('activation acknowledgement lost'));await new Promise(r=>setImmediate(r));assert.equal((await request('/v1/native/status')).body.operation.state,'unknown');assert.equal(journal.rows.find(r=>r.id===rehearsal.id).state,'submitted');assert.equal((await request('/v1/native/rehearse',rehearsal)).status,409);
+  const recovery={id:crypto.randomUUID(),rehearsal_id:rehearsal.id};assert.equal((await request('/v1/native/resume-managed',recovery)).status,202);await new Promise(r=>setImmediate(r));assert.equal((await request('/v1/native/status')).body.operation.state,'completed');assert.equal(journal.rows.find(r=>r.id===recovery.id).state,'completed');assert.equal(journal.rows.find(r=>r.id===rehearsal.id).state,'submitted');assert.equal(nativeCalls,2);
+  agent.status=originalStatus;
   const v=command();assert.equal((await request('/v1/exec',v)).body.stdout,'uid=0');assert.equal(calls,1);assert.equal((await request('/v1/exec',v)).status,409);assert.equal(calls,1);
   exitCode=1;const nonzero=await request('/v1/exec',command());assert.equal(nonzero.status,200);assert.equal(nonzero.body.exit_code,1);assert.equal(nonzero.body.stdout,'uid=0');calls=1;
   const operationId=crypto.randomUUID();
