@@ -1,16 +1,19 @@
 # Native worker experiment
 
-This C prototype is a measurement sidecar, **not a production replacement**. It
-is not referenced by the package builder, service selection or boot configuration.
-The installed .NET worker remains active throughout a comparison. No SDK changes,
-service replacement, root reacquisition or TV reboot is needed.
+This directory began as a C measurement sidecar and now supplies the signed native
+agent candidate. The service can explicitly select it and recover it on the same
+boot; managed remains the deployed fallback. See [MIGRATION.md](MIGRATION.md) for
+current integration and device qualification. Historical experiments below retain
+their original limits. Standalone comparisons keep the installed managed worker
+active and use separate owned scopes.
 
 The prototype uses the existing HMAC protocol with strict sequence ordering,
 bounded binary chunks and structured failure responses. It implements status,
 root commands, bounded output and process-group timeouts, app commands through an
 independently staged, digest-verified native launcher, and file begin/write/status/read/commit/close with
-per-chunk/full-file hashes and conditional replacement. File access is deliberately
-restricted to direct children of a private, root-owned experiment directory.
+per-chunk/full-file hashes and conditional replacement. Default experiment file
+access is restricted to direct children of a private, root-owned directory;
+production mode uses the broader policy described in [PARITY.md](PARITY.md).
 It loads the TV's libcrypto and json-c APIs, rather than implementing cryptography
 or a complete JSON parser itself. This is still experimental C with a substantially
 smaller test history than the managed worker.
@@ -51,9 +54,9 @@ its traced descendants; the next launch can reconcile a same-boot ownership jour
 with durable resource bindings before starting a new worker. Ambiguous state remains blocked. There is no durable log recovery. The
 controller and deployed .NET worker retain their original namespace.
 
-Missing parity still includes autonomous root acquisition and production
-packaging/recovery integration. The broader production file policy and offline
-managed-record migration are now opt-in, as described in [PARITY.md](PARITY.md). Legacy READFILE/WRITEFILE frames remain omitted: neither the
+Native-only capability entry remains unqualified: acquisition and recovery still
+retain a small .NET entry bridge. The broader production file policy and offline
+managed-record migration are opt-in, as described in [PARITY.md](PARITY.md). Legacy READFILE/WRITEFILE frames remain omitted: neither the
 current HTTPS API, enrolled client nor loopback service exposes them. JSON
 `file.write` is supported on the worker protocol for older service compatibility,
 using canonical base64 and the same 1 MiB chunk, digest, offset and commit checks
@@ -63,14 +66,15 @@ operations fail explicitly; there is no automatic fallback or replay. The build 
 binary. The worker accepts its source path inside the canonical file scope and an
 expected SHA-256; it validates ARM ELF32, stages a private root-only copy, applies
 Smack and a read-only bind mount, and verifies the staged digest before use. It no
-longer accepts a borrowed .NET execution view. Root acquisition and transport
-service integration are still borrowed, so startup is not complete service startup. The worker defaults to a five-minute experiment lifetime. An explicit
+longer accepts a borrowed .NET execution view. Standalone comparisons borrow their
+initial root context and transport from the deployed agent; they do not establish
+native-only service startup. The worker defaults to a five-minute experiment lifetime. An explicit
 `COUCHROOT_NATIVE_LIFETIME_SECONDS` value from 300 to 86400 permits longer bounded
 experiments; jobs cannot outlive that worker. The explicit `--production` option
 enables production file policy and removes both worker and guardian lifetime
 alarms. It rejects `COUCHROOT_NATIVE_LIFETIME_SECONDS` rather than silently
 ignoring it. Status reports `lifetime_mode=production` and `lifetime_seconds=0`
-(no expiry). This mode is not yet selected or packaged by the deployed service.
+(no expiry). The signed candidate and explicit native service selection use this mode.
 The `--production-files` option alone keeps the bounded experiment lifetime. Disconnect,
 SIGTERM and graceful shutdown clean up owned active jobs and helper views.
 
@@ -115,6 +119,10 @@ frame is idle. Bounded experiments retain their socket/lifetime limits. Producti
 mode waits indefinitely for the first byte of a request, then applies the active
 progress lease; individual socket reads/writes and the initial handshake have a
 30-second timeout. Buffered frames are processed without another socket wait.
+If an external zero descriptor limit makes `poll(nfds=1)` return `EINVAL`, idle
+waiting peeks the existing socket with its receive timeout temporarily disabled.
+It restores the active-frame timeout before parsing, consumes no byte and opens
+no descriptor. Restoring the limit concurrently does not invalidate that wait.
 Completed storage reads, writes, digest blocks and flushes refresh the request
 lease. Hashing, transfer I/O and helper/launcher copies can therefore exceed the
 grace while making progress. EOF, failures and interrupted calls do not refresh
@@ -488,6 +496,15 @@ command execution and restart reconciliation. The repository runner passed 226
 tests and skipped those 47 native tests. See
 [focused validation evidence](descriptor-recovery-results.json). The earlier
 [failure evidence](resource-failure-results.json) remains as a historical record.
+
+For ordinary production-binary qualification, use the separate controller mode
+`COUCHROOT_NATIVE_PRODUCTION_RESOURCES=1`. It requires `--production` status,
+adds zero-descriptor idle/partial-frame deadlines and full/read-only storage
+recovery, then runs descriptor admission, retained-intent reconciliation, fault
+diagnostics and mixed uploads. It rejects other experiment modes before creating
+state. Only the controller-owned worker's limit and private storage are changed;
+the controller's 240-second alarm bounds the run. This is a controller option,
+not a production worker fault interface.
 
 ## Event-driven waits and lifecycle cleanup — 2026-10-13
 

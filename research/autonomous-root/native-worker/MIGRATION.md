@@ -7,9 +7,15 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.36 packages with native service acquisition enabled,
+Both TVs are on signed 0.7.38 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 28 settled history entries (22 committed,
 six rolled back); S90D has 29 (22 committed, seven rolled back).
+Both also passed eleven bounded resource checks on exact ordinary production
+worker bytes: zero-descriptor idle and partial-frame deadlines, full/read-only
+storage recovery, retention, descriptor admission and transfers. The installed
+managed workers stayed ready throughout these separate-worker trials. All owned
+test scopes are removed and independent rescue timers are inactive. See
+[production resource evidence](production-resource-results.json).
 Both now also qualify native production guardian loss while the production record
 is submitted and readiness is pending, before selection commit. Each original
 coordinator automatically rolled back and completed explicit cleanup, preserving
@@ -2707,3 +2713,58 @@ Next: inspect a native vendor namespace-preparation path before another SDK
 loader trial. That path must prove code mapping and actual SDK capabilities
 without relying on the managed bridge or changing global policy. The wider
 maintenance, pressure, endurance, rollout and power-lifecycle gates remain open.
+
+### Ordinary production worker resource pressure — 2026-10-15
+
+Signed 0.7.38 qualifies an additional bounded pressure round on both TVs using
+exact ordinary native worker bytes from the installed package. Each private
+controller launches `--production`, verifies no lifetime expiry, and leaves the
+installed managed worker running. This qualifies separate production worker
+instances, not native-default service operation or long-duration endurance.
+
+The production idle path previously terminated when an externally imposed zero
+`RLIMIT_NOFILE` made `poll(nfds=1)` return `EINVAL`. It now waits by peeking the
+existing socket with its receive timeout temporarily disabled, then restores the
+active-frame deadline before parsing. It allocates no descriptor and never changes
+the imposed limit. Review also found a race in an interim fix that consulted a
+later `getrlimit`: restoration between the failing poll and that check could still
+close the session. A test-only Linux interposer reproduces the real poll error,
+restores the limit, and verifies continued authenticated requests. It fails on the
+interim binary and passes on the corrected binary. No test interposer or fault
+interface is included in the production worker.
+
+Both TVs passed eleven acceptance groups. At descriptor limit zero, a worker
+remained idle for 32 seconds, served another request, then enforced the existing
+active-frame timeout after a partial request, exiting within 25–38 seconds.
+The socket deadline or active-request watchdog can enforce this bound; the
+controller accepts either termination path and verifies guardian cleanup.
+Fresh children then passed terminal-result persistence recovery, rejected launch
+intent publication on full and read-only storage, crash cleanup with retained
+journal reconciliation, retention limits, descriptor admission, retained-intent
+recovery without command replay, bounded command-fault diagnostics and mixed
+JSON/binary uploads. Production file admission includes its extra parent-directory
+descriptor. Storage faults were confined to a private disposable 2 MiB tmpfs;
+no existing TV filesystem was filled or remounted read-only.
+
+Local validation passed six focused resource tests, five ordinary lifetime and
+bounded-admission checks, 404 Node tests with 143 platform/fixture skips, six
+fresh-container rehearsal cases and nineteen fresh-container recovery cases.
+Two extended lifetime cases were skipped; this milestone does not claim 24-hour
+qualification. Native and managed fixtures were rebuilt in scratch directories.
+Both signed native builds reproduced twice and matched each other. No client or
+setup source changed, so full Python discovery was not repeated.
+
+Both devices ended managed-ready and settled, with the original boot and unchanged
+selection history: QN90A has 28 entries (22 committed, six rolled back), S90D 29
+(22 committed, seven rolled back). Retained job records also match the accepted
+0.7.36 baseline across the interim and final package updates. Owned test jobs,
+helpers and scopes are removed, enrollment/protected hashes are unchanged, SDK
+is on loopback, and independent 300-second managed rescue timers are inactive.
+All three packaged managed DLLs are unchanged from the preceding packages.
+See [production resource evidence](production-resource-results.json).
+
+Next: guardian/startup descriptor budgets, concurrent memory/process pressure,
+wider storage stalls and remaining maintenance/interruption boundaries, followed
+by ordinary production endurance. The native-only entry investigation and native
+default rollout remain open. The .NET entry bridge, worker fallback and independent
+rescue remain deployed; no reboot, standby or global-policy change occurred.

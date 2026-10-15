@@ -9,6 +9,14 @@ rounds and same-boot return recovery on both TVs. Managed is selected and ready
 after acceptance. Historical versioned observations below retain their original
 limits; see the current native recovery and parity sections for newer evidence.
 
+Signed 0.7.38 adds bounded ordinary-production resource qualification on both TVs.
+A zero descriptor limit no longer closes an otherwise usable idle session; the
+active-frame deadline remains enforced. Full/read-only private storage, retained
+intents, descriptor admission and mixed transfers recover without replay. These
+were separate production worker instances with managed still selected, not native
+default or endurance qualification. See
+[resource evidence](native-worker/production-resource-results.json).
+
 All examples use the existing enrolled, certificate-pinned client:
 
 ```sh

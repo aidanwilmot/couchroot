@@ -67,6 +67,44 @@ static void resource_restore_slots(void) {
               NULL))
     fatal("restore native descriptor limit");
 }
+static void production_idle_limit_checks(void) {
+  resource_free_slots(0);
+  discard(call(req("status")));
+  discard(call(req("status")));
+  /* Cross the active-frame deadline while genuinely idle. Existing descriptors
+   * remain usable even though poll(nfds=1) rejects the zero soft limit. */
+  sleep(32);
+  discard(call(req("status")));
+  writeall(w.fd, "OP\t", 3);
+  double started = stamp();
+  struct pollfd closed = {w.fd, POLLIN, 0};
+  char byte;
+  if (poll(&closed, 1, 38000) != 1)
+    fatal("production partial frame deadline");
+  ssize_t n = read(w.fd, &byte, 1);
+  if (n > 0 || (n < 0 && errno != ECONNRESET))
+    fatal("production partial frame disconnect");
+  close(w.fd);
+  w.fd = -1;
+  int status;
+  pid_t got;
+  do {
+    got = waitpid(child, &status, WNOHANG);
+    if (!got)
+      usleep(10000);
+  } while (!got && stamp() - started < 38000);
+  if (got != child || !WIFEXITED(status) ||
+      (WEXITSTATUS(status) != 1 && WEXITSTATUS(status) != 137) ||
+      stamp() - started < 25000 ||
+      stamp() - started >= 38000)
+    fatal("production partial frame termination");
+  child = 0;
+  char *journal = format("%s/.jobs/guardian", filescope);
+  resource_no_witness(journal);
+  free(journal);
+  launch();
+  mark("production_zero_descriptor_idle_and_partial_frame_deadline");
+}
 /* One slot short of each operation's admission must reject it cleanly; at the
  * threshold the operation must complete. On these kernels an undercounted
  * allocation would abort the worker instead. */
@@ -102,10 +140,12 @@ static void operation_admission_checks(const char *marker) {
       1, job_req("job.status", "native-descriptor-limit")));
   J *j = req("file.open");
   str(j, "path", app);
-  resource_operation_rejected(1, j);
+  /* Production policy also holds a parent directory descriptor. */
+  unsigned file_slots = production_resources ? 3 : 2;
+  resource_operation_rejected(file_slots - 1, j);
   j = req("file.open");
   str(j, "path", app);
-  J *r = resource_operation_admitted(2, j);
+  J *r = resource_operation_admitted(file_slots, j);
   char *id = strdup(textval(get(r, "result"), "transfer_id"));
   discard(r);
   transfer_op("file.close", id, 1);

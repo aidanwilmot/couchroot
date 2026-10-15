@@ -902,12 +902,7 @@ int main(int argc, char **argv) {
   for (;;) {
     progress_idle(&progress_main);
     if (production_mode && w.at == w.end) {
-      struct pollfd ready = {.fd = w.fd, .events = POLLIN};
-      int result;
-      do {
-        result = poll(&ready, 1, -1);
-      } while (result < 0 && errno == EINTR);
-      if (result < 0)
+      if (request_wait_idle(w.fd) < 0)
         fatal("idle protocol wait");
     }
     if (production_mode)

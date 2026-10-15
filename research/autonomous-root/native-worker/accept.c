@@ -8,6 +8,7 @@
 
 #include "controller.h"
 static const char *binary, *app, *appsha, *source_helper;
+static int production_resources;
 static char boot[80], namespace_before[80];
 static void launch(void) {
   sequence = 0;
@@ -38,7 +39,7 @@ static void launch(void) {
     fatal("fork");
   if (!child) {
     execl(binary, binary, "127.0.0.1", port, token, filescope, app, appsha,
-          getenv("COUCHROOT_NATIVE_HANDOFF_ONLY") ? "--production" :
+          production_resources || getenv("COUCHROOT_NATIVE_HANDOFF_ONLY") ? "--production" :
           getenv("COUCHROOT_NATIVE_PARITY_ONLY") ? "--production-files"
                                                  : (char *)NULL,
           (char *)NULL);
@@ -71,6 +72,10 @@ static void launch(void) {
   worker_pid = atoi(f[1]);
   free(auth);
   J *r = call(req("status"));
+  if (production_resources &&
+      (number(get(r, "result"), "lifetime_seconds") != 0 ||
+       strcmp(textval(get(r, "result"), "lifetime_mode"), "production")))
+    fatal("resource acceptance requires production lifetime");
   if (strcmp(textval(get(r, "result"), "boot_id"), boot))
     fatal("boot changed");
   if (number(get(r, "result"), "guardian_pid") != child ||
@@ -440,6 +445,18 @@ int main(int argc, char **argv) {
   app = argv[4];
   appsha = argv[5];
   source_helper = argv[6];
+  const char *resource_mode = getenv("COUCHROOT_NATIVE_PRODUCTION_RESOURCES");
+  production_resources = resource_mode != NULL;
+  if (production_resources &&
+      (strcmp(resource_mode, "1") || getenv("COUCHROOT_NATIVE_HANDOFF_ONLY") ||
+       getenv("COUCHROOT_NATIVE_PARITY_ONLY") ||
+       getenv("COUCHROOT_NATIVE_RESOURCE_ONLY") ||
+       getenv("COUCHROOT_NATIVE_SOAK_SECONDS") ||
+       getenv("COUCHROOT_NATIVE_LIFETIME_SECONDS"))) {
+    fputs("production resource acceptance cannot combine experiment modes\n",
+          stderr);
+    return 64;
+  }
   signal(SIGPIPE, SIG_IGN);
   libraries();
   /* Namespace-pin refusal fixtures must never add mounts to deployed .NET. */
@@ -474,7 +491,11 @@ int main(int argc, char **argv) {
     parity_checks();
     return 0;
   }
-  if (getenv("COUCHROOT_NATIVE_RESOURCE_ONLY")) {
+  if (production_resources || getenv("COUCHROOT_NATIVE_RESOURCE_ONLY")) {
+    if (production_resources) {
+      production_idle_limit_checks();
+      storage_recovery_checks();
+    }
     resource_limit_checks();
     fault_diagnostic_checks();
     json_upload_checks();
@@ -485,7 +506,8 @@ int main(int argc, char **argv) {
       fatal("focused resource cleanup");
     free(lock);
     free(dir);
-    mark("focused_resource_shutdown_and_cleanup");
+    mark(production_resources ? "production_resource_shutdown_and_cleanup"
+                              : "focused_resource_shutdown_and_cleanup");
     return 0;
   }
   J *initial = call(req("status"));

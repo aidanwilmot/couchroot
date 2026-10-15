@@ -335,7 +335,7 @@ class NativeWorkerTests(unittest.TestCase):
             self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
             self.assertFalse(marker.exists());self.assertTrue(self.job('job.forget',id)['ok'])
 
-    def test_operation_descriptor_admission_boundaries(self):
+    def test_operation_descriptor_admission_boundaries(self, file_slots=2):
         import resource
         original=resource.prlimit(self.worker_pid,resource.RLIMIT_NOFILE)
         def fds():return {int(p.name) for p in Path(f'/proc/{self.worker_pid}/fd').iterdir()}
@@ -363,15 +363,17 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertIn('guardian-parent-identity-v1',info['result']['capabilities'])
         rejected(0,'job.status',id='native-admission-saved')
         self.assertTrue(limited(1,lambda:self.op('job.status',id='native-admission-saved'))['ok'])
-        rejected(1,'file.open',path=str(self.root/'readable'))
-        opened=limited(2,lambda:self.op('file.open',path=str(self.root/'readable')))
+        # Production file policy holds the parent directory as well as the file;
+        # its caller supplies three slots, including the monitor's reserve.
+        rejected(file_slots-1,'file.open',path=str(self.root/'readable'))
+        opened=limited(file_slots,lambda:self.op('file.open',path=str(self.root/'readable')))
         self.assertTrue(opened['ok']);self.assertTrue(self.op('file.close',transfer_id=opened['result']['transfer_id'])['ok'])
         data=b'admitted';meta=dict(path=str(self.root/'admitted'),size=len(data),sha256=hashlib.sha256(data).hexdigest(),expected_sha256='absent')
-        rejected(1,'file.begin',**meta)
-        id=limited(2,lambda:self.op('file.begin',**meta))['result']['transfer_id']
+        rejected(file_slots-1,'file.begin',**meta)
+        id=limited(file_slots,lambda:self.op('file.begin',**meta))['result']['transfer_id']
         self.assertTrue(self.upload(id,data)['ok'])
-        rejected(1,'file.commit',transfer_id=id);self.assertFalse((self.root/'admitted').exists())
-        self.assertTrue(limited(2,lambda:self.op('file.commit',transfer_id=id))['ok'])
+        rejected(file_slots-1,'file.commit',transfer_id=id);self.assertFalse((self.root/'admitted').exists())
+        self.assertTrue(limited(file_slots,lambda:self.op('file.commit',transfer_id=id))['ok'])
         self.assertEqual((self.root/'admitted').read_bytes(),data)
         helper=dict(path=str(self.root/'helper-source'),sha256=hashlib.sha256(b'helper').hexdigest())
         rejected(3,'helper.prepare',**helper)

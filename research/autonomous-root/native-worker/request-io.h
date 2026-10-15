@@ -45,3 +45,35 @@ static int request_sync(int fd) {
     request_progress();
   return result;
 }
+
+/* poll rejects nfds=1 when an external resource limit lowers RLIMIT_NOFILE to
+ * zero, even though our connected socket remains usable. Preserve production's
+ * unbounded idle wait without allocating a descriptor or changing that limit.
+ * The limit may already have been restored when poll returns, so do not use a
+ * later getrlimit result to reject this fallback. Peek only the first byte,
+ * then restore the active-frame receive deadline
+ * before the parser runs. The ordinary path remains a single poll call. */
+static int request_wait_idle(int fd) {
+  struct pollfd ready = {.fd = fd, .events = POLLIN};
+  int result;
+  do {
+    result = poll(&ready, 1, -1);
+  } while (result < 0 && errno == EINTR);
+  if (result >= 0 || errno != EINVAL)
+    return result;
+  struct timeval original, idle = {0, 0};
+  socklen_t size = sizeof original;
+  if (getsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &original, &size) ||
+      size != sizeof original ||
+      setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &idle, sizeof idle))
+    return -1;
+  char byte;
+  do {
+    result = (int)recv(fd, &byte, 1, MSG_PEEK);
+  } while (result < 0 && errno == EINTR);
+  int saved_errno = errno;
+  if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &original, sizeof original))
+    return -1;
+  errno = saved_errno;
+  return result;
+}
