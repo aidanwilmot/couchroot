@@ -34,6 +34,10 @@ The 0.7.33 package adds an opt-in read-only SDK entry probe. Both direct vendor-
 trials returned without a capability receipt; native-only entry remains unqualified.
 Both target codec checks passed and cleanup/restoration is verified; see
 [entry investigation](../../native-root-acquisition/entry/results.json).
+Subsequent managed diagnostics on 0.7.36 establish that the receipt cannot map
+from writable VDFS or tmpfs on either TV, but executes from a private read-only
+bind. This narrows the native-entry prerequisite without qualifying SDK entry;
+see [mapping evidence](../../native-root-acquisition/entry/mapping-results.json).
 Each passed native disable/enable, worker transport loss and coordinator restart,
 then automatic recovery after coordinator interruption at both the submitted and
 ready native-bootstrap phases. Recovery retired the original receipt without
@@ -2658,3 +2662,48 @@ maintenance, pressure and endurance qualification. This one pre-commit fault doe
 not establish every interruption or post-commit failure. The earlier paused S90D
 coordinator exit remains unexplained; .NET fallback and rescue stay deployed, and
 reboot/standby remain excluded.
+
+### Native-entry mapping prerequisite — 2026-10-15
+
+Both installed 0.7.36 targets were inspected under their per-device locks with
+no pending setup. The file-capability inventory covered the direct entries in
+`/bin`, `/sbin`, `/usr/bin` and `/usr/sbin`. The stock `mount`, `unshare` and
+`nsenter` helpers are root-owned 0755 files without file capabilities. This
+rules out those helpers as a direct capability-promotion step; it is not a
+complete search of installed launchers or package execution paths.
+
+A private managed diagnostic then called `dlopen(..., 0x1002)` on the exact
+installed native receipt bytes. Writable package storage and a temporary copy
+on writable tmpfs both returned `failed to map segment from shared object` on
+each TV. In a separate process, `unshare(CLONE_NEWNS)`, private mount propagation
+and a read-only bind of the payload directory allowed the receipt constructor
+to execute on both targets. The complete receipts identify UID/GID 0, `dotnet`,
+and `code_readonly: 1`; they correctly fail the SDK vendor-loader identity gate
+with `capable: false` and exit 2. An initial diagnostic used the managed environment
+setter and reached the constructor's nonce refusal; the corrected diagnostic
+used libc `setenv` and produced the full nonce-bound receipt. No native-entry or
+acquisition qualification is claimed from these managed diagnostics.
+
+The captured QN90A loader's preload failure is logged through `__dlog_print`;
+its inspected logging implementation reads fixed configuration files. No
+environment override was found in that inspected path, and no logging settings
+were changed. The original SDK-loader failures still lack a direct `dlerror`
+receipt. Mapping failure in the managed diagnostic is evidence for the next
+investigation, not proof of those original failures' exact cause.
+
+All diagnostic files were removed after digest verification. Both original
+managed workers remain ready on their original boots, with unchanged selection
+history, retained jobs, enrollment, protected files and managed recovery bytes.
+SDK remains on loopback. No diagnostic payload bind remains in the inspected
+service/PID-1 namespaces. No vendor loader was invoked in this round, no package
+was deployed, and no production source, policy, file capability, SMACK rule,
+reboot or standby behavior changed. Raw evidence, vendor binaries and diagnostic
+builds remain private. `npm test` passed 404 tests with 143 skips. No Python,
+client, setup or production source changed, so the previously passing fresh
+container suites were not repeated for this evidence-only milestone. See
+[mapping results](../../native-root-acquisition/entry/mapping-results.json).
+
+Next: inspect a native vendor namespace-preparation path before another SDK
+loader trial. That path must prove code mapping and actual SDK capabilities
+without relying on the managed bridge or changing global policy. The wider
+maintenance, pressure, endurance, rollout and power-lifecycle gates remain open.

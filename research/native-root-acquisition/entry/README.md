@@ -60,3 +60,20 @@ The signed 0.7.33 trial on each TV returned without a constructor receipt. The
 fixed codec passed exact target-library round trips, but SDK native entry remains
 unqualified. Both TVs were restored and every trial scope removed. See
 [results](results.json); this probe must not replace the managed bridge.
+
+The subsequent 0.7.36 mapping diagnostic isolates a prerequisite on both TVs:
+the installed receipt fails `dlopen(..., 0x1002)` from writable VDFS, and an
+identical copy fails from writable `/tmp` tmpfs. Both report `failed to map
+segment from shared object`. Binding the installed payload directory read-only
+inside a private mount namespace lets the constructor emit its complete receipt.
+These diagnostics ran as root under the existing managed executor; their receipts
+correctly report `capable: false` and exit 2 because they are not SDK vendor-loader
+processes. They establish code-mapping behavior in that context, not the exact
+cause of either earlier SDK-loader failure or a .NET-free entry.
+
+The stock `mount`, `unshare` and `nsenter` helpers have mode 0755, owner root and
+no file capabilities on either target. Invoking those helpers directly therefore
+does not supply the missing capability promotion. The next entry investigation
+must establish a native vendor path that prepares a usable code view before
+loading the receipt. Package signing and a writable tmpfs copy alone do not
+establish that path. See [mapping evidence](mapping-results.json).
