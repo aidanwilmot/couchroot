@@ -774,3 +774,24 @@ both TVs ready on managed selection with admission released and unchanged boot
 identities. The deployed baseline remains 0.7.13; no TV mutation or reboot was
 performed during preparation. This validates package assembly, not native cutover,
 rollback, restart recovery or the remaining sunset gates.
+
+### Native retained-state export for rollback — local follow-up
+
+A read-only native rollback snapshot now binds the production transaction, worker
+and guardian identities, and original installation receipt. It requires the original
+managed source plus production worker/guardian to be absent on the same boot,
+checks the native lock and import-manifest metadata, rejects unresolved guardian,
+intent, repair or partial-write entries, and compares inventories around byte reads.
+Records use the existing importer validation contract and remain byte-preserved.
+
+The result records the current native inventory exactly. Downstream managed
+restoration must replace state from that inventory instead of merging the old
+managed directory: a job explicitly forgotten under native must not reappear.
+This change does not yet install rollback state or start/select a managed worker.
+
+The combined Linux suite passes 168 tests without skips. Tests cover empty/full
+retention, live worker/guardian/source refusal, metadata conflicts, changed inventory,
+and forgotten records. The real-process integration exports through an independent
+native connection after production shutdown, preserving ordinary and BOM records.
+Both TVs and their deployed packages remain unchanged; no reboot was performed.
+The prepared 0.7.14 artifacts predate this source-only export addition.

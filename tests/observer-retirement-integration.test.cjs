@@ -71,6 +71,9 @@ for (const bom of [false,true]) test('native retirement channel migrates retaine
   const retainedStatus=await productionChannel.operation({op:'job.status',id:'retained-job-0001'});assert.equal(retainedStatus.state,'completed');assert.equal(retainedStatus.record.exit_code,7);assert.equal(retainedStatus.output_available,false);
   assert.deepEqual(await productionChannel.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await production.ended,[0,null],production.stderr());productionSession.closeTransport();
   assert.equal(fs.readFileSync(path.join(installed,'state','.jobs','retained-job-0001.json')).equals(saved),true);
+  const {receipt_sha256,...installedRecord}=installation;
+  const rollbackSnapshot=await require('../research/autonomous-root/service/native-retained-state').snapshotNativeJobs({record:productionSession.record,installation:installedRecord,execute:(command,timeout)=>native.server.execute(command.replaceAll('/opt/couchroot-agent',retained).replaceAll(productionRecord.directory,installed),timeout)});
+  assert.equal(rollbackSnapshot.implementation,'native-prototype');assert.equal(rollbackSnapshot.records.length,1);assert.equal(Buffer.from(rollbackSnapshot.records[0].base64,'base64').equals(saved),true);
   const stopped=await require('../research/autonomous-root/service/retirement-teardown').shutdownRetirement({record:readyRecord,journalDirectory,channel:native.server});assert.equal(stopped.phase,'shutdown-acknowledged');assert.deepEqual(await native.ended,[0,null],native.stderr());
   assert.equal(fs.existsSync(path.join(native.dir,'.jobs','guardian')),false);assert.equal(fs.existsSync(path.join(native.dir,'.views')),false);
   assert.doesNotMatch(native.stderr(),/AddressSanitizer|runtime error:|recovery incomplete/);

@@ -1,0 +1,39 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
+const {snapshotNativeJobs,planNativeSnapshot}=require('../research/autonomous-root/service/native-retained-state');
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex'),sha='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
+const linux={skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||process.geteuid()!==0};
+async function fixture(fn,count=2){
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-retained-')),id='a'.repeat(32),source={boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}},worker_identity={boot_id:boot,worker_id:'d'.repeat(32),processes:{worker:{pid:52,start_ticks:'200'},guardian:{pid:51,start_ticks:'199'}}};
+ const manifest=Buffer.from('{"fixture":"original-import"}'),directory='/opt/couchroot-worker-'+id,scope=directory+'/state';
+ const installation={schema:1,id,phase:'ready',source,snapshot_sha256:sha,manifest_sha256:sha,installed_manifest_sha256:hash(manifest),directory,scope,quiescence_sha256:sha};
+ const record={schema:1,id,phase:'ready',device:'s90d',manifest_sha256:sha,state_receipt_sha256:hash(JSON.stringify(installation)),worker_sha256:sha,launcher_sha256:sha,source,boot_id:boot,unit:'couchroot-worker-'+id+'.service',directory,scope,port:12345,token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/production-ABC123/token',token_sha256:sha,worker_identity,unit_started_monotonic:'123'};
+ const target=root+'/native',jobs=target+'/state/.jobs';fs.mkdirSync(jobs,{recursive:true,mode:0o700});fs.mkdirSync(root+'/proc',{mode:0o700});fs.writeFileSync(root+'/boot',boot+'\n');fs.writeFileSync(jobs+'/lock','',{mode:0o600});fs.writeFileSync(jobs+'/.import-manifest',manifest,{mode:0o600});
+ const records=[];for(let i=0;i<count;i++){const name=('native-retained-'+String(i).padStart(4,'0')).padEnd(64,'x')+'.json',bytes=Buffer.from((i===1?'\uFEFF':'')+JSON.stringify({id:name.slice(0,-5),boot_id:boot,state:i?'unknown':'completed',pid:0,exit_code:i?null:7}));fs.writeFileSync(jobs+'/'+name,bytes,{mode:0o600});records.push({name,bytes});}
+ const commands=[],execute=async command=>{commands.push(command);let mapped=command.replaceAll(directory,target).replaceAll('/proc/sys/kernel/random/boot_id',root+'/boot');for(const pid of [42,51,52])mapped=mapped.replaceAll('/proc/'+pid+'/stat',root+'/proc/'+pid+'/stat');const r=spawnSync('/bin/sh',[],{input:mapped,encoding:'utf8'});return {exit_code:r.status,stdout:r.stdout,stderr:r.stderr};};
+ try{await fn({root,jobs,records,commands,options:{record,installation,execute},execute});}finally{fs.rmSync(root,{recursive:true,force:true});}
+}
+test('native snapshot preserves bytes and binds production identity and original installation',linux,()=>fixture(async f=>{
+ const result=await snapshotNativeJobs(f.options);assert.equal(result.implementation,'native-prototype');assert.deepEqual(result.source,f.options.record.worker_identity);assert.equal(result.origin.installation_sha256,f.options.record.state_receipt_sha256);assert.equal(result.records.length,2);
+ const {sha256,...value}=result;assert.equal(sha256,hash(JSON.stringify(value)));for(let i=0;i<2;i++){assert.deepEqual(Buffer.from(result.records[i].base64,'base64'),f.records[i].bytes);assert.deepEqual(fs.readFileSync(f.jobs+'/'+f.records[i].name),f.records[i].bytes);}
+ for(const command of f.commands)assert.equal(spawnSync('/bin/sh',['-n'],{input:command}).status,0);
+}));
+test('empty and full native retention inventories remain exact',linux,async()=>{
+ for(const count of [0,64])await fixture(async f=>{const result=await snapshotNativeJobs(f.options);assert.equal(result.records.length,count);assert.deepEqual(fs.readdirSync(f.jobs).sort(),['lock','.import-manifest',...f.records.map(r=>r.name)].sort());},count);
+});
+test('live worker or guardian and unresolved metadata refuse rollback snapshots',linux,async()=>{
+ for(const mode of ['worker','guardian','old-source','journal','pending','intent','repair','next','link','manifest'])await fixture(async f=>{
+  if(['worker','guardian','old-source'].includes(mode)){const pid=mode==='worker'?52:mode==='guardian'?51:42,ticks=mode==='worker'?'200':mode==='guardian'?'199':'100';fs.mkdirSync(f.root+'/proc/'+pid);fs.writeFileSync(f.root+'/proc/'+pid+'/stat',pid+' (worker) S '+Array(18).fill('0').join(' ')+' '+ticks+' 0\n');}
+  else if(mode==='link'){fs.unlinkSync(f.jobs+'/'+f.records[0].name);fs.symlinkSync('/dev/null',f.jobs+'/'+f.records[0].name);}
+  else if(mode==='manifest')fs.writeFileSync(f.jobs+'/.import-manifest','changed');
+  else fs.writeFileSync(f.jobs+'/'+({journal:'guardian',pending:'.import-pending',intent:'.intent-unknown',repair:'.repair-unknown',next:'record.next'}[mode]),'unfinished',{mode:0o600});
+  await assert.rejects(snapshotNativeJobs(f.options));
+ });
+});
+test('inventory changes during reads are detected and forgotten jobs are not resurrected',linux,async()=>{
+ await fixture(async f=>{let changed=false;await assert.rejects(snapshotNativeJobs({...f.options,execute:async command=>{const result=await f.execute(command);if(!changed&&command.includes('\nbase64 ')){changed=true;fs.unlinkSync(f.jobs+'/'+f.records[0].name);}return result;}}));});
+ await fixture(async f=>{fs.unlinkSync(f.jobs+'/'+f.records[0].name);const result=await snapshotNativeJobs(f.options);assert.deepEqual(result.records.map(r=>r.name),[f.records[1].name]);});
+});
+test('wrong installation binding and metadata are refused',linux,()=>fixture(async f=>{
+ await assert.rejects(snapshotNativeJobs({...f.options,installation:{...f.options.installation,installed_manifest_sha256:'f'.repeat(64)}}));assert.equal(f.commands.length,0);
+ fs.chmodSync(f.jobs+'/lock',0o644);await assert.rejects(snapshotNativeJobs(f.options));
+}));
