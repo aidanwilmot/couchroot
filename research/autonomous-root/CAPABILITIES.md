@@ -44,8 +44,10 @@ recovery does not rewrite an unknown original request as completed.
 
 Only one rehearsal is admitted per live coordinator. A service restart retains
 request replay protection but does not reconstruct in-memory recovery handles.
-The rehearsal routes are deployed on both TVs in 0.7.21. The additional
-interrupted-exit recovery boundary is locally qualified but not yet deployed.
+The rehearsal routes and interrupted-exit recovery code are deployed on both TVs
+in 0.7.22. Normal round trips passed on both TVs. The interrupted-exit recovery
+boundary passed local real-process tests; controlled hardware interruption testing
+remains open.
 
 ## Results and readiness
 

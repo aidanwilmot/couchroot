@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "date": "2026-10-15",
-  "source_commit": "6080415",
+  "source_commit": "00c328a",
   "scope": "Installed service managed/native/managed rehearsal",
   "devices": {
     "qn90a": {
-      "package_version": "0.7.21",
+      "package_version": "0.7.22",
       "signed_installation_verified": true,
       "native_readiness_and_adoption": true,
       "managed_return_and_activation": true,
@@ -19,10 +19,13 @@
       "boot_unchanged": true,
       "final_selection": "managed",
       "final_worker_ready": true,
-      "pending_setup": false
+      "pending_setup": false,
+      "prior_committed_history_preserved": true,
+      "committed_history_entries": 4,
+      "interrupted_exit_recovery_hardware_exercised": false
     },
     "s90d": {
-      "package_version": "0.7.21",
+      "package_version": "0.7.22",
       "signed_installation_verified": true,
       "native_readiness_and_adoption": true,
       "managed_return_and_activation": true,
@@ -36,7 +39,10 @@
       "boot_unchanged": true,
       "final_selection": "managed",
       "final_worker_ready": true,
-      "pending_setup": false
+      "pending_setup": false,
+      "prior_committed_history_preserved": true,
+      "committed_history_entries": 4,
+      "interrupted_exit_recovery_hardware_exercised": false
     }
   },
   "limitations": [

@@ -7,7 +7,7 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.21 packages from `6080415`, with .NET selected and ready.
+Both TVs are on signed 0.7.22 packages from `00c328a`, with .NET selected and ready.
 Each completed an installed-service managed/native/managed rehearsal, including
 native readiness/adoption, managed return/activation, byte-identical retention of
 one completed job, current-trial provider/native staging removal and unchanged
@@ -54,9 +54,18 @@ verified one shutdown, held admission until recovery, preserved imported and
 native-created job results, and completed staging cleanup. TV systemd, mounting
 and launch setup are substituted in this fixture; it is not hardware evidence.
 
-The installed packages remain unchanged. Both-TV recovery validation, coordinator
-restart reconstruction, and recovery from other interrupted mutation phases
-remain open.
+Signed 0.7.22 packages from `00c328a` are installed on both TVs. All 48 service
+members matched the source before deployment; installed readback, enrollment,
+protected-file hashes and startup settings passed verification. Each TV completed
+a normal managed/native/managed rehearsal, retained the completed job byte for
+byte, removed the current native/provider scopes, disarmed recovery timers and
+returned to a ready managed worker without changing boot identity. Existing
+committed history was preserved; each selection journal now has four committed
+entries. No setup operation remains pending.
+
+Controlled interrupted-exit recovery on hardware, coordinator restart
+reconstruction, and recovery from other interrupted mutation phases remain open.
+The normal hardware rehearsal does not qualify the injected failure boundary.
 
 ## Decision and scope
 
