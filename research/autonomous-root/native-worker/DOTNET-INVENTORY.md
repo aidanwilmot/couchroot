@@ -205,12 +205,34 @@ signature and owner-identity transition, which still requires the private
 passwd/key views created by a capable host. S90D's capability inventory alone
 does not establish equivalent launcher behavior.
 
-Historical Tizen loader source suggests an in-process native-library entry as a
-candidate, but current-firmware binaries and Couchroot's own package route have
-not been bound to that behavior on either TV. The next investigation is passive
-binary/manifest verification before any prototype or launch trial. Do not treat
-this lead as qualified acquisition, or grant persistent capabilities or relax
-platform policy to make it work. Detailed vendor-artifact evidence stays private.
+The current-firmware artifact audit now identifies a concrete SDK entry candidate.
+QN90A's vendor `launchpad-loader` and S90D's `app-defined-loader` decode the caller's
+bundle and preload a native library before connecting to Launchpad. Direct SDK
+execution is distinct from Couchroot's normal WRT package route; it does not need
+a package route rewrite. QN's loader explicitly checks inheritable/effective
+SETGID. Existing vendor capability metadata suggests the needed context on both
+models, but metadata alone is not a runtime capability receipt.
+
+Both captured `libbundle` implementations agree on string and string-array
+records wrapped in ASCII MD5 and Base64. The original bounded host encoder and
+[read-only entry probe](../../native-root-acquisition/entry/README.md) implement
+only a fixed Couchroot preload. The constructor records SDK credentials and
+capabilities and exits before the normal vendor event loop. Its caller must
+verify code/loader hashes and an absent exact socket, and guard failed preload
+with an independent process-bound watchdog. The signed package is the proposed
+code mapping location; no persistent capability grant or platform-policy change
+is part of this experiment. Detailed vendor-artifact evidence stays private.
+
+This is a capability-entry investigation, not complete native acquisition.
+The signed 0.7.33 trials produced no constructor receipt on either TV, although
+both installed bundle libraries decoded and re-encoded the fixed bundle exactly.
+The ordinary WGT code location did not establish entry; previous signed-TPK
+experiments also show that package signing alone does not solve native executable
+verification on writable VDFS. See [entry results](../../native-root-acquisition/entry/results.json).
+Replacing the managed bridge still needs successful SDK code mapping and runtime
+receipts on both TVs, then a native identity child and independent qualification
+of the full namespace/archive operation. A read-only receipt alone cannot remove
+the managed fallback or justify native-default installation.
 
 ### Remaining removal order
 

@@ -1040,3 +1040,16 @@ Provider loss with the original coordinator still running, later production
 readiness and cross-boot recovery are not established by these rounds. The managed
 fallback and independent SDK rescue remain available. See
 [forward recovery results](native-worker/forward-recovery-results.json).
+
+
+## SDK native-entry investigation
+
+Signed 0.7.33 can include a read-only capability receipt with
+`--native-entry-probe`. It is not connected to public operations or automatic
+acquisition. Both SDK vendor-loader trials produced no constructor receipt;
+therefore this path is not qualified to replace the managed bridge. The fixed
+bundle codec passed byte-identical round trips through both target libraries.
+All owned trial resources were cleaned and managed readiness restored without
+replaying either invocation. The .NET fallback and independent rescue remain
+unchanged. See [probe contract](../native-root-acquisition/entry/README.md) and
+[hardware evidence](../native-root-acquisition/entry/results.json).

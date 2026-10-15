@@ -7,12 +7,16 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.32 packages with native service acquisition enabled,
+Both TVs are on signed 0.7.33 packages with native service acquisition enabled,
 managed selected and ready, and settled histories of 25 entries each: 22 committed
 and three rolled back. The latest rounds qualify forward rollback at provider
 readiness and retained-state readiness, plus provider loss followed by coordinator
 restart, with explicit cleanup under each original transaction. See
 [forward recovery evidence](forward-recovery-results.json).
+The 0.7.33 package adds an opt-in read-only SDK entry probe. Both direct vendor-loader
+trials returned without a capability receipt; native-only entry remains unqualified.
+Both target codec checks passed and cleanup/restoration is verified; see
+[entry investigation](../../native-root-acquisition/entry/results.json).
 Each passed native disable/enable, worker transport loss and coordinator restart,
 then automatic recovery after coordinator interruption at both the submitted and
 ready native-bootstrap phases. Recovery retired the original receipt without
@@ -2415,3 +2419,44 @@ containers. Hardware evidence covers six interrupted rounds across the two TVs.
 Later production-readiness interruption, provider loss without coordinator restart,
 final production endurance and power lifecycle remain separate gates. See
 [aggregate evidence](forward-recovery-results.json).
+
+
+### SDK native-entry receipt investigation — 2026-10-15
+
+Signed 0.7.33 includes an explicitly requested, inert-by-default native receipt
+library built twice per model from original C. A bounded host encoder supplies
+only a fixed preload path. The constructor validates a fresh nonce, records
+credentials/capabilities and process metadata, and exits before returning to the
+vendor loader. Focused tests cover wire vectors, reproducibility gates, malformed
+metadata, credential slots, capability refusal and constructor termination.
+
+Both TVs ran a direct SDK trial at UID/GID 901 with the worker disabled. Per-TV
+locks, physical/firmware/boot/hash guards, unique intents, an absent exact loader
+socket, process-bound watchdog and independent 300-second .NET rescue remained
+in force. Neither trial produced a constructor receipt. QN90A exited 255 after
+EFL diagnostics; exact binary analysis puts those diagnostics after the preload
+loop. S90D reported a runtime-directory failure and signal 9 was observed during
+its bounded trial. The original invocations were not replayed or treated as
+successful acquisition.
+
+Separate private managed diagnostics called each exact installed libbundle. Both
+decoded the intended loader type and single fixed preload path, then re-encoded
+byte-identical data. The wire format is therefore corroborated on both targets;
+it does not explain away the failed code entry. The normal WGT payload remains
+on writable VDFS. Earlier signed-TPK trials also failed native verification, so
+package signing alone is not a demonstrated fix. A viable code mapping path and
+actual vendor-loader capability receipts remain requirements for removing the
+managed bridge. No HOME/XDG workaround or platform-policy change was attempted.
+
+Both TVs ended managed-ready on SDK loopback, same boot, settled with their prior
+25 history entries unchanged. Retained job records, enrollment/configuration and
+.NET recovery digests match their baselines. Exact probe/codec scopes are absent;
+all 14 owned install/trial timer and service identities per TV are inactive.
+
+Validation: 263 macOS Python tests passed with 136 platform skips; all ten focused
+Linux tests passed. Node passed 377 tests with 135 skips. Rebuilt native/managed
+fixtures passed six rehearsal and eleven restart cases in fresh containers. One
+initial macOS process-group deadline test errored; focused and full reruns passed.
+See [entry evidence](../../native-root-acquisition/entry/results.json). This is
+an implemented and tested diagnostic with unsuccessful native-entry qualification,
+not .NET-free acquisition or native-default completion.

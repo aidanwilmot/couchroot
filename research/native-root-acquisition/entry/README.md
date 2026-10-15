@@ -1,0 +1,62 @@
+# SDK capability-entry receipt
+
+This opt-in diagnostic tests a possible replacement for the managed capability
+entry. It performs no root acquisition, mount, system-file change or operation.
+The existing acquisition bridge and .NET recovery utility remain available.
+
+Include the receipt library in the normal signed package with:
+
+```sh
+python3 -m tvsetup.autonomous_root --device DEVICE --native-candidate \
+  --native-acquisition --native-entry-probe --version VERSION
+```
+Preparation does not install or execute it.
+`tvsetup.native_entry.build` snapshots original sources, pins the compiler image,
+builds twice, compares every output byte and checks ARM softfp/GLIBC compatibility.
+The package's ordinary payload manifest covers the library and its build receipt.
+
+The host encoder supplies only `loader_type=common-loader` and one fixed preload:
+`/opt/usr/apps/MiniRoot01/res/wgt/payload/libentry-receipt.so`. It implements the
+string and string-array records observed in both current `libbundle` artifacts:
+little-endian lengths and tags, NUL-inclusive string lengths, then a lowercase
+ASCII MD5 checksum and Base64 wrapper. MD5 is a vendor wire checksum; it does not
+replace the package, source or artifact SHA-256 guards. No vendor code is bundled.
+
+QN90A uses its existing `/usr/bin/launchpad-loader`; S90D uses its existing
+`/usr/bin/app-defined-loader`. Static evidence puts the preload callback before
+the normal Launchpad connection. The original DSO constructor requires a fresh
+32-hex `COUCHROOT_ENTRY_NONCE`, reads bounded process metadata and prints a single
+receipt. It exits the process immediately, including on refusal. The receipt
+contains all UID/GID slots, effective/permitted/inheritable/bounding capability
+sets, executable, mount namespace, label, boot identity and the code filesystem's
+read-only flag. Missing `NoNewPrivs` or filesystem data is explicitly unknown.
+
+Exit 0 means the expected vendor executable has SDK UID/GID 901 in every slot
+and SETGID/SYS_ADMIN in its effective, permitted and inheritable sets. It does
+not mean root acquisition succeeded. `code_readonly` is independent evidence:
+a successfully mapped signed package need not reside on a read-only filesystem.
+Exit 2 reports a complete receipt that does not meet the capability/identity gate;
+64 rejects the nonce; 65 rejects incomplete metadata; 66 rejects output failure.
+
+A caller must hold the per-TV lock, reject pending setup, bind physical identity,
+firmware, boot and source/package/loader hashes, and journal one fresh invocation.
+The loader ID is nonce-derived, but the caller must separately prove its exact
+per-UID socket is absent. Verify the fixed library before submitting. A failed
+`dlopen` does not run this constructor: vendor code can continue toward its normal
+startup path. An independent, bounded watchdog must therefore bind the expected
+loader to boot/PID/start time and terminate it if needed. Keep the independent
+300-second .NET SDK rescue active, inspect an uncertain outcome without replay,
+and verify process absence, exact staging cleanup, loopback and managed readiness.
+Do not change file capabilities, SMACK, loader registration or another app.
+
+Local tests cover explicit wire vectors, fixed bundle contents, malformed inputs,
+reproducible build gates, all identity slots, required capability sets, duplicate
+and partial status fields, missing optional fields and constructor refusal/exit.
+Linux fixture results do not establish TV code mapping or capability inheritance.
+Hardware results are recorded separately in the migration evidence.
+
+
+The signed 0.7.33 trial on each TV returned without a constructor receipt. The
+fixed codec passed exact target-library round trips, but SDK native entry remains
+unqualified. Both TVs were restored and every trial scope removed. See
+[results](results.json); this probe must not replace the managed bridge.
