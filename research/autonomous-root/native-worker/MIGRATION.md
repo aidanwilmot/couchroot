@@ -970,3 +970,30 @@ stale callbacks, identity/selection/receipt drift, blocked admission and disconn
 They are not full rollback or on-TV acceptance. Managed completion still needs
 provider retirement, transition cleanup, activation and controller orchestration.
 Both TVs remain unchanged on .NET; neither was restarted or rebooted.
+
+### Stopped native production retirement — local follow-up
+
+Native production staging can now be retired only after a matching managed ready
+receipt and committed rollback/return selection. The durable cleanup intent binds
+the original native identity/unit, restored snapshot and installation, managed
+readiness and transition. Checks require the original source and native processes
+to be absent, the exact native file inventory/metadata/hashes, unchanged managed
+restoration and preserved baseline, and the recorded systemd unit's successful
+exit with the original monotonic start identity. The unit is stopped without a
+blocking stop call and observed inactive before a second inventory check and
+explicit file removal. No recursive deletion or arbitrary target path is used.
+
+Remote cleanup records staging-retired only. Local tokens and launch/restore
+markers remain owned for activation; a lost reply leaves the cleanup intent and
+refuses repeated deletion. Changed native records, code, extra entries, unit
+identity, managed identity and restoration receipts refuse cleanup. A partial
+cleanup or lost acknowledgement still needs explicit reconciliation.
+
+Host tests execute filesystem checks/removal with fixture unit/proc state and
+cover preservation of the managed inventory/baseline, lost replies and full
+retention within the protocol bound. This is not live TV cleanup qualification or
+full rollback completion. Agent/controller wiring, local transition cleanup and
+managed activation remain open. Both TVs remain unchanged on .NET; neither was
+restarted or rebooted.
+
+The combined Linux migration suite passes 200 tests without skips.

@@ -261,3 +261,37 @@ test('managed readiness rejects unit changes and local ownership changes across 
  });
  let calls=0;await assert.rejects(require('../research/autonomous-root/service/observer-unit').inspectManagedUnit({unit:'couchroot-worker-'+'a'.repeat(32)+'.service',bootId:boot,execute:()=>{calls++;}}));assert.equal(calls,0);
 });
+
+const {productionRetirementPlan,retireProduction}=require('../research/autonomous-root/service/production-retirement');
+async function productionRetirementFixture(f){
+ f.options.record.worker_sha256=hash('native worker');f.options.record.launcher_sha256=hash('native launcher');fs.mkdirSync(f.root+'/native/code',{mode:0o700});fs.writeFileSync(f.root+'/native/code/worker','native worker',{mode:0o500});fs.writeFileSync(f.root+'/native/state/launcher','native launcher',{mode:0o400});
+ const r=await managedReadyFixture(f),ready=await readyManaged(r.readyOptions);new SelectionJournal(r.options.selectionFile).commitRollback(selectionStatus(r.options.selectionFile).revision,ready.record.id,ready.readiness_sha256);
+ fs.writeFileSync(r.bin+'/systemctl','#!/bin/sh\nif test "$1" = stop; then touch '+f.root+'/unit-stopped; exit 0; fi\nif test "$#" -gt 4; then printf "LoadState=not-found\\nActiveState=inactive\\nMainPID=0\\n"; exit 0; fi\ncase "$3" in\nLoadState) echo LoadState=loaded;;\nActiveState) echo ActiveState=active;;\nSubState) echo SubState=exited;;\nMainPID) echo MainPID=0;;\nExecMainCode) echo ExecMainCode=1;;\nExecMainStatus) echo ExecMainStatus=0;;\nExecMainStartTimestampMonotonic) echo ExecMainStartTimestampMonotonic=123;;\n*) exit 1;; esac\n');
+ return {...r,retireOptions:{managed:ready.record,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,execute:r.execute,confirmManaged:async()=>ready.record.worker_identity},retireFile:r.options.journalDirectory+'/'+ready.record.origin_id+'.production-retirement.json'};
+}
+test('production retirement removes only verified native staging and preserves managed restoration and baseline',linux,()=>fixture(async f=>{
+ const r=await productionRetirementFixture(f),before=selectionStatus(r.options.selectionFile),receipt=await retireProduction(r.retireOptions);
+ assert.equal(receipt.phase,'staging-retired');assert(!fs.existsSync(f.root+'/native'));assert(fs.existsSync(f.root+'/unit-stopped'));assert.deepEqual(selectionStatus(r.options.selectionFile),before);
+ for(const item of f.records){assert.deepEqual(fs.readFileSync(r.parent+'/jobs/'+item.name),item.bytes);assert.deepEqual(fs.readFileSync(r.parent+'/rollback-'+f.options.record.id+'/previous/'+item.name),item.bytes);}
+ assert(fs.existsSync(r.marker));assert(fs.existsSync(r.options.journalDirectory+'/managed-launch.pending'));assert(!fs.existsSync(r.retireFile+'.pending'));await assert.rejects(retireProduction(r.retireOptions));
+}));
+test('production retirement rejects changed native state, unit identity and managed ownership before deletion',linux,async()=>{
+ for(const mode of ['record','worker','extra','unit','identity','receipt'])await fixture(async f=>{
+  const r=await productionRetirementFixture(f);
+  if(mode==='record')fs.writeFileSync(f.jobs+'/'+f.records[0].name,'changed');if(mode==='worker')fs.writeFileSync(f.root+'/native/code/worker','changed');
+  if(mode==='extra')fs.writeFileSync(f.root+'/native/state/foreign','changed');
+  if(mode==='unit')fs.writeFileSync(r.bin+'/systemctl','#!/bin/sh\necho MainPID=52\n');
+  if(mode==='identity')r.retireOptions.confirmManaged=async()=>({...r.retireOptions.managed.worker_identity,worker_id:'0'.repeat(32)});
+  if(mode==='receipt')fs.writeFileSync(r.options.journalDirectory+'/'+r.retireOptions.managed.id+'.managed-restore.json','{}');
+  await assert.rejects(retireProduction(r.retireOptions));assert(fs.existsSync(f.root+'/native/code/worker'));assert(fs.existsSync(f.jobs));assert(!fs.existsSync(f.root+'/unit-stopped'));
+ });
+});
+test('lost production cleanup reply retains intent and never repeats deletion',linux,()=>fixture(async f=>{
+ const r=await productionRetirementFixture(f);let calls=0;
+ await assert.rejects(retireProduction({...r.retireOptions,execute:async c=>{calls++;const v=await r.execute(c);assert.equal(v.exit_code,0,v.stderr);throw Error('lost reply');}}),e=>e.outcome==='unknown');
+ assert(!fs.existsSync(f.root+'/native'));assert(fs.existsSync(r.retireFile+'.pending'));assert(!fs.existsSync(r.retireFile));await assert.rejects(retireProduction(r.retireOptions));assert.equal(calls,1);
+}));
+test('production cleanup supports full retained inventory within protocol bounds',linux,()=>fixture(async f=>{
+ const r=await productionRetirementFixture(f),inputs=JSON.parse(fs.readFileSync(r.options.journalDirectory+'/'+r.retireOptions.managed.id+'.managed-restore-input.json')),plan=productionRetirementPlan(inputs);
+ assert(Buffer.byteLength(plan.command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:plan.command}).status,0);await retireProduction(r.retireOptions);assert(!fs.existsSync(f.root+'/native'));assert.equal(fs.readdirSync(r.parent+'/jobs').length,64);
+},64));
