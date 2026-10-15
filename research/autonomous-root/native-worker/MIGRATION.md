@@ -7,9 +7,8 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-QN90A is on signed 0.7.25 from `e277c44` and S90D on signed 0.7.24 from `977230b`, both
-with .NET selected and ready. QN90A completed a normal round trip on 0.7.25; restart
-rollback is qualified locally only (see [restart rollback evidence](restart-rollback-results.json)).
+Both TVs are on signed 0.7.25 packages from `e277c44`, with .NET selected and ready.
+Each completed a normal round trip on 0.7.25; restart rollback is qualified locally only (see [restart rollback evidence](restart-rollback-results.json)).
 Each completed a normal installed managed/native/managed rehearsal on 0.7.22 and
 again on 0.7.24, and on 0.7.23 an installed rehearsal whose native exit observation
 was deliberately interrupted and then explicitly recovered. On 0.7.24 the
@@ -1916,5 +1915,7 @@ and exit code 7 preserved, current-trial scopes and markers removed, ten committ
 history entries, durable inventory `settled`. Acceptance ran after the rehearsal's
 300 s SDK rescue timer had fired, so SDK briefly pointed at the operator host; the
 pinned recovery utility restored loopback and the same worker stayed ready before
-acceptance completed. S90D remains on 0.7.24. No real service restart has been
+acceptance completed. S90D then received 0.7.25 the same way (68 members verified)
+and completed one normal round trip, accepted within the rescue window, with the
+same retained-state, cleanup and settled-inventory results. No real service restart has been
 performed on either TV, so restart rollback and cleanup remain hardware-unqualified.
