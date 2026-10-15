@@ -36,7 +36,9 @@ function runtimeCommand(record,identity,snapshot,installation){
  const d=record.directory,s=record.scope,j=s+'/.jobs';
  const dir=p=>'test -d '+p+'; test ! -L '+p+'; test "$(stat -c "%u:%a" '+p+')" = 0:700\n';
  const file=(p,mode,sha)=>'test -f '+p+'; test ! -L '+p+'; test "$(stat -c "%u:%h:%a" '+p+')" = 0:1:'+mode+'\n'+(sha?'test "$(sha256sum '+p+' | cut -d " " -f1)" = '+sha+'\n':'');
- const processGuard=Object.values(identity.processes).map(p=>'line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" = '+p.start_ticks+'\ntest "$(readlink /proc/'+p.pid+'/exe)" = '+d+'/code/worker\n').join('');
+ // Private bind mounts can report /worker instead of the staging pathname.
+ // Require the same executable inode; the staged file hash is verified below.
+ const processGuard=Object.values(identity.processes).map(p=>'line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" = '+p.start_ticks+'\ntest /proc/'+p.pid+'/exe -ef '+d+'/code/worker\n').join('');
  const command='set -eu\nPATH=/usr/bin:/bin\nexport PATH\n'+sourceExitGuard(record.source)+processGuard+dir(d)+dir(d+'/code')+dir(s)+dir(j)+
   file(d+'/code/worker','500',record.worker_sha256)+file(s+'/launcher','400',record.launcher_sha256)+file(j+'/.import-manifest','600',installation.installed_manifest_sha256)+file(j+'/lock','600')+file(j+'/guardian','600')+
   'test ! -e '+s+'/token; test ! -L '+s+'/token\n'+

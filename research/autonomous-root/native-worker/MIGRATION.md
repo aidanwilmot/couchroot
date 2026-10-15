@@ -1438,3 +1438,27 @@ exposes the failed phase and up to four bounded error causes to authenticated
 status reads, with tests for caller mutation, long messages and cyclic causes.
 This diagnostic change is local and requires a new candidate deployment. Native
 hardware qualification and automatic earlier-phase recovery remain open.
+
+### QN90A readiness failure reproduced and corrected
+
+The archived readiness-intent marker establishes that the first native worker
+connected and entered production verification. A separate native diagnostic
+process, launched with the same private bind mount and production flags while
+.NET stayed running, reproduced a verifier failure: QN90A exposes its executable
+through `/proc/PID/exe` as `/worker`, rather than the full staging pathname.
+The old literal `readlink` comparison therefore rejected the running process.
+The unit's later exit status 1 alone did not establish a startup failure.
+
+Production verification now compares `/proc/PID/exe` to the staged worker using
+same-file inode identity. The existing staged-file digest, owner/mode, process
+start-tick and repeated verification checks remain. A second QN90A diagnostic
+passed the complete generated runtime verification command with this correction.
+Both diagnostic workers were shut down, their timers disarmed and their exact
+known staging files removed after confirming zero main PIDs. The original failed
+migration evidence remains preserved for the broader recovery work.
+
+Seven readiness tests pass, including alternate paths to the same inode and
+rejection of identical bytes on a different inode. All three real-process Linux
+rehearsals pass. Both TVs retained the same managed worker and boot throughout
+these diagnostics. This validates the corrected runtime check on QN90A, not the
+complete on-TV migration; packaging/deployment and both-TV rehearsals remain.

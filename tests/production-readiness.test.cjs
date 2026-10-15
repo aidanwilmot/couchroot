@@ -22,7 +22,7 @@ test('readiness binds peer, retained state, unit and pending trial without chang
  await assert.rejects(readyProduction(f.options));assert.equal(f.calls(),4);
 }));
 test('runtime evidence covers all 64 retained records within command bounds',()=>fixture(async f=>{
- const value=info(),identity={boot_id:boot,worker_id:value.worker_id,processes:value.processes},command=runtimeCommand(f.record,identity,f.snapshot,f.installation);assert.ok(Buffer.byteLength(command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:command}).status,0);assert.match(command,/readlink \/proc\/87\/exe/);assert.match(command,/\.import-manifest/);assert.match(command,/\/opt\/couchroot-agent\/jobs/);await readyProduction(f.options);
+ const value=info(),identity={boot_id:boot,worker_id:value.worker_id,processes:value.processes},command=runtimeCommand(f.record,identity,f.snapshot,f.installation);assert.ok(Buffer.byteLength(command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:command}).status,0);assert.match(command,/test \/proc\/87\/exe -ef/);assert.match(command,/\.import-manifest/);assert.match(command,/\/opt\/couchroot-agent\/jobs/);await readyProduction(f.options);
 },64));
 test('identity, resources, retained output and remote evidence failures retain intent',async()=>{
  for(const mode of ['profile','source','provider','bounded','resources','job','guardian','unit-drift','files','disconnect'])await fixture(async f=>{
@@ -47,4 +47,17 @@ test('uncertain ready-record publication keeps the transition and readiness inte
  vm.runInNewContext(fs.readFileSync(sourceFile,'utf8'),{module,process,Buffer,require:name=>name==='./policy'?{atomic:(file,value)=>{real(name).atomic(file,value);throw Error('lost publication acknowledgement');}}:real(name)});
  await assert.rejects(module.exports.readyProduction(f.options),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(f.file)).phase,'ready');assert.equal(f.journal.read().pending.phase,'state-ready');assert.equal(fs.existsSync(f.intent),true);
  await assert.rejects(readyProduction(f.options));
+}));
+
+test('executable binding accepts alternate paths to the same inode and rejects equal bytes on a different inode',()=>fixture(async f=>{
+ const value=info(),identity={boot_id:boot,worker_id:value.worker_id,processes:value.processes};
+ const command=runtimeCommand(f.record,identity,f.snapshot,f.installation);
+ const line=command.split('\n').find(l=>l.startsWith('test /proc/87/exe -ef '));assert(line);
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'executable-binding-'));
+ try{
+  fs.writeFileSync(dir+'/staged','identical bytes');fs.linkSync(dir+'/staged',dir+'/alternate');fs.symlinkSync(dir+'/alternate',dir+'/exe');
+  const check=line.replace('/proc/87/exe',dir+'/exe').replace(f.record.directory+'/code/worker',dir+'/staged');
+  assert.equal(spawnSync('/bin/sh',['-c',check]).status,0);
+  fs.unlinkSync(dir+'/alternate');fs.writeFileSync(dir+'/alternate','identical bytes');assert.notEqual(spawnSync('/bin/sh',['-c',check]).status,0);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
 }));
