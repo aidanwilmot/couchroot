@@ -84,7 +84,7 @@ function selectionStatus(file){
   if(writer)return {phase:'inspection-required',launch_allowed:false,reason:'selection-writer-incomplete'};
   const state=readState(file);
   if(!state)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
-  return {phase:state.pending?'reconciliation-required':'stable',revision:state.revision,selected_implementation:state.selected.implementation,selected_manifest_sha256:state.selected.manifest_sha256,last_known_good:state.last_known_good,pending:state.pending,history:state.history,reason:!state.pending&&state.selected.implementation!=='managed'?'native-runtime-not-integrated':undefined,launch_allowed:!state.pending&&state.selected.implementation==='managed'};
+  return {phase:state.pending?'reconciliation-required':'stable',revision:state.revision,selected_implementation:state.selected.implementation,selected_manifest_sha256:state.selected.manifest_sha256,last_known_good:state.last_known_good,pending:state.pending,history:state.history,reason:!state.pending&&state.selected.implementation!=='managed'?'native-runtime-verification-required':undefined,launch_allowed:!state.pending&&state.selected.implementation==='managed'};
  }catch(_){return {phase:'inspection-required',launch_allowed:false,reason:'selection-record-invalid'};}
 }
 function managedVersion(payload){

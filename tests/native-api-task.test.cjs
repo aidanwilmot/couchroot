@@ -85,3 +85,12 @@ test('restart recovery binds the original journaled return ID without replaying 
  assert.equal(calls,1);assert.equal(f.tasks.status().state,'completed');assert.equal(f.journal.rows[0].state,'submitted');assert.equal(f.journal.rows[1].state,'completed');
  assert.throws(()=>f.tasks.resume({id:'restart-recovery-0001',rehearsal_id:original}));
 }));
+
+
+test('a return refused before mutation permits a new request after live jobs settle',()=>fixture(async f=>{
+ f.agent.status=()=>({connected:true,worker_ready:true,selected_implementation:'native-prototype',admission_held:false,native_runtime:{transaction_id:'c'.repeat(32)}});
+ let calls=0;f.agent.returnManaged=async()=>{calls++;if(calls===1)throw Object.assign(Error('live jobs'),{outcome:'rejected'});return {selected_implementation:'managed',admission_held:false};};
+ const first={id:'live-return-refused-0001',runtime_sha256:value.runtime_sha256};f.tasks.returnManaged(first);await tick();await tick();assert.equal(f.tasks.status().state,'rejected');
+ assert.throws(()=>f.tasks.returnManaged(first),'request IDs remain single use');
+ f.tasks.returnManaged({...first,id:'settled-return-next-0001'});await tick();await tick();assert.equal(calls,2);assert.equal(f.tasks.status().state,'completed');assert.deepEqual(f.journal.rows.map(r=>r.exit_code),[1,0]);
+}));

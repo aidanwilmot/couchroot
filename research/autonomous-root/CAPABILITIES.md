@@ -4,6 +4,11 @@ These changes require rebuilding the service and worker together. Existing insta
 0.1.x workers do not expose the new operations. Source validation is separate from
 TV installation and firmware-specific acceptance; no deployment is implicit.
 
+Current qualification: signed 0.7.28 has passed bounded native public-operation
+rounds and same-boot return recovery on both TVs. Managed is selected and ready
+after acceptance. Historical versioned observations below retain their original
+limits; see the current native recovery and parity sections for newer evidence.
+
 All examples use the existing enrolled, certificate-pinned client:
 
 ```sh
@@ -74,8 +79,8 @@ never repeats provider retirement. The client commands are `native-migrate`
 NEW_REQUEST_ID --migration-id ORIGINAL_REQUEST_ID`.
 
 `POST /v1/native/return-managed` accepts exactly `{id, runtime_sha256}`. It
-needs native selected and admitted after a completed `migrate` (or
-`resume-native`) task in the same coordinator. The managed fallback runtime is
+needs an admitted native runtime, either after a completed `migrate` (or
+`resume-native`) task or after verified selected-native startup. The managed fallback runtime is
 verified through native first. The request then goes through these steps:
 
 1. It holds admission and waits for every admitted public request to reach a
@@ -98,7 +103,9 @@ ENROLLED_RUNTIME_SHA256`. The durable inventory reports the return provider as
 Selected-native startup now reconstructs the runtime on the same boot; see
 [recovery](#selected-native-recovery). Signed 0.7.27 passed native admission,
 disable/enable, worker transport loss, service restart and return to managed
-on both supported TVs. Pending-return restart recovery is locally qualified.
+on both supported TVs. Signed 0.7.28 additionally passed public-operation
+parity checks and an interrupted active return on both TVs; see the parity
+contract below.
 
 ### Restart reconciliation of an uncommitted forward trial
 
@@ -215,10 +222,11 @@ The optional private `worker-selection.json` record is an internal migration
 journal, not an exposed switching API. Its absence preserves legacy managed
 startup. Pending transitions, uncertain writes and mismatched managed package
 versions block acquisition and new command admission with `selection-required`.
-Existing work is not silently killed by a metadata change. A recorded native
-selection is currently blocked with `native-runtime-not-integrated`; it is not a
-working native launch switch. Record mutation requires the future controller to
-quiesce workers and verify artifact/state/readiness evidence. Do not create or
+Existing work is not silently killed by a metadata change. A native selection
+requires verified runtime evidence (`native-runtime-verification-required`).
+The startup coordinator reconstructs an activated same-boot selection before
+admission; the journal alone cannot authorize a worker. Record mutation requires
+the controller to quiesce workers and verify artifact/state/readiness evidence. Do not create or
 edit this file as a shortcut to native deployment.
 
 `/v1/status` now includes `boot_id`, `uptime_seconds`, `worker_ready`, `worker_id`,
@@ -769,12 +777,11 @@ identities, signed artifacts and raw evidence remain outside the repository.
 
 ## Native worker experiment
 
-A separate [C worker prototype](native-worker/README.md) was compared with temporary
-copies of the deployed .NET worker on both TVs. It reduces startup and memory cost,
-but lacks production job, helper lifecycle and root-acquisition/recovery parity.
-It is not selected or packaged by the service. The deployed .NET 0.7.0 workers
-remain unchanged; neither TV was rebooted. See the experiment's aggregate metrics,
-capability matrix and limitations before considering a replacement.
+The [C worker prototype](native-worker/README.md) began as a sidecar experiment.
+Signed 0.7.28 now packages it for explicit migration, public operation and same-boot
+recovery trials on both TVs. Managed remains the selected fallback after acceptance.
+Earlier sidecar performance measurements do not establish production performance
+or .NET independence; acquisition still uses managed code.
 
 ## Worker handoff inventory
 
@@ -859,3 +866,50 @@ reports `durable.native_startup` and `durable.restart_return`. An explicit
 `resume-managed` after restart must name the original return request ID.
 Previously launched managed staging is retained and reported after return
 recovery; native/provider staging is removed only after exact verification.
+
+
+## Native public-operation parity — 0.7.28
+
+Both installed TVs passed commands with nonzero exits, separate stdout/stderr,
+foreground and job timeouts, app-user UID/GID and home-directory checks, helper
+prepare/execute/release, and file upload/download through the enrolled HTTPS client.
+The file round transferred 8,388,679 bytes in 1 MiB chunks, checked the whole-file
+SHA-256, read across a chunk boundary and at EOF, rejected a bad chunk digest and
+wrong replacement condition, and then replaced the file under the correct digest.
+Job checks covered output-ring truncation, bounded tails, explicit cancellation,
+forgetting completed records and retained outcomes after return to managed.
+See [aggregate evidence](native-worker/public-parity-results.json) and the
+[differential contract](../../tests/worker-parity/contract.json).
+
+A running job prevents return before a selection transaction begins. Native stays
+ready with its existing identity. The caller must wait for completion or explicitly
+cancel the owned job, close transfers and release helpers, then submit a fresh
+return request ID. A rejected return no longer prevents that subsequent request;
+the rejected ID remains protected against replay. Return does not cancel jobs
+implicitly. `job.status` exposes `exit_code` at the top level for in-memory jobs;
+disk-only jobs expose it in `record`. Completed and cancelled native-created records
+survive the return alongside imported managed records. In-memory output does not.
+
+Both TVs also restarted the app service during an active return, recovered the
+original durable transaction, and completed `resume-managed` bound to its original
+request ID. That request's unconfirmed journal entry remains `submitted`; the
+separate recovery request records completion. No public failure-injection endpoint
+is involved. Native/provider scopes were removed, rescue timers disarmed, and SDK
+access returned to loopback on the same boot.
+
+The intentional differences are:
+
+| Area | Native contract |
+| --- | --- |
+| Saved-job cancellation | Only currently owned jobs can be signalled. Saved PIDs are never authority to cancel a process. Same-boot uncertain records remain unknown and cannot be forgotten. |
+| Interrupted records | Native permits forgetting a reconciled terminal interrupted record on the same boot; managed accepts fewer terminal states. Neither reruns the saved command. |
+| Commands and cancellation | Native retains its reported strict fault/signal policy and owned-descendant supervision. Full arbitrary signal-handler compatibility remains a rollout gate. Neither public foreground route has a cancel endpoint; use jobs for explicit cancellation. |
+| File ownership | Native `.jobs` and `.views` metadata are inaccessible through transfers. Native rejects a non-regular destination at begin and a moved/replaced parent at commit. |
+| Concurrent file changes | Native hashing is bounded by the initial size and rejects size changes. Same-size external changes and publication races still require writer quiescence; no filesystem snapshot or general compare-and-swap is promised. |
+| Helpers and volatile state | Helper paths are implementation-specific (`native-helpers` versus managed `helpers`). Use the returned path/ID. Transfer/helper IDs and job output expire with the worker; retained job metadata persists. |
+| Diagnostics | Native status and results may include additive fields such as `output_truncated`; the shared result fields, limits and outcome classifications remain unchanged. |
+
+The local seven-group managed/native differential suite, six process rehearsals
+and eleven restart scenarios passed with freshly rebuilt fixtures. The installed
+round is bounded acceptance, not a 2 GiB hardware transfer, endurance, reboot,
+standby/resume or native-default qualification. .NET remains required and deployed.

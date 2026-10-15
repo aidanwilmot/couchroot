@@ -142,13 +142,12 @@
     "hash_size_change": "Native hashes only the initial regular-file size and refuses a changed size instead of following a growing file to EOF. Same-size external writes still require writer quiescence."
   },
   "remaining_integration_gates": [
-    "production capability advertisement",
-    "real HTTPS service end-to-end worker selection",
-    "app identity and helper execution on both TVs",
-    "signal-handler policy approval",
-    "production lifetime",
-    "acquisition and recovery",
-    "authorized cross-boot qualification"
+    "full signal-handler compatibility policy",
+    "production-binary performance and endurance",
+    "native-only acquisition and independent recovery",
+    "wider interruption boundaries",
+    "authorized cross-boot and standby/resume qualification",
+    "native-default rollout and managed fallback retirement"
   ],
   "legacy_frames": {
     "READFILE": "not in public replacement contract",

@@ -73,6 +73,6 @@ async function reconcileRestartReturn({selectionFile,managedSha256,executor}){
  }
  for(const [name,owner] of [['retirement-launch.pending',rid],['managed-restore.pending',id],['managed-launch.pending',id]]){const f=path.join(directory,name);if(exists(f)){check(privateRead(f,64)===owner+'\n');fs.unlinkSync(f);}}
  const result={...readiness,phase:'complete',retained_managed_staging:oldManaged?[oldManaged.directory,oldManaged.stage]:[]};atomic(receiptFile,result);
- return {...result,selected_implementation:'managed',admission_held:false};
+ return {...result,transaction_id:id,native_origin_id:origin_id,selected_implementation:'managed',admission_held:false};
 }
 module.exports={restartReturnCandidate,reconcileRestartReturn};

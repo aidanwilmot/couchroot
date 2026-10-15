@@ -15,7 +15,7 @@ test('transition gates preserve versions and receipts across restart',()=>{
   let j=new SelectionJournal(f.file);s=advance(j,s,'state-ready',S);j=new SelectionJournal(f.file);s=advance(j,s,'trial-ready',R);
   s=j.commit(s.revision,s.pending.id);assert.deepEqual(s.selected,N);assert.deepEqual(s.last_known_good,N);assert.equal(s.pending,null);
   assert.equal(s.history[0].state_sha256,S);assert.deepEqual(s.history[0].from,M);assert.equal(s.history[0].outcome,'committed');
-  assert.equal(selectionStatus(f.file).launch_allowed,false);assert.equal(selectionStatus(f.file).reason,'native-runtime-not-integrated');
+  assert.equal(selectionStatus(f.file).launch_allowed,false);assert.equal(selectionStatus(f.file).reason,'native-runtime-verification-required');
  }finally{f.close();}
 });
 test('rollback requires new quiescence, state export and readiness receipts',()=>{

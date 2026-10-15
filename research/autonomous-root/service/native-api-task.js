@@ -40,7 +40,7 @@ function createNativeTasks({agent,journal}){
   // bound to this request ID.
   returnManaged:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|runtime_sha256'&&id(value.id)&&digest(value.runtime_sha256));
-   check((!task||task.state==='completed'&&['native.migrate','native.resume-native'].includes(task.kind))&&typeof agent.returnManaged==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='native-prototype'&&s.native_runtime);
+   check((!task||task.state==='completed'&&['native.migrate','native.resume-native'].includes(task.kind)||task.state==='rejected'&&task.kind==='native.return-managed')&&typeof agent.returnManaged==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='native-prototype'&&s.native_runtime);
    return launch('native.return-managed',value,()=>agent.returnManaged(value.runtime_sha256,value.id),value.id);
   },
   cleanupRestart:value=>{

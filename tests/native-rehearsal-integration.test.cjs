@@ -96,7 +96,13 @@ fi
    {const durable=agent.restartInventory();assert.equal(durable.action,'none',JSON.stringify(durable));assert.equal(durable.boundary,'native-active');assert.equal(durable.transaction_id,result.transaction_id);}
    // Return the admitted native runtime through a provider launched by native.
    const nativeOrigin=result.transaction_id;assert.equal(shutdownCalls,0);
-   result=await agent.returnManaged(runtimeSha);assert.equal(result.native_origin_id,nativeOrigin);assert.equal(agent.status().native_runtime,null);assert.equal(agent.status().managed_return.phase,'active');
+   await agent.operation({op:'job.start',id:'native-live-job-0001',profile:'root',timeout_ms:60000,command:'printf live; sleep 30'});
+   const selectedBefore=JSON.stringify(agent.status().worker_selection),workerBefore=agent.status().worker_id;
+   await assert.rejects(agent.returnManaged(runtimeSha),e=>e.outcome==='rejected');assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().worker_id,workerBefore);assert.equal(JSON.stringify(agent.status().worker_selection),selectedBefore);
+   assert.equal((await agent.operation({op:'job.status',id:'native-live-job-0001'})).state,'running');
+   await agent.operation({op:'job.cancel',id:'native-live-job-0001'});await until(async()=>{const info=await agent.operation({op:'status'});return info.resources.jobs.every(j=>j.monitor_finished);});
+   const cancelled=await agent.operation({op:'job.status',id:'native-live-job-0001'});assert.equal(cancelled.state,'cancelled');assert.equal(typeof cancelled.exit_code,'number');assert.equal(cancelled.record,undefined);
+   result=await agent.returnManaged(runtimeSha);assert.equal(result.native_origin_id,nativeOrigin);assert.equal(agent.status().native_runtime,null);assert.equal(agent.status().managed_return.phase,'active');const retained=await agent.operation({op:'job.status',id:'native-live-job-0001'});assert.equal(retained.record.state,'cancelled');assert.equal(retained.record.exit_code,cancelled.exit_code);
    returnedChannel=servers.find(s=>s._conn&&s._conn.identity.pid===agent.status().identity.pid);assert(fs.existsSync(state+'/'+providerId(result.transaction_id)+'.retirement.json'));
   }
   assert.equal(result.selected_implementation,'managed');assert.equal(result.admission_held,false);{const durable=agent.restartInventory();assert.equal(durable.action,'none',JSON.stringify(durable));assert.equal(durable.boundary,'settled');}assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().boot_id,boot);assert.equal((await agent.execute('printf restored',1000)).stdout,'restored');

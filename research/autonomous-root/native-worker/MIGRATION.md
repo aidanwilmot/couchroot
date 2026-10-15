@@ -7,12 +7,20 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.27 packages, with .NET selected and ready after native
-startup acceptance. Each completed native disable/enable, worker transport loss,
-and a service restart while native was selected, then returned to managed with
-retained job records preserved. Committed history and activation records stayed
-unchanged across native reacquisition. See [startup evidence](startup-results.json).
-Pending-return restart recovery is locally qualified at four interruption points.
+Both TVs are on signed 0.7.28 packages, with .NET selected and ready after native
+public-operation parity and interrupted-return acceptance. Each transferred an
+8 MiB-plus file through HTTPS, exercised command/job/app/helper operations,
+refused a return with a live job, explicitly cancelled it, then recovered a service
+restart during the return under the original transaction. Completed and cancelled
+native-created records survived. History is settled at 16 committed entries on QN90A and 18 on S90D;
+SDK is on loopback and rescue timers are disarmed. See
+[public parity evidence](public-parity-results.json).
+
+On 0.7.27, each completed native disable/enable, worker transport loss and service
+restart while native was selected, then returned to managed. Original committed
+history and activation records stayed unchanged across native reacquisition.
+See [startup evidence](startup-results.json). Pending-return restart recovery is
+also locally qualified at four interruption points.
 Previously, on 0.7.26 each TV completed one native admission round: a committed migration
 opened public admission on native, public requests ran there, and the active
 native worker returned to managed through a provider it launched (see [native
@@ -26,15 +34,12 @@ history and boot identity were preserved; no recovery timer or setup operation i
 pending. See [round-trip evidence](roundtrip-results.json) and
 [interrupted-exit evidence](exit-recovery-results.json).
 
-This is a handoff-and-return milestone, not native-default or .NET-free completion.
-The trials held public admission while native was selected. Remaining work includes:
-
-- Public native operation parity and native-created retained results through the
-  installed service and enrolled client.
+Native public admission and same-boot recovery are qualified for the bounded
+rounds above. Native-default and .NET-free completion still require:
 - Recovery from earlier handoff failures, coordinator restart and provider loss,
   including durable reconciliation without replaying operations.
-- Hardware interruption of an active return to managed, and wider maintenance
-  lifecycle coverage beyond the same-boot startup checks.
+- Wider interruption boundaries and maintenance lifecycle coverage beyond the
+  same-boot startup and active-return checks.
 - Replacing agent-required managed acquisition, installation and recovery utilities.
 - Final production-binary performance, resource-pressure and endurance validation
   on both TVs; reboot and standby/resume gates remain unqualified.
@@ -2061,3 +2066,39 @@ to loopback, and history settled at 14 entries. The first QN90A loss-test timer
 failed before signalling; inspection proved the worker unchanged before a new
 ID and corrected quoting were used. Test timers were reconciled separately.
 Pending-return interruption remains hardware-unqualified at this version.
+
+
+### Public-operation parity and interrupted active return — 2026-10-15
+
+Signed 0.7.28 closes the task-admission gap after a pre-begin live-resource refusal:
+a fresh return request can proceed after the caller resolves the resource. The
+original request ID still cannot be replayed. Restart-return completion now exposes
+the original native and managed transaction IDs, matching normal public results.
+The selection status reason describes required runtime verification rather than
+claiming native launch is unimplemented.
+
+Both TVs passed the operation matrix documented in
+[CAPABILITIES.md](../CAPABILITIES.md#native-public-operation-parity--0728). They
+also passed a service restart during the active return, automatic durable
+reconciliation, and explicit completion under the original return request binding.
+Retained managed, native-completed and native-cancelled records survived. Both
+ended managed-ready, settled at 16 (QN90A) and 18 (S90D) history entries, with native/provider scopes
+removed, SDK loopback restored and rescue timers disarmed before their deadlines.
+Prior managed staging is retained as restart-recovery audit material.
+
+The QN90A acceptance script initially assumed an app-context proc-label read would
+work through `cat`, and caught the wrong client exception for an expected bad digest.
+Neither failure changed selection. The known transfer was explicitly closed;
+fresh isolated parity fixtures completed, and the abandoned empty directories
+were removed. These were test-harness corrections, not worker changes. On S90D the initial
+app-manager restart left the JavaScript coordinator alive and the return completed
+normally. That round was accepted separately. A fresh recovery round terminated
+the HTTPS-listener coordinator only after binding its executable, PID and start
+ticks; it recovered the interrupted original return. The extra round accounts
+for S90D's two additional history entries.
+
+Validation: 360 Node tests passed, 125 environment/platform skips; seven differential
+groups, six real-process rehearsals and eleven restart scenarios passed in fresh
+containers with rebuilt native and managed fixtures. No client or tvsetup code
+changed. No TV reboot or standby was requested. Signal-handler compatibility,
+endurance, wider fault boundaries and native-only acquisition remain open.
