@@ -21,3 +21,15 @@ test('malformed inputs and unavailable managed readiness refuse dispatch',()=>fi
 test('known refusal is recorded but failed journal completion stays unknown',async()=>{
  for(const mode of ['rejected','journal'])await fixture(async f=>{f.tasks.rehearse(value);await tick();if(mode==='journal'){f.journal.finish=()=>{throw Error('disk failed');};f.complete({});}else f.fail(Object.assign(Error('preflight refused'),{outcome:'rejected'}));await tick();assert.equal(f.tasks.status().state,mode==='journal'?'unknown':'rejected');assert.equal(f.journal.rows[0].state,mode==='journal'?'submitted':'completed');assert.equal(f.tasks.busy(),false);});
 });
+test('recovery refuses overlap and completed transactions; a failed recovery stays unknown for a new bound request',()=>fixture(async f=>{
+ f.tasks.rehearse(value);await tick();f.fail(Error('exit observation interrupted'));await tick();
+ let finish;f.agent.resumeManagedActivation=async()=>new Promise((yes,no)=>{finish={yes,no};});
+ const first={id:'native-recovery-0001',rehearsal_id:value.id};f.tasks.resume(first);await tick();
+ assert.throws(()=>f.tasks.resume({id:'native-recovery-0002',rehearsal_id:value.id}));assert.equal(f.tasks.status().state,'submitted');
+ finish.no(Error('still interrupted'));await tick();assert.equal(f.tasks.status().state,'unknown');assert.equal(f.tasks.status().id,first.id);assert.equal(f.journal.rows[1].state,'submitted');
+ assert.throws(()=>f.tasks.resume(first),/already submitted/);
+ f.agent.resumeManagedActivation=async()=>({selected_implementation:'managed',admission_held:false});
+ const second={id:'native-recovery-0002',rehearsal_id:value.id};f.tasks.resume(second);await tick();assert.equal(f.tasks.status().state,'completed');assert.equal(f.journal.rows[2].state,'completed');
+ assert.throws(()=>f.tasks.resume({id:'native-recovery-0003',rehearsal_id:value.id}));assert.equal(f.journal.rows.length,3);
+ assert.deepEqual(f.journal.rows.map(r=>r.state),['submitted','submitted','completed']);
+}));

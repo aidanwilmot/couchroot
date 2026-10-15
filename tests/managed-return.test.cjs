@@ -16,7 +16,7 @@ async function fixture(failure,run){
  const provider={snapshotNativeJobs:async inputs=>{step('snapshot');assert.equal(inputs.record.id,id);assert.equal(inputs.baseline.sha256,baseline.sha256);},restoreManagedState:async()=>{step('restore');return {phase:'restored',id,transition_id:journal.read().pending.id,receipt_sha256:'9'.repeat(64)};},acceptManagedRestore:async()=>{step('accept');const s=journal.read();return journal.advance(s.revision,s.pending.id,'state-ready','9'.repeat(64));},launchManaged:async()=>{},verifyManaged:async()=>{}};
  const module={exports:{}};vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='./worker-selection'?{...real(n),managedVersion:()=>managed}:n==='./managed-session'?{openManagedSession:async o=>{step('session');assert.equal(o.provider,provider);assert.equal(o.runtimeSha256,'8'.repeat(64));assert.equal(o.managedSha256,managed);const s=journal.read();journal.advance(s.revision,s.pending.id,'trial-ready','f'.repeat(64));if(failure==='close')controller.closeTransport();return {readiness_sha256:'f'.repeat(64),closeTransport:()=>closes++};}}:real(n)});
  controller=module.exports.createManagedReturn({hold,retirement:{provider},record,payload:'/fixture/payload',selectionFile,runtimeSha256:'8'.repeat(64)});
- try{await run({controller,events,journal,dir,record,hold,closes:()=>closes});}finally{fs.rmSync(dir,{recursive:true,force:true});}
+ try{await run({controller,events,journal,dir,record,hold,provider,closes:()=>closes});}finally{fs.rmSync(dir,{recursive:true,force:true});}
 }
 test('managed return orders stopped native state restoration, managed session, commit and activation',()=>fixture(null,async f=>{
  const result=await f.controller.run();assert.equal(result.selected_implementation,'managed');assert.equal(result.native_origin_id,f.record.id);assert.equal(result.admission_held,false);assert.deepEqual(f.events,['drain','stop','snapshot','restore','accept','session','adopt','activate']);assert.equal(f.journal.read().pending,null);assert.equal(f.journal.read().history.length,2);assert.equal(f.controller.status().phase,'active');await assert.rejects(f.controller.run());
@@ -58,5 +58,18 @@ test('exit recovery remains explicit, excludes concurrency and refuses changed r
    const pending=f.controller.resumeActivation();await assert.rejects(f.controller.resumeActivation());release();await pending;
   }else{await assert.rejects(f.controller.resumeActivation());assert.equal(f.events.includes('restore'),false);}
   assert.equal(f.events.filter(e=>e==='stop').length,1);
+ });
+});
+
+test('a resumed return that fails during a later mutation stays held and cannot be resumed again',async()=>{
+ for(const later of ['snapshot','restore','accept','adopt'])await fixture('stop',async f=>{
+  await assert.rejects(f.controller.run(),e=>e.outcome==='unknown');const id=f.journal.read().pending.id;
+  f.hold.resumeNativeExit=async tx=>{assert.equal(tx,id);f.events.push('observe-exit');return {phase:'stopped',id,origin_id:f.record.id,inventory_sha256:f.journal.read().pending.quiescence_sha256};};
+  const wrap=(target,name,step)=>{const original=target[name];target[name]=async(...args)=>{if(later===step){f.events.push(step);throw Error('injected '+step);}return original(...args);};};
+  wrap(f.provider,'snapshotNativeJobs','snapshot');wrap(f.provider,'restoreManagedState','restore');wrap(f.provider,'acceptManagedRestore','accept');wrap(f.hold,'adoptManaged','adopt');
+  await assert.rejects(f.controller.resumeActivation(),e=>e.outcome==='unknown');assert.equal(f.controller.status().phase,'reconciliation-required');
+  const count=f.events.length;
+  await assert.rejects(f.controller.resumeActivation());await assert.rejects(f.controller.run());assert.equal(f.events.length,count);
+  assert.equal(f.events.filter(e=>e==='stop').length,1);assert.equal(f.events.filter(e=>e==='observe-exit').length,1);const s=f.journal.read();assert.equal(later==='adopt'?s.history.at(-1).id:s.pending.id,id);assert.equal(f.events.includes('activate'),false);
  });
 });

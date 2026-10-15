@@ -320,12 +320,24 @@ function createAgent(config,options={}){
      catch(_){shutdown={acknowledged:false,outcome:'unknown'};}
      // A lost BYE is not exit evidence. Use the already-bound independent
      // observer even after a transport failure; never submit shutdown again.
+     // Verified exit evidence is retained before publication. If publishing the
+     // stopped receipt fails, recovery republishes that evidence, or adopts the
+     // identical receipt already renamed into place, without observing again.
+     let verified=null;
      const finishExit=async resume=>{
-      owned();if(privateRead(file,16384)!==text)throw Error('Native stop journal changed');
-      const exited=await (resume?observer.resumeExitObservation():observer.waitForExit());owned();
-      if(!exited||exited.record_id!==adopted.record.id||JSON.stringify(exited.identity)!==JSON.stringify(adopted.record.worker_identity)||privateRead(file,16384)!==text)throw Error('Native exit evidence changed');
-      const completed={...pending,phase:'stopped',shutdown,exited};atomic(file,completed);owned();
-      token.nativeStopped=JSON.parse(JSON.stringify(completed));return completed;
+      owned();
+      if(!verified){
+       if(privateRead(file,16384)!==text)throw Error('Native stop journal changed');
+       const exited=await (resume?observer.resumeExitObservation():observer.waitForExit());owned();
+       if(!exited||exited.record_id!==adopted.record.id||JSON.stringify(exited.identity)!==JSON.stringify(adopted.record.worker_identity)||privateRead(file,16384)!==text)throw Error('Native exit evidence changed');
+       verified=JSON.stringify({...pending,phase:'stopped',shutdown,exited});
+      }
+      const published=privateRead(file,65536);
+      if(published===text)atomic(file,JSON.parse(verified));
+      else if(published!==verified)throw Error('Native stop journal changed');
+      else{const parent=fs.openSync(directory,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}}
+      owned();if(privateRead(file,65536)!==verified)throw Error('Native stop journal changed');
+      token.nativeStopped=JSON.parse(verified);return JSON.parse(verified);
      };
      token.nativeExitRecovery={transactionId,retirementSession,finishExit};
      return await finishExit(false);

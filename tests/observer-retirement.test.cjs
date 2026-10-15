@@ -138,15 +138,16 @@ test('explicit native exit recovery rechecks provider and permits restoration on
 });
 
 test('exit recovery refuses provider replacement or drift permanently',async()=>{
- for(const mode of ['connection','boot','worker','profile','status']){
+ for(const mode of ['connection','exited','boot','worker','profile','status']){
   const f=rollbackFixture('exit'),p=await f.create(),observer=await p.prepareNativeExit(f.inputs.record);
   await assert.rejects(observer.waitForExit());const count=f.calls.length,old=f.channel.operation;
   if(mode==='connection')f.channel._conn={...f.peer};
+  if(mode==='exited')f.channel._conn=null;
   if(mode==='boot')f.info.boot_id=boot.slice(0,-1)+'2';
   if(mode==='worker')f.info.worker_id='0'.repeat(32);
   if(mode==='profile')f.peer.identity.smack='User';
   if(mode==='status')f.channel.operation=async()=>{throw Error('provider unavailable');};
-  await assert.rejects(observer.resumeExitObservation());
+  await assert.rejects(observer.resumeExitObservation(),mode==='exited'||mode==='connection'?/provider transport closed or replaced/:/./);
   f.channel._conn=f.peer;Object.assign(f.info,status());f.peer.identity.smack='System';f.channel.operation=old;
   await assert.rejects(observer.resumeExitObservation());await assert.rejects(p.snapshotNativeJobs(f.inputs));assert.equal(f.calls.length,count);
  }

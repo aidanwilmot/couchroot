@@ -15,7 +15,7 @@ const {prepareProductionExit}=require('./production-exit');
 const {inspectObserverUnit,retireObserverUnit}=require('./observer-unit');
 const HEX=/^[a-f0-9]{64}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const CAPS=['prototype-scoped-files-v1','worker-process-identity-v1','guardian-parent-identity-v1','resource-inventory-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1'];
-function requireValue(ok){if(!ok)throw Error('Independent observer retirement identity unavailable');}
+function requireValue(ok,detail){if(!ok)throw Error('Independent observer retirement identity unavailable'+(detail?': '+detail:''));}
 function binding(value){
  requireValue(value&&Object.keys(value).sort().join('|')==='bootId|sha256|unit'&&typeof value.unit==='string'&&value.unit.length===59&&/^couchroot-observer-[a-f0-9]{32}\.service$/.test(value.unit)&&typeof value.bootId==='string'&&value.bootId.length===36&&BOOT.test(value.bootId)&&typeof value.sha256==='string'&&value.sha256.length===64&&HEX.test(value.sha256));
  return Object.freeze({unit:value.unit,bootId:value.bootId,sha256:value.sha256});
@@ -44,7 +44,8 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
  let expires=clock()+5000;
  const peer=channel._conn,expected={bootId:target.bootId,launcherSha256};
  let pinned=null,busy=false,failed=false,exitInterrupted=false,retirementEntered=false,retired=false,snapshotEntered=false,retainedSnapshot=null,installEntered=false,retainedInstallation=null,acceptEntered=false,stateAccepted=false,productionEntered=false,productionRecord=null,readinessEntered=false;
- function current(){requireValue(!failed&&channel._conn===peer&&peer&&clock()<expires);}
+ // Bounded causes reach authenticated status; provider loss stays terminal.
+ function current(){requireValue(!failed,'provider previously failed');requireValue(channel._conn===peer&&peer,'provider transport closed or replaced');requireValue(clock()<expires,'provider deadline expired');}
  async function verify(){
   try{current();const info=await channel.operation({op:'status'});current();
   const actual=validateProvider(info,peer,expected,sourceIdentity),serialized=JSON.stringify(actual);
