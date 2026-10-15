@@ -7,8 +7,12 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.25 packages from `e277c44`, with .NET selected and ready.
-Each completed a normal round trip on 0.7.25; restart rollback is qualified locally only (see [restart rollback evidence](restart-rollback-results.json)).
+Both TVs are on signed 0.7.26 packages from `54a06be`, with .NET selected and ready.
+On 0.7.26 each TV completed one native admission round: a committed migration
+opened public admission on native, public requests ran there, and the active
+native worker returned to managed through a provider it launched (see [native
+admission evidence](native-admission-results.json)). Each completed a normal
+round trip on 0.7.25; restart rollback is qualified locally only (see [restart rollback evidence](restart-rollback-results.json)).
 Each completed a normal installed managed/native/managed rehearsal on 0.7.22 and
 again on 0.7.24, and on 0.7.23 an installed rehearsal whose native exit observation
 was deliberately interrupted and then explicitly recovered. On 0.7.24 the
@@ -1979,3 +1983,22 @@ Local validation:
 Not verified on hardware: `systemd-run` from inside the native unit
 (`NoNewPrivileges`, `PrivateMounts`, System label). The parity container fakes
 unit launches.
+
+Signed 0.7.26 packages from `54a06be` were installed on both TVs through the
+shared engine, using the installed 0.7.25 packages as the baseline. No members
+were added or removed, all install steps passed, and boots were unchanged. Each
+TV then completed one round:
+
+- **Migrate:** native was committed and activated, with public admission open,
+  in about 8 s on QN90A and 10 s on S90D.
+- **On native:** a public exec ran. The retained managed job read exit 7. A
+  native-created job ran with exit 9, and its output was read.
+- **Return:** the native worker launched the return provider under its
+  `NoNewPrivileges`/`PrivateMounts` unit, which was the open hardware question.
+  Managed was restored and activated in about 14 s and 21 s.
+- **Acceptance:** both jobs were preserved through the return, and the native
+  and both provider scopes and all markers were removed. The rescue timer was
+  disarmed, SDK was back on loopback, and the inventory was `settled`, with 12
+  committed history entries per TV.
+
+No failure, recovery route or restart was exercised on hardware.
