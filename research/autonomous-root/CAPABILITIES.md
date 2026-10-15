@@ -33,6 +33,13 @@ fixtures cover these boundaries; both TVs passed the fourteen resource groups on
 the updated ordinary binary. Forced slow-storage behavior remains locally tested
 only. See [job timing evidence](native-worker/job-start-timing-results.json).
 
+Both TVs also passed a bounded address-space pressure round on the same 0.7.41
+worker bytes. Refused launches retained their intent without execution; existing
+live and saved jobs survived, and restored capacity admitted fresh app work.
+Allocation-site and fork failures are covered by local fixtures only. These
+results do not establish whole-TV OOM or sustained pressure behavior. See
+[launch-pressure evidence](native-worker/launch-pressure-results.json).
+
 All examples use the existing enrolled, certificate-pinned client:
 
 ```sh

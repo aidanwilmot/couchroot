@@ -455,6 +455,7 @@ static void soak(int seconds) {
 #include "parity-accept.h"
 #include "resource-accept.h"
 #include "startup-resource-accept.h"
+#include "launch-pressure-accept.h"
 #include "storage-accept.h"
 #include "handoff-accept.h"
 int main(int argc, char **argv) {
@@ -470,9 +471,12 @@ int main(int argc, char **argv) {
   appsha = argv[5];
   source_helper = argv[6];
   const char *resource_mode = getenv("COUCHROOT_NATIVE_PRODUCTION_RESOURCES");
-  production_resources = resource_mode != NULL;
+  const char *pressure_mode = getenv("COUCHROOT_NATIVE_LAUNCH_PRESSURE");
+  const char *production_mode = resource_mode ? resource_mode : pressure_mode;
+  production_resources = production_mode != NULL;
   if (production_resources &&
-      (strcmp(resource_mode, "1") || getenv("COUCHROOT_NATIVE_HANDOFF_ONLY") ||
+      (strcmp(production_mode, "1") || (resource_mode && pressure_mode) ||
+       getenv("COUCHROOT_NATIVE_HANDOFF_ONLY") ||
        getenv("COUCHROOT_NATIVE_PARITY_ONLY") ||
        getenv("COUCHROOT_NATIVE_RESOURCE_ONLY") ||
        getenv("COUCHROOT_NATIVE_SOAK_SECONDS") ||
@@ -506,7 +510,7 @@ int main(int argc, char **argv) {
   if (ns < 0)
     fatal("parent namespace");
   namespace_before[ns] = 0;
-  if (production_resources)
+  if (resource_mode)
     startup_refusal_checks();
   launch();
   if (getenv("COUCHROOT_NATIVE_HANDOFF_ONLY")) {
@@ -518,15 +522,19 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (production_resources || getenv("COUCHROOT_NATIVE_RESOURCE_ONLY")) {
-    if (production_resources) {
+    if (pressure_mode) {
+      launch_pressure_checks();
+    } else if (production_resources) {
       guardian_resource_checks(0);
       guardian_resource_checks(1);
       production_idle_limit_checks();
       storage_recovery_checks();
     }
-    resource_limit_checks();
-    fault_diagnostic_checks();
-    json_upload_checks();
+    if (!pressure_mode) {
+      resource_limit_checks();
+      fault_diagnostic_checks();
+      json_upload_checks();
+    }
     finish(0);
     char *lock = format("%s/.jobs/lock", filescope),
          *dir = format("%s/.jobs", filescope);
@@ -534,7 +542,8 @@ int main(int argc, char **argv) {
       fatal("focused resource cleanup");
     free(lock);
     free(dir);
-    mark(production_resources ? "production_resource_shutdown_and_cleanup"
+    mark(pressure_mode ? "launch_pressure_shutdown_and_cleanup" :
+         production_resources ? "production_resource_shutdown_and_cleanup"
                               : "focused_resource_shutdown_and_cleanup");
     return 0;
   }

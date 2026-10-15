@@ -527,6 +527,16 @@ state. Only the controller-owned worker's limit and private storage are changed;
 the controller's 240-second alarm bounds the run. This is a controller option,
 not a production worker fault interface.
 
+`COUCHROOT_NATIVE_LAUNCH_PRESSURE=1` selects a separate bounded production
+controller round. It limits only its authenticated worker's `RLIMIT_AS` to the
+current virtual mapping size, verifies memory refusal without command execution,
+then restores the original limit. A live job and a saved result survive; a fresh
+app job succeeds and ordinary restart reconciles the refused intent without
+replay. It uses the same 32-slot startup budget and 240-second controller alarm,
+and refuses combined experiment modes. Both TVs passed this round on unchanged
+0.7.41 worker bytes; allocation-site and fork failure injection remain local-only
+tests. See [launch-pressure evidence](launch-pressure-results.json).
+
 ## Event-driven waits and lifecycle cleanup — 2026-10-13
 
 Revision `43ec7bc` replaces fixed polling passes without changing the protocol,

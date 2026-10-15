@@ -14,7 +14,7 @@ class AcceptanceModeTests(unittest.TestCase):
     def test_conflicting_modes_refuse_before_creating_state(self):
         conflicts = ('COUCHROOT_NATIVE_HANDOFF_ONLY', 'COUCHROOT_NATIVE_PARITY_ONLY',
                      'COUCHROOT_NATIVE_RESOURCE_ONLY', 'COUCHROOT_NATIVE_SOAK_SECONDS',
-                     'COUCHROOT_NATIVE_LIFETIME_SECONDS')
+                     'COUCHROOT_NATIVE_LIFETIME_SECONDS', 'COUCHROOT_NATIVE_LAUNCH_PRESSURE')
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             args = [os.environ['NATIVE_ACCEPT'], '/missing-worker', str(root/'token'),
@@ -25,6 +25,26 @@ class AcceptanceModeTests(unittest.TestCase):
                     env = {key: value for key, value in os.environ.items()
                            if not key.startswith('COUCHROOT_NATIVE_')}
                     env.update(COUCHROOT_NATIVE_PRODUCTION_RESOURCES='1')
+                    env.update(extra)
+                    result = subprocess.run(args, env=env, capture_output=True, timeout=5)
+                    self.assertEqual(result.returncode, 64, result.stderr)
+                    self.assertIn(b'cannot combine experiment modes', result.stderr)
+                    self.assertEqual(list(root.iterdir()), [])
+
+    def test_launch_pressure_mode_conflicts_refuse_before_creating_state(self):
+        conflicts = ('COUCHROOT_NATIVE_HANDOFF_ONLY', 'COUCHROOT_NATIVE_PARITY_ONLY',
+                     'COUCHROOT_NATIVE_RESOURCE_ONLY', 'COUCHROOT_NATIVE_SOAK_SECONDS',
+                     'COUCHROOT_NATIVE_LIFETIME_SECONDS', 'COUCHROOT_NATIVE_PRODUCTION_RESOURCES')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = [os.environ['NATIVE_ACCEPT'], '/missing-worker', str(root/'token'),
+                    str(root/'files'), '/missing-launcher', '0'*64, '/missing-helper']
+            for extra in [{key: '1'} for key in conflicts] + [
+                    {'COUCHROOT_NATIVE_LAUNCH_PRESSURE': value} for value in ('', '0', 'yes')]:
+                with self.subTest(extra=extra):
+                    env = {key: value for key, value in os.environ.items()
+                           if not key.startswith('COUCHROOT_NATIVE_')}
+                    env.update(COUCHROOT_NATIVE_LAUNCH_PRESSURE='1')
                     env.update(extra)
                     result = subprocess.run(args, env=env, capture_output=True, timeout=5)
                     self.assertEqual(result.returncode, 64, result.stderr)

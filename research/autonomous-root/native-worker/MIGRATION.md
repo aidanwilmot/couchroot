@@ -10,6 +10,11 @@ below for installed state. The plan itself does not authorize device changes.
 Both TVs are on signed 0.7.41 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 28 settled history entries (22 committed,
 six rolled back); S90D has 29 (22 committed, seven rolled back).
+Both also passed a bounded per-worker address-space pressure round on unchanged
+0.7.41 bytes: new allocation refusal preserved a live job and saved result,
+restored limits admitted fresh app work, and restart reconciled the refused
+intent without replay. Allocation-site and fork failure injection are locally
+qualified only. See [launch-pressure evidence](launch-pressure-results.json).
 The native job execution budget now starts after durable launch preparation,
 immediately before releasing the command gate. Slow failed persistence retries
 back off from completion of the write. Local fixtures reproduce both preceding
@@ -2923,3 +2928,46 @@ strict job deadlines during concurrent persistence stalls, broad pressure or
 endurance. Native-only entry, remaining lifecycle coverage and native-default
 rollout stay open. The .NET entry bridge, worker fallback and independent rescue
 remain available. No reboot, standby or global-policy change occurred.
+
+### Launch allocation and process-failure qualification — 2026-10-15
+
+A new controller-only pressure mode qualifies the existing ordinary 0.7.41 worker
+on both TVs. It constrains only the live authenticated fixture worker's
+`RLIMIT_AS` to its current virtual mapping size. The independent guardian,
+installed managed worker and already-running command child keep their original
+limits. This produces allocation refusal without filling TV RAM or changing a
+system-wide policy.
+
+Each worker refuses a new job with `Insufficient memory; job intent retained,
+not launched`. Its execution witness stays absent and the published intent stays
+`unknown`; a duplicate start is refused even after restoring the limit. The
+existing live job is held at a FIFO gate throughout the refusal and is checked
+still running before the controller releases it. It then finishes with exit 9
+and one witness write; a saved exit-7 record remains byte-identical, and fresh app work exits 11. Normal shutdown and
+fresh launch reconcile the refused intent as interrupted with unknown exit
+status. No command is replayed. Normal job operations retire the owned records,
+then the controller removes its empty scope.
+
+Four local cases cover real address-space limitation, ENOMEM at the first and
+second one-MiB output-buffer allocations, and EAGAIN at fork. The injected cases
+preserve the descriptor set, retain intent, refuse duplicate execution and recover
+fresh work. The glibc interposer targets only an explicitly named protocol PID;
+it is never packaged or used on a TV. Two additional cases check controller-mode
+refusal before state creation. All six pass, and npm test passes 404 with 143
+platform/fixture skips. Linux and ARM acceptance controllers were freshly built.
+
+No worker/runtime implementation, package or selection changed in this milestone.
+The preceding c218c05 runtime, rehearsal and restart results remain their own
+qualification; those passing suites were not repeated for controller-only work.
+No client or setup source changed. Both devices remain managed-ready and settled
+on the original boot with unchanged enrollment, protected hashes, retained jobs
+and selection history. Test jobs, helpers and scopes are removed, SDK is on
+loopback, and independent 300-second .NET rescue timers are inactive. See
+[launch-pressure evidence](launch-pressure-results.json).
+
+This establishes bounded per-process virtual-address refusal with one live job,
+not allocator fragmentation, aggregate multi-job guarantees, whole-TV OOM or
+sustained pressure. Process-launch injection is locally qualified only. Broader
+pressure, post-commit lifecycle interruption, endurance and native-only entry
+remain open. The .NET entry bridge, worker fallback and independent rescue remain
+available; no reboot, standby or global-policy change occurred.
