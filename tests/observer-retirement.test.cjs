@@ -72,6 +72,7 @@ function rollbackFixture(failure){
  const receipt={transition_id:'f'.repeat(32),receipt_sha256:'c'.repeat(64)},launch={id:'f'.repeat(32),phase:'submitted'};
  const step=async(name,o,result)=>{events.push(name);await o.execute(name,1000);if(failure===name)throw Error('lost '+name+' response');return structuredClone(result);};
  const modules={
+  './production-exit':{prepareProductionExit:async o=>{await step('bind',o,{});return {waitForExit:()=>step('exit',o,{record_id:o.record.id})};}},
   './native-retained-state':{snapshotNativeJobs:async o=>{assert.equal(o.record.id,inputs.record.id);return step('snapshot',o,snapshot);}},
   './managed-restore':{restoreManagedJobs:async o=>{assert.equal(o.snapshot.sha256,snapshot.sha256);assert.equal(o.record.id,inputs.record.id);assert.equal(o.baseline.sha256,sha);assert.equal(o.resume,false);return step('restore',o,receipt);},acceptManagedRestore:async o=>{assert.equal(o.transitionId,receipt.transition_id);assert.equal(o.receiptSha256,receipt.receipt_sha256);return step('accept',o,{pending:{phase:'rollback-state-ready'}});}},
   './managed-launch':{submitManaged:async o=>{assert.equal(o.transitionId,receipt.transition_id);assert.equal(o.receiptSha256,receipt.receipt_sha256);return step('launch',o,launch);}},
@@ -106,5 +107,20 @@ test('uncertainty in any rollback provider phase forbids retries and later mutat
   for(let i=0;i<steps.length;i++){const [name,o]=steps[i];if(['snapshot','restore','accept','launch','ready'][i]===failure){await assert.rejects(p[name](o));break;}await p[name](o);}
   const count=f.calls.length;
   for(const [name,o] of steps)await assert.rejects(p[name](o));await assert.rejects(p.retireUnit(bound));assert.equal(f.calls.length,count);
+ }
+});
+
+test('bound native exit must finish before rollback snapshot and cannot be replayed',async()=>{
+ const f=rollbackFixture(),p=await f.create(),observer=await p.prepareNativeExit(f.inputs.record);
+ await assert.rejects(p.snapshotNativeJobs(f.inputs));await assert.rejects(p.prepareNativeExit(f.inputs.record));assert.deepEqual(f.events,['bind']);
+ assert.equal((await observer.waitForExit()).record_id,f.inputs.record.id);await assert.rejects(observer.waitForExit());
+ const changed=structuredClone(f.inputs);changed.record.worker_identity.processes.worker.start_ticks='999';await assert.rejects(p.snapshotNativeJobs(changed));
+ await p.snapshotNativeJobs(f.inputs);assert.deepEqual(f.events,['bind','exit','snapshot']);
+});
+test('unknown native exit poisons provider and cannot authorize state restoration',async()=>{
+ for(const phase of ['bind','exit']){
+  const f=rollbackFixture(phase),p=await f.create();
+  if(phase==='bind')await assert.rejects(p.prepareNativeExit(f.inputs.record));else{const observer=await p.prepareNativeExit(f.inputs.record);await assert.rejects(observer.waitForExit());}
+  const count=f.calls.length;await assert.rejects(p.prepareNativeExit(f.inputs.record));await assert.rejects(p.snapshotNativeJobs(f.inputs));await assert.rejects(p.restoreManagedState({}));assert.equal(f.calls.length,count);
  }
 });

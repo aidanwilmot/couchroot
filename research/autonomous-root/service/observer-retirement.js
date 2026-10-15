@@ -11,6 +11,7 @@ const {snapshotNativeJobs}=require('./native-retained-state');
 const {restoreManagedJobs,acceptManagedRestore}=require('./managed-restore');
 const {submitManaged}=require('./managed-launch');
 const {readyManaged}=require('./managed-readiness');
+const {prepareProductionExit}=require('./production-exit');
 const {inspectObserverUnit,retireObserverUnit}=require('./observer-unit');
 const HEX=/^[a-f0-9]{64}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const CAPS=['prototype-scoped-files-v1','worker-process-identity-v1','guardian-parent-identity-v1','resource-inventory-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1'];
@@ -65,7 +66,7 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
   }catch(error){failed=true;throw error;}
   finally{busy=false;}
  }
- let rollbackEntered=false,rollbackInputs=null,restoreEntered=false,restored=null,restoreAccepted=false,restoreAcceptEntered=false,managedEntered=false,managedRecord=null,managedReadyEntered=false;
+ let nativeExitEntered=false,nativeExitRecord=null,nativeExited=false,rollbackEntered=false,rollbackInputs=null,restoreEntered=false,restored=null,restoreAccepted=false,restoreAcceptEntered=false,managedEntered=false,managedRecord=null,managedReadyEntered=false;
  async function rollbackOperation(timeout,body){
   requireValue(!busy&&!failed);busy=true;expires=clock()+timeout;
   try{await verify();const result=await body();await verify();return result;}
@@ -76,10 +77,23 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
  const identity=JSON.parse(pinned);Object.freeze(identity.processes.worker);Object.freeze(identity.processes.guardian);Object.freeze(identity.processes);Object.freeze(identity);
  return Object.freeze({
   identity,
+  prepareNativeExit:async record=>{
+   requireValue(!busy&&!failed&&!nativeExitEntered&&!rollbackEntered);
+   const saved=copy(record);requireValue(saved&&JSON.stringify(saved.source)===JSON.stringify(sourceIdentity)&&saved.boot_id===target.bootId);
+   requireValue(saved.worker_identity&&saved.worker_identity.worker_id!==identity.worker_id&&Object.values(saved.worker_identity.processes).every(p=>p&&Object.values(identity.processes).every(q=>p.pid!==q.pid)));
+   nativeExitEntered=true;
+   const observer=await rollbackOperation(15000,()=>prepareProductionExit({record:saved,execute}));nativeExitRecord=saved;
+   let waited=false;
+   return Object.freeze({waitForExit:async()=>{
+    requireValue(!busy&&!failed&&!waited);waited=true;
+    return rollbackOperation(20000,async()=>{const evidence=await observer.waitForExit();nativeExited=true;return evidence;});
+   }});
+  },
   snapshotNativeJobs:async options=>{
    requireValue(!busy&&!failed&&!rollbackEntered);
    const inputs=copy({record:options.record,installation:options.installation,baseline:options.baseline}),record=inputs.record;
    requireValue(record&&record.phase==='ready'&&record.boot_id===target.bootId&&JSON.stringify(record.source)===JSON.stringify(sourceIdentity));
+   if(nativeExitEntered)requireValue(nativeExited&&JSON.stringify(record)===JSON.stringify(nativeExitRecord));
    const native=processIdentities({...record.worker_identity,implementation:'native-prototype',guardian_pid:record.worker_identity.processes.guardian.pid,capabilities:['worker-process-identity-v1']},record.worker_identity.processes.worker.pid);
    requireValue(native.boot_id===target.bootId&&native.worker_id!==identity.worker_id&&Object.values(native.processes).every(p=>Object.values(identity.processes).every(q=>p.pid!==q.pid)));
    if(retainedSnapshot)requireValue(JSON.stringify(inputs.baseline)===JSON.stringify(retainedSnapshot));

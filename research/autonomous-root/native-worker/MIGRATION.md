@@ -1168,3 +1168,33 @@ required. The provider's existing bounded lifetime is unchanged.
 
 The combined Linux migration suite passes 214 tests without skips. The tracked-file
 privacy audit reports no findings across 607 files.
+
+### Independent native exit evidence for rollback — local follow-up
+
+The rollback provider can now prepare a read-only observation of the native worker
+and guardian before shutdown, then wait for both original process identities to
+exit. It reads procfs through its independent authenticated executor, preserving
+stat bytes for the shared parser and checking the boot around each observation.
+Initial binding requires both identities present and the original running unit;
+completion requires both absent/reused plus the same unit's successful exited
+state. A worker disconnect or BYE alone is insufficient. The observer never signals
+processes or removes staging, and rejects unreadable/malformed data, changed unit
+start identity, failed termination and deadline expiry.
+
+The provider pins the prepared native record, forbids a snapshot while its exit
+observation is unresolved, and permits the bound wait only once. Unknown binding
+or exit outcomes poison the provider and cannot authorize restoration. Fresh live
+status/quiescence confirmation and the actual shutdown call still belong in the
+held controller; this observation API alone does not stop a worker or release
+admission. It complements the existing lower-level exit observers rather than
+relying on service-thread access to root procfs.
+
+Tests cover delayed guardian completion, PID reuse, failed/malformed reads, changed
+unit identity, timeout, no replay, snapshot gating and provider failure. Linux shell
+fixtures exercise actual procfs-format transport/parsing and boot guards; systemd
+state remains simulated. This is not on-TV qualification. No TV was changed or
+rebooted; .NET remains deployed. Held native shutdown and full rollback controller
+integration are the next required steps.
+
+The combined Linux migration suite passes 221 tests without skips. The tracked-file
+privacy audit reports no findings across 609 files.
