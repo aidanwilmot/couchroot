@@ -1462,3 +1462,20 @@ rejection of identical bytes on a different inode. All three real-process Linux
 rehearsals pass. Both TVs retained the same managed worker and boot throughout
 these diagnostics. This validates the corrected runtime check on QN90A, not the
 complete on-TV migration; packaging/deployment and both-TV rehearsals remain.
+
+### Corrected verifier deployed to both TVs — 0.7.16
+
+Separate signed 0.7.16 packages from `fb6fdbc` were built and reviewed against each
+TV's installed 0.7.15 artifact. Signed service bytes match source and all packaged
+service scripts pass syntax checks. QN90A and then S90D were updated through the
+shared setup engine with bounded inventory reads and existing enrollment retained.
+Each update passed installed-file, certificate, protected-file and startup-flag
+verification before its installation journal was completed.
+
+Both TVs are managed-ready, with unchanged boot IDs, no admission hold, no pending
+setup operation and idle native administration endpoints. SDK access is restored
+to loopback and both temporary installation recovery timers are disarmed. The
+inode-based native runtime check and bounded failure-cause diagnostics are now
+installed. No native rehearsal has yet been retried on this version. The earlier
+QN90A failed-transition evidence remains preserved, and .NET remains selected.
+Neither TV was rebooted; signed packages and raw evidence remain private.
