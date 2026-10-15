@@ -1503,3 +1503,38 @@ journal parent. Focused tests cover invalid modes, file-mode strictness and
 unchanged metadata; the observer fixture runs its shared predicate under the
 simulated app identity. The correction is local and not yet deployed. Both TVs
 remain on 0.7.16 with .NET selected; no TV was rebooted.
+
+### 0.7.17 hardware rehearsal: canonical managed staging path
+
+Both TVs received separately signed 0.7.17 packages through the shared setup
+engine. All 48 service members matched source; installed inventory, enrollment,
+protected files, startup flags, managed readiness and unchanged boot IDs were
+verified before completing each installation journal. Installation rescue timers
+were disarmed and SDK access returned to loopback.
+
+QN90A's rehearsal passed native readiness, committed/adopted the native worker,
+and entered the managed return. Native shutdown completed and managed retained
+state was restored, but the managed launch command failed before creating its
+staging directory or systemd unit. Independent inspection found that `/home` is
+the TV's symlink to `/opt/usr/home`; the launch plan's symlink-parent refusal
+therefore rejected its own `/home/owner/...` staging path. Earlier integration
+fixtures substituted the managed launch and did not reproduce this filesystem
+layout. This was a failed complete rehearsal, not hardware qualification.
+
+The SDK rescue timer restored access without a reboot. Recovery preserved the
+failed transition directory, independently checked production/provider exits and
+absence of the managed unit, and verified that the retained test-job file still
+matched its original digest. The unchanged managed fallback was then enabled.
+Its restored job result was exit 7 with byte-identical retained data; only this
+known test fixture was forgotten afterward. Both TVs are managed-ready on their
+original boots with no admission hold and loopback SDK access. S90D was not
+rehearsed. Original failed journals and staging remain preserved privately.
+
+Managed launch and readiness now use `/opt/usr/home/owner/...` consistently.
+Canonical parent checks remain strict. The generated-command fixture models the
+TV's `/home` symlink, checks successful canonical staging, and rejects a symlink
+inside the canonical parent chain. The new regression fails against the previous
+launch implementation and passes with the correction. All 67 focused retained
+state/readiness tests and all three isolated real-process rehearsals pass.
+This correction is local, not yet deployed. Automatic recovery from this earlier
+return failure and full both-TV rehearsal acceptance remain open.

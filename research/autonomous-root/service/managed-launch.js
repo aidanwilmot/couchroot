@@ -21,7 +21,7 @@ function managedLaunchPlan({transitionId,payload,managedSha256,runtimeSha256,rec
  for(const name of files)check(hex(manifest[name],64)&&hash(read(payload+'/'+name,4*1024*1024))===manifest[name]);
  const tokenDirectory=typeof tokenFile==='string'?path.dirname(tokenFile):'';
  check(path.dirname(tokenDirectory)===STATE&&/^managed-[A-Za-z0-9]{6}$/.test(path.basename(tokenDirectory))&&path.basename(tokenDirectory).length===14&&tokenFile===tokenDirectory+'/token');
- const directory='/opt/couchroot-managed-'+transitionId,code=directory+'/code',stage='/home/owner/share/tmp/sdk_tools/managed-'+transitionId,unit='couchroot-managed-'+transitionId+'.service';
+ const directory='/opt/couchroot-managed-'+transitionId,code=directory+'/code',stage='/opt/usr/home/owner/share/tmp/sdk_tools/managed-'+transitionId,unit='couchroot-managed-'+transitionId+'.service';
  const absent=p=>'test ! -e '+q(p)+'; test ! -L '+q(p)+'\n';
  const digest=(p,h)=>'test "$(sha256sum '+q(p)+' | cut -d " " -f1)" = '+q(h)+'\n';
  const parents=[];for(const leaf of [payload,path.dirname(stage)]){let p=leaf;while(p!=='/'){if(!parents.includes(p))parents.unshift(p);p=path.dirname(p);}}

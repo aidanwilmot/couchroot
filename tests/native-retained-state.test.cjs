@@ -176,11 +176,11 @@ async function managedLaunchFixture(f,committed=false){
  await acceptManagedRestore(r.accept);
  const tokenFile='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/managed-ABC123/token',tokenLocal=tokenFile.replace('/opt/usr',f.root+'/package-root');
  fs.mkdirSync(path.dirname(tokenLocal),{recursive:true,mode:0o700});fs.chownSync(path.dirname(tokenLocal),5001,100);const token=Buffer.from('a'.repeat(32)).toString('base64');fs.writeFileSync(tokenLocal,token,{mode:0o600});fs.chownSync(tokenLocal,5001,100);
- const runtime=f.root+'/dotnet';fs.writeFileSync(runtime,'fixture runtime',{mode:0o755});fs.mkdirSync(f.root+'/owner/share/tmp/sdk_tools',{recursive:true,mode:0o755});
+ const runtime=f.root+'/dotnet';fs.writeFileSync(runtime,'fixture runtime',{mode:0o755});fs.mkdirSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools',{recursive:true,mode:0o755});fs.symlinkSync('package-root/home',f.root+'/home');
  const bin=f.root+'/bin';fs.mkdirSync(bin);fs.writeFileSync(bin+'/systemctl','#!/bin/sh\necho LoadState=not-found\n',{mode:0o755});fs.writeFileSync(bin+'/systemd-run','#!/bin/sh\nprintf "%s\\n" "$@" > '+f.root+'/launched\n',{mode:0o755});
  const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-launch.js'),real=require('node:module').createRequire(file),module={exports:{}};
  require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./worker-selection'?{...real(n),managedVersion:p=>real(n).managedVersion(p.replace(payload,payloadLocal))}:n==='./policy'?{...real(n),read:(p,l)=>real(n).read(p.replace(payload,payloadLocal),l)}:real(n)});
- const execute=c=>r.execute(c.replaceAll('/opt/usr',f.root+'/package-root').replaceAll('/opt/couchroot-managed-',f.root+'/launch-').replaceAll("'/home/owner","'"+f.root+'/owner').replaceAll('/usr/bin/dotnet',runtime).replaceAll('PATH=/usr/bin:/bin','PATH='+bin+':/usr/bin:/bin'));
+ const execute=c=>r.execute(c.replaceAll('/opt/usr',f.root+'/package-root').replaceAll('/opt/couchroot-managed-',f.root+'/launch-').replaceAll("'/home","'"+f.root+'/home').replaceAll('/usr/bin/dotnet',runtime).replaceAll('PATH=/usr/bin:/bin','PATH='+bin+':/usr/bin:/bin'));
  const options={transitionId:r.receipt.transition_id,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,receiptSha256:r.receipt.receipt_sha256,payload,managedSha256:version,runtimeSha256:hash('fixture runtime'),port:12345,tokenFile,tokenSha256:hash(token),execute};
  return {...r,api:module.exports,launchOptions:options,execute,tokenLocal,payloadLocal,runtime,bin,launchFile:r.options.journalDirectory+'/'+options.transitionId+'.managed-launch.json'};
 }
@@ -190,6 +190,21 @@ test('managed restart journals before submission and keeps rollback selection pe
  assert.equal(result.phase,'submitted');assert.equal(submissions,1);assert.deepEqual(selectionStatus(r.options.selectionFile),before);
  assert.match(fs.readFileSync(f.root+'/launched','utf8'),/SamsungTvRootAgent.dll/);assert.equal(hash(fs.readFileSync(f.root+'/launch-'+result.id+'/code/SamsungTvRootAgent.dll')),result.files['SamsungTvRootAgent.dll']);
  await assert.rejects(r.api.submitManaged(r.launchOptions));
+}));
+test('managed launch uses canonical staging when home is the TV compatibility symlink',linux,()=>fixture(async f=>{
+ const r=await managedLaunchFixture(f);
+ assert(fs.lstatSync(f.root+'/home').isSymbolicLink());
+ const result=await r.api.submitManaged(r.launchOptions);
+ assert.equal(result.stage,'/opt/usr/home/owner/share/tmp/sdk_tools/managed-'+result.id);
+ assert(fs.existsSync(f.root+'/launched'));
+ assert(fs.existsSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools/managed-'+result.id+'/token'));
+}));
+test('managed launch still refuses a symlink in the canonical staging parent',linux,()=>fixture(async f=>{
+ const r=await managedLaunchFixture(f),parent=f.root+'/package-root/home/owner/share/tmp/sdk_tools';
+ fs.renameSync(parent,parent+'-actual');fs.symlinkSync(parent+'-actual',parent);
+ await assert.rejects(r.api.submitManaged(r.launchOptions));
+ assert(!fs.existsSync(f.root+'/launched'));
+ assert(!fs.existsSync(f.root+'/launch-'+r.launchOptions.transitionId));
 }));
 test('managed launch uncertain response retains intent and cannot launch twice',linux,()=>fixture(async f=>{
  const r=await managedLaunchFixture(f);let submissions=0;
@@ -220,9 +235,9 @@ async function managedReadyFixture(f,committed=false){
  const proc=f.root+'/proc/73';fs.mkdirSync(proc+'/ns',{recursive:true});fs.mkdirSync(f.root+'/proc/1/ns',{recursive:true});fs.symlinkSync('mnt:[2]',proc+'/ns/mnt');fs.symlinkSync('mnt:[1]',f.root+'/proc/1/ns/mnt');fs.symlinkSync(r.runtime,proc+'/exe');fs.writeFileSync(proc+'/stat','73 (dotnet) S '+Array(18).fill('0').join(' ')+' 500 0\n');
  fs.writeFileSync(proc+'/cmdline',['/usr/bin/dotnet',record.directory+'/code/SamsungTvRootAgent.dll','127.0.0.1',String(record.port),record.stage+'/token',record.stage].join('\0')+'\0');
  fs.writeFileSync(proc+'/mountinfo','1 0 0:1 / '+f.root+'/launch-'+record.id+'/code ro - tmpfs tmpfs rw\n2 0 0:2 / '+launcher+' ro - tmpfs tmpfs rw\n');
- fs.unlinkSync(f.root+'/owner/share/tmp/sdk_tools/managed-'+record.id+'/token');
+ fs.unlinkSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools/managed-'+record.id+'/token');
  const channel={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async request=>{if(request.op==='status')return JSON.parse(JSON.stringify(info));const item=r.snapshot.records.find(e=>e.name===request.id+'.json'),saved=JSON.parse(Buffer.from(item.base64,'base64').toString().replace(/^\uFEFF/,''));return {id:saved.id,boot_id:saved.boot_id,state:saved.state,record:saved,output_available:false};}};
- const execute=async c=>{if(c.includes('--property=Id,'))return {exit_code:0,stdout:'Id='+record.unit+'\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=73\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n',stderr:''};return r.execute(c.replaceAll(' /home/owner',' '+f.root+'/owner').replaceAll('/proc/73/',proc+'/').replaceAll('/proc/1/ns/mnt',f.root+'/proc/1/ns/mnt'));};
+ const execute=async c=>{if(c.includes('--property=Id,'))return {exit_code:0,stdout:'Id='+record.unit+'\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=73\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n',stderr:''};return r.execute(c.replaceAll('/proc/73/',proc+'/').replaceAll('/proc/1/ns/mnt',f.root+'/proc/1/ns/mnt'));};
  return {...r,record,info,proc,channel,execute,readyOptions:{record,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,channel,execute,providerIdentity},intent:r.launchFile+'.readiness.pending'};
 }
 test('managed readiness verifies runtime, mounts, retained jobs and receipt without committing selection',linux,()=>fixture(async f=>{

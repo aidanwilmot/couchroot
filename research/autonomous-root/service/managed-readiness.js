@@ -17,7 +17,7 @@ function validateManagedLaunch(r){
  check(r&&Object.keys(r).sort().join('|')==='boot_id|directory|files|id|implementation|manifest_sha256|origin_id|phase|port|runtime_sha256|schema|source|stage|state_receipt_sha256|token_file|token_sha256|unit');
  check(r.schema===1&&r.phase==='submitted'&&r.implementation==='managed'&&hex(r.id,32)&&hex(r.origin_id,32));
  for(const key of ['manifest_sha256','runtime_sha256','state_receipt_sha256','token_sha256'])check(hex(r[key],64));
- check(r.directory==='/opt/couchroot-managed-'+r.id&&r.stage==='/home/owner/share/tmp/sdk_tools/managed-'+r.id&&r.unit==='couchroot-managed-'+r.id+'.service');
+ check(r.directory==='/opt/couchroot-managed-'+r.id&&r.stage==='/opt/usr/home/owner/share/tmp/sdk_tools/managed-'+r.id&&r.unit==='couchroot-managed-'+r.id+'.service');
  check(r.files&&Object.keys(r.files).sort().join('|')==='SamsungTvRootAgent.deps.json|SamsungTvRootAgent.dll|SamsungTvRootAgent.runtimeconfig.json'&&Object.values(r.files).every(h=>hex(h,64)));
  check(Number.isInteger(r.port)&&r.port>=1024&&r.port<=65535&&typeof r.token_file==='string'&&/^\/opt\/usr\/home\/owner\/apps_rw\/MiniRoot01\/data\/worker-state\/managed-[A-Za-z0-9]{6}\/token$/.test(r.token_file)&&!r.token_file.includes('\n'));
  const s=r.source;check(s&&s.processes&&s.processes.guardian&&s.boot_id===r.boot_id);
