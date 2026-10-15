@@ -57,18 +57,22 @@ class PilotTransport(Transport):
         super().__init__(profile,evidence)
     def snapshot(self,privileged=False):
         state=super().snapshot(privileged=False)
-        script=''
-        for i,p in enumerate(self.pilot_files):
-            # Both package layouts are observed under a canonical package key.
-            candidate=p.replace('/res/wgt/','/') if p.startswith(PREFIX) else p
-            script+='printf "PILOT_FILE_'+str(i)+'="\n'
-            script+=f'p={Q(p)}\nif test ! -e "$p"; then p={Q(candidate)}; fi\nif test -L "$p"; then echo SYMLINK; elif test -f "$p"; then sha256sum "$p"; else echo ABSENT; fi\n'
-        script+='vconftool get db/sdk/develop/ip\n'
-        output=self.root(script)
-        for i,p in enumerate(self.pilot_files):
-            match=re.search(r'PILOT_FILE_'+str(i)+r'=([a-f0-9]{64}|ABSENT|SYMLINK)',output)
-            if not match:raise Refused('Pilot file inspection incomplete')
-            state['files'][p]=None if match[1]=='ABSENT' else match[1]
+        # The SDK diagnostic path can elide the middle of long command output.
+        # Bound each readback so a growing signed inventory remains verifiable.
+        for start in range(0,len(self.pilot_files),12):
+            batch=list(enumerate(self.pilot_files[start:start+12],start))
+            script=''
+            for i,p in batch:
+                # Both package layouts use a canonical package key.
+                candidate=p.replace('/res/wgt/','/') if p.startswith(PREFIX) else p
+                script+='printf "PILOT_FILE_'+str(i)+'="\n'
+                script+=f'p={Q(p)}\nif test ! -e "$p"; then p={Q(candidate)}; fi\nif test -L "$p"; then echo SYMLINK; elif test -f "$p"; then sha256sum "$p"; else echo ABSENT; fi\n'
+            output=self.root(script)
+            for i,p in batch:
+                match=re.search(r'PILOT_FILE_'+str(i)+r'=([a-f0-9]{64}|ABSENT|SYMLINK)',output)
+                if not match:raise Refused('Pilot file inspection incomplete')
+                state['files'][p]=None if match[1]=='ABSENT' else match[1]
+        output=self.root('vconftool get db/sdk/develop/ip\n')
         match=re.search(r'db/sdk/develop/ip, value = (\S+) \(String\)',output)
         if not match:raise Refused('Developer host unavailable')
         state['developer_host']=match[1]

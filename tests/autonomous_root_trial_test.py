@@ -1,8 +1,9 @@
+import re
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from tvsetup.autonomous_root_trial import PilotDriver,DATA,PREFIX,PROVISION,PACKAGE,package_files,inventory_review,reviewed_inventory,review_update
+from tvsetup.autonomous_root_trial import PilotTransport,PilotDriver,DATA,PREFIX,PROVISION,PACKAGE,package_files,inventory_review,reviewed_inventory,review_update
 from tvsetup.operations import observed
 from tvsetup.common import Refused,sha
 from tvsetup.planner import Action
@@ -90,3 +91,32 @@ class PilotTests(unittest.TestCase):
             with self.assertRaises(Refused):driver.verify(action,before,after)
             after['files']['/production']='old';after['developer_host']='127.0.0.1'
             with self.assertRaises(Refused):driver.verify(action,before,after)
+
+class PilotReadbackTests(unittest.TestCase):
+    def test_large_inventory_uses_bounded_complete_batches(self):
+        tv=object.__new__(PilotTransport)
+        tv.pilot_files=[PREFIX+'service/file'+str(i)+'.js' for i in range(69)]
+        calls=[]
+        def root(command):
+            calls.append(command)
+            indices=re.findall(r'PILOT_FILE_(\d+)=',command)
+            self.assertLessEqual(len(indices),12)
+            if not indices:return 'db/sdk/develop/ip, value = 127.0.0.1 (String)'
+            return ''.join('PILOT_FILE_'+i+'='+('ABSENT' if i=='1' else 'SYMLINK' if i=='2' else 'a'*64)+'\n' for i in indices)
+        tv.root=root
+        with patch('tvsetup.transport.Transport.snapshot',return_value={'files':{}}):
+            state=tv.snapshot()
+        self.assertEqual(len(calls),7)
+        self.assertEqual(len(state['files']),69)
+        self.assertIsNone(state['files'][tv.pilot_files[1]])
+        self.assertEqual(state['files'][tv.pilot_files[2]],'SYMLINK')
+        self.assertEqual(state['files'][tv.pilot_files[-1]],'a'*64)
+        self.assertEqual(state['developer_host'],'127.0.0.1')
+
+    def test_missing_middle_batch_entry_still_refuses(self):
+        tv=object.__new__(PilotTransport);tv.pilot_files=[PREFIX+str(i) for i in range(30)]
+        def root(command):
+            return ''.join('PILOT_FILE_'+i+'='+'a'*64+'\n' for i in re.findall(r'PILOT_FILE_(\d+)=',command) if i!='15')
+        tv.root=root
+        with patch('tvsetup.transport.Transport.snapshot',return_value={'files':{}}):
+            with self.assertRaisesRegex(Refused,'inspection incomplete'):tv.snapshot()

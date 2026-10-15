@@ -1375,3 +1375,23 @@ These are preparation checks only: 0.7.15 has not been installed, no rehearsal
 has run on hardware, and neither TV was rebooted. Installation must preserve the
 existing enrollment and use the current 0.7.13 package as its recovery baseline;
 older private deployment script source pointers are stale and must not be reused.
+
+### QN90A candidate installation and bounded inventory readback
+
+QN90A now runs the signed 0.7.15 candidate with managed selected and ready. Its
+65 package members, enrollment certificates, protected files and startup flags
+were checked against the expected installation. The boot ID remained unchanged,
+SDK access returned to loopback, the temporary recovery timer was disarmed and
+the shared installation journal completed. The new native-status API responds
+with no active operation. No hardware native rehearsal has run yet; S90D remains
+on 0.7.13 pending the same update.
+
+The first post-install snapshot failed because the SDK diagnostic response omitted
+middle inventory entries from its long output. The installer itself reported
+success. Recovery used smaller read-only batches and the existing engine journal
+to verify the installed after-state; installation was not replayed. The shared
+pilot transport now reads at most 12 inventory entries per command and obtains
+the SDK setting separately. Missing entries still refuse verification. Focused
+large-inventory and missing-middle-entry tests pass; the full Python suite ran
+360 tests successfully, with 108 environment-dependent skips. Private recovery
+logs and signed packages remain outside Git. Neither TV was rebooted.
