@@ -1036,8 +1036,8 @@ transaction. A separate explicit cleanup verifies remaining staging and removes
 its ownership markers before another migration is admitted. Original interrupted
 request rows retain their uncertainty; recovery does not replay the request.
 
-Provider loss with the original coordinator still running, later production
-readiness and cross-boot recovery are not established by these rounds. The managed
+These rounds do not establish later production readiness or cross-boot recovery.
+For live-coordinator recovery and its S90D cleanup limit, see below. The managed
 fallback and independent SDK rescue remain available. See
 [forward recovery results](native-worker/forward-recovery-results.json).
 
@@ -1053,3 +1053,41 @@ All owned trial resources were cleaned and managed readiness restored without
 replaying either invocation. The .NET fallback and independent rescue remain
 unchanged. See [probe contract](../native-root-acquisition/entry/README.md) and
 [hardware evidence](../native-root-acquisition/entry/results.json).
+
+
+## Live forward-failure recovery
+
+A settled failure before native commit now gates a fresh managed acquisition in
+the original coordinator. This applies only when the durable forward transaction
+and its recorded provider/source evidence match the failed controller. The gate
+is installed before closing its source, provider and production transports. No
+public operation is admitted until the existing read-only rollback verifier
+confirms old process/unit absence, a distinct managed executor on the same boot,
+and unchanged retained managed state. It then rolls back the original selection
+transaction. Closing a transport alone never proves that its worker has exited.
+
+Malformed or missing evidence, a selection writer, a published commit, activation
+failure and managed-return failure do not enter this path. They retain their
+existing reconciliation boundaries. A transport-close failure leaves the original
+hold intact. Recovery never replays provider launch, state installation or the
+original migration request; it acquires only a fresh held managed executor.
+
+Native status exposes `durable.restart_rollback.trigger: "live-forward-failure"`
+and the failed controller phase. The original background operation remains unknown
+and its journal row remains submitted. Its `recovery_transaction_id` permits
+`cleanup-restart` only for that exact, successfully rolled-back transaction, using
+a fresh request ID. Cleanup remains explicit; an unknown cleanup cannot be
+resubmitted through this exception. After verified cleanup, a new migration or
+rehearsal can use the same coordinator. No fault-injection API is introduced.
+
+
+Signed 0.7.34 qualified automatic rollback/readmission after provider loss on both
+TVs without restarting the original coordinator. QN90A also passed normal explicit
+cleanup. S90D's unpaused trial retained an external observer remnant, so generic
+cleanup stayed unknown until separate guarded observer retirement and a later
+coordinator restart allowed reconciliation of the same cleanup intent. S90D cleanup
+without maintenance remains unqualified. A preceding paused S90D trial lost its
+coordinator and was recovered through the independent .NET SDK rescue; its cause
+remains unresolved. Both TVs ended managed-ready, settled, and on SDK loopback,
+with retained jobs, enrollment and recovery bytes preserved. See
+[live recovery results](native-worker/live-recovery-results.json).

@@ -7,11 +7,18 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.33 packages with native service acquisition enabled,
-managed selected and ready, and settled histories of 25 entries each: 22 committed
-and three rolled back. The latest rounds qualify forward rollback at provider
-readiness and retained-state readiness, plus provider loss followed by coordinator
-restart, with explicit cleanup under each original transaction. See
+Both TVs are on signed 0.7.34 packages with native service acquisition enabled,
+managed selected and ready. QN90A has 26 settled history entries (22 committed,
+four rolled back); S90D has 27 (22 committed, five rolled back).
+Both qualified automatic rollback and managed readmission after provider loss
+with the original coordinator still running. QN90A also completed ordinary
+explicit cleanup. S90D required separate observer retirement and a later
+coordinator restart to reconcile an unknown cleanup request; that cleanup gap
+remains open. A preceding paused S90D trial lost its coordinator, recovered via
+the independent .NET SDK rescue, and was not counted as live recovery. See
+[live recovery evidence](live-recovery-results.json).
+Earlier rounds qualified forward rollback at provider readiness and retained-state
+readiness, plus provider loss followed by coordinator restart; see
 [forward recovery evidence](forward-recovery-results.json).
 The 0.7.33 package adds an opt-in read-only SDK entry probe. Both direct vendor-loader
 trials returned without a capability receipt; native-only entry remains unqualified.
@@ -59,9 +66,12 @@ pending. See [round-trip evidence](roundtrip-results.json) and
 
 Native public admission and same-boot recovery are qualified for the bounded
 rounds above. Native-default and .NET-free completion still require:
-- Later forward-handoff interruption boundaries and provider-loss handling without
-  coordinator restart; provider-ready, state-ready and provider-loss plus restart
-  now have both-TV rollback/cleanup evidence without operation replay.
+- S90D observer retirement after provider loss and safe continuation of an unknown
+  cleanup in the live coordinator. Automatic rollback/readmission now has both-TV
+  evidence, but S90D cleanup still needs separate maintenance.
+- Later forward-handoff interruption boundaries, including installed production
+  readiness. Provider-ready/state-ready interruption and provider-loss rollback
+  now have both-TV evidence without operation replay.
 - Wider interruption boundaries and maintenance lifecycle coverage beyond the
   same-boot startup and active-return checks.
 - Establishing a .NET-free capability entry, then adopting it in agent-required
@@ -2460,3 +2470,78 @@ initial macOS process-group deadline test errored; focused and full reruns passe
 See [entry evidence](../../native-root-acquisition/entry/results.json). This is
 an implemented and tested diagnostic with unsuccessful native-entry qualification,
 not .NET-free acquisition or native-default completion.
+
+
+### Live coordinator forward-failure recovery — 2026-10-15
+
+The coordinator now handles settled, uncommitted forward failures without needing
+a service restart. It accepts only its current held controller and a matching
+reconcilable durable transaction. Before closing source/provider/production
+transports, it installs the rollback admission gate and invalidates stale channel
+callbacks. A fresh managed executor runs the existing read-only rollback checks:
+same boot, distinct identity, no old recorded processes or active unit cgroups,
+no executor resources, and unchanged retained managed state. Transport closure
+alone never authorizes reopening admission.
+
+A missing or ambiguous receipt, selection writer, published commit, failed native
+activation or failed managed return keeps its existing recovery boundary. A
+transport-close exception retains the original hold. The forward request stays
+unknown in memory and submitted in its journal; recovery neither repeats its
+launch/install work nor rewrites it as success. The API binds a separate explicit
+cleanup request to the exact recovered transaction. Unknown cleanup remains
+blocked, and successful cleanup permits another handoff on the same coordinator.
+
+Real-process tests cover provider termination, failure after state acceptance,
+and failure just before commit while retaining the original coordinator object.
+They verify held public admission, read-only reconciliation, retained bytes,
+explicit cleanup and a subsequent normal round trip. Additional cases prove that
+published commit and ambiguous writer outcomes stay held. Existing restart,
+selected-native reacquisition, return and rehearsal cases remain covered.
+
+
+Signed 0.7.34 qualified automatic rollback/readmission after provider loss on both
+TVs. QN90A's bounded watcher briefly paused the bound coordinator and terminated
+only the recorded provider guardian. The same coordinator acquired a fresh held
+managed worker, verified rollback on the first attempt, and completed explicit
+cleanup. S90D's unpaused watcher also produced first-attempt rollback with the
+original coordinator PID/start time unchanged. Its failure was in source stopping;
+QN90A's was in retained-state processing.
+
+S90D exposed an outstanding cleanup boundary. Its source-exit observer had a
+terminal failure receipt and idle unit, but the execution directory remained.
+Generic cleanup stopped the idle unit and then refused that unsupported remnant,
+retaining its cleanup intent and original request uncertainty. Separate guarded
+maintenance checked the original observer receipt, process absence, exact artifact
+and scope bytes, then retired only those resources. The coordinator was restarted
+only after automatic rollback/readmission had succeeded, to clear the volatile
+unknown-cleanup task slot. A fresh explicit request reconciled the same cleanup
+intent. Neither the migration nor the original cleanup request was rewritten as
+successful or blindly replayed. This does not qualify maintenance-free S90D cleanup.
+
+An earlier S90D trial using a brief coordinator pause lost the endpoint process.
+The guardian signal matched the recorded provider identity; the cause of the
+coordinator exit remains unproven. The independent 300-second .NET rescue reopened
+SDK access on the same boot. A single service restoration rolled back the original
+transaction, and separate observer retirement completed recovery. No reboot,
+standby, platform-policy change or unrelated-app operation was performed.
+
+Both devices ended managed-ready and settled on SDK loopback. All retained job
+bytes, enrollment/configuration, protected files and managed recovery digests
+matched their baselines. Witness and observer scopes are absent, no setup or
+selection operation remains pending, and all 11 owned units on QN90A and 30 on
+S90D are inactive. The extra S90D units include independent rescue and explicit
+cleanup recovery. Private harness corrections handled cached Developer Mode data,
+verified empty inspection staging, exact serialized receipt bytes and encoded
+systemd shell arguments; they did not repeat an uncertain migration.
+
+Validation: 380 Node tests passed with 140 platform/fixture skips. Fresh scratch
+native/managed fixtures passed six rehearsal cases and fourteen recovery cases;
+two additional commit-refusal cases passed in a separate fresh container. Privacy
+audit passed. No Python/client/setup source changed. See
+[live recovery evidence](live-recovery-results.json).
+
+Next: integrate evidence-bound S90D observer retirement into forward cleanup and
+provide a bound reconciliation path for its existing unknown cleanup task, with
+focused failure tests and both-TV acceptance. Later production-readiness faults,
+final production endurance, native-default rollout and native-only code entry
+remain separate gates. The managed bridge, fallback and independent rescue stay.

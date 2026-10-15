@@ -14,6 +14,7 @@ function createNativeTasks({agent,journal}){
    catch(error){
     let outcome=['rejected','failed'].includes(error&&error.outcome)?error.outcome:'unknown';
     if(outcome!=='unknown')try{journal.finish(current.id,{exit_code:1,timed_out:false});}catch(_){outcome='unknown';}
+    if(outcome==='unknown'&&['native.migrate','native.rehearse'].includes(kind)&&typeof error.recovery_transaction_id==='string'&&/^[a-f0-9]{32}$/.test(error.recovery_transaction_id))current.recovery_transaction_id=error.recovery_transaction_id;
     current.state=outcome;current.detail=String(error&&error.message||error).slice(0,200);
    }finally{running=false;}
   });
@@ -45,7 +46,8 @@ function createNativeTasks({agent,journal}){
   },
   cleanupRestart:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|transaction_id'&&id(value.id)&&typeof value.transaction_id==='string'&&/^[a-f0-9]{32}$/.test(value.transaction_id));
-   check((!task||task.state!=='unknown')&&typeof agent.cleanupRestart==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='managed');
+   const recovered=task&&task.state==='unknown'&&['native.migrate','native.rehearse'].includes(task.kind)&&task.recovery_transaction_id===value.transaction_id&&typeof agent.canCleanupRestart==='function'&&agent.canCleanupRestart(value.transaction_id);
+   check((!task||task.state!=='unknown'||recovered)&&typeof agent.cleanupRestart==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='managed');
    return launch('native.cleanup-restart',value,()=>agent.cleanupRestart(value.transaction_id),value.id);
   },
   resume:value=>{

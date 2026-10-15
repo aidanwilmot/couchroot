@@ -1,5 +1,5 @@
 'use strict';
-// After a service restart, return an uncommitted forward native trial to its
+// After a service restart or settled live failure, return a forward trial to its
 // unchanged managed state. Native never had public admission before commit, so
 // the managed job directory remains authoritative. A freshly acquired managed
 // worker, held from public admission, is used only to verify that every old

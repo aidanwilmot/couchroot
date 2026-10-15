@@ -607,13 +607,47 @@ function createAgent(config,options={}){
  }
  // A migration rejected before handoff changed nothing durable; replace it.
  function freshMigration(){if(!migration||migration.status().phase==='rejected')migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration;}
+ // A settled, uncommitted forward failure can use the same read-only rollback
+ // as a restart. Install its admission gate before retiring any live handles.
+ // Transport closure is not cleanup evidence: the fresh executor must still
+ // prove every recorded process/unit gone and retained managed state unchanged.
+ function recoverForward(controller){
+  const failed=controller.status();
+  if(!running||migration!==controller||!admissionHold||nativeRuntime||managedReturn||restartHeld()||!options.selectionFile||failed.phase!=='reconciliation-required'||!['provider','stopping-source','retained-state','production','committing'].includes(failed.failed_phase))return null;
+  const selected=selection(true),candidate=restartRollbackCandidate(options.selectionFile,(options.managedVersion||managedVersion)(payload));
+  if(!candidate||!selected.pending||selected.pending.id!==failed.transaction_id||candidate.id!==failed.transaction_id||!['prepared','state-ready','trial-ready'].includes(candidate.phase))return null;
+  const r={id:candidate.id,phase:'acquiring',running:false,attempts:0,error:null,result:null,trigger:'live-forward-failure',failed_phase:failed.failed_phase};
+  restartRollback=r;
+  ++generation;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;
+  if(timer)clearTimeout(timer);timer=null;
+  // If closing a handle fails, leave the original hold in place. No new
+  // executor or public operation can escape this unresolved boundary.
+  controller.closeTransport();if(channel)channel.close();if(client)sdb.close(client);
+  channel=null;client=null;launching=false;migration=null;admissionHold=null;
+  launch();return r.id;
+ }
+ async function runForward(manifestSha256,options){
+  const controller=freshMigration();
+  try{return await controller.run(manifestSha256,options);}
+  catch(error){
+   try{const id=recoverForward(controller);if(id)error.recovery_transaction_id=id;}
+   catch(cause){lastError='Live forward recovery held: '+String(cause.message).slice(0,160);}
+   // Recovery does not change the outcome of the original submitted request.
+   throw error;
+  }
+ }
+ function canCleanupRestart(transactionId){
+  if(!restartRollback||restartRollback.trigger!=='live-forward-failure'||restartRollback.phase!=='complete'||restartRollback.id!==transactionId)return false;
+  const s=selection(true),h=s.history&&s.history[s.history.length-1];
+  return s.phase==='stable'&&s.launch_allowed&&s.selected_implementation==='managed'&&!!h&&h.id===transactionId&&h.outcome==='rolled-back';
+ }
  async function rehearseNative(manifestSha256,runtimeSha256){
   await verifyFallback(runtimeSha256,'Native rehearsal');
-  return freshMigration().run(manifestSha256,{returnToManaged:true,runtimeSha256});
+  return runForward(manifestSha256,{returnToManaged:true,runtimeSha256});
  }
  async function migrateNative(manifestSha256,runtimeSha256){
   await verifyFallback(runtimeSha256,'Native migration');
-  return freshMigration().run(manifestSha256);
+  return runForward(manifestSha256);
  }
  // Return an admitted native runtime to the installed managed version. Nothing
  // durable changes before the return transition begins; a refusal reopens native.
@@ -645,7 +679,7 @@ function createAgent(config,options={}){
   if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();
  }
  // Durable evidence only; live coordinator handles are reported separately.
- const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),bootstrap_recovery:bootstrapRecovery&&{id:bootstrapRecovery.id,phase:bootstrapRecovery.phase,attempts:bootstrapRecovery.attempts,error:bootstrapRecovery.error},native_startup:nativeStartup,restart_return:restartReturn&&{transaction_id:restartReturn.id,phase:restartReturn.phase,attempts:restartReturn.attempts,error:restartReturn.error,result:restartReturn.result||null},startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null},restart_rollback:restartRollback&&{transaction_id:restartRollback.id,phase:restartRollback.phase,attempts:restartRollback.attempts,error:restartRollback.error,receipt_sha256:restartRollback.result?restartRollback.result.receipt_sha256:null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
- const api={status,start,stop,holdAdmission,probeObserver,restartInventory,cleanupRestart,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},canResumeManaged,resumeManagedActivation,returnManaged,rehearseNative,migrateNative};return api;
+ const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),bootstrap_recovery:bootstrapRecovery&&{id:bootstrapRecovery.id,phase:bootstrapRecovery.phase,attempts:bootstrapRecovery.attempts,error:bootstrapRecovery.error},native_startup:nativeStartup,restart_return:restartReturn&&{transaction_id:restartReturn.id,phase:restartReturn.phase,attempts:restartReturn.attempts,error:restartReturn.error,result:restartReturn.result||null},startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null},restart_rollback:restartRollback&&{transaction_id:restartRollback.id,phase:restartRollback.phase,trigger:restartRollback.trigger||'service-restart',failed_phase:restartRollback.failed_phase||null,attempts:restartRollback.attempts,error:restartRollback.error,receipt_sha256:restartRollback.result?restartRollback.result.receipt_sha256:null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
+ const api={status,start,stop,holdAdmission,probeObserver,restartInventory,cleanupRestart,canCleanupRestart,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},canResumeManaged,resumeManagedActivation,returnManaged,rehearseNative,migrateNative};return api;
 }
 module.exports={createAgent,launchRequest};

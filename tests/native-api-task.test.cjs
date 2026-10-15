@@ -94,3 +94,23 @@ test('a return refused before mutation permits a new request after live jobs set
  assert.throws(()=>f.tasks.returnManaged(first),'request IDs remain single use');
  f.tasks.returnManaged({...first,id:'settled-return-next-0001'});await tick();await tick();assert.equal(calls,2);assert.equal(f.tasks.status().state,'completed');assert.deepEqual(f.journal.rows.map(r=>r.exit_code),[1,0]);
 }));
+
+for(const kind of ['rehearse','migrate'])test('live rollback cleanup binds the failed '+kind+' to its reconciled transaction',()=>fixture(async f=>{
+ const transaction='c'.repeat(32);let recovered=false;
+ if(kind==='migrate')f.agent.migrateNative=f.agent.rehearseNative;
+ f.agent.canCleanupRestart=id=>recovered&&id===transaction;
+ f.agent.cleanupRestart=async id=>({id});
+ f.tasks[kind](value);await tick();f.fail(Object.assign(Error('provider disconnected'),{outcome:'unknown',recovery_transaction_id:transaction}));await tick();
+ const request={id:'native-cleanup-0001',transaction_id:transaction};
+ assert.throws(()=>f.tasks.cleanupRestart(request));assert.equal(f.journal.rows.length,1);
+ recovered=true;assert.throws(()=>f.tasks.cleanupRestart({...request,transaction_id:'d'.repeat(32)}));
+ assert.equal(f.tasks.cleanupRestart(request).state,'submitted');await tick();await tick();
+ assert.equal(f.tasks.status().state,'completed');assert.deepEqual(f.journal.rows.map(r=>r.state),['submitted','completed']);
+ assert.throws(()=>f.tasks[kind](value),/already submitted/);
+ f.tasks[kind]({...value,id:'native-followup-0001'});await tick();f.complete({});await tick();
+}));
+test('cleanup cannot bypass an unknown operation without its recovery binding',()=>fixture(async f=>{
+ f.agent.canCleanupRestart=()=>true;f.agent.cleanupRestart=async()=>({});
+ f.tasks.rehearse(value);await tick();f.fail(Error('unknown activation'));await tick();
+ assert.throws(()=>f.tasks.cleanupRestart({id:'native-cleanup-0001',transaction_id:'c'.repeat(32)}));assert.equal(f.journal.rows.length,1);
+}));
