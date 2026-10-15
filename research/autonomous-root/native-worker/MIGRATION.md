@@ -1198,3 +1198,36 @@ integration are the next required steps.
 
 The combined Linux migration suite passes 221 tests without skips. The tracked-file
 privacy audit reports no findings across 609 files.
+
+### Held adopted-native shutdown for managed return — local follow-up
+
+The existing handoff hold now inventories its adopted native channel and can stop
+it for an explicitly prepared return-to-managed transition. It binds the new
+selection's quiescence digest to settled resources, the native ready receipt and
+original managed version. The independent provider binds both native processes;
+the agent then reconfirms inventory and selection before writing and syncing a
+single-attempt native-stop record and issuing shutdown. Successful independent
+exit evidence publishes a stopped receipt. Unknown shutdown/exit outcomes retain
+the submitting receipt and admission hold, and cannot implicitly repeat shutdown.
+
+Managed adoption after native adoption now requires this verified native stop.
+Native activation cannot race a pending shutdown, and stale source callbacks remain
+invalidated. This supports return within the original held handoff; creating a new
+hold for an already activated native service remains separate work.
+
+The retirement session now forwards the rollback methods added to its underlying
+provider. It also owns the prepared exit-observation handle and refuses provider
+retirement between binding and successful exit confirmation. Failed binding or
+observation retains that guard; closing transport does not claim cleanup.
+
+Tests cover the complete held native-stop-to-managed-adoption sequence, journal
+publication before shutdown, changed identity/selection, an existing stop record,
+lost shutdown reply, failed exit observation, blocked public admission and no
+implicit replay. Session tests verify method forwarding and retirement exclusion
+while exit evidence is pending or uncertain. These are local orchestration tests;
+no TV was changed or rebooted, and .NET remains deployed. Top-level return/rollback
+orchestration, interrupted-stop reconciliation, active-native holds and both-TV
+qualification remain open.
+
+The combined Linux migration suite passes 223 tests without skips. The tracked-file
+privacy audit reports no findings across 609 files.

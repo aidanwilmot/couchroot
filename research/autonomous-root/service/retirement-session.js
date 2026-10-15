@@ -40,11 +40,22 @@ async function openRetirementSession(options){
   const ready=await readyRetirement({...options,record,channel});
   if(closed||channel._conn!==peer)throw Error('Retirement connection changed during readiness');
   clearTimeout(timer);
-  let retiring=false,inUse=0;
+  let retiring=false,inUse=0,exitPending=false;
   const call=async(method,request)=>{if(retiring||closed)throw Error('Retirement session is closing');inUse++;try{return await ready.provider[method](request);}finally{inUse--;}};
-  const provider=Object.freeze({identity:ready.provider.identity,inspectUnit:request=>call('inspectUnit',request),retireUnit:request=>call('retireUnit',request),snapshotManagedJobs:()=>call('snapshotManagedJobs'),installManagedState:options=>call('installManagedState',options),acceptManagedState:options=>call('acceptManagedState',options),launchProduction:options=>call('launchProduction',options),verifyProduction:options=>call('verifyProduction',options)});
+  const provider=Object.freeze({identity:ready.provider.identity,
+   inspectUnit:request=>call('inspectUnit',request),retireUnit:request=>call('retireUnit',request),snapshotManagedJobs:()=>call('snapshotManagedJobs'),installManagedState:options=>call('installManagedState',options),acceptManagedState:options=>call('acceptManagedState',options),launchProduction:options=>call('launchProduction',options),verifyProduction:options=>call('verifyProduction',options),
+   snapshotNativeJobs:options=>call('snapshotNativeJobs',options),restoreManagedState:options=>call('restoreManagedState',options),acceptManagedRestore:options=>call('acceptManagedRestore',options),launchManaged:options=>call('launchManaged',options),verifyManaged:options=>call('verifyManaged',options),
+   prepareNativeExit:async record=>{
+    if(exitPending||retiring||closed)throw Error('Native exit observation already pending');exitPending=true;
+    const observer=await call('prepareNativeExit',record);let waited=false;
+    return Object.freeze({waitForExit:async()=>{
+     if(waited||retiring||closed)throw Error('Native exit observation unavailable');waited=true;inUse++;
+     try{const result=await observer.waitForExit();exitPending=false;return result;}finally{inUse--;}
+    }});
+   }
+  });
   const retire=async executor=>{
-   if(retiring||closed||inUse)throw Error('Retirement session is busy or closing');
+   if(retiring||closed||inUse||exitPending)throw Error('Retirement session is busy or closing');
    retiring=true;
    try{
     const stopped=await shutdownRetirement({record:ready.record,journalDirectory,channel});

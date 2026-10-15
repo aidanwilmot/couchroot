@@ -467,7 +467,8 @@ test('native preparation binds held inventory and prevents shutdown during provi
 test('held handoff adopts managed rollback with admission closed and stale callbacks invalidated',async()=>{
  const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
  const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
- for(const mode of ['ok','after-native-adoption','identity-drift','selection-drift','receipt-drift','cleanup-failure','provider-failure','activation-failure','final-drift']){
+ for(const mode of ['ok','after-native-adoption','identity-drift','selection-drift','receipt-drift','cleanup-failure','provider-failure','activation-failure','final-drift','native-stop-identity','native-stop-selection','native-stop-shutdown','native-stop-exit','native-stop-journal']){
+  const nativeReturn=mode==='after-native-adoption'||mode.startsWith('native-stop-');
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'managed-adoption-')),file=dir+'/selection.json',journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,taken=0,closed=0;
   const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(!live)throw Object.assign(Error('gone'),{code:'ENOENT'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';};
   const events=[];let finalDrift=false;
@@ -483,21 +484,32 @@ test('held handoff adopts managed rollback with admission closed and stale callb
    const nativeIdentity={boot_id:BOOT,worker_id:nativeInfo.worker_id,processes:nativeInfo.processes},nativeRecord={schema:1,id:origin,phase:'ready',device:'qn90a',manifest_sha256:'c'.repeat(64),state_receipt_sha256:'d'.repeat(64),worker_sha256:'e'.repeat(64),launcher_sha256:DIGEST,source,boot_id:BOOT,unit:'couchroot-worker-'+origin+'.service',directory:'/opt/couchroot-worker-'+origin,scope:'/opt/couchroot-worker-'+origin+'/state',port:12345,token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/production-ABC123/token',token_sha256:'e'.repeat(64),worker_identity:nativeIdentity,unit_started_monotonic:'123'};
    old.shutdown=async()=>{live=false;ready.conn._socket.destroy();return {acknowledged:true,disconnected:true};};await hold.shutdown(origin);
    let id=origin,nativeChannel;
-   if(mode==='after-native-adoption'){
+   if(nativeReturn){
     journal.advance(2,origin,'state-ready',nativeRecord.state_receipt_sha256);journal.advance(3,origin,'trial-ready',digest(nativeRecord));journal.commit(4,origin);
     nativeChannel={_conn:{identity:{pid:52,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async()=>nativeInfo,close(){this._conn=null;if(this.onClose)this.onClose();}};
     await hold.adoptProduction({record:nativeRecord,readiness_sha256:digest(nativeRecord),takeChannel:async()=>nativeChannel,closeTransport:()=>nativeChannel.close()});
-    id=journal.begin(5,{implementation:'managed',manifest_sha256:DIGEST},'8'.repeat(64)).pending.id;
+    id=journal.begin(5,{implementation:'managed',manifest_sha256:DIGEST},digest({...nativeIdentity,resources:nativeInfo.resources})).pending.id;
    }else journal.advance(2,id,'rollback-required','8'.repeat(64));
-   const restored={schema:1,id:origin,transition_id:id,phase:'restored',quiescence_sha256:'8'.repeat(64)},stateDigest=digest(restored);
+   const restored={schema:1,id:origin,transition_id:id,phase:'restored',quiescence_sha256:journal.read().pending.quiescence_sha256},stateDigest=digest(restored);
    const info={...inventoried(),worker_id:'9'.repeat(32),processes:{worker:{pid:73,start_ticks:'500'},guardian:null}};
    const record={schema:1,id,phase:'ready',implementation:'managed',manifest_sha256:DIGEST,runtime_sha256:'e'.repeat(64),state_receipt_sha256:stateDigest,origin_id:origin,source:nativeIdentity,boot_id:BOOT,unit:'couchroot-managed-'+id+'.service',directory:'/opt/couchroot-managed-'+id,stage:'/home/owner/share/tmp/sdk_tools/managed-'+id,files:{'SamsungTvRootAgent.dll':'e'.repeat(64),'SamsungTvRootAgent.runtimeconfig.json':'e'.repeat(64),'SamsungTvRootAgent.deps.json':'e'.repeat(64)},port:12345,token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/managed-ABC123/token',token_sha256:'e'.repeat(64),worker_identity:{boot_id:BOOT,worker_id:info.worker_id,processes:info.processes},launcher_sha256:DIGEST,unit_started_monotonic:'456'};
    for(const [name,value] of [[origin+'.production.json',nativeRecord],[id+'.managed-restore.json',restored],[id+'.managed-launch.json',record]])fs.writeFileSync(dir+'/'+name,JSON.stringify(value),{mode:0o600});
+   if(nativeReturn){
+    const nativeInventory=await hold.snapshotNative();assert.equal(nativeInventory.worker_id,nativeInfo.worker_id);
+    let binds=0,stops=0;const provider={record:{source,manifest_sha256:nativeRecord.manifest_sha256},provider:{prepareNativeExit:async record=>{binds++;assert.equal(record.id,origin);if(mode==='native-stop-identity')nativeInfo.worker_id='0'.repeat(32);if(mode==='native-stop-selection')journal.advance(journal.read().revision,id,'state-ready',DIGEST);return {waitForExit:async()=>{if(mode==='native-stop-exit')throw Error('exit observation unknown');return {record_id:origin,identity:nativeIdentity};}};}}};
+    nativeChannel.shutdown=async()=>{stops++;assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'submitting');nativeChannel.close();if(mode==='native-stop-shutdown')throw Error('shutdown response lost');return {acknowledged:true,disconnected:true};};
+    if(mode==='native-stop-journal')fs.writeFileSync(dir+'/'+id+'.native-stop.json','existing',{mode:0o600});
+    if(mode.startsWith('native-stop-')){
+     await assert.rejects(hold.shutdownNative(id,provider),e=>e.outcome==='unknown');const before=[binds,stops];await assert.rejects(hold.shutdownNative(id,provider));assert.deepEqual([binds,stops],before);assert.equal(agent.status().admission_held,true);await assert.rejects(agent.execute('blocked',100));
+     assert.equal(stops,['native-stop-shutdown','native-stop-exit'].includes(mode)?1:0);if(stops)assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'submitting');continue;
+    }
+    const stopped=await hold.shutdownNative(id,provider);assert.equal(stopped.phase,'stopped');assert.equal(stopped.inventory_sha256,digest(nativeInventory));assert.equal(agent.status().admission_held,true);assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'stopped');await assert.rejects(hold.shutdownNative(id,provider));
+   }
    const next={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async()=>(mode==='identity-drift'||finalDrift)?{...info,worker_id:'0'.repeat(32)}:info,execute:async()=>({exit_code:0,stdout:'managed'}),close(){this._conn=null;if(this.onClose)this.onClose();}};
    const session={record,readiness_sha256:digest(record),takeChannel:async()=>{taken++;if(mode==='selection-drift')journal.begin(journal.read().revision,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},DIGEST);if(mode==='receipt-drift')fs.writeFileSync(dir+'/'+id+'.managed-restore.json','{}');return next;},closeTransport:()=>{closed++;next.close();}};
-   journal.advance(journal.read().revision,id,mode==='after-native-adoption'?'state-ready':'rollback-state-ready',stateDigest);
+   journal.advance(journal.read().revision,id,nativeReturn?'state-ready':'rollback-state-ready',stateDigest);
    await assert.rejects(hold.adoptManaged(session),/Committed managed/);assert.equal(taken,0);
-   if(mode==='after-native-adoption'){journal.advance(journal.read().revision,id,'trial-ready',session.readiness_sha256);journal.commit(journal.read().revision,id);}else journal.commitRollback(journal.read().revision,id,session.readiness_sha256);
+   if(nativeReturn){journal.advance(journal.read().revision,id,'trial-ready',session.readiness_sha256);journal.commit(journal.read().revision,id);}else journal.commitRollback(journal.read().revision,id,session.readiness_sha256);
    if(!['identity-drift','selection-drift','receipt-drift'].includes(mode)){
     const result=await hold.adoptManaged(session);assert.equal(result.admission_held,true);assert.equal(agent.status().worker_id,info.worker_id);assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_ready,false);
     old.options.onClose();if(nativeChannel&&nativeChannel.onClose)nativeChannel.onClose();assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_id,info.worker_id);

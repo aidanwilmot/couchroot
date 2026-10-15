@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const sdb=require('./vendor/sdb'),{tarGz}=require('./vendor/tar'),{RootAgentServer}=require('./vendor/root-agent');
-const {read,hash,verifyFirmware,sdkRuntimeGuard}=require('./policy');
+const {read,hash,atomic,verifyFirmware,sdkRuntimeGuard}=require('./policy');
 const {candidateStatus}=require('./native-candidate');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const {selectionStatus,managedVersion}=require('./worker-selection');
@@ -146,6 +146,15 @@ function createAgent(config,options={}){
    if(token.targetVersion&&token.targetVersion!==target)throw Error('Selection target changed during handoff');
    token.targetVersion=target;
   }
+  async function nativeSnapshot(){
+   const adopted=token.adopted,peer=adopted&&adopted.channel._conn;
+   const bound=()=>{if(!adopted||adopted.managed||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!peer||adopted.channel._conn!==peer||currentBoot()!==boot)throw Error('Held native ownership required');};
+   bound();const info=await adopted.channel.operation({op:'status'});bound();
+   validateReadiness(info,{implementation:'native-prototype',bootId:boot,launcherSha256:adopted.record.launcher_sha256});
+   const nativeIdentity=processIdentities(info,peer.identity.pid),resources=validateResourceInventory(info);
+   if(JSON.stringify(nativeIdentity)!==JSON.stringify(adopted.record.worker_identity))throw Error('Native identity changed before rollback');
+   return {...nativeIdentity,resources:JSON.parse(JSON.stringify(resources))};
+  }
   return {
    snapshot:async()=>{if(token.preparingStop)throw Error('Worker shutdown preparation in progress');return snapshot();},
    probeObserver:async (expectedManifest,requestId)=>{
@@ -286,10 +295,36 @@ function createAgent(config,options={}){
      return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
     }catch(error){session.closeTransport();throw Object.assign(Error('Production channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
    },
+   snapshotNative:async()=>{if(token.nativeStopAttempted||token.nativeStopping||token.preparingNativeStop||token.completionBusy)throw Error('Native shutdown requires reconciliation');return nativeSnapshot();},
+   shutdownNative:async (transactionId,retirementSession)=>{
+    if(token.nativeStopAttempted||token.nativeStopping||token.preparingNativeStop||token.completionBusy)throw Error('Native shutdown requires reconciliation');
+    const adopted=token.adopted;if(!adopted||adopted.managed)throw Error('Held native ownership required');
+    if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||!retirementSession.provider||typeof retirementSession.provider.prepareNativeExit!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching rollback provider required');
+    token.preparingNativeStop=true;
+    try{
+     const inventory=await nativeSnapshot(),digest=hash(JSON.stringify(inventory)),r=inventory.resources;
+     if(r.transfers.length||r.helpers.length||r.jobs.some(j=>!j.monitor_finished||!['completed','cancelled','timed_out','interrupted'].includes(j.state)))throw Error('Native resources must be settled before rollback');
+     const directory=path.dirname(options.selectionFile),file=path.join(directory,transactionId+'.native-stop.json');
+     const selected=selectionStatus(options.selectionFile),p=selected.pending,h=selected.history&&selected.history[selected.history.length-1];
+     if(selected.phase!=='reconciliation-required'||!p||p.id!==transactionId||p.phase!=='prepared'||p.from.implementation!=='native-prototype'||p.from.manifest_sha256!==adopted.record.manifest_sha256||p.to.implementation!=='managed'||p.to.manifest_sha256!==sourceVersion||p.quiescence_sha256!==digest||!h||h.id!==adopted.record.id||h.outcome!=='committed'||h.readiness_sha256!==hash(JSON.stringify(adopted.record)))throw Error('Selection does not bind native rollback inventory');
+     const selectedText=JSON.stringify(selected),readyText=JSON.stringify(adopted.record);
+     const owned=()=>{if(admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||currentBoot()!==boot||JSON.stringify(selectionStatus(options.selectionFile))!==selectedText||privateRead(path.join(directory,adopted.record.id+'.production.json'),16384)!==readyText)throw Error('Native rollback ownership changed');};
+     owned();try{fs.lstatSync(file);throw Error('Native shutdown requires reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}
+     token.nativeStopAttempted=true;const observer=await retirementSession.provider.prepareNativeExit(adopted.record);owned();
+     if(hash(JSON.stringify(await nativeSnapshot()))!==digest)throw Error('Native inventory changed after exit binding');owned();
+     const pending={schema:1,id:transactionId,origin_id:adopted.record.id,phase:'submitting',inventory_sha256:digest,worker_identity:adopted.record.worker_identity,readiness_sha256:hash(readyText)},text=JSON.stringify(pending);
+     const fd=fs.openSync(file,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);try{fs.writeFileSync(fd,text);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+     const parent=fs.openSync(directory,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}
+     token.nativeStopping=true;owned();const shutdown=await adopted.channel.shutdown();owned();const exited=await observer.waitForExit();owned();
+     if(!exited||exited.record_id!==adopted.record.id||JSON.stringify(exited.identity)!==JSON.stringify(adopted.record.worker_identity)||privateRead(file,16384)!==text)throw Error('Native exit evidence changed');
+     const completed={...pending,phase:'stopped',shutdown,exited};atomic(file,completed);owned();
+     token.nativeStopped=JSON.parse(JSON.stringify(completed));return completed;
+    }catch(cause){throw Object.assign(Error('Native rollback shutdown requires reconciliation'),{outcome:'unknown',cause});}finally{token.preparingNativeStop=false;}
+   },
    adoptManaged:async session=>{
     const previous=token.adopted,previousChannel=previous?previous.channel:owner,previousGeneration=previous?previous.generation:gen;
-    const bound=()=>{if(admissionHold!==token||generation!==previousGeneration||channel!==previousChannel||!running||!token.stopped||token.preparingStop||token.completionBusy)throw Error('Stopped handoff ownership required for managed adoption');};
-    bound();if(token.managedAdopting)throw Error('Managed adoption requires reconciliation');
+    const bound=()=>{if(admissionHold!==token||generation!==previousGeneration||channel!==previousChannel||!running||!token.stopped||token.preparingStop||token.preparingNativeStop||token.completionBusy)throw Error('Stopped handoff ownership required for managed adoption');};
+    bound();if(previous&&!token.nativeStopped)throw Error('Verified native shutdown required before managed adoption');if(token.managedAdopting)throw Error('Managed adoption requires reconciliation');
     if(!session||typeof session.takeChannel!=='function'||typeof session.closeTransport!=='function'||!session.record||session.record.phase!=='ready'||hash(JSON.stringify(session.record))!==session.readiness_sha256)throw Error('Verified managed session required');
     const readinessDigest=session.readiness_sha256,readyRecord=JSON.parse(JSON.stringify(session.record));
     const {worker_identity,unit_started_monotonic,launcher_sha256,...launch}=readyRecord;validateManagedLaunch({...launch,phase:'submitted'});
@@ -319,7 +354,7 @@ function createAgent(config,options={}){
    completeManaged:async (retirementSession,{resume=false}={})=>{
     const adopted=token.adopted;
     const bound=()=>{if(!adopted||!adopted.managed||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted managed ownership required');};
-    bound();if(typeof resume!=='boolean'||token.completionBusy||(!resume&&token.managedCompleting)||(resume&&(!token.managedActivating||!token.managedProviderRetired)))throw Error('Managed completion requires reconciliation');
+    bound();if(token.preparingNativeStop||token.nativeStopAttempted&&!adopted.managed||typeof resume!=='boolean'||token.completionBusy||(!resume&&token.managedCompleting)||(resume&&(!token.managedActivating||!token.managedProviderRetired)))throw Error('Managed completion requires reconciliation');
     if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||token.targetVersion!=='native-prototype|'+retirementSession.record.manifest_sha256)throw Error('Matching retirement session required');
     const selected=JSON.stringify(selectionStatus(options.selectionFile)),peer=channel._conn;
     const confirm=async()=>{
@@ -344,7 +379,7 @@ function createAgent(config,options={}){
    completeProduction:async (retirementSession,{resume=false}={})=>{
     const adopted=token.adopted;
     const bound=()=>{if(!adopted||adopted.managed||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted production ownership required');};
-    bound();if(typeof resume!=='boolean'||token.completionBusy||(!resume&&token.completing)||(resume&&(!token.completing||!token.retired)))throw Error('Production completion requires reconciliation');
+    bound();if(token.preparingNativeStop||token.nativeStopAttempted&&!adopted.managed||typeof resume!=='boolean'||token.completionBusy||(!resume&&token.completing)||(resume&&(!token.completing||!token.retired)))throw Error('Production completion requires reconciliation');
     if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching retirement session required');
     token.completing=true;token.completionBusy=true;const peer=channel._conn;
     const confirm=async()=>{
