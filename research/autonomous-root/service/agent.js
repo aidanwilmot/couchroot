@@ -11,6 +11,8 @@ const {stageObserver}=require('./observer-stage');
 const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime');
 const {openRetirementSession}=require('./retirement-session');
 const {validateLaunch}=require('./production-readiness');
+const {validateManagedLaunch}=require('./managed-readiness');
+const {privateRead}=require('./private-state');
 const {activateProduction}=require('./production-activation');
 const {createNativeMigration}=require('./native-migration');
 const BASE='/home/owner/share/tmp/sdk_tools';
@@ -282,9 +284,39 @@ function createAgent(config,options={}){
      return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
     }catch(error){session.closeTransport();throw Object.assign(Error('Production channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
    },
+   adoptManaged:async session=>{
+    const previous=token.adopted,previousChannel=previous?previous.channel:owner,previousGeneration=previous?previous.generation:gen;
+    const bound=()=>{if(admissionHold!==token||generation!==previousGeneration||channel!==previousChannel||!running||!token.stopped||token.preparingStop||token.completionBusy)throw Error('Stopped handoff ownership required for managed adoption');};
+    bound();if(token.managedAdopting)throw Error('Managed adoption requires reconciliation');
+    if(!session||typeof session.takeChannel!=='function'||typeof session.closeTransport!=='function'||!session.record||session.record.phase!=='ready'||hash(JSON.stringify(session.record))!==session.readiness_sha256)throw Error('Verified managed session required');
+    const readinessDigest=session.readiness_sha256,readyRecord=JSON.parse(JSON.stringify(session.record));
+    const {worker_identity,unit_started_monotonic,launcher_sha256,...launch}=readyRecord;validateManagedLaunch({...launch,phase:'submitted'});
+    if(!/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic)||typeof launcher_sha256!=='string'||launcher_sha256.length!==64||!/^[a-f0-9]+$/.test(launcher_sha256)||launch.origin_id!==token.stopped.transaction_id||launch.boot_id!==boot||launch.manifest_sha256!==sourceVersion)throw Error('Managed session does not match stopped handoff');
+    const directory=path.dirname(options.selectionFile),nativeText=privateRead(path.join(directory,launch.origin_id+'.production.json'),16384),nativeRecord=JSON.parse(nativeText),restoreText=privateRead(path.join(directory,launch.id+'.managed-restore.json'),16384),restored=JSON.parse(restoreText);
+    const {worker_identity:nativeIdentity,unit_started_monotonic:nativeStarted,...nativeLaunch}=nativeRecord;validateLaunch({...nativeLaunch,phase:'submitted'});
+    if(nativeRecord.phase!=='ready'||nativeRecord.id!==launch.origin_id||token.targetVersion!=='native-prototype|'+nativeRecord.manifest_sha256||(previous&&JSON.stringify(previous.record)!==nativeText)||JSON.stringify(nativeRecord.source)!==JSON.stringify(token.source)||JSON.stringify(nativeIdentity)!==JSON.stringify(launch.source)||!nativeStarted||hash(restoreText)!==launch.state_receipt_sha256||restored.phase!=='restored'||restored.id!==launch.origin_id||restored.transition_id!==launch.id)throw Error('Managed restoration is not bound to this handoff');
+    const committed=()=>{const s=selectionStatus(options.selectionFile),h=s.history&&s.history[s.history.length-1],rollback=launch.id===launch.origin_id;
+     if(s.phase!=='stable'||s.selected_implementation!=='managed'||s.selected_manifest_sha256!==sourceVersion||!h||h.id!==launch.id||h.outcome!==(rollback?'rolled-back':'committed')||h.state_sha256!==launch.state_receipt_sha256||h.readiness_sha256!==readinessDigest||h.quiescence_sha256!==restored.quiescence_sha256||h.from.implementation!==(rollback?'managed':'native-prototype')||h.to.implementation!==(rollback?'native-prototype':'managed')||h.from.manifest_sha256!==(rollback?sourceVersion:nativeRecord.manifest_sha256)||h.to.manifest_sha256!==(rollback?nativeRecord.manifest_sha256:sourceVersion))throw Error('Committed managed rollback required');
+     if(privateRead(path.join(directory,launch.origin_id+'.production.json'),16384)!==nativeText||privateRead(path.join(directory,launch.id+'.managed-restore.json'),16384)!==restoreText||hash(privateRead(path.join(directory,launch.id+'.managed-launch.json'),16384))!==readinessDigest)throw Error('Managed rollback evidence changed');return JSON.stringify(s);};
+    const selected=committed();token.managedAdopting=true;let next;
+    try{
+     next=await session.takeChannel();bound();if(committed()!==selected||!next||next===previousChannel||!next._conn)throw Error('Managed channel ownership changed');
+     const peer=next._conn,info=await next.operation({op:'status'});bound();
+     if(committed()!==selected||next._conn!==peer||currentBoot()!==boot||!['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)||peer.identity.smack!=='System')throw Error('Managed peer changed during adoption');
+     validateReadiness(info,{implementation:'managed',bootId:boot,launcherSha256:launcher_sha256});
+     const identityNow=processIdentities(info,peer.identity.pid),resources=validateResourceInventory(info);
+     if(JSON.stringify(identityNow)!==JSON.stringify(worker_identity)||resources.jobs.length||resources.transfers.length||resources.helpers.length||[token.source,launch.source].some(s=>s.worker_id===identityNow.worker_id||Object.values(s.processes).some(p=>p&&p.pid===peer.identity.pid)))throw Error('Managed identity or resources changed');
+     const adoptedGeneration=++generation,previousClose=next.onClose;
+     channel=next;connected=true;workerReady=true;workerStatus=info;workerStatusAt=process.uptime();identity=peer.identity;launching=false;lastError=null;nativeRuntime=null;
+     if(timer){clearTimeout(timer);timer=null;}
+     next.onClose=error=>{try{if(previousClose)previousClose(error);}finally{if(generation===adoptedGeneration&&channel===next){connected=false;workerReady=false;workerStatus=null;identity=null;workerStatusAt=0;lastError='Managed rollback worker disconnected; reconciliation required';}}};
+     previousChannel.close();token.adopted={generation:adoptedGeneration,channel:next,record:readyRecord,managed:true};
+     return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
+    }catch(error){session.closeTransport();throw Object.assign(Error('Managed channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
+   },
    completeProduction:async (retirementSession,{resume=false}={})=>{
     const adopted=token.adopted;
-    const bound=()=>{if(!adopted||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted production ownership required');};
+    const bound=()=>{if(!adopted||adopted.managed||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted production ownership required');};
     bound();if(typeof resume!=='boolean'||token.completionBusy||(!resume&&token.completing)||(resume&&(!token.completing||!token.retired)))throw Error('Production completion requires reconciliation');
     if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching retirement session required');
     token.completing=true;token.completionBusy=true;const peer=channel._conn;

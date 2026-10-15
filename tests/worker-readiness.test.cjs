@@ -463,3 +463,42 @@ test('native preparation binds held inventory and prevents shutdown during provi
   await assert.rejects(hold.shutdown(transition.pending.id),/reconciliation/);assert.throws(()=>hold.release());release();assert.equal(await preparing,session);await assert.rejects(hold.prepareNative(transition.pending.id));assert.throws(()=>hold.release());assert.equal(agent.status().admission_held,true);
  }finally{release();agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('held handoff adopts managed rollback with admission closed and stale callbacks invalidated',async()=>{
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
+ for(const mode of ['ok','after-native-adoption','identity-drift','selection-drift','receipt-drift']){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'managed-adoption-')),file=dir+'/selection.json',journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,taken=0,closed=0;
+  const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(!live)throw Object.assign(Error('gone'),{code:'ENOENT'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';};
+  const {agent,channels,timers}=fixture({selectionFile:file,managedVersion:()=>DIGEST,readProcessFile});agent.start();const old=channels[0],ready=old.connect();
+  try{
+   ready.resolve(managed());await flush();old.operation=async()=>inventoried();const hold=agent.holdAdmission(),inventory=await hold.snapshot(),source={boot_id:BOOT,worker_id:inventory.worker_id,processes:inventory.processes};
+   const transition=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},digest(inventory)),origin=transition.pending.id;
+   const nativeInfo={...native(),worker_id:'f'.repeat(32),guardian_pid:51,processes:{worker:{pid:52,start_ticks:'200'},guardian:{pid:51,start_ticks:'199'}},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]}};nativeInfo.capabilities.push('worker-process-identity-v1','resource-inventory-v1');
+   const nativeIdentity={boot_id:BOOT,worker_id:nativeInfo.worker_id,processes:nativeInfo.processes},nativeRecord={schema:1,id:origin,phase:'ready',device:'qn90a',manifest_sha256:'c'.repeat(64),state_receipt_sha256:'d'.repeat(64),worker_sha256:'e'.repeat(64),launcher_sha256:DIGEST,source,boot_id:BOOT,unit:'couchroot-worker-'+origin+'.service',directory:'/opt/couchroot-worker-'+origin,scope:'/opt/couchroot-worker-'+origin+'/state',port:12345,token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/production-ABC123/token',token_sha256:'e'.repeat(64),worker_identity:nativeIdentity,unit_started_monotonic:'123'};
+   old.shutdown=async()=>{live=false;ready.conn._socket.destroy();return {acknowledged:true,disconnected:true};};await hold.shutdown(origin);
+   let id=origin,nativeChannel;
+   if(mode==='after-native-adoption'){
+    journal.advance(2,origin,'state-ready',nativeRecord.state_receipt_sha256);journal.advance(3,origin,'trial-ready',digest(nativeRecord));journal.commit(4,origin);
+    nativeChannel={_conn:{identity:{pid:52,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async()=>nativeInfo,close(){this._conn=null;if(this.onClose)this.onClose();}};
+    await hold.adoptProduction({record:nativeRecord,readiness_sha256:digest(nativeRecord),takeChannel:async()=>nativeChannel,closeTransport:()=>nativeChannel.close()});
+    id=journal.begin(5,{implementation:'managed',manifest_sha256:DIGEST},'8'.repeat(64)).pending.id;
+   }else journal.advance(2,id,'rollback-required','8'.repeat(64));
+   const restored={schema:1,id:origin,transition_id:id,phase:'restored',quiescence_sha256:'8'.repeat(64)},stateDigest=digest(restored);
+   const info={...inventoried(),worker_id:'9'.repeat(32),processes:{worker:{pid:73,start_ticks:'500'},guardian:null}};
+   const record={schema:1,id,phase:'ready',implementation:'managed',manifest_sha256:DIGEST,runtime_sha256:'e'.repeat(64),state_receipt_sha256:stateDigest,origin_id:origin,source:nativeIdentity,boot_id:BOOT,unit:'couchroot-managed-'+id+'.service',directory:'/opt/couchroot-managed-'+id,stage:'/home/owner/share/tmp/sdk_tools/managed-'+id,files:{'SamsungTvRootAgent.dll':'e'.repeat(64),'SamsungTvRootAgent.runtimeconfig.json':'e'.repeat(64),'SamsungTvRootAgent.deps.json':'e'.repeat(64)},port:12345,token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/managed-ABC123/token',token_sha256:'e'.repeat(64),worker_identity:{boot_id:BOOT,worker_id:info.worker_id,processes:info.processes},launcher_sha256:DIGEST,unit_started_monotonic:'456'};
+   for(const [name,value] of [[origin+'.production.json',nativeRecord],[id+'.managed-restore.json',restored],[id+'.managed-launch.json',record]])fs.writeFileSync(dir+'/'+name,JSON.stringify(value),{mode:0o600});
+   const next={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async()=>mode==='identity-drift'?{...info,worker_id:'0'.repeat(32)}:info,close(){this._conn=null;if(this.onClose)this.onClose();}};
+   const session={record,readiness_sha256:digest(record),takeChannel:async()=>{taken++;if(mode==='selection-drift')journal.begin(journal.read().revision,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},DIGEST);if(mode==='receipt-drift')fs.writeFileSync(dir+'/'+id+'.managed-restore.json','{}');return next;},closeTransport:()=>{closed++;next.close();}};
+   journal.advance(journal.read().revision,id,mode==='after-native-adoption'?'state-ready':'rollback-state-ready',stateDigest);
+   await assert.rejects(hold.adoptManaged(session),/Committed managed/);assert.equal(taken,0);
+   if(mode==='after-native-adoption'){journal.advance(journal.read().revision,id,'trial-ready',session.readiness_sha256);journal.commit(journal.read().revision,id);}else journal.commitRollback(journal.read().revision,id,session.readiness_sha256);
+   if(mode==='ok'||mode==='after-native-adoption'){
+    const result=await hold.adoptManaged(session);assert.equal(result.admission_held,true);assert.equal(agent.status().worker_id,info.worker_id);assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_ready,false);
+    old.options.onClose();if(nativeChannel&&nativeChannel.onClose)nativeChannel.onClose();assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_id,info.worker_id);
+    await assert.rejects(agent.execute('not admitted',100));await assert.rejects(hold.completeProduction({}));await assert.rejects(hold.adoptManaged(session));assert.throws(()=>hold.release());assert.equal(taken,1);assert.equal(timers.length,0);
+    next.close();assert.equal(agent.status().connected,false);assert.equal(agent.status().admission_held,true);assert.match(agent.status().last_error,/reconciliation required/);assert.equal(timers.length,0);
+   }else{await assert.rejects(hold.adoptManaged(session),e=>e.outcome==='unknown');assert.equal(closed,1);assert.equal(agent.status().admission_held,true);assert.equal(taken,1);await assert.rejects(hold.adoptManaged(session));}
+  }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
+});

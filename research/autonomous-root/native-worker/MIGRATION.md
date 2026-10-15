@@ -947,3 +947,26 @@ integration and interrupted session recovery remain open.
 
 The combined Linux suite passes 195 tests without skips. No TV restart or reboot
 was performed; .NET remains the deployed fallback.
+
+### Held-agent managed adoption — local follow-up
+
+An existing stopped handoff can now adopt its verified managed rollback session
+without releasing admission. Adoption binds the original managed source/version,
+original native production record and target, restored-state receipt, committed
+rollback/return history, managed readiness digest and fresh peer identity/resources.
+It supports the still-held handoff before native adoption and after native channel
+adoption; it does not create a new rollback hold for an already activated native
+service. The latter still requires controller work.
+
+The agent invalidates old callbacks before closing the prior listener, records the
+new managed channel under a new generation, and refuses public operations until
+completion. Managed disconnection keeps the hold and does not schedule acquisition.
+Native completion cannot accidentally activate a managed adoption. Failed adoption
+retains the hold and requires reconciliation rather than taking another channel.
+
+The combined Linux suite passes 196 tests without skips, and all seven API tests
+pass. Agent tests use fixture channels/receipts and cover both held-source cases,
+stale callbacks, identity/selection/receipt drift, blocked admission and disconnect.
+They are not full rollback or on-TV acceptance. Managed completion still needs
+provider retirement, transition cleanup, activation and controller orchestration.
+Both TVs remain unchanged on .NET; neither was restarted or rebooted.
