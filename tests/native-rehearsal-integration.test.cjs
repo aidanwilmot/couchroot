@@ -40,7 +40,7 @@ fi
  function syncUnits(){for(const [unit,v] of units){const d=unitRoot+'/'+unit;if(!fs.existsSync(d))fs.mkdirSync(d);if(fs.existsSync(d+'/stopped'))continue;const exited=v.child.exitCode!==null||v.child.signalCode!==null;
   const values={Id:unit,LoadState:'loaded',ActiveState:'active',SubState:exited?'exited':'running',MainPID:exited?0:v.child.pid,ExecMainCode:exited?1:0,ExecMainStatus:exited?v.child.exitCode===0?0:1:0,ExecMainStartTimestampMonotonic:'123'};for(const [k,value] of Object.entries(values))fs.writeFileSync(d+'/'+k,String(value));}}
  class HostServer extends RootAgentServer{
-  constructor(options){super({...options,onConnect:peer=>{peer.identity.smack='System';options.onConnect(peer);}});servers.push(this);}
+  constructor(options){super({...options,onConnect:peer=>{const executable=fs.readlinkSync('/proc/'+peer.identity.pid+'/exe'),launched=children.find(v=>v.child.pid===peer.identity.pid||v.command===executable);assert(launched);peer.identity.smack=launched.command==='dotnet'?'User':'System';options.onConnect(peer);}});servers.push(this);}
   async execute(command,timeout){
    syncUnits();
    if(command.includes('FALLBACK-RUNTIME-VERIFIED'))command=command.replaceAll('/usr/bin/dotnet','/opt/dotnet/bin/dotnet');
@@ -54,7 +54,7 @@ fi
    return super.execute(command.replaceAll('systemctl ',systemctl+' '),timeout);
   }
  }
- function start(command,args,unit){const child=spawn(command,args,{stdio:['ignore','ignore','pipe']}),ended=once(child,'exit');let stderr='';child.stderr.on('data',v=>{stderr=(stderr+v).slice(-16384);});const v={child,ended,stderr:()=>stderr};children.push(v);child.on('exit',code=>{if(code!==0)console.error('Fixture child failed',unit||'managed-source',code,stderr);});if(unit)units.set(unit,v);return v;}
+ function start(command,args,unit){const child=spawn(command,args,{stdio:['ignore','ignore','pipe']}),ended=once(child,'exit');let stderr='';child.stderr.on('data',v=>{stderr=(stderr+v).slice(-16384);});const v={child,ended,command,stderr:()=>stderr};children.push(v);child.on('exit',code=>{if(code!==0)console.error('Fixture child failed',unit||'managed-source',code,stderr);});if(unit)units.set(unit,v);return v;}
  function write(name,value){fs.writeFileSync(state+'/'+name,typeof value==='string'?value:JSON.stringify(value),{mode:0o600});}
  function nativeStage(id,kind,options){
   const directory='/opt/couchroot-'+kind+'-'+id,scope=directory+'/state';if(kind==='retirement'){assert(!fs.existsSync(directory));roots.push(directory);fs.mkdirSync(directory,{mode:0o700});fs.mkdirSync(scope,{mode:0o700});}else roots.push(directory);

@@ -1561,3 +1561,41 @@ The new regression fails against the 0.7.18 launch implementation (validator exi
 isolated real-process rehearsals. This closes a harness coverage gap; the latter
 still substitute TV-specific process launch and are not hardware acceptance.
 The argument correction is local pending packaging and both-TV deployment.
+
+### QN90A 0.7.19 managed identity gate corrected
+
+QN90A received the signed 0.7.19 candidate after installed-file and managed
+readiness checks. Its rehearsal passed native activation, native shutdown and
+retained-state restoration, then failed in managed readiness. The managed unit
+had launched; its status reported peer disconnection after verification failed.
+S90D remains managed on 0.7.17 and was not updated or rehearsed in this attempt.
+
+The SDK recovery timer restored access. After independent process-exit and
+retained-file checks, the failed journal was archived and the unchanged managed
+fallback restored without a reboot. A separate managed diagnostic worker then
+ran from copied, digest-checked payloads with the same unit properties while the
+fallback stayed available. The generated runtime verification command passed
+on QN90A (only the expected callback address digest was adapted for the diagnostic
+host). Its authenticated identity reported Smack `User`. Read-only status from
+both existing managed fallbacks also reported `User`.
+
+The managed readiness/adoption checks incorrectly required the native worker's
+`System` label. Replaying the captured diagnostic inputs locally reproduced
+rejection of `User` and acceptance of `System`; changing only the managed checks
+reverses that result. Native readiness retains its `System` contract. Host fixtures
+now distinguish managed and native processes instead of normalizing every peer
+to `System`, and managed adoption explicitly rejects label drift.
+
+All 85 focused tests pass without skips, including managed session, production
+readiness, retained state and adoption checks. All three isolated real-process
+rehearsals pass. The first fixture revision failed because it matched native
+worker PIDs to their guardian launch PIDs; the fixture now resolves the known
+launched executable for forked native peers.
+
+The diagnostic worker exited, its owned staging/launcher files are absent, and
+its timer is inactive. Final unit stop reported that the timer had already removed
+the unit; independent readback established cleanup rather than replaying removal.
+The retained test job remained byte-identical with exit 7 and was then explicitly
+forgotten. Both TVs remain managed-ready with loopback SDK access and unchanged
+boot IDs. Original failed-transition evidence remains preserved. The managed
+identity correction is local and still needs packaged hardware validation.

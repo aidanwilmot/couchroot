@@ -253,7 +253,7 @@ async function managedReadyFixture(f,committed=false){
  fs.writeFileSync(proc+'/cmdline',['/usr/bin/dotnet',record.directory+'/code/SamsungTvRootAgent.dll','127.0.0.1',String(record.port),record.stage.replace('/opt/usr/home/','/home/')+'/token',record.stage.replace('/opt/usr/home/','/home/')].join('\0')+'\0');
  fs.writeFileSync(proc+'/mountinfo','1 0 0:1 / '+f.root+'/launch-'+record.id+'/code ro - tmpfs tmpfs rw\n2 0 0:2 / '+launcher+' ro - tmpfs tmpfs rw\n');
  fs.unlinkSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools/managed-'+record.id+'/token');
- const channel={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async request=>{if(request.op==='status')return JSON.parse(JSON.stringify(info));const item=r.snapshot.records.find(e=>e.name===request.id+'.json'),saved=JSON.parse(Buffer.from(item.base64,'base64').toString().replace(/^\uFEFF/,''));return {id:saved.id,boot_id:saved.boot_id,state:saved.state,record:saved,output_available:false};}};
+ const channel={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'User'}},operation:async request=>{if(request.op==='status')return JSON.parse(JSON.stringify(info));const item=r.snapshot.records.find(e=>e.name===request.id+'.json'),saved=JSON.parse(Buffer.from(item.base64,'base64').toString().replace(/^\uFEFF/,''));return {id:saved.id,boot_id:saved.boot_id,state:saved.state,record:saved,output_available:false};}};
  const execute=async c=>{if(c.includes('--property=Id,'))return {exit_code:0,stdout:'Id='+record.unit+'\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=73\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n',stderr:''};return r.execute(c.replaceAll('/proc/73/',proc+'/').replaceAll('/proc/1/ns/mnt',f.root+'/proc/1/ns/mnt'));};
  return {...r,record,info,proc,channel,execute,readyOptions:{record,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,channel,execute,providerIdentity},intent:r.launchFile+'.readiness.pending'};
 }
@@ -265,7 +265,7 @@ test('managed readiness verifies runtime, mounts, retained jobs and receipt with
 test('managed readiness rejects identity, inventory, retained results and remote runtime drift',linux,async()=>{
  for(const mode of ['identity','resources','job','ticks','mount','argv','runtime','launcher','unit','disconnect'])await fixture(async f=>{
   const r=await managedReadyFixture(f),op=r.channel.operation;
-  if(mode==='identity')r.channel._conn.identity.smack='User';if(mode==='resources')r.info.resources.helpers=['a'.repeat(32)];
+  if(mode==='identity')r.channel._conn.identity.smack='System';if(mode==='resources')r.info.resources.helpers=['a'.repeat(32)];
   if(mode==='job')r.channel.operation=async q=>{const v=await op(q);if(q.op==='job.status')v.record.exit_code=99;return v;};
   if(mode==='ticks')fs.writeFileSync(r.proc+'/stat','73 (dotnet) S '+Array(18).fill('0').join(' ')+' 501 0\n');
   if(mode==='mount')fs.writeFileSync(r.proc+'/mountinfo','');if(mode==='argv')fs.writeFileSync(r.proc+'/cmdline','wrong command');

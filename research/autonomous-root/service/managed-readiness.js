@@ -24,7 +24,9 @@ function validateManagedLaunch(r){
  check(JSON.stringify(processIdentities({...s,implementation:'native-prototype',guardian_pid:s.processes.guardian.pid,capabilities:['worker-process-identity-v1']},s.processes.worker.pid))===JSON.stringify(s));
 }
 function managedIdentity(info,peer,record,provider,original){
- check(peer&&peer.identity&&['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)&&peer.identity.smack==='System');
+ // The shipped managed runtime reports User on both supported TVs.
+ // Native production workers have a separate System-label contract.
+ check(peer&&peer.identity&&['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)&&peer.identity.smack==='User');
  validateReadiness(info,{implementation:'managed',bootId:record.boot_id});
  const identity=processIdentities(info,peer.identity.pid),r=validateResourceInventory(info);
  check(!r.jobs.length&&!r.helpers.length&&!r.transfers.length&&identity.processes.worker.pid>1&&hex(identity.worker_id,32));

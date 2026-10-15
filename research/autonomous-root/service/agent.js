@@ -344,7 +344,7 @@ function createAgent(config,options={}){
     try{
      next=await session.takeChannel();bound();if(committed()!==selected||!next||next===previousChannel||!next._conn)throw Error('Managed channel ownership changed');
      const peer=next._conn,info=await next.operation({op:'status'});bound();
-     if(committed()!==selected||next._conn!==peer||currentBoot()!==boot||!['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)||peer.identity.smack!=='System')throw Error('Managed peer changed during adoption');
+     if(committed()!==selected||next._conn!==peer||currentBoot()!==boot||!['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)||peer.identity.smack!=='User')throw Error('Managed peer changed during adoption');
      validateReadiness(info,{implementation:'managed',bootId:boot,launcherSha256:launcher_sha256});
      const identityNow=processIdentities(info,peer.identity.pid),resources=validateResourceInventory(info);
      if(JSON.stringify(identityNow)!==JSON.stringify(worker_identity)||resources.jobs.length||resources.transfers.length||resources.helpers.length||[token.source,launch.source].some(s=>s.worker_id===identityNow.worker_id||Object.values(s.processes).some(p=>p&&p.pid===peer.identity.pid)))throw Error('Managed identity or resources changed');

@@ -80,7 +80,7 @@ test('managed session authenticates a real managed process and transfers its cha
  journal.initialize({implementation:'managed',manifest_sha256:'a'.repeat(64)});const id=journal.begin(1,{implementation:'native-prototype',manifest_sha256:sha},sha).pending.id;journal.advance(2,id,'rollback-required',sha);journal.advance(3,id,'rollback-state-ready','d'.repeat(64));
  fs.writeFileSync(directory+'/'+id+'.managed-restore-input.json',JSON.stringify({record:{source:original}}),{mode:0o600});
  const {RootAgentServer}=real('./vendor/root-agent'),{managedIdentity}=real('./managed-readiness');let child,ended,session,stderr='';
- class HostServer extends RootAgentServer{constructor(options){super({...options,onConnect:peer=>{peer.identity.smack='System';options.onConnect(peer);}});}}
+ class HostServer extends RootAgentServer{constructor(options){super({...options,onConnect:peer=>{peer.identity.smack='User';options.onConnect(peer);}});}}
  let submitted;
  const provider={identity:providerIdentity,launchManaged:async options=>{
   const stage=directory+'/stage';fs.mkdirSync(stage,{mode:0o700});fs.copyFileSync(options.tokenFile,stage+'/token');

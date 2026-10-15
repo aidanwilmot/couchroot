@@ -467,7 +467,7 @@ test('native preparation binds held inventory and prevents shutdown during provi
 test('held handoff adopts managed rollback with admission closed and stale callbacks invalidated',async()=>{
  const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
  const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
- for(const mode of ['ok','after-native-adoption','identity-drift','selection-drift','receipt-drift','cleanup-failure','provider-failure','activation-failure','final-drift','native-stop-identity','native-stop-selection','native-stop-shutdown','native-stop-both','native-stop-exit','native-stop-journal']){
+ for(const mode of ['ok','after-native-adoption','identity-drift','profile-drift','selection-drift','receipt-drift','cleanup-failure','provider-failure','activation-failure','final-drift','native-stop-identity','native-stop-selection','native-stop-shutdown','native-stop-both','native-stop-exit','native-stop-journal']){
   const nativeReturn=mode==='after-native-adoption'||mode.startsWith('native-stop-');
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'managed-adoption-')),file=dir+'/selection.json',journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,taken=0,closed=0;
   const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(!live)throw Object.assign(Error('gone'),{code:'ENOENT'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';};
@@ -505,12 +505,12 @@ test('held handoff adopts managed rollback with admission closed and stale callb
     }
     const stopped=await hold.shutdownNative(id,provider);assert.equal(stopped.phase,'stopped');assert.equal(stops,1);if(mode==='native-stop-shutdown')assert.deepEqual(JSON.parse(JSON.stringify(stopped.shutdown)),{acknowledged:false,outcome:'unknown'});assert.equal(stopped.inventory_sha256,digest(nativeInventory));assert.equal(agent.status().admission_held,true);assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'stopped');await assert.rejects(hold.shutdownNative(id,provider));
    }
-   const next={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async()=>(mode==='identity-drift'||finalDrift)?{...info,worker_id:'0'.repeat(32)}:info,execute:async()=>({exit_code:0,stdout:'managed'}),close(){this._conn=null;if(this.onClose)this.onClose();}};
+   const next={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:mode==='profile-drift'?'System':'User'}},operation:async()=>(mode==='identity-drift'||finalDrift)?{...info,worker_id:'0'.repeat(32)}:info,execute:async()=>({exit_code:0,stdout:'managed'}),close(){this._conn=null;if(this.onClose)this.onClose();}};
    const session={record,readiness_sha256:digest(record),takeChannel:async()=>{taken++;if(mode==='selection-drift')journal.begin(journal.read().revision,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},DIGEST);if(mode==='receipt-drift')fs.writeFileSync(dir+'/'+id+'.managed-restore.json','{}');return next;},closeTransport:()=>{closed++;next.close();}};
    journal.advance(journal.read().revision,id,nativeReturn?'state-ready':'rollback-state-ready',stateDigest);
    await assert.rejects(hold.adoptManaged(session),/Committed managed/);assert.equal(taken,0);
    if(nativeReturn){journal.advance(journal.read().revision,id,'trial-ready',session.readiness_sha256);journal.commit(journal.read().revision,id);}else journal.commitRollback(journal.read().revision,id,session.readiness_sha256);
-   if(!['identity-drift','selection-drift','receipt-drift'].includes(mode)){
+   if(!['identity-drift','profile-drift','selection-drift','receipt-drift'].includes(mode)){
     const result=await hold.adoptManaged(session);assert.equal(result.admission_held,true);assert.equal(agent.status().worker_id,info.worker_id);assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_ready,false);
     old.options.onClose();if(nativeChannel&&nativeChannel.onClose)nativeChannel.onClose();assert.equal(agent.status().connected,true);assert.equal(agent.status().worker_id,info.worker_id);
     await assert.rejects(agent.execute('not admitted',100));await assert.rejects(hold.completeProduction({}));await assert.rejects(hold.adoptManaged(session));assert.throws(()=>hold.release());assert.equal(taken,1);assert.equal(timers.length,0);
