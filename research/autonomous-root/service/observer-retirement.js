@@ -1,7 +1,7 @@
 'use strict';
 // Narrow adapter over an independently launched, authenticated native instance.
 // Launch ownership, artifact staging and provider teardown belong to its caller.
-const {processIdentities}=require('./worker-processes');
+const {processIdentities,returnProviderSource}=require('./worker-processes');
 const {validateResourceInventory}=require('./worker-readiness');
 const {snapshotManagedJobs}=require('./retained-state');
 const {installRetainedState,acceptRetainedState}=require('./retained-install');
@@ -81,7 +81,7 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
   identity,
   prepareNativeExit:async record=>{
    requireValue(!busy&&!failed&&!exitInterrupted&&!nativeExitEntered&&!rollbackEntered);
-   const saved=copy(record);requireValue(saved&&JSON.stringify(saved.source)===JSON.stringify(sourceIdentity)&&saved.boot_id===target.bootId);
+   const saved=copy(record);requireValue(saved&&returnProviderSource(sourceIdentity,saved)&&saved.boot_id===target.bootId);
    requireValue(saved.worker_identity&&saved.worker_identity.worker_id!==identity.worker_id&&Object.values(saved.worker_identity.processes).every(p=>p&&Object.values(identity.processes).every(q=>p.pid!==q.pid)));
    nativeExitEntered=true;
    const observer=await rollbackOperation(15000,()=>prepareProductionExit({record:saved,execute}));nativeExitRecord=saved;
@@ -103,7 +103,7 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
   snapshotNativeJobs:async options=>{
    requireValue(!busy&&!failed&&!exitInterrupted&&!rollbackEntered);
    const inputs=copy({record:options.record,installation:options.installation,baseline:options.baseline}),record=inputs.record;
-   requireValue(record&&record.phase==='ready'&&record.boot_id===target.bootId&&JSON.stringify(record.source)===JSON.stringify(sourceIdentity));
+   requireValue(record&&record.phase==='ready'&&record.boot_id===target.bootId&&returnProviderSource(sourceIdentity,record));
    if(nativeExitEntered)requireValue(nativeExited&&JSON.stringify(record)===JSON.stringify(nativeExitRecord));
    const native=processIdentities({...record.worker_identity,implementation:'native-prototype',guardian_pid:record.worker_identity.processes.guardian.pid,capabilities:['worker-process-identity-v1']},record.worker_identity.processes.worker.pid);
    requireValue(native.boot_id===target.bootId&&native.worker_id!==identity.worker_id&&Object.values(native.processes).every(p=>Object.values(identity.processes).every(q=>p.pid!==q.pid)));

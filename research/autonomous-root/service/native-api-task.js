@@ -36,6 +36,13 @@ function createNativeTasks({agent,journal}){
    check(task&&task.migration_id===value.migration_id&&task.state==='unknown'&&typeof agent.resumeNativeActivation==='function');
    return launch('native.resume-native',value,()=>agent.resumeNativeActivation(),null,value.migration_id);
   },
+  // Return an admitted native runtime to managed. Recovery uses resume-managed
+  // bound to this request ID.
+  returnManaged:value=>{
+   check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|runtime_sha256'&&id(value.id)&&digest(value.runtime_sha256));
+   check((!task||task.state==='completed'&&['native.migrate','native.resume-native'].includes(task.kind))&&typeof agent.returnManaged==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='native-prototype'&&s.native_runtime);
+   return launch('native.return-managed',value,()=>agent.returnManaged(value.runtime_sha256),value.id);
+  },
   cleanupRestart:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|transaction_id'&&id(value.id)&&typeof value.transaction_id==='string'&&/^[a-f0-9]{32}$/.test(value.transaction_id));
    check((!task||task.state!=='unknown')&&typeof agent.cleanupRestart==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='managed');

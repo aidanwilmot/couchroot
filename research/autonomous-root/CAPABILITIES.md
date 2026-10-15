@@ -73,10 +73,31 @@ never repeats provider retirement. The client commands are `native-migrate`
 (same arguments as `native-rehearse`) and `native-resume-native --request-id
 NEW_REQUEST_ID --migration-id ORIGINAL_REQUEST_ID`.
 
-Limits until the following steps land: returning from active native to managed
-needs a fresh provider. A service restart, disable/enable or a lost native
-transport leaves native selected without a cold start, so admission stays closed
-with diagnostics. Neither route is qualified on hardware.
+`POST /v1/native/return-managed` accepts exactly `{id, runtime_sha256}`. It
+needs native selected and admitted after a completed `migrate` (or
+`resume-native`) task in the same coordinator. The managed fallback runtime is
+verified through native first. The request then goes through these steps:
+
+1. It holds admission and waits for every admitted public request to reach a
+   known outcome.
+2. It journals the return transition.
+3. It launches a fresh bounded provider through the native worker. The provider
+   is bound to the native worker as its source.
+4. It runs the rehearsal's managed return: native exit observed by the provider,
+   native job records copied back, the managed restore, launch, commit and
+   adoption, then native retirement, provider retirement and managed activation.
+
+A refusal before the transition begins releases the hold, and native stays
+admitted. Recovery after an unknown outcome uses `resume-managed` with
+`rehearsal_id` set to the original return request ID. Jobs that native created
+remain available through managed `job.status`. The client command is
+`native-return-managed --request-id UNIQUE_REQUEST_ID --runtime-sha256
+ENROLLED_RUNTIME_SHA256`. The durable inventory reports the return provider as
+`return-provider-launch`.
+
+A service restart, disable/enable or a lost native transport still leaves native
+selected without a cold start, so admission stays closed with diagnostics.
+These routes are not qualified on hardware.
 
 ### Restart reconciliation of an uncommitted forward trial
 

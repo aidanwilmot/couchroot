@@ -63,3 +63,16 @@ test('native migration requires ready managed admission',()=>fixture(async f=>{
  for(const status of [{connected:true,worker_ready:true,selected_implementation:'native-prototype',admission_held:false},{connected:true,worker_ready:true,selected_implementation:'managed',admission_held:true},{connected:false,worker_ready:false,selected_implementation:'managed'}]){f.agent.status=()=>status;assert.throws(()=>f.tasks.migrate(value));}
  assert.equal(f.journal.rows.length,0);
 }));
+test('managed return follows a completed migration, is journaled and recovers through resume-managed',()=>fixture(async f=>{
+ f.agent.migrateNative=async()=>({selected_implementation:'native-prototype',admission_held:false});
+ const back={id:'native-return-0001',runtime_sha256:value.runtime_sha256};assert.throws(()=>f.tasks.returnManaged(back),'native must be admitted first');
+ f.tasks.migrate(value);await tick();await tick();assert.equal(f.tasks.status().state,'completed');
+ let finish;const seen=[];f.agent.returnManaged=async r=>{seen.push(r);assert.equal(f.journal.rows.at(-1).state,'submitted');return new Promise((yes,no)=>{finish={yes,no};});};
+ assert.throws(()=>f.tasks.returnManaged(back),'managed selection refuses a return');
+ f.agent.status=()=>({connected:true,worker_ready:true,selected_implementation:'native-prototype',admission_held:false,native_runtime:{transaction_id:'c'.repeat(32)}});
+ for(const v of [{id:back.id},{...back,extra:1},{...back,runtime_sha256:'B'.repeat(64)}])assert.throws(()=>f.tasks.returnManaged(v));
+ assert.equal(f.tasks.returnManaged(back).rehearsal_id,back.id);await tick();assert.deepEqual(seen,[value.runtime_sha256]);assert.throws(()=>f.tasks.returnManaged({...back,id:'native-return-0002'}));
+ finish.no(Error('activation acknowledgement lost'));await tick();assert.equal(f.tasks.status().state,'unknown');
+ const recovery={id:'native-recovery-0001',rehearsal_id:back.id};assert.equal(f.tasks.resume(recovery).state,'submitted');await tick();await tick();assert.equal(f.tasks.status().state,'completed');assert.equal(f.tasks.status().kind,'native.resume-managed');
+ assert.deepEqual(f.journal.rows.map(r=>r.state),['completed','submitted','completed']);
+}));

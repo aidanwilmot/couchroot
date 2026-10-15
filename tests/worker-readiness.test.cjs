@@ -547,7 +547,7 @@ test('rehearsal rejects missing or mismatched fallback pins before migration cre
   let checked=0,created=0;
   const {agent}=fixture({verifyFirmware:()=>{checked++;}},{'./native-migration':{createNativeMigration:()=>{created++;throw Error('must not create');}}},'qn90a',{hashes});
   await assert.rejects(agent.rehearseNative(DIGEST,DIGEST),e=>e.outcome==='rejected');
-  await assert.rejects(agent.migrateNative(DIGEST,DIGEST),e=>e.outcome==='rejected'&&/Native migration rejected/.test(e.message));await assert.rejects(agent.migrateNative(DIGEST),e=>e.outcome==='rejected');
+  await assert.rejects(agent.migrateNative(DIGEST,DIGEST),e=>e.outcome==='rejected'&&/Native migration rejected/.test(e.message));await assert.rejects(agent.migrateNative(DIGEST),e=>e.outcome==='rejected');await assert.rejects(agent.returnManaged(DIGEST),e=>e.outcome==='rejected'&&/Managed return rejected/.test(e.message));assert.equal(agent.status().managed_return,null);
   assert.equal(checked,0);assert.equal(created,0);assert.equal(agent.status().admission_held,false);
  }
 });

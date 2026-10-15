@@ -53,6 +53,17 @@ test('committed return is inventoried through its activation evidence and never 
  f.write(origin+'.production-retirement.json',{phase:'staging-retired'});f.write(providerId(origin)+'.retirement.json',{phase:'complete'});f.write(id+'.managed-activation.json',{phase:'active'});r=f.state();
  assert.equal(statuses(r)['native-retirement'],'verified-complete');assert.equal(statuses(r)['provider-retirement'],'verified-complete');assert.equal(statuses(r)['managed-activation'],'verified-complete');assert.equal(r.boundary,'managed-commit');
 }));
+test('return from an activated native tracks its own provider from launch to retirement',()=>fixture(f=>{
+ const origin=f.journal.begin(1,native,d('c')).pending.id;f.journal.advance(2,origin,'state-ready',d('d'));f.journal.advance(3,origin,'trial-ready',d('e'));f.journal.commit(4,origin);
+ f.write(providerId(origin)+'.retirement.json',{phase:'complete'});f.write(origin+'.retained-snapshot.json',{});f.write(origin+'.activation.json',{phase:'active'});
+ assert.equal(f.state().boundary,'native-active');
+ const id=f.journal.begin(5,managed,d('f')).pending.id,obs=providerId(id);let r=f.state();assert.equal(r.direction,'to-managed');assert.equal(statuses(r)['return-provider-launch'],'not-submitted');assert.equal(r.boundary,'return-provider-launch');
+ f.write('retirement-launch.pending',obs+'\n');r=f.state();assert.equal(statuses(r)['return-provider-launch'],'submitted-unknown');assert.equal(r.action,'pending-reconciliation');
+ f.write(obs+'.retirement.json',{phase:'ready'});fs.unlinkSync(f.dir+'/retirement-launch.pending');r=f.state();assert.equal(statuses(r)['return-provider-launch'],'verified-complete');assert.equal(r.boundary,'native-stop');assert.equal(statuses(r)['provider-retirement'],'not-submitted','the activated origin provider does not stand in for the return provider');
+ f.write(id+'.native-stop.json',{phase:'stopped'});f.write(id+'.managed-restore.json',{phase:'restored'});f.journal.advance(6,id,'state-ready',d('9'));f.journal.advance(7,id,'trial-ready',d('8'));f.journal.commit(8,id);
+ f.write(origin+'.production-retirement.json',{phase:'staging-retired'});f.write(obs+'.retirement.json',{phase:'complete'});f.write(id+'.managed-activation.json',{phase:'active'});r=f.state();
+ assert(Object.values(statuses(r)).every(s=>s==='verified-complete'),JSON.stringify(r.mutations));assert.equal(r.action,'none');assert.equal(r.boundary,'settled');
+}));
 test('malformed records, writer markers and invalid journals stay pending with diagnostics and are never repaired',()=>fixture(f=>{
  const id=f.journal.begin(1,native,d('c')).pending.id;f.write(providerId(id)+'.retirement.json','{not json');let r=f.state();assert.equal(statuses(r)['provider-launch'],'submitted-unknown');assert.match(r.diagnostics.join('\n'),/retirement.json invalid/);
  f.write('worker-selection.json.writer','w');r=f.state();assert.equal(r.selection_phase,'inspection-required');assert.equal(r.action,'pending-reconciliation');assert.match(r.diagnostics.join('\n'),/selection journal requires inspection/);

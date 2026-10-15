@@ -46,6 +46,12 @@ function inventoryRestart(selectionFile){
    step('native-activation',active==='active'&&!intent?'verified-complete':active||intent?'submitted-unknown':'not-submitted',[active&&native+'.activation.json:'+active,intent&&native+'.activation.json.pending']);
   }
  }
+ // A return from an activated native launches its own provider through native.
+ const activeReturn=direction==='to-managed'&&!!origin&&phaseOf(origin+'.activation.json')==='active',returnProvider=direction==='to-managed'?providerId(activeReturn?transaction:origin):null;
+ if(activeReturn){
+  const p=phaseOf(returnProvider+'.retirement.json'),launching=markers.includes('retirement-launch.pending');
+  step('return-provider-launch',committed(transaction)||['ready','shutdown-acknowledged','shutdown-observed','staging-retired','complete'].includes(p)?'verified-complete':p===null&&!launching?'not-submitted':'submitted-unknown',[p&&returnProvider+'.retirement.json:'+p,launching&&'retirement-launch.pending']);
+ }
  if(direction==='to-managed'){
   const stop=phaseOf(transaction+'.native-stop.json');
   step('native-stop',stop===null?'not-submitted':stop==='stopped'?'verified-complete':'submitted-unknown',[stop&&transaction+'.native-stop.json:'+stop]);
@@ -56,8 +62,8 @@ function inventoryRestart(selectionFile){
   step('managed-commit',committed(transaction)?'verified-complete':'not-submitted',[committed(transaction)&&'selection-history']);
  }
  if(direction==='to-managed'){
-  const managedId=transaction,retired=origin&&phaseOf(origin+'.production-retirement.json'),provider=origin&&phaseOf(providerId(origin)+'.retirement.json'),active=managedId&&phaseOf(managedId+'.managed-activation.json');
-  const teardown=origin&&['shutdown','cleanup','finish'].some(k=>exists(providerId(origin)+'.retirement.json.'+k+'.pending'));
+  const managedId=transaction,retired=origin&&phaseOf(origin+'.production-retirement.json'),provider=origin&&phaseOf(returnProvider+'.retirement.json'),active=managedId&&phaseOf(managedId+'.managed-activation.json');
+  const teardown=origin&&['shutdown','cleanup','finish'].some(k=>exists(returnProvider+'.retirement.json.'+k+'.pending'));
   step('native-retirement',retired==='staging-retired'?'verified-complete':retired===null||retired===undefined?'not-submitted':'submitted-unknown',[retired&&origin+'.production-retirement.json:'+retired]);
   step('provider-retirement',provider==='complete'?'verified-complete':teardown||['shutdown-acknowledged','shutdown-observed','staging-retired'].includes(provider)?'submitted-unknown':'not-submitted',[provider&&'provider-retirement:'+provider,teardown&&'provider-teardown-pending']);
   step('managed-activation',active==='active'?'verified-complete':active?'submitted-unknown':'not-submitted',[active&&managedId+'.managed-activation.json:'+active]);

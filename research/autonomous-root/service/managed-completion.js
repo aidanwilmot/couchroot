@@ -6,7 +6,7 @@ const {privateRead,privateDirectory}=require('./private-state');
 const {retireProduction}=require('./production-retirement');
 const {managedRuntimeCommand,validateManagedLaunch}=require('./managed-readiness');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
-const {processIdentities}=require('./worker-processes');
+const {processIdentities,returnProviderSource}=require('./worker-processes');
 const {selectionStatus}=require('./worker-selection');
 const {validateTeardownRecord}=require('./retirement-teardown');
 const {providerAbsentCommand}=require('./production-activation');
@@ -20,7 +20,7 @@ async function verifyManagedCompletion({managed,retired,journalDirectory,selecti
  check(path.dirname(path.dirname(retired.token_file))===journalDirectory);
  const directory=fs.lstatSync(journalDirectory);check(privateDirectory(directory));
  const saved=path.join(journalDirectory,managed.id+'.managed-restore-input.json'),inputText=privateRead(saved,524288),inputs=JSON.parse(inputText);
- check(JSON.stringify(retired.source)===JSON.stringify(inputs.record.source)&&retired.manifest_sha256===inputs.record.manifest_sha256&&retired.device===inputs.record.device&&retired.id!==managed.id&&retired.id!==managed.origin_id);
+ check(returnProviderSource(retired.source,inputs.record)&&retired.manifest_sha256===inputs.record.manifest_sha256&&retired.device===inputs.record.device&&retired.id!==managed.id&&retired.id!==managed.origin_id);
  check([retired.source,retired.provider_identity,managed.source].every(s=>s.worker_id!==worker_identity.worker_id&&Object.values(s.processes).every(p=>!p||p.pid!==worker_identity.processes.worker.pid)));
  const providerFile=path.join(journalDirectory,retired.id+'.retirement.json'),cleanupFile=path.join(journalDirectory,managed.origin_id+'.production-retirement.json'),cleanupText=privateRead(cleanupFile,16384),selected=JSON.stringify(selectionStatus(selectionFile));
  const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===selected&&privateRead(saved,524288)===inputText&&privateRead(providerFile,16384)===JSON.stringify(retired)&&privateRead(cleanupFile,16384)===cleanupText&&privateRead(path.join(journalDirectory,managed.id+'.managed-launch.json'),16384)===JSON.stringify(managed));

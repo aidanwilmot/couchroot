@@ -5,6 +5,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const {observeProcesses}=require('../research/autonomous-root/service/worker-processes');
+const {providerId}=require('../research/autonomous-root/service/restart-inventory');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 for(const mode of ['normal','activation-recovery','shutdown-response-lost','exit-observation-recovery','guardian-stopped-exit-recovery','native-active'])test('real managed/native/managed rehearsal preserves state and cleanup ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:60000
@@ -93,7 +94,10 @@ fi
    assert.equal(JSON.parse(fs.readFileSync(state+'/'+result.transaction_id+'.activation.json')).phase,'active');for(const p of roots.filter(p=>p.startsWith('/opt/couchroot-retirement-')))assert(!fs.existsSync(p));for(const name of ['retirement-launch.pending','production-launch.pending','state-install.pending'])assert(!fs.existsSync(state+'/'+name));
    const selection=load('worker-selection').selectionStatus(selectionFile);assert.equal(selection.history.length,1);assert.equal(selection.history[0].outcome,'committed');assert.equal(original.child.exitCode,0);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(fs.readFileSync(root+'/effect','utf8'),'once');
    {const durable=agent.restartInventory();assert.equal(durable.action,'none',JSON.stringify(durable));assert.equal(durable.boundary,'native-active');assert.equal(durable.transaction_id,result.transaction_id);}
-   return;
+   // Return the admitted native runtime through a provider launched by native.
+   const nativeOrigin=result.transaction_id;assert.equal(shutdownCalls,0);
+   result=await agent.returnManaged(runtimeSha);assert.equal(result.native_origin_id,nativeOrigin);assert.equal(agent.status().native_runtime,null);assert.equal(agent.status().managed_return.phase,'active');
+   returnedChannel=servers.find(s=>s._conn&&s._conn.identity.pid===agent.status().identity.pid);assert(fs.existsSync(state+'/'+providerId(result.transaction_id)+'.retirement.json'));
   }
   assert.equal(result.selected_implementation,'managed');assert.equal(result.admission_held,false);{const durable=agent.restartInventory();assert.equal(durable.action,'none',JSON.stringify(durable));assert.equal(durable.boundary,'settled');}assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().boot_id,boot);assert.equal((await agent.execute('printf restored',1000)).stdout,'restored');
   assert.equal((await agent.operation({op:'job.status',id:'retained-keep-0001'})).record.exit_code,7);assert.equal((await agent.operation({op:'job.status',id:'native-created-0001'})).record.exit_code,9);await assert.rejects(agent.operation({op:'job.status',id:'retained-forget-0001'}));assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(fs.readFileSync(root+'/effect','utf8'),'once');

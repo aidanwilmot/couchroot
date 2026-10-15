@@ -60,4 +60,8 @@ async function waitForProcessExit(bound,options={}){
   await new Promise(resolve=>setTimeout(resolve,Math.min(100,left)));
  }
 }
-module.exports={processIdentities,observeProcesses,waitForProcessExit,startTicks};
+// A provider that returns a native trial to managed is bound either to the
+// trial's original managed source (held rehearsal) or, after native activation
+// retired that provider, to the active native worker it replaces.
+function returnProviderSource(source,record){const s=JSON.stringify(source);return !!record&&(s===JSON.stringify(record.source)||!!record.worker_identity&&s===JSON.stringify(record.worker_identity));}
+module.exports={processIdentities,observeProcesses,waitForProcessExit,startTicks,returnProviderSource};

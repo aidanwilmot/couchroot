@@ -36,6 +36,8 @@ class RootAgentClientTests(unittest.TestCase):
             self.assertEqual(request.call_args.args,({},'POST','/v1/native/migrate',{'id':'native-migrate-0001','manifest_sha256':'a'*64,'runtime_sha256':'b'*64}))
             client.resume_native_activation({},'native-migrate-0001','native-recovery-0001')
             self.assertEqual(request.call_args.args,({},'POST','/v1/native/resume-native',{'id':'native-recovery-0001','migration_id':'native-migrate-0001'}))
+            client.return_managed({},'b'*64,'native-return-0001')
+            self.assertEqual(request.call_args.args,({},'POST','/v1/native/return-managed',{'id':'native-return-0001','runtime_sha256':'b'*64}))
         with patch.object(client,'request',side_effect=OSError('lost reply')) as request:
             with self.assertRaises(OSError):client.rehearse_native({},'a'*64,'b'*64,'native-request-0001')
             self.assertEqual(request.call_count,1)
@@ -44,6 +46,7 @@ class RootAgentClientTests(unittest.TestCase):
             with self.assertRaises(ValueError):client.resume_managed_activation({},'native-request-0001','native-request-0001')
             with self.assertRaises(ValueError):client.migrate_native({},'a'*64,'b'*64,'short')
             with self.assertRaises(ValueError):client.resume_native_activation({},'native-migrate-0001','native-migrate-0001')
+            with self.assertRaises(ValueError):client.return_managed({},'bad','native-return-0001')
             with self.assertRaises(ValueError):client.cleanup_restart({},'C'*32,'native-cleanup-0001')
             request.assert_not_called()
 

@@ -1945,3 +1945,37 @@ fallback-pin refusal, status binding and inventory boundaries. The real-process
 The other five rehearsal modes and four restart modes still pass. Hardware is not
 exercised. A hardware migration waits for the active-native return route, so a
 TV is never left native without a way back.
+
+### Return to managed from an active native worker — local
+
+`POST /v1/native/return-managed` returns an admitted native runtime. The
+original provider was retired at activation, so the return transition is
+journaled first. A new bounded provider is then launched through the native
+worker, with the native worker identity as its source. Return providers may
+now be bound to either the trial's original managed source (rehearsal) or the
+native worker they replace. The provider (`prepareNativeExit`,
+`snapshotNativeJobs`), the admission hold and managed completion each verify
+one of those two bindings. After that, the existing managed-return controller
+runs unchanged: native stop, job records copied back, managed restore and
+launch, commit, adoption, native and provider retirement, and managed
+activation. Managed activation already accepts a native whose activation
+removed its tokens and markers.
+
+The active hold drains admitted public requests before the native snapshot. A
+return refused before `begin` reports `rejected`, and native stays admitted.
+The inventory names the return provider `providerId(return id)` and adds
+`return-provider-launch` ahead of `native-stop`.
+
+Local validation:
+- Unit tests for the lazily opened provider, pre-begin refusal, the task route
+  and its recovery binding, and the inventory for an active return through
+  settlement.
+- The parity container's `native-active` mode now migrates, serves public jobs
+  on native, and returns. A native-created job (exit 9) and the retained managed
+  bytes survive, and every provider, native staging directory and marker is
+  removed.
+- All other rehearsal and restart modes pass.
+
+Not verified on hardware: `systemd-run` from inside the native unit
+(`NoNewPrivileges`, `PrivateMounts`, System label). The parity container fakes
+unit launches.
