@@ -23,10 +23,14 @@ function productionRetirementPlan(inputs){
   'test "$(printf "%s\\n" "$state" | wc -l)" -eq 3\nprintf "%s\\n" "$state" | grep -qx "LoadState=\\(loaded\\|not-found\\)"\n'+
   'if printf "%s\\n" "$state" | grep -qx ActiveState=inactive && printf "%s\\n" "$state" | grep -qx MainPID=0; then stopped=1; break; fi\nsleep 0.1\ndone\ntest "$stopped" = 1\nverify_native\n'+
   'rm '+[d+'/code/worker',s+'/launcher',j+'/lock',j+'/.import-manifest',...snapshot.records.map(r=>j+'/'+r.name)].join(' ')+'\nrmdir '+j+' '+s+' '+d+'/code '+d+'\nsync\n'+native.guard+'test ! -e '+d+'; test ! -L '+d+'\nprintf "PRODUCTION-RETIRED\\n"\n';
- check(Buffer.byteLength(command)<=65536);return {command,record:{schema:1,id:record.id,phase:'staging-retired',boot_id:record.boot_id,worker_identity:record.worker_identity,unit:u,unit_started_monotonic:record.unit_started_monotonic,snapshot_sha256:snapshot.sha256,installation_sha256:record.state_receipt_sha256}};
+ const verifyRetired=restored.verify+'export DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+native.guard+'test ! -e '+d+'; test ! -L '+d+'\n'+
+  'state=$(systemctl show -p LoadState -p ActiveState -p MainPID '+u+')\ntest "$(printf "%s\\n" "$state" | wc -l)" -eq 3\nprintf "%s\\n" "$state" | grep -qx ActiveState=inactive\nprintf "%s\\n" "$state" | grep -qx MainPID=0\n'+
+  'if printf "%s\\n" "$state" | grep -qx LoadState=loaded; then\n'+[['ExecMainStartTimestampMonotonic',record.unit_started_monotonic],['ExecMainCode','1'],['ExecMainStatus','0']].map(([key,value])=>'test "$(systemctl show -p '+key+' '+u+')" = '+key+'='+value+'\n').join('')+
+  'else printf "%s\\n" "$state" | grep -qx LoadState=not-found; fi\n'+native.guard+'printf "PRODUCTION-ABSENT\\n"\n';
+ check(Buffer.byteLength(command)<=65536&&Buffer.byteLength(verifyRetired)<=65536);return {command,verifyRetired,record:{schema:1,id:record.id,phase:'staging-retired',boot_id:record.boot_id,worker_identity:record.worker_identity,unit:u,unit_started_monotonic:record.unit_started_monotonic,snapshot_sha256:snapshot.sha256,installation_sha256:record.state_receipt_sha256}};
 }
-async function retireProduction({managed,journalDirectory,selectionFile,execute,confirmManaged}){
- check(managed&&managed.phase==='ready');const {worker_identity,launcher_sha256,unit_started_monotonic,...launch}=managed;validateManagedLaunch({...launch,phase:'submitted'});
+async function retireProduction({managed,journalDirectory,selectionFile,execute,confirmManaged,resume=false}){
+ check(typeof resume==='boolean'&&managed&&managed.phase==='ready');const {worker_identity,launcher_sha256,unit_started_monotonic,...launch}=managed;validateManagedLaunch({...launch,phase:'submitted'});
  check(typeof execute==='function'&&typeof confirmManaged==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
  check(typeof launcher_sha256==='string'&&launcher_sha256.length===64&&/^[a-f0-9]+$/.test(launcher_sha256)&&typeof unit_started_monotonic==='string'&&/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic));
  check(worker_identity&&JSON.stringify(processIdentities({...worker_identity,capabilities:['worker-process-identity-v1']},worker_identity.processes.worker.pid))===JSON.stringify(worker_identity)&&worker_identity.boot_id===managed.boot_id);
@@ -41,10 +45,22 @@ async function retireProduction({managed,journalDirectory,selectionFile,execute,
  const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(selected)&&privateRead(inputFile,524288)===inputText&&privateRead(restoreFile,16384)===restoreText&&privateRead(path.join(journalDirectory,'managed-restore.pending'),64)===managed.id+'\n'&&privateRead(path.join(journalDirectory,'managed-launch.pending'),64)===managed.id+'\n');for(const [name,text] of refs)check(privateRead(path.join(journalDirectory,name),262144)===text);};
  const confirm=async()=>{owned();const identity=await confirmManaged();owned();check(JSON.stringify(identity)===JSON.stringify(worker_identity)&&identity.worker_id!==managed.source.worker_id&&Object.values(managed.source.processes).every(p=>p.pid!==identity.processes.worker.pid));};
  await confirm();const file=path.join(journalDirectory,managed.origin_id+'.production-retirement.json'),intent=file+'.pending';
- for(const name of [file,intent])try{fs.lstatSync(name);throw Error('Production retirement requires reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}
  const receipt={...plan.record,transition_id:managed.id,managed_readiness_sha256:hash(JSON.stringify(managed))};
+ const sync=()=>{const fd=fs.openSync(journalDirectory,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}};
+ const optional=name=>{try{return privateRead(name,16384);}catch(e){if(e.code==='ENOENT')return null;throw e;}};
+ if(resume){
+  const pending=optional(intent),published=optional(file),text=JSON.stringify(receipt);check((pending===text||published===text)&&(pending===null||pending===text)&&(published===null||published===text));
+  const recoveryOwned=()=>{owned();check(optional(intent)===pending&&optional(file)===published);};
+  try{
+   recoveryOwned();const r=await execute(plan.verifyRetired,10000);await confirm();recoveryOwned();
+   check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='RESTORE-READY\nPRODUCTION-ABSENT\n');
+   if(published===null)atomic(file,receipt);if(pending!==null)fs.unlinkSync(intent);sync();
+   return Object.freeze({...receipt,receipt_sha256:hash(text)});
+  }catch(cause){throw Object.assign(Error('Production retirement reconciliation incomplete'),{outcome:'unknown',cause});}
+ }
+ for(const name of [file,intent])try{fs.lstatSync(name);throw Error('Production retirement requires reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}
  const fd=fs.openSync(intent,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);try{fs.writeFileSync(fd,JSON.stringify(receipt));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
- const sync=()=>{const fd=fs.openSync(journalDirectory,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}};sync();
+ sync();
  try{await confirm();check(privateRead(intent,16384)===JSON.stringify(receipt));const r=await execute(plan.command,10000);await confirm();check(privateRead(intent,16384)===JSON.stringify(receipt)&&r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='RESTORE-READY\nPRODUCTION-RETIRED\n');atomic(file,receipt);fs.unlinkSync(intent);sync();return Object.freeze({...receipt,receipt_sha256:hash(JSON.stringify(receipt))});}
  catch(cause){throw Object.assign(Error('Production retirement requires reconciliation'),{outcome:'unknown',cause});}
 }

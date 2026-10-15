@@ -290,8 +290,28 @@ test('lost production cleanup reply retains intent and never repeats deletion',l
  const r=await productionRetirementFixture(f);let calls=0;
  await assert.rejects(retireProduction({...r.retireOptions,execute:async c=>{calls++;const v=await r.execute(c);assert.equal(v.exit_code,0,v.stderr);throw Error('lost reply');}}),e=>e.outcome==='unknown');
  assert(!fs.existsSync(f.root+'/native'));assert(fs.existsSync(r.retireFile+'.pending'));assert(!fs.existsSync(r.retireFile));await assert.rejects(retireProduction(r.retireOptions));assert.equal(calls,1);
+ const resumed=await retireProduction({...r.retireOptions,resume:true,execute:async c=>{assert.doesNotMatch(c,/\nrm |\nrmdir |systemctl stop/);return r.execute(c);}});
+ assert.equal(resumed.phase,'staging-retired');assert(!fs.existsSync(r.retireFile+'.pending'));assert.deepEqual(await retireProduction({...r.retireOptions,resume:true}),resumed);
 }));
 test('production cleanup supports full retained inventory within protocol bounds',linux,()=>fixture(async f=>{
  const r=await productionRetirementFixture(f),inputs=JSON.parse(fs.readFileSync(r.options.journalDirectory+'/'+r.retireOptions.managed.id+'.managed-restore-input.json')),plan=productionRetirementPlan(inputs);
  assert(Buffer.byteLength(plan.command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:plan.command}).status,0);await retireProduction(r.retireOptions);assert(!fs.existsSync(f.root+'/native'));assert.equal(fs.readdirSync(r.parent+'/jobs').length,64);
 },64));
+test('production retirement resume refuses incomplete cleanup and changed ownership or unit state',linux,async()=>{
+ for(const mode of ['partial','unit','intent','missing','managed'])await fixture(async f=>{
+  const r=await productionRetirementFixture(f);
+  await assert.rejects(retireProduction({...r.retireOptions,execute:async c=>{if(mode==='partial')throw Error('submission not observed');const result=await r.execute(c);assert.equal(result.exit_code,0,result.stderr);throw Error('lost reply');}}));
+  if(mode==='unit')fs.writeFileSync(r.bin+'/systemctl','#!/bin/sh\nprintf "LoadState=loaded\\nActiveState=active\\nMainPID=52\\n"\n');
+  if(mode==='intent')fs.writeFileSync(r.retireFile+'.pending','{}');
+  if(mode==='missing')fs.unlinkSync(r.retireFile+'.pending');
+  if(mode==='managed')fs.writeFileSync(r.parent+'/jobs/'+f.records[0].name,'changed');
+  await assert.rejects(retireProduction({...r.retireOptions,resume:true}));assert(!fs.existsSync(r.retireFile));
+  if(mode==='partial')assert(fs.existsSync(f.root+'/native/code/worker'));
+ });
+});
+test('production retirement resumes an uncertain receipt publication without deleting staging again',linux,()=>fixture(async f=>{
+ const r=await productionRetirementFixture(f),file=path.resolve(__dirname,'../research/autonomous-root/service/production-retirement.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./policy'?{...real(n),atomic:(p,v)=>{real(n).atomic(p,v);throw Error('lost publication acknowledgement');}}:real(n)});
+ await assert.rejects(module.exports.retireProduction(r.retireOptions),e=>e.outcome==='unknown');assert(fs.existsSync(r.retireFile));assert(fs.existsSync(r.retireFile+'.pending'));
+ const before=fs.readFileSync(r.retireFile,'utf8'),result=await retireProduction({...r.retireOptions,resume:true});assert.equal(result.phase,'staging-retired');assert.equal(fs.readFileSync(r.retireFile,'utf8'),before);assert(!fs.existsSync(r.retireFile+'.pending'));
+}));

@@ -997,3 +997,23 @@ managed activation remain open. Both TVs remain unchanged on .NET; neither was
 restarted or rebooted.
 
 The combined Linux migration suite passes 200 tests without skips.
+
+### Completed production cleanup reconciliation — local follow-up
+
+Production retirement has an explicit read-only resume path for completed remote
+cleanup whose reply was lost, published cleanup whose acknowledgement was lost,
+and repeated receipt readback. Resume requires the exact durable intent or exact
+published receipt, unchanged managed identity/selection/restoration/baseline, absent
+native staging and stopped original native processes. The unit must be absent or
+inactive; a remaining loaded unit must retain its original start identity and
+successful exit status. Resume never issues stop, rm or rmdir.
+
+Missing/changed ownership, partial staging, an active unit or changed managed
+records refuse reconciliation. A completed remote state can publish the matching
+receipt and clear its intent; repeated verification leaves the receipt unchanged.
+Partial deletion recovery remains open and is not implicitly treated as complete.
+Tests cover lost replies/publication, repeat readback and these refusal cases.
+Both TVs remain unchanged on deployed .NET; no restart or reboot was performed.
+
+The combined Linux migration suite passes 202 tests without skips. These are host
+results; activation/controller integration and both-TV qualification remain open.
