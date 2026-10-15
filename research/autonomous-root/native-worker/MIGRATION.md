@@ -919,3 +919,31 @@ These are host checks, not a live TV managed restart: the new readiness tests us
 fixture peers and unit/proc/mount evidence. Session ownership, controller adoption,
 provider retirement, selection commit and interrupted-readiness recovery remain
 open. Both TVs and their deployed .NET fallbacks are unchanged; no reboot occurred.
+
+### Managed rollback session ownership — local follow-up
+
+A managed session now owns a private loopback listener and durable random token,
+binds the submitted launch to the accepted restoration transition, and obtains
+readiness through the independent provider. A failed trial retains its rollback
+state gate; returning from committed native selection advances to a managed trial
+only after verified readiness. The general channel is transferred once, after the
+exact corresponding selection commit, with fresh identity/launcher checks and
+unchanged token, restoration input, ready receipt and quiescence/history binding.
+
+Listener failures remove unused private material. Submitted/unknown launches,
+failed readiness and disconnects retain ownership evidence. Connection and
+readiness deadlines also terminate waiting when a provider callback stalls;
+closing the socket is never reported as process or resource cleanup. No public
+migration endpoint or automatic rollback is enabled by this module.
+
+Session tests cover both transition forms, precommit refusal, changed identity,
+launcher/token/input/history, listener failure, stalled callbacks and disconnects.
+A real managed harness authenticates to the actual listener, transfers its channel
+after commit, executes a command and shuts down successfully. That test normalizes
+the host Smack field and supplies fixture readiness/systemd evidence; it does not
+qualify a TV launch, retained-state restart or full rollback controller. Both TVs
+remain unchanged. Provider retirement, agent adoption/activation, controller
+integration and interrupted session recovery remain open.
+
+The combined Linux suite passes 195 tests without skips. No TV restart or reboot
+was performed; .NET remains the deployed fallback.
