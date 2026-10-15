@@ -114,3 +114,21 @@ test('cleanup cannot bypass an unknown operation without its recovery binding',(
  f.tasks.rehearse(value);await tick();f.fail(Error('unknown activation'));await tick();
  assert.throws(()=>f.tasks.cleanupRestart({id:'native-cleanup-0001',transaction_id:'c'.repeat(32)}));assert.equal(f.journal.rows.length,1);
 }));
+
+test('unknown cleanup resumes only under its original request and transaction, preserving uncertainty',()=>fixture(async f=>{
+ const transaction='c'.repeat(32),first={id:'native-cleanup-origin-0001',transaction_id:transaction};let fail=true;
+ f.agent.cleanupRestart=async()=>{if(fail)throw Error('retirement acknowledgement lost');return {id:transaction};};
+ f.tasks.cleanupRestart(first);await tick();assert.equal(f.tasks.status().state,'unknown');
+ assert.throws(()=>f.tasks.resume({id:'native-wrong-resume-0001',rehearsal_id:first.id}),'activation recovery cannot displace an unknown cleanup');assert.equal(f.journal.rows.length,1);
+ const next={id:'native-cleanup-resume-0001',cleanup_id:first.id,transaction_id:transaction};
+ for(const wrong of [{...next,cleanup_id:'unrelated-cleanup-0001'},{...next,transaction_id:'d'.repeat(32)},{...next,id:first.id},{...next,extra:true},{id:next.id,transaction_id:transaction}])assert.throws(()=>f.tasks.cleanupRestart(wrong));
+ f.tasks.cleanupRestart(next);assert.throws(()=>f.tasks.cleanupRestart({...next,id:'native-cleanup-resume-0002'}));await tick();assert.equal(f.tasks.status().state,'unknown');
+ assert.throws(()=>f.tasks.cleanupRestart({...next,id:'native-cleanup-resume-0002',cleanup_id:next.id}));
+ fail=false;f.tasks.cleanupRestart({...next,id:'native-cleanup-resume-0002'});await tick();await tick();assert.equal(f.tasks.status().state,'completed');
+ assert.deepEqual(f.journal.rows.map(r=>r.state),['submitted','submitted','completed']);assert.throws(()=>f.tasks.cleanupRestart({...next,id:'native-cleanup-resume-0003'}));
+ assert.equal(f.tasks.rehearse(value).state,'submitted');await tick();f.complete({});await tick();
+}));
+test('automatic forward rollback cannot be displaced by an unrelated activation resume',()=>fixture(async f=>{
+ f.agent.migrateNative=f.agent.rehearseNative;f.agent.resumeNativeActivation=async()=>({});f.tasks.migrate(value);await tick();f.fail(Object.assign(Error('lost provider'),{recovery_transaction_id:'c'.repeat(32)}));await tick();
+ assert.throws(()=>f.tasks.resumeNative({id:'native-resume-activation-0001',migration_id:value.id}));assert.equal(f.journal.rows.length,1);
+}));

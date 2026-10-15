@@ -8,13 +8,13 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-restart-')),state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',selectionFile=state+'/selection.json';fs.mkdirSync(state,{recursive:true,mode:0o700});
  const managed='a'.repeat(64),native='b'.repeat(64),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),launcherSha=sha(fs.readFileSync('/bin/true')),workerSha=sha(fs.readFileSync(process.env.NATIVE_WORKER)),runtimeSha=sha(fs.readFileSync('/opt/dotnet/bin/dotnet'));
- const live=mode.startsWith('live-');let faulted=false;
+ const live=mode.startsWith('live-'),observerLoss=mode.startsWith('live-observer-');let faulted=false,cleanupFaulted=false;
  const children=[],servers=[],roots=['/opt/couchroot-agent'],units=new Map(),commands=new Map();let first,second;
  const unitRoot=root+'/units';fs.mkdirSync(unitRoot);
  // Unknown units report systemd's not-found defaults; the fixture has no cgroups.
@@ -60,7 +60,8 @@ done
     const names=fs.readdirSync(state).filter(n=>n.endsWith('.managed-launch.json'));assert.equal(names.length,1);const r=JSON.parse(fs.readFileSync(state+'/'+names[0]));
     const inputs=JSON.parse(fs.readFileSync(state+'/'+r.id+'.managed-restore-input.json'));command=require('../research/autonomous-root/service/managed-restore-plan').planManagedRestore(inputs).verify+'printf "MANAGED-VERIFIED\\n"\n';
    }
-   return super.execute(command.replaceAll('systemctl ',systemctl+' '),timeout);
+   const result=await super.execute(command.replaceAll('systemctl ',systemctl+' '),timeout);
+   if(mode==='live-observer-ack-lost'&&!cleanupFaulted&&command.includes('OBSERVER-RECOVERY-RETIRED')){assert.equal(result.exit_code,0);cleanupFaulted=true;throw Error('observer cleanup acknowledgement lost');}return result;
   }
  }
  function start(command,args,unit){const child=spawn(command,args,{stdio:['ignore','ignore','pipe']}),ended=once(child,'exit');let stderr='';child.stderr.on('data',v=>{stderr=(stderr+v).slice(-16384);});const v={child,ended,command,stderr:()=>stderr};children.push(v);if(unit)units.set(unit,v);return v;}
@@ -71,7 +72,7 @@ done
   return {directory,scope};
  }
  const launchers={
-  'retirement-launch':{submitRetirement:async o=>{const {directory,scope}=nativeStage(o.id,'retirement',o),unit='couchroot-retirement-'+o.id+'.service',r={schema:1,id:o.id,phase:'submitted',device:o.device,manifest_sha256:o.manifestSha256,worker_sha256:workerSha,launcher_sha256:launcherSha,observer_sha256:native,boot_id:boot,source:o.source,unit,directory,scope,token_file:o.tokenFile,token_sha256:o.tokenSha256,port:o.port};write('retirement-launch.pending',o.id+'\n');write(o.id+'.retirement.json',r);start(directory+'/code/worker',['127.0.0.1',String(o.port),scope+'/token',scope,scope+'/launcher',launcherSha],unit);return r;}},
+  'retirement-launch':{submitRetirement:async o=>{const {directory,scope}=nativeStage(o.id,'retirement',o),unit='couchroot-retirement-'+o.id+'.service',r={schema:1,id:o.id,phase:'submitted',device:o.device,manifest_sha256:o.manifestSha256,worker_sha256:workerSha,launcher_sha256:launcherSha,observer_sha256:sha('fixture observer'),boot_id:boot,source:o.source,unit,directory,scope,token_file:o.tokenFile,token_sha256:o.tokenSha256,port:o.port};write('retirement-launch.pending',o.id+'\n');write(o.id+'.retirement.json',r);start(directory+'/code/worker',['127.0.0.1',String(o.port),scope+'/token',scope,scope+'/launcher',launcherSha],unit);return r;}},
   'managed-launch':{submitManaged:async o=>{const inputs=JSON.parse(fs.readFileSync(state+'/'+o.transitionId+'.managed-restore-input.json')),id=o.transitionId,directory='/opt/couchroot-managed-'+id,stage='/opt/usr/home/owner/share/tmp/sdk_tools/managed-'+id,unit='couchroot-managed-'+id+'.service';for(const p of [directory,stage]){assert(!fs.existsSync(p));roots.push(p);fs.mkdirSync(p,{recursive:true,mode:0o700});}fs.copyFileSync(o.tokenFile,stage+'/token');fs.chmodSync(stage+'/token',0o600);
    const r={schema:1,id,phase:'submitted',implementation:'managed',manifest_sha256:o.managedSha256,runtime_sha256:o.runtimeSha256,state_receipt_sha256:o.receiptSha256,origin_id:inputs.record.id,source:inputs.record.worker_identity,boot_id:boot,unit,directory,stage,files:{'SamsungTvRootAgent.dll':managed,'SamsungTvRootAgent.runtimeconfig.json':managed,'SamsungTvRootAgent.deps.json':managed},port:o.port,token_file:o.tokenFile,token_sha256:o.tokenSha256};write('managed-launch.pending',id+'\n');write(id+'.managed-launch.json',r);start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(o.port),stage],unit);return r;}},
   'production-launch':{submitProduction:async o=>{const installation=JSON.parse(fs.readFileSync(state+'/'+o.id+'.state-install.json')),{directory,scope}=nativeStage(o.id,'worker',o),unit='couchroot-worker-'+o.id+'.service',r={schema:1,id:o.id,phase:'submitted',device:o.device,manifest_sha256:o.manifestSha256,state_receipt_sha256:o.receiptSha256,worker_sha256:workerSha,launcher_sha256:launcherSha,source:installation.source,boot_id:boot,unit,directory,scope,token_file:o.tokenFile,token_sha256:o.tokenSha256,port:o.port};write('production-launch.pending',o.id+'\n');write(o.id+'.production.json',r);start(directory+'/code/worker',['127.0.0.1',String(o.port),scope+'/token',scope,scope+'/launcher',launcherSha,'--production'],unit);return r;}}
@@ -86,7 +87,7 @@ done
   };
  }
  const until=async(predicate,ms=5000)=>{const end=Date.now()+ms;while(!await predicate()){if(Date.now()>end)throw Error('Restart rehearsal deadline '+JSON.stringify(second&&second.restartInventory())+' '+children.map(c=>c.stderr()).join('\n'));await pause();}};
- const createAgent=load=>load('agent').createAgent({device:'qn90a',hashes:{'/usr/bin/dotnet':runtimeSha}},{selectionFile,verifyFirmware:()=>{},managedVersion:()=>managed,restartRollbackRetryMs:200});
+ const createAgent=load=>load('agent').createAgent({device:observerLoss?'s90d':'qn90a',hashes:{'/usr/bin/dotnet':runtimeSha}},{selectionFile,verifyFirmware:()=>{},managedVersion:()=>managed,restartRollbackRetryMs:200});
  // Acquisition: the fixture starts the managed parity worker against the agent's listener.
  async function acquire(agent){const before=servers.length;agent.start();await until(()=>servers.length>before&&servers[servers.length-1].listeningPort(),12000);return attach(servers[servers.length-1]);}
  function attach(server){fs.writeFileSync(root+'/token',server.secret.toString('base64'),{mode:0o600});return {server,worker:start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(server.listeningPort()),root])};}
@@ -103,7 +104,15 @@ done
   const saved=fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json');
   const originalHold=first.holdAdmission;first.holdAdmission=()=>{const hold=originalHold();
    if(mode==='abandon-prepared')hold.prepareNative=async()=>{throw injected;};
-   if(mode==='live-provider-loss'){const prepare=hold.prepareNative;hold.prepareNative=async id=>{const session=await prepare(id);if(!faulted){faulted=true;const provider=units.get(session.record.unit);assert(provider);provider.child.kill('SIGTERM');await provider.ended;}return session;};}
+   if(mode==='live-provider-loss'||observerLoss){const prepare=hold.prepareNative;hold.prepareNative=async id=>{const session=await prepare(id);if(!faulted){faulted=true;
+    if(observerLoss){
+     const record=session.record,obs=record.id,nested=state+'/observer-launches',scope=state+'/observer-Abc123',directory='/opt/couchroot-observer-'+obs,unit='couchroot-observer-'+obs+'.service';
+     fs.mkdirSync(nested,{mode:0o700});fs.mkdirSync(scope,{mode:0o700});fs.mkdirSync(directory,{mode:0o700});roots.push(directory);fs.writeFileSync(directory+'/observer','fixture observer',{mode:0o500});
+     const observed=start('/bin/true',[],unit);await observed.ended;
+     write('observer-launches/observer-launch.pending',obs+'\n');write('observer-launches/'+obs+'.observer.json',{schema:1,id:obs,phase:'submitted',manifest_sha256:native,observer_sha256:record.observer_sha256,boot_id:boot,pids:[record.source.processes.worker.pid],unit,root:scope,execution_directory:directory,credentials:{uid:5001,gid:100,groups:[100,201],label:'User::Pkg::MiniRoot01'}});
+     write('observer-Abc123/token','c'.repeat(64));write('observer-Abc123/result',{schema:1,boot_id:boot,worker_pid:record.source.processes.worker.pid,guardian_pid:null,observer_pid:observed.child.pid,exit_code:1,signal:null});
+    }
+    const provider=units.get(session.record.unit);assert(provider);provider.child.kill('SIGTERM');await provider.ended;}return session;};}
    if(mode==='provider-ready'){const prepare=hold.prepareNative;hold.prepareNative=async id=>{await prepare(id);throw injected;};}
    return hold;};
   if(mode.startsWith('native-')||mode.startsWith('return-')){
@@ -130,7 +139,7 @@ done
    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
    assert.equal(second.restartInventory().boundary,'settled');return;
   }
-  await assert.rejects(first.rehearseNative(native,runtimeSha),e=>{if(mode==='live-provider-loss')return e.outcome==='unknown'&&/^[a-f0-9]{32}$/.test(e.recovery_transaction_id);for(let c=e;c;c=c.cause)if(c===injected)return true;return false;});
+  await assert.rejects(first.rehearseNative(native,runtimeSha),e=>{if(mode==='live-provider-loss'||observerLoss)return e.outcome==='unknown'&&/^[a-f0-9]{32}$/.test(e.recovery_transaction_id);for(let c=e;c;c=c.cause)if(c===injected)return true;return false;});
   if(['live-published-commit','live-ambiguous-commit'].includes(mode)){
    const held=first.status(),count=servers.length;assert.equal(held.admission_held,true);assert.equal(held.worker_ready,false);assert.equal(first.restartInventory().restart_rollback,null);
    assert.equal(held.native_migration.phase,'reconciliation-required');assert.equal(held.native_migration.failed_phase,'committing');
@@ -138,7 +147,7 @@ done
   }
   const pending=load=>load('worker-selection').selectionStatus(selectionFile).pending;
   const id=pending(loader(new Map()))&&pending(loader(new Map())).id;assert(id);
-  assert.equal(pending(loader(new Map())).phase,{'abandon-prepared':'prepared','provider-ready':'prepared','state-ready':'state-ready','trial-ready':'trial-ready','live-provider-loss':'prepared','live-state-ready':'state-ready','live-trial-ready':'trial-ready'}[mode]);
+  assert.equal(pending(loader(new Map())).phase,{'abandon-prepared':'prepared','provider-ready':'prepared','state-ready':'state-ready','trial-ready':'trial-ready','live-provider-loss':'prepared','live-state-ready':'state-ready','live-trial-ready':'trial-ready','live-observer-loss':'prepared','live-observer-ack-lost':'prepared'}[mode]);
   // Live recovery keeps the same agent; restart cases discard all old handles.
   const old=children.slice();if(!live){first.stop();for(const s of servers.slice())s.close();}else{assert.equal(first.canCleanupRestart(id),false);await assert.rejects(first.execute('echo admission-escape',1000),e=>e.outcome==='rejected');}
   await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
@@ -155,7 +164,7 @@ done
    // Ownership markers, records and staging remain for explicit cleanup and block another handoff.
    const after=new Map(listing());for(const [n,v] of before)if(n!=='selection.json')assert.equal(after.get(n),v,n);
    assert(r.markers.includes('retirement-launch.pending'));assert.equal(r.action,'pending-reconciliation');
-   if(!['provider-ready','live-provider-loss'].includes(mode))assert(fs.existsSync('/opt/couchroot-worker-'+id+'/state/.jobs'));
+   if(!['provider-ready','live-provider-loss'].includes(mode)&&!observerLoss)assert(fs.existsSync('/opt/couchroot-worker-'+id+'/state/.jobs'));
   }
   await until(()=>second.status().worker_ready);
   const s=load=>load('worker-selection').selectionStatus(selectionFile),final=s(loader(new Map())),h=final.history[final.history.length-1];
@@ -164,7 +173,10 @@ done
   assert.equal((await second.operation({op:'job.status',id:'retained-keep-0001'})).record.exit_code,7);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
   if(mode!=='abandon-prepared'){
    await assert.rejects(second.migrateNative(native,runtimeSha),e=>e.outcome==='rejected'&&/Existing native transition requires reconciliation/.test(e.cause&&e.cause.message));
-   const obs=require('../research/autonomous-root/service/restart-inventory').providerId(id),cleaned=await second.cleanupRestart(id);
+   const obs=require('../research/autonomous-root/service/restart-inventory').providerId(id);
+   if(mode==='live-observer-ack-lost'){await assert.rejects(second.cleanupRestart(id),e=>e.outcome==='unknown');assert.equal(second.status().worker_ready,true);assert.equal(JSON.parse(fs.readFileSync(state+'/observer-launches/'+obs+'.recovery.json')).phase,'prepared');assert(fs.existsSync(state+'/observer-Abc123/result'));}
+   const cleaned=await second.cleanupRestart(id);
+   if(observerLoss){assert(!fs.existsSync('/opt/couchroot-observer-'+obs));assert(!fs.existsSync(state+'/observer-Abc123'));assert(!fs.existsSync(state+'/observer-launches/observer-launch.pending'));assert.equal(JSON.parse(fs.readFileSync(state+'/observer-launches/'+obs+'.recovery.json')).phase,'complete');}
    assert.equal(cleaned.id,id);assert.equal(second.status().admission_held,false);
    for(const p of ['/opt/couchroot-worker-'+id,'/opt/couchroot-retirement-'+obs])assert(!fs.existsSync(p),p);
    for(const n of ['retirement-launch.pending','state-install.pending','production-launch.pending'])assert(!fs.existsSync(state+'/'+n),n);

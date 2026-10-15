@@ -7,16 +7,20 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.34 packages with native service acquisition enabled,
-managed selected and ready. QN90A has 26 settled history entries (22 committed,
-four rolled back); S90D has 27 (22 committed, five rolled back).
-Both qualified automatic rollback and managed readmission after provider loss
-with the original coordinator still running. QN90A also completed ordinary
-explicit cleanup. S90D required separate observer retirement and a later
-coordinator restart to reconcile an unknown cleanup request; that cleanup gap
-remains open. A preceding paused S90D trial lost its coordinator, recovered via
-the independent .NET SDK rescue, and was not counted as live recovery. See
-[live recovery evidence](live-recovery-results.json).
+Both TVs are on signed 0.7.36 packages with native service acquisition enabled,
+managed selected and ready. QN90A has 27 settled history entries (22 committed,
+five rolled back); S90D has 28 (22 committed, six rolled back).
+Both qualified automatic rollback/readmission after unpaused provider loss,
+cleanup refusal on an inert owned test file, and a bound continuation of that
+cleanup. The original coordinator stayed unchanged throughout. S90D's terminal
+observer was retired by the service through its durable checkpoint, without
+separate observer maintenance or a coordinator restart. Original uncertain
+requests remain submitted; only the continuation is completed. See
+[observer cleanup evidence](observer-cleanup-results.json).
+The preceding 0.7.34 trial established automatic rollback/readmission but exposed
+the observer-cleanup gap now closed. Its earlier paused S90D coordinator exit
+remains unexplained; the independent .NET rescue restored access on that same
+boot. See [live recovery evidence](live-recovery-results.json).
 Earlier rounds qualified forward rollback at provider readiness and retained-state
 readiness, plus provider loss followed by coordinator restart; see
 [forward recovery evidence](forward-recovery-results.json).
@@ -66,9 +70,6 @@ pending. See [round-trip evidence](roundtrip-results.json) and
 
 Native public admission and same-boot recovery are qualified for the bounded
 rounds above. Native-default and .NET-free completion still require:
-- S90D observer retirement after provider loss and safe continuation of an unknown
-  cleanup in the live coordinator. Automatic rollback/readmission now has both-TV
-  evidence, but S90D cleanup still needs separate maintenance.
 - Later forward-handoff interruption boundaries, including installed production
   readiness. Provider-ready/state-ready interruption and provider-loss rollback
   now have both-TV evidence without operation replay.
@@ -2545,3 +2546,68 @@ provide a bound reconciliation path for its existing unknown cleanup task, with
 focused failure tests and both-TV acceptance. Later production-readiness faults,
 final production endurance, native-default rollout and native-only code entry
 remain separate gates. The managed bridge, fallback and independent rescue stay.
+
+### Observer retirement and bound cleanup continuation — 2026-10-15
+
+Forward rollback cleanup now handles a terminal S90D source-exit observer through
+`observer-recovery.js`. It binds the observer record to the original provider,
+source worker, boot, candidate manifest and observer artifact. Before any remote
+removal it captures the original serialized record, terminal receipt, private
+scope identity and exact token/result/socket identities in an fsynced checkpoint
+under `observer-launches`. Active processes, nonempty cgroups, a live Unix listener,
+changed bytes, unknown entries or an unfinished receipt publication refuse cleanup.
+
+The remote command repeats process checks and enforces observer unit idleness
+immediately before stopping an exited unit. It removes only the root-owned
+executable whose metadata and digest match the record, then its empty directory.
+Acknowledgement advances the checkpoint before local deletion. A lost reply repeats
+only guarded cleanup of the remaining resources; partial local deletion resumes
+only after remote absence and the remaining file identities are reverified.
+The original observer record becomes cancelled with the terminal receipt and
+recovery-evidence digest; its matching marker is removed last. The sealed checkpoint
+remains as evidence. No observer or provider launch is replayed.
+
+An uncertain cleanup can now continue through the existing cleanup route with a
+fresh request ID, the same transaction ID and `cleanup_id` naming its original
+cleanup request. The client exposes `--cleanup-id`. The live coordinator retains
+that original binding across repeated uncertain continuations, rejects unrelated
+requests and activation resumes, and leaves earlier request-journal rows submitted.
+This does not authorize retrying an uncertain migration. A coordinator restart
+still uses the existing ordinary cleanup route to reconcile durable state.
+
+Focused tests cover wrong bindings, live units/listeners, unexpected scope entries,
+changed bytes, lost remote acknowledgement and interrupted local deletion. Real
+managed/native process tests model the terminal observer remnant, both ordinary
+cleanup and lost-acknowledgement recovery, preserved retained jobs and a subsequent
+normal handoff on the same coordinator. Three shell-executed refusal cases verify
+that a newly live observer or foreign cgroup cannot be stopped after the first
+observation. Local validation passed 404 Node tests with 142 fixture/platform
+skips, 399 Python tests run with 136 skips, six fresh-container rehearsal cases
+and eighteen fresh-container restart/recovery cases.
+
+Signed 0.7.36 qualified the complete recovery path on both TVs. An unpaused watcher
+terminated only the bound provider guardian. After automatic managed rollback,
+an inert uniquely owned file in the recorded execution directory forced an
+unknown cleanup result. The fixture removed only that exact file after mode and
+digest checks. A fresh request naming the original cleanup and transaction then
+completed service cleanup, with the original coordinator PID/start time unchanged.
+On S90D the observer checkpoint remained prepared after refusal and became
+complete after continuation; the observer executable, local scope and marker
+were removed by service code. This closes the separate-maintenance gap found in
+0.7.34. Lost replies and partial local deletion remain locally qualified cases;
+the hardware fault was a known file obstruction.
+
+Both devices are managed-ready, settled and on SDK loopback, with no pending setup
+or selection. Retained job bytes, enrollment/configuration, protected files and
+managed recovery hashes match their baselines. Packaged managed worker and
+capability-entry bridge hashes also match the prior packages. All milestone-owned
+units are inactive (15 on QN90A, including the interim installation units; nine
+on S90D), and test witness scopes are absent. Original migration and refused
+cleanup journal rows remain submitted; only the continuation is completed.
+See [observer cleanup evidence](observer-cleanup-results.json).
+
+Next: qualify later production-readiness interruption and continue the native-only
+entry investigation. The earlier paused S90D coordinator exit, wider maintenance
+lifecycle, final resource-pressure/endurance evidence, native-default rollout and
+power lifecycle remain open. No reboot or standby was performed; .NET fallback
+and independent rescue remain deployed.

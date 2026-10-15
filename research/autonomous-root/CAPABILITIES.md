@@ -127,7 +127,7 @@ a changed managed package remain blocked. `GET /v1/native/status` reports the
 attempt as `durable.restart_rollback`.
 
 Staging, units and ownership markers survive the rollback. While they remain,
-another handoff is refused. `POST /v1/native/cleanup-restart` accepts exactly
+another handoff is refused. `POST /v1/native/cleanup-restart` accepts
 `{id, transaction_id}` for a committed restart rollback. It is journaled like the
 other native routes and returns HTTP 202. Cleanup runs under a held, drained
 managed worker:
@@ -139,10 +139,24 @@ managed worker:
 4. It then removes the transaction's token directories, readiness intents and
    markers.
 
-Unknown entries, live processes and S90D source-exit observer remnants leave the
-intent and markers in place. Records and receipts are retained. Use the client
-command `native-cleanup-restart --request-id NEW_REQUEST_ID --transaction-id
+S90D source-exit observers with a bound terminal receipt are retired through a
+separate durable checkpoint before generic staging cleanup. The service verifies
+the original record, same-boot process and unit absence, no live control socket,
+and exact file identities and hashes. It removes only those recorded resources;
+a lost acknowledgement or partial deletion resumes against the same checkpoint.
+Unknown entries, live processes and missing terminal evidence leave the intent
+and markers in place. Records and receipts are retained. Use the client command
+`native-cleanup-restart --request-id NEW_REQUEST_ID --transaction-id
 ROLLED_BACK_TRANSACTION_ID`.
+
+If that cleanup becomes unknown in the live coordinator, explicitly continue with
+`{id, transaction_id, cleanup_id}`, where `cleanup_id` is the original cleanup
+request and `id` is fresh. The client exposes `--cleanup-id ORIGINAL_CLEANUP_ID`.
+The coordinator requires the same transaction and original request, managed-ready
+admission, and no running native task. Repeated continuations retain the original
+binding; previous uncertain journal rows stay submitted. Activation recovery
+cannot displace an unknown cleanup. After coordinator restart, the ordinary
+cleanup route reconciles the durable intent under its existing evidence guards.
 
 ## Results and readiness
 
@@ -1076,8 +1090,8 @@ Native status exposes `durable.restart_rollback.trigger: "live-forward-failure"`
 and the failed controller phase. The original background operation remains unknown
 and its journal row remains submitted. Its `recovery_transaction_id` permits
 `cleanup-restart` only for that exact, successfully rolled-back transaction, using
-a fresh request ID. Cleanup remains explicit; an unknown cleanup cannot be
-resubmitted through this exception. After verified cleanup, a new migration or
+a fresh request ID. Cleanup remains explicit; an unknown cleanup requires the separate original-request
+binding described above. After verified cleanup, a new migration or
 rehearsal can use the same coordinator. No fault-injection API is introduced.
 
 
@@ -1086,8 +1100,20 @@ TVs without restarting the original coordinator. QN90A also passed normal explic
 cleanup. S90D's unpaused trial retained an external observer remnant, so generic
 cleanup stayed unknown until separate guarded observer retirement and a later
 coordinator restart allowed reconciliation of the same cleanup intent. S90D cleanup
-without maintenance remains unqualified. A preceding paused S90D trial lost its
+without maintenance was not qualified by that 0.7.34 round. A preceding paused S90D trial lost its
 coordinator and was recovered through the independent .NET SDK rescue; its cause
 remains unresolved. Both TVs ended managed-ready, settled, and on SDK loopback,
 with retained jobs, enrollment and recovery bytes preserved. See
 [live recovery results](native-worker/live-recovery-results.json).
+
+
+Signed 0.7.36 subsequently qualified terminal observer retirement and bound cleanup
+continuation on both TVs. An inert owned file forced cleanup refusal; after that
+exact test file was removed, a fresh request naming the original cleanup and
+transaction completed reconciliation. S90D advanced its observer checkpoint from
+prepared to complete and retired the recorded resources through service code.
+Both original coordinators remained running throughout rollback, refusal and
+continuation. Original migration and cleanup rows remain submitted; the continuation
+alone is completed. Both TVs ended managed-ready and settled on SDK loopback,
+with retained state, enrollment and .NET recovery preserved. See
+[observer cleanup results](native-worker/observer-cleanup-results.json).

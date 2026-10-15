@@ -5,6 +5,7 @@
 // observer remnants leave the transaction pending; nothing unknown is deleted.
 const fs=require('fs'),path=require('path');
 const {privateRead,privateDirectory}=require('./private-state');
+const {recoverObserver}=require('./observer-recovery');
 const {SelectionJournal}=require('./worker-selection');
 const {hash,atomic}=require('./policy');
 const {loadEvidence,observeCommand,parseObservation}=require('./restart-rollback');
@@ -69,6 +70,7 @@ async function cleanupRestartRollback({selectionFile,id,executor}){
  if(present(intent))check(privateRead(intent,64)===id+'\n','cleanup intent changed');
  else{const fd=fs.openSync(intent,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);try{fs.writeFileSync(fd,id+'\n');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}sync(directory);}
  try{
+  await recoverObserver({directory,evidence:e,execute:run});
   const r=await run(command,25000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='RESTART-CLEANED\n','remote staging did not match its records ('+(r?(r.timed_out?'timeout':'exit '+r.exit_code)+': '+String(r.stderr||r.stdout||'').slice(-120).replace(/[^\x20-\x7e]+/g,' '):'no result')+')');
   const removed=[];
   for(const t of tokens)if(present(t.dir)){

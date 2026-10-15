@@ -30,6 +30,8 @@ class RootAgentClientTests(unittest.TestCase):
             self.assertEqual(request.call_args.args,({},'POST','/v1/native/rehearse',{'id':'native-request-0001','manifest_sha256':'a'*64,'runtime_sha256':'b'*64}))
             client.resume_managed_activation({},'native-request-0001','native-recovery-0001')
             self.assertEqual(request.call_args.args,({},'POST','/v1/native/resume-managed',{'id':'native-recovery-0001','rehearsal_id':'native-request-0001'}))
+            client.cleanup_restart({},'c'*32,'native-cleanup-0002',cleanup_id='native-cleanup-0001')
+            self.assertEqual(request.call_args.args[3],{'id':'native-cleanup-0002','transaction_id':'c'*32,'cleanup_id':'native-cleanup-0001'})
             client.cleanup_restart({},'c'*32,'native-cleanup-0001')
             self.assertEqual(request.call_args.args,({},'POST','/v1/native/cleanup-restart',{'id':'native-cleanup-0001','transaction_id':'c'*32}))
             client.migrate_native({},'a'*64,'b'*64,'native-migrate-0001')
@@ -48,6 +50,8 @@ class RootAgentClientTests(unittest.TestCase):
             with self.assertRaises(ValueError):client.resume_native_activation({},'native-migrate-0001','native-migrate-0001')
             with self.assertRaises(ValueError):client.return_managed({},'bad','native-return-0001')
             with self.assertRaises(ValueError):client.cleanup_restart({},'C'*32,'native-cleanup-0001')
+            for original in ['short','native-cleanup-0001']:
+                with self.assertRaises(ValueError):client.cleanup_restart({},'c'*32,'native-cleanup-0001',cleanup_id=original)
             request.assert_not_called()
 
     def test_wait_requires_new_boot_and_ready_worker(self):

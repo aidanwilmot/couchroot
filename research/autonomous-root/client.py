@@ -243,15 +243,20 @@ def return_managed(config, runtime_sha256, request_id, session=None):
     return request(config,'POST','/v1/native/return-managed',dict(id=request_id,runtime_sha256=runtime_sha256),session=session)
 
 
-def cleanup_restart(config, transaction_id, request_id, session=None):
+def cleanup_restart(config, transaction_id, request_id, session=None, *, cleanup_id=None):
     if not isinstance(transaction_id,str) or not re.fullmatch('[a-f0-9]{32}',transaction_id) or not isinstance(request_id,str) or not re.fullmatch('[-a-zA-Z0-9]{16,64}',request_id):
         raise ValueError('Rolled-back transaction and persistent request ID required')
-    return request(config,'POST','/v1/native/cleanup-restart',dict(id=request_id,transaction_id=transaction_id),session=session)
+    value=dict(id=request_id,transaction_id=transaction_id)
+    if cleanup_id is not None:
+        if not isinstance(cleanup_id,str) or not re.fullmatch(r'[-a-zA-Z0-9]{16,64}',cleanup_id) or cleanup_id==request_id: raise ValueError('Distinct original cleanup ID required')
+        value['cleanup_id']=cleanup_id
+    return request(config,'POST','/v1/native/cleanup-restart',value,session=session)
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config',required=True,type=Path)
+    parser.add_argument('--cleanup-id',help='Original unknown cleanup request to reconcile (same live coordinator)')
     parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal','upload','download','op','wait-ready','app-exec','job-start','job-status','job-tail','job-cancel','job-forget','helper-prepare','helper-release','observer-probe','native-rehearse','native-status','native-resume-managed','native-cleanup-restart','native-migrate','native-resume-native','native-return-managed'])
     parser.add_argument('--manifest-sha256');parser.add_argument('--runtime-sha256');parser.add_argument('--rehearsal-id');parser.add_argument('--migration-id');parser.add_argument('--transaction-id')
     parser.add_argument('--command-file',type=Path)
@@ -315,7 +320,7 @@ def main():
     elif args.operation=='native-cleanup-restart':
         if not args.transaction_id or not args.request_id:parser.error('--transaction-id and --request-id required')
         print('Request ID: '+args.request_id,file=sys.stderr)
-        result=cleanup_restart(config,args.transaction_id,args.request_id)
+        result=cleanup_restart(config,args.transaction_id,args.request_id,cleanup_id=args.cleanup_id)
     elif args.operation=='observer-probe':
         if not args.manifest_sha256:parser.error('--manifest-sha256 required')
         identity=args.request_id or str(uuid.uuid4())
