@@ -11,6 +11,8 @@ const {stageObserver}=require('./observer-stage');
 const {prepareRuntimeObserver,observerTransactionId}=require('./observer-runtime');
 const {openRetirementSession}=require('./retirement-session');
 const {inventoryRestart,abandonUnsubmitted}=require('./restart-inventory');
+const {restartRollbackCandidate,reconcileRestartRollback}=require('./restart-rollback');
+const {cleanupRestartRollback}=require('./restart-cleanup');
 const {validateLaunch}=require('./production-readiness');
 const {validateManagedLaunch}=require('./managed-readiness');
 const {privateRead}=require('./private-state');
@@ -33,7 +35,7 @@ function createAgent(config,options={}){
  const currentBoot=options.readBootId||(()=>read('/proc/sys/kernel/random/boot_id',128).toString().trim());
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
- let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null,reconciliation=null;
+ let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null,reconciliation=null,restartRollback=null;
  const inFlight=new Set();
  function selection(refresh=false){
   if(!options.selectionFile)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
@@ -51,7 +53,7 @@ function createAgent(config,options={}){
   return !!(nativeRuntime&&running&&connected&&workerReady&&generation===nativeRuntime.generation&&channel===nativeRuntime.channel&&JSON.stringify(selected)===nativeRuntime.selection&&selected.phase==='stable'&&selected.selected_implementation==='native-prototype'&&selected.selected_manifest_sha256===nativeRuntime.record.manifest_sha256&&h&&h.id===nativeRuntime.record.id&&h.outcome==='committed'&&h.readiness_sha256===nativeRuntime.activation.readiness_sha256);
  }
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,native_migration:migration?migration.status():null,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold,worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,native_migration:migration?migration.status():null,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold&&!restartHeld(),worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:restartHeld()&&connected?'reconciling':!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -87,16 +89,20 @@ function createAgent(config,options={}){
  async function launch(){
   if(!running||connected||launching||admissionHold)return;
   // A restarted service has no live coordinator handles. Only a transition proven
-  // to have submitted nothing remote is abandoned; anything else stays blocked.
+  // to have submitted nothing remote is abandoned; others stay blocked unless
+  // their durable evidence admits a held restart rollback below.
   if(!selection(true).launch_allowed&&!migration&&options.selectionFile){try{reconciliation=abandonUnsubmitted(options.selectionFile);}catch(error){reconciliation={abandoned:false,error:String(error.message).slice(0,160)};}}
-  if(!selection(true).launch_allowed){running=false;lastError='Worker selection requires reconciliation';return;}
+  // A submitted but uncommitted forward trial, or a committed restart rollback
+  // whose intent remains, is finished through a held managed executor.
+  if(!migration&&options.selectionFile&&(!restartRollback||restartRollback.phase==='complete')){try{const c=restartRollbackCandidate(options.selectionFile,(options.managedVersion||managedVersion)(payload));if(c)restartRollback={id:c.id,phase:'acquiring',running:false,attempts:0,error:null,result:null};}catch(error){reconciliation={...(reconciliation||{}),error:String(error.message).slice(0,160)};}}
+  if(!selection(true).launch_allowed&&!restartHeld()){running=false;lastError='Worker selection requires reconciliation';return;}
   launching=true;attempts++;const gen=++generation;let step='firmware verification';
   try{
    nativeCandidate=candidateStatus(payload,config.device);
    firmware(config);
    const secret=crypto.randomBytes(32);
    if(channel)channel.close();
-   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation||(admissionHold&&admissionHold.stopping)){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
+   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation||(admissionHold&&admissionHold.stopping)){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();if(restartHeld())runRestartRollback(conn,gen);}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation)return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
    await new Promise((resolve,reject)=>{channel.start(resolve);channel._server.once('error',reject);});
    if(!running||gen!==generation)return;
    step='loopback connection';
@@ -114,10 +120,32 @@ function createAgent(config,options={}){
   }catch(e){if(running&&gen===generation&&!connected)lastError=(step+': '+String(e.message||e.code)).slice(0,300);}
   finally{if(gen===generation){launching=false;if(client){sdb.close(client);client=null;}if(!connected)schedule();}}
  }
+ function restartHeld(){return !!restartRollback&&restartRollback.phase!=='complete';}
+ // Uses only the held channel that just passed managed readiness. Any change of
+ // connection or generation aborts; the journal records how far it got.
+ async function runRestartRollback(conn,gen){
+  const r=restartRollback;if(!r||r.running||r.phase==='complete')return;
+  const owner=channel,owned=()=>{if(!running||gen!==generation||!connected||channel!==owner||owner._conn!==conn||restartRollback!==r)throw Error('Restart rollback executor changed');};
+  r.running=true;r.phase='verifying';r.attempts++;
+  try{
+   const result=await reconcileRestartRollback({selectionFile:options.selectionFile,managedSha256:(options.managedVersion||managedVersion)(payload),executor:{pid:conn.identity.pid,
+    status:async()=>{owned();const info=await conn.operation({op:'status'});owned();return info;},
+    execute:async(command,timeout)=>{owned();const result=await owner.execute(command,timeout);owned();return result;}}});
+   owned();if(!selection(true).launch_allowed)throw Error('Managed selection not restored');
+   r.result=result;r.error=null;r.phase='complete';
+  }catch(error){
+   const chain=[];for(let c=error;c&&chain.length<4;c=c.cause)chain.push(String(c.message||c).slice(0,160));r.error=chain;r.phase='failed';
+   // Old workers exit when their transports close, and the bounded provider
+   // within its 300 s lifetime. A rejected attempt changed nothing durable, so
+   // re-observe on the same held worker; anything uncertain waits for a new one.
+   if(error.outcome==='rejected'&&r.attempts<(options.restartRollbackAttempts||36))setTimeout(()=>{if(restartRollback===r&&gen===generation&&connected&&channel===owner&&owner._conn===conn)runRestartRollback(conn,gen);},options.restartRollbackRetryMs||10000);
+  }
+  finally{r.running=false;}
+ }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
  function stop(){admissionHold=null;nativeRuntime=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(migration)migration.closeTransport();if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
  function submit(call){
-  if(admissionHold||!running||!connected||!workerReady||!channel||!runtimeAllowed(selection()))return Promise.reject(Object.assign(Error('Root worker unavailable or admission held'),{outcome:'rejected'}));
+  if(admissionHold||restartHeld()||!running||!connected||!workerReady||!channel||!runtimeAllowed(selection()))return Promise.reject(Object.assign(Error('Root worker unavailable or admission held'),{outcome:'rejected'}));
   let request;try{request=Promise.resolve(call(channel));}catch(e){request=Promise.reject(e);}
   // Keep a result classification, not command output, for the handoff drain.
   // Transport errors without an explicit outcome are also uncertain.
@@ -127,7 +155,7 @@ function createAgent(config,options={}){
  }
  function holdAdmission(){
   const selected=selection();
-  if(admissionHold||!running||!connected||!workerReady||!channel||!selected.launch_allowed)throw Error('Ready worker required for handoff hold');
+  if(admissionHold||restartHeld()||!running||!connected||!workerReady||!channel||!selected.launch_allowed)throw Error('Ready worker required for handoff hold');
   const token={},owner=channel,peer=channel._conn,gen=generation,worker=workerStatus.worker_id,boot=workerStatus.boot_id,pending=Array.from(inFlight),sourceVersion=selected.selected_manifest_sha256;
   admissionHold=token;
   function current(){if(admissionHold!==token||generation!==gen||channel!==owner||owner._conn!==peer||!running||!connected||!workerReady||!workerStatus||workerStatus.worker_id!==worker)throw Error('Worker changed during handoff hold');}
@@ -431,6 +459,17 @@ function createAgent(config,options={}){
      return {transaction_id:adopted.record.id,worker_id:info.worker_id,admission_held:false,activation_sha256:activation.receipt_sha256};
     }catch(error){nativeRuntime=null;throw Object.assign(Error('Production completion requires reconciliation'),{outcome:'unknown',cause:error});}finally{token.completionBusy=false;}
    },
+   // Removes only verified staging of a committed restart rollback; drained first.
+   cleanupRestart:async transactionId=>{
+    current();if(token.preparingStop||token.stopping||token.observerStaging||token.observerProbe||token.retirementPreparing||token.retirementSession)throw Error('Restart cleanup requires an idle hold');
+    token.preparingStop=true;
+    try{
+     await snapshot();current();
+     return await cleanupRestartRollback({selectionFile:options.selectionFile,id:transactionId,executor:{pid:peer.identity.pid,
+      status:async()=>{current();const info=await owner.operation({op:'status'});current();return info;},
+      execute:async(command,timeout)=>{current();const result=await owner.execute(command,timeout);current();return result;}}});
+    }finally{token.preparingStop=false;}
+   },
    release:()=>{current();if(token.stopping||token.preparingStop||token.observerStaging||token.observerProbe||token.retirementPreparing||token.retirementSession)throw Error('Cannot release a pending shutdown or unresolved observer staging/probe');admissionHold=null;}
   };
  }
@@ -438,6 +477,12 @@ function createAgent(config,options={}){
   let hold;try{hold=holdAdmission();}catch(error){throw Object.assign(error,{outcome:'rejected'});}
   try{const result=await hold.probeObserver(expectedManifest,requestId);hold.release();return result;}
   catch(error){try{hold.release();}catch(_){}throw error;}
+ }
+ async function cleanupRestart(transactionId){
+  let hold;try{hold=holdAdmission();}catch(error){throw Object.assign(error,{outcome:'rejected'});}
+  // Cleanup never touches managed state; an incomplete one keeps its intent and
+  // markers, which block another handoff, while managed admission reopens.
+  try{return await hold.cleanupRestart(transactionId);}finally{try{hold.release();}catch(_){}}
  }
  async function rehearseNative(manifestSha256,runtimeSha256){
   try{
@@ -450,11 +495,12 @@ function createAgent(config,options={}){
    const result=await submit(worker=>worker.execute(command,10000));
    if(!running||!connected||!workerReady||channel!==owner||!owner||owner._conn!==peer||generation!==gen||!result||result.exit_code!==0||result.timed_out||result.stdout!=='FALLBACK-RUNTIME-VERIFIED\n')throw Error('Managed fallback runtime verification failed');
   }catch(cause){throw Object.assign(Error('Native rehearsal rejected before handoff'),{outcome:'rejected',cause});}
-  if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});
+  // A migration rejected before handoff changed nothing durable; replace it.
+  if(!migration||migration.status().phase==='rejected')migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});
   return migration.run(manifestSha256,{returnToManaged:true,runtimeSha256});
  }
  // Durable evidence only; live coordinator handles are reported separately.
- const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
- const api={status,start,stop,holdAdmission,probeObserver,restartInventory,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative,migrateNative:manifestSha256=>{if(!migration)migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
+ const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null},restart_rollback:restartRollback&&{transaction_id:restartRollback.id,phase:restartRollback.phase,attempts:restartRollback.attempts,error:restartRollback.error,receipt_sha256:restartRollback.result?restartRollback.result.receipt_sha256:null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
+ const api={status,start,stop,holdAdmission,probeObserver,restartInventory,cleanupRestart,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative,migrateNative:manifestSha256=>{if(!migration||migration.status().phase==='rejected')migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
 }
 module.exports={createAgent,launchRequest};

@@ -52,6 +52,43 @@ exit is recovered by republishing the retained evidence; that case is tested
 locally only. Status keeps the original failed phase and causes after a
 successful recovery; the operation state and migration phase show the outcome.
 
+### Restart reconciliation of an uncommitted forward trial
+
+A rehearsal can be interrupted by a service restart before native is committed.
+The new service then acquires the installed last-known-good managed worker with
+public admission held. That worker is used only as an executor: it gets status
+requests and read-only root commands. The service checks the following:
+
+- The source, provider and native process identities are gone.
+- The provider, source-exit observer and native transient units have no main
+  process and an empty cgroup.
+- The managed job directory still matches the retained snapshot.
+
+It then records a `rolled-back` selection outcome under a durable intent.
+Admission opens only after that commit. A pending launch that has no provider
+record is still blocked, because the source identity is unknown. So are committed
+native selections, return transitions, writer locks, unknown files, cross-boot
+records and a changed managed package. `GET /v1/native/status` reports the
+attempt as `durable.restart_rollback`.
+
+Staging, units and ownership markers survive the rollback. While they remain,
+another handoff is refused. `POST /v1/native/cleanup-restart` accepts exactly
+`{id, transaction_id}` for a committed restart rollback. It is journaled like the
+other native routes and returns HTTP 202. Cleanup runs under a held, drained
+managed worker:
+
+1. It confirms that nothing runs.
+2. It stops only idle units whose cgroup is empty.
+3. It removes staging only when every present entry matches its recorded type,
+   mode and digest.
+4. It then removes the transaction's token directories, readiness intents and
+   markers.
+
+Unknown entries, live processes and S90D source-exit observer remnants leave the
+intent and markers in place. Records and receipts are retained. Use the client
+command `native-cleanup-restart --request-id NEW_REQUEST_ID --transaction-id
+ROLLED_BACK_TRANSACTION_ID`.
+
 ## Results and readiness
 
 The migration candidate adds `POST /v1/observer/probe`, using the same enrolled

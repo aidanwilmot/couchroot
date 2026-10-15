@@ -22,8 +22,13 @@ function createNativeTasks({agent,journal}){
  return Object.freeze({busy:()=>running,status,
   rehearse:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|manifest_sha256|runtime_sha256'&&id(value.id)&&digest(value.manifest_sha256)&&digest(value.runtime_sha256));
-   check(!task&&typeof agent.rehearseNative==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='managed');
+   check((!task||task.kind==='native.cleanup-restart'&&task.state==='completed')&&typeof agent.rehearseNative==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='managed');
    return launch('native.rehearse',value,()=>agent.rehearseNative(value.manifest_sha256,value.runtime_sha256),value.id);
+  },
+  cleanupRestart:value=>{
+   check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|transaction_id'&&id(value.id)&&typeof value.transaction_id==='string'&&/^[a-f0-9]{32}$/.test(value.transaction_id));
+   check((!task||task.state!=='unknown')&&typeof agent.cleanupRestart==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='managed');
+   return launch('native.cleanup-restart',value,()=>agent.cleanupRestart(value.transaction_id),value.id);
   },
   resume:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|rehearsal_id'&&id(value.id)&&id(value.rehearsal_id)&&value.id!==value.rehearsal_id);

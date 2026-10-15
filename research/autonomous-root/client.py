@@ -81,7 +81,7 @@ class Session:
             raw = response.read(4 * 1024 * 1024 + 1)
             if len(raw) > 4 * 1024 * 1024:
                 raise RuntimeError('Oversized response')
-            if response.status != 200 and not (response.status == 202 and method == 'POST' and route in ('/v1/native/rehearse','/v1/native/resume-managed')):
+            if response.status != 200 and not (response.status == 202 and method == 'POST' and route in ('/v1/native/rehearse','/v1/native/resume-managed','/v1/native/cleanup-restart')):
                 raise OperationError(json.loads(raw))
             if raw_response:
                 if len(raw) > 1024 * 1024 or hashlib.sha256(raw).hexdigest() != response.getheader('X-SHA256'):
@@ -221,11 +221,17 @@ def resume_managed_activation(config, rehearsal_id, request_id, session=None):
     return request(config,'POST','/v1/native/resume-managed',dict(id=request_id,rehearsal_id=rehearsal_id),session=session)
 
 
+def cleanup_restart(config, transaction_id, request_id, session=None):
+    if not isinstance(transaction_id,str) or not re.fullmatch('[a-f0-9]{32}',transaction_id) or not isinstance(request_id,str) or not re.fullmatch('[-a-zA-Z0-9]{16,64}',request_id):
+        raise ValueError('Rolled-back transaction and persistent request ID required')
+    return request(config,'POST','/v1/native/cleanup-restart',dict(id=request_id,transaction_id=transaction_id),session=session)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config',required=True,type=Path)
-    parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal','upload','download','op','wait-ready','app-exec','job-start','job-status','job-tail','job-cancel','job-forget','helper-prepare','helper-release','observer-probe','native-rehearse','native-status','native-resume-managed'])
-    parser.add_argument('--manifest-sha256');parser.add_argument('--runtime-sha256');parser.add_argument('--rehearsal-id')
+    parser.add_argument('operation',choices=['status','requests','enable','disable','exec','archive-journal','upload','download','op','wait-ready','app-exec','job-start','job-status','job-tail','job-cancel','job-forget','helper-prepare','helper-release','observer-probe','native-rehearse','native-status','native-resume-managed','native-cleanup-restart'])
+    parser.add_argument('--manifest-sha256');parser.add_argument('--runtime-sha256');parser.add_argument('--rehearsal-id');parser.add_argument('--transaction-id')
     parser.add_argument('--command-file',type=Path)
     parser.add_argument('--timeout-ms',type=int,default=20000)
     parser.add_argument('--request-id',default=None)
@@ -272,6 +278,10 @@ def main():
         if not args.rehearsal_id or not args.request_id:parser.error('--rehearsal-id and --request-id required')
         print('Request ID: '+args.request_id,file=sys.stderr)
         result=resume_managed_activation(config,args.rehearsal_id,args.request_id)
+    elif args.operation=='native-cleanup-restart':
+        if not args.transaction_id or not args.request_id:parser.error('--transaction-id and --request-id required')
+        print('Request ID: '+args.request_id,file=sys.stderr)
+        result=cleanup_restart(config,args.transaction_id,args.request_id)
     elif args.operation=='observer-probe':
         if not args.manifest_sha256:parser.error('--manifest-sha256 required')
         identity=args.request_id or str(uuid.uuid4())

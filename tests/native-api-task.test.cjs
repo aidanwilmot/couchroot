@@ -33,3 +33,15 @@ test('recovery refuses overlap and completed transactions; a failed recovery sta
  assert.throws(()=>f.tasks.resume({id:'native-recovery-0003',rehearsal_id:value.id}));assert.equal(f.journal.rows.length,3);
  assert.deepEqual(f.journal.rows.map(r=>r.state),['submitted','submitted','completed']);
 }));
+test('restart cleanup is journaled, validated and permits one later rehearsal only after completion',()=>fixture(async f=>{
+ let finish;const seen=[];f.agent.cleanupRestart=async id=>{seen.push(id);assert.equal(f.journal.rows.at(-1).state,'submitted');return new Promise((yes,no)=>{finish={yes,no};});};
+ for(const v of [{id:'native-cleanup-0001'},{id:'native-cleanup-0001',transaction_id:'C'.repeat(32)},{id:'short',transaction_id:'c'.repeat(32)},{id:'native-cleanup-0001',transaction_id:'c'.repeat(32),extra:1}])assert.throws(()=>f.tasks.cleanupRestart(v));
+ assert.equal(f.journal.rows.length,0);
+ const request={id:'native-cleanup-0001',transaction_id:'c'.repeat(32)};assert.equal(f.tasks.cleanupRestart(request).state,'submitted');await tick();assert.deepEqual(seen,['c'.repeat(32)]);
+ assert.throws(()=>f.tasks.rehearse(value));finish.no(Error('remote staging did not match'));await tick();assert.equal(f.tasks.status().state,'unknown');assert.throws(()=>f.tasks.rehearse(value));
+ assert.throws(()=>f.tasks.cleanupRestart({...request,id:'native-cleanup-0002'}),'an unknown cleanup needs inspection before another submission');
+}));
+test('a completed restart cleanup leaves the live coordinator free for one rehearsal',()=>fixture(async f=>{
+ f.agent.cleanupRestart=async()=>({id:'c'.repeat(32)});f.tasks.cleanupRestart({id:'native-cleanup-0001',transaction_id:'c'.repeat(32)});await tick();await tick();assert.equal(f.tasks.status().state,'completed');assert.equal(f.journal.rows[0].exit_code,0);
+ assert.equal(f.tasks.rehearse(value).state,'submitted');
+}));

@@ -1826,3 +1826,83 @@ armed until the corrected check completed. Both services then reported
 committed entries per TV. The inventory was settled again afterwards. A real
 restart at the abandonment boundary has not been exercised on either TV; no TV
 was rebooted.
+
+### Restart rollback of uncommitted forward trials and explicit cleanup — local
+
+A restart can interrupt a forward trial after its first remote mutation and
+before native is committed. Such a trial is now reconciled on startup instead of
+blocking all acquisition. Before commit, native never had public admission, and
+retained-state installation only copies managed records into native scope. The
+managed job directory is therefore still authoritative.
+
+`restart-rollback.js` accepts such a transition only if the durable evidence binds
+every recorded identity:
+
+- the provider record, which holds the source identity;
+- optionally the retained snapshot, the state-install receipt and the production
+  record;
+- markers that name this transaction;
+- no unknown file naming it.
+
+The service acquires the installed last-known-good managed worker, with public
+admission and hand-off holds closed, and uses it only as an executor.
+
+| Check | Evidence |
+| --- | --- |
+| Executor | Freshly authenticated managed readiness, same boot, no owned resources, not a recorded process |
+| Old processes | Source worker, provider worker/guardian and native worker/guardian absent or reused PIDs |
+| Units | Provider, source-exit observer and native unit: `MainPID=0`, idle state, empty `systemd` cgroup (or not-found) |
+| Managed state | Current managed job manifest equals the retained snapshot when one exists |
+
+The transition then goes through `rollback-required`, a receipt-bound
+`rollback-state-ready` and `rolled-back`, all under a
+`<id>.restart-rollback.pending` intent. Remnants are observed again just before
+commit. Every command sent before commit is read-only, and tests check that no
+mutating command reaches the executor. A rejected attempt is retried on the same
+held worker, at most 36 times, to cover the provider's 300 s lifetime. An
+interrupted attempt resumes from its journal phase on the next acquisition, and a
+leftover intent after commit is finished. Admission opens only after the rollback
+is committed. Staging, units and markers are retained.
+
+`POST /v1/native/cleanup-restart` then removes that transaction's leftovers under
+a drained hold, in this order:
+
+1. It observes the remnants again.
+2. It stops only idle units whose cgroup is empty.
+3. It removes provider and native staging only when every present entry matches
+   its recorded type, mode and digest.
+4. It removes local token directories and readiness intents, then the markers.
+
+Records and both receipts are kept, and the inventory returns to `settled`. Unknown
+entries, live processes and S90D observer remnants leave the intent and markers
+in place.
+
+Local validation:
+
+- **Unit tests (13):** every forward boundary; refusal for running, changing or
+  non-empty units, changed managed jobs, unknown transaction files, foreign
+  markers, a recorded executor, a different boot and later provider phases;
+  resume and finalization; cleanup success, refusal and retry; `sh -n` on every
+  generated plan shape.
+- **Real-process restart tests (4)** in the parity container, stopped at:
+  - `prepared` with nothing submitted (abandonment);
+  - `prepared` after provider readiness;
+  - `state-ready`;
+  - `trial-ready` with native ready.
+
+  Each test closes every listener of the first agent and starts a second agent
+  with fresh modules and a new managed process. It checks reconciliation,
+  cleanup and a settled inventory, then completes a normal round trip, and the
+  retained job bytes stay unchanged.
+
+A source managed worker that is never asked to stop ends with its transport. The
+test harness's `--parity-wire` entry point aborts in that case. Production `Main`
+catches the disconnect, stops jobs and exits with status 1.
+
+Still open:
+
+- A restart after native commit or during the return to managed (committed native
+  without cold start, and pending to-managed). Both still block with diagnostics.
+- S90D source-exit observer cleanup.
+- Cross-boot records.
+- Hardware qualification of a real service restart.
