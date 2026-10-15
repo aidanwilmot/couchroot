@@ -8,8 +8,9 @@ const {openProductionSession}=require('./production-session');
 const {createManagedReturn}=require('./managed-return');
 function check(ok){if(!ok)throw Error('Native migration prerequisites unavailable');}
 function createNativeMigration({agent,device,payload,selectionFile}){
- let entered=false,closed=false,phase='idle',failedPhase=null,resuming=false,id=null,hold=null,retirement=null,production=null,begun=false,managedReturn=null;
- const status=()=>({phase,transaction_id:id,managed_return:managedReturn?managedReturn.status():null});
+ let entered=false,closed=false,phase='idle',failedPhase=null,resuming=false,id=null,hold=null,retirement=null,production=null,begun=false,managedReturn=null,failure=null;
+ function failureDetails(cause){const chain=[],seen=new Set();while(cause&&chain.length<4&&!seen.has(cause)){seen.add(cause);chain.push(String(cause.message||cause).slice(0,200));cause=cause.cause;}return chain;}
+ const status=()=>({phase,failed_phase:failedPhase,failure:failure?failure.slice():null,transaction_id:id,managed_return:managedReturn?managedReturn.status():null});
  const closeTransport=()=>{closed=true;if(managedReturn)managedReturn.closeTransport();if(production)production.closeTransport();if(retirement)retirement.closeTransport();};
  const move=next=>{check(!closed);phase=next;};
  async function run(manifestSha256,{returnToManaged=false,runtimeSha256}={}){
@@ -45,7 +46,7 @@ function createNativeMigration({agent,device,payload,selectionFile}){
   }catch(cause){
    if(closed)closeTransport();
    if(!begun&&hold){try{hold.release();}catch(_){begun=true;}}
-   failedPhase=phase;phase=begun?'reconciliation-required':'rejected';
+   failedPhase=phase;failure=failureDetails(cause);phase=begun?'reconciliation-required':'rejected';
    // Keep live session references for explicit recovery. Closing a connection
    // here would destroy useful recovery access without proving remote cleanup.
    throw Object.assign(Error(begun?'Native migration requires reconciliation':'Native migration rejected before handoff'),{outcome:begun?'unknown':'rejected',cause});
@@ -54,7 +55,7 @@ function createNativeMigration({agent,device,payload,selectionFile}){
  async function resumeActivation(){
   check(!closed&&!resuming&&phase==='reconciliation-required'&&failedPhase==='activating'&&hold&&retirement&&production);resuming=true;
   try{move('resuming-activation');const activated=await hold.completeProduction(retirement,{resume:true});check(activated.transaction_id===id&&activated.admission_held===false);move('active');return {...activated,selected_implementation:'native-prototype'};}
-  catch(cause){phase='reconciliation-required';throw Object.assign(Error('Native activation resume requires reconciliation'),{outcome:'unknown',cause});}
+  catch(cause){failure=failureDetails(cause);phase='reconciliation-required';throw Object.assign(Error('Native activation resume requires reconciliation'),{outcome:'unknown',cause});}
   finally{resuming=false;}
  }
  async function resumeManagedActivation(){

@@ -1411,3 +1411,30 @@ installation acceptance, and an idle native-status endpoint. Native hardware
 rehearsal is still outstanding; installing the candidate does not establish
 native worker readiness or migration parity. No TV was rebooted. Raw acceptance
 and final-check evidence remain in the private candidate deployment directory.
+
+### First QN90A hardware rehearsal — failed production readiness, managed restored
+
+The first 0.7.15 hardware rehearsal reached retained-state `state-ready` after
+stopping the managed source. The production launch record is `submitted`, but no
+native readiness receipt was published. Independent SDK inspection found the
+native production unit failed with exit status 1 and MainPID 0. The exact failure
+inside startup/readiness is not yet established; the API discarded nested causes
+and reported only a generic reconciliation error. This is a failed trial, not
+native qualification. S90D was not trialed.
+
+The pre-armed recovery timer restored external SDK access without a reboot.
+Recovery preserved the old on-demand staging directory, closed the held service
+transports, and independently verified zero production/provider main PIDs and no
+matching native executables. Original managed retained state was empty before
+and after the trial. With no active native processes, the failed coordinator-state
+directory was archived privately on-device, a fresh app-owned state directory was
+created, and the unchanged managed fallback was enabled. This was manual recovery,
+not the automated rollback path. The failed journal was neither erased nor marked
+successful. Native staging remains available for diagnosis.
+
+QN90A is again managed-ready, accepts commands, uses loopback SDK access and has
+the same boot ID. The original request remains unknown. The source controller now
+exposes the failed phase and up to four bounded error causes to authenticated
+status reads, with tests for caller mutation, long messages and cyclic causes.
+This diagnostic change is local and requires a new candidate deployment. Native
+hardware qualification and automatic earlier-phase recovery remain open.
