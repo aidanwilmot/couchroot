@@ -315,7 +315,12 @@ function createAgent(config,options={}){
      const pending={schema:1,id:transactionId,origin_id:adopted.record.id,phase:'submitting',inventory_sha256:digest,worker_identity:adopted.record.worker_identity,readiness_sha256:hash(readyText)},text=JSON.stringify(pending);
      const fd=fs.openSync(file,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);try{fs.writeFileSync(fd,text);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
      const parent=fs.openSync(directory,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}
-     token.nativeStopping=true;owned();const shutdown=await adopted.channel.shutdown();owned();const exited=await observer.waitForExit();owned();
+     token.nativeStopping=true;owned();let shutdown;
+     try{shutdown=await adopted.channel.shutdown();}
+     catch(_){shutdown={acknowledged:false,outcome:'unknown'};}
+     // A lost BYE is not exit evidence. Use the already-bound independent
+     // observer even after a transport failure; never submit shutdown again.
+     owned();const exited=await observer.waitForExit();owned();
      if(!exited||exited.record_id!==adopted.record.id||JSON.stringify(exited.identity)!==JSON.stringify(adopted.record.worker_identity)||privateRead(file,16384)!==text)throw Error('Native exit evidence changed');
      const completed={...pending,phase:'stopped',shutdown,exited};atomic(file,completed);owned();
      token.nativeStopped=JSON.parse(JSON.stringify(completed));return completed;

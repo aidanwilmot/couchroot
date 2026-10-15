@@ -1337,3 +1337,22 @@ rehearsals pass with the actual host runtime hashed through the managed wire;
 the fixture substitutes only the host runtime pathname for this new check.
 No device changes or reboots were performed. Earlier-phase and service-restart
 recovery, both-TV qualification and the remaining sunset gates are still open.
+
+### Lost native shutdown acknowledgement
+
+Held native return now runs its already-bound independent exit observer even if
+the single shutdown submission loses its response. The shutdown receipt records
+`acknowledged: false, outcome: unknown`; only independently verified worker and
+guardian exit plus successful termination of the original systemd unit permit a
+`stopped` receipt and managed restoration. No shutdown retry is sent. If exit
+observation also fails, the submitting receipt and admission hold remain intact.
+Ownership and journal checks still run before and after observation.
+
+The real-process rehearsal adds a third case that discards the actual shutdown
+response, verifies one submission, and completes retained-state restoration,
+managed activation and scope cleanup. All three isolated Linux rehearsals pass.
+A separate Linux run passes 46 controller, readiness and exit tests without skips,
+including lost-response plus failed-observation refusal. Coordinator restart and
+independent-provider loss still require further reconciliation work; this change
+only handles acknowledgement loss while the bound observer remains available.
+No TV was changed or rebooted, and .NET remains deployed.
