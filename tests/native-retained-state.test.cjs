@@ -166,8 +166,8 @@ test('restore acceptance catches mutation during asynchronous verification befor
  });
 });
 
-async function managedLaunchFixture(f){
- const r=await restoredForAcceptance(f),payload='/opt/usr/apps/MiniRoot01/res/wgt/payload',payloadLocal=f.root+'/package-root/apps/MiniRoot01/res/wgt/payload';
+async function managedLaunchFixture(f,committed=false){
+ const r=await restoredForAcceptance(f,committed),payload='/opt/usr/apps/MiniRoot01/res/wgt/payload',payloadLocal=f.root+'/package-root/apps/MiniRoot01/res/wgt/payload';
  fs.mkdirSync(payloadLocal,{recursive:true,mode:0o755});const manifest={};
  for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const ext of ['dll','runtimeconfig.json','deps.json']){const n=name+'.'+ext,bytes=Buffer.from(n);manifest[n]=hash(bytes);fs.writeFileSync(payloadLocal+'/'+n,bytes,{mode:0o644});fs.chownSync(payloadLocal+'/'+n,201,201);}
  fs.writeFileSync(payloadLocal+'/manifest.json',JSON.stringify(manifest));
@@ -213,8 +213,8 @@ test('managed launch plan handles full retention and rejects malformed callback 
 },64));
 
 const {readyManaged,managedRuntimeCommand}=require('../research/autonomous-root/service/managed-readiness');
-async function managedReadyFixture(f){
- const r=await managedLaunchFixture(f),record=await r.api.submitManaged(r.launchOptions),worker='9'.repeat(32),launcherBytes=Buffer.from('fixture launcher'),providerIdentity={boot_id:boot,worker_id:'8'.repeat(32),processes:{worker:{pid:77,start_ticks:'700'},guardian:{pid:76,start_ticks:'699'}}};
+async function managedReadyFixture(f,committed=false){
+ const r=await managedLaunchFixture(f,committed),record=await r.api.submitManaged(r.launchOptions),worker='9'.repeat(32),launcherBytes=Buffer.from('fixture launcher'),providerIdentity={boot_id:boot,worker_id:'8'.repeat(32),processes:{worker:{pid:77,start_ticks:'700'},guardian:{pid:76,start_ticks:'699'}}};
  const info={implementation:'managed',boot_id:boot,worker_id:worker,uptime_seconds:1,processes:{worker:{pid:73,start_ticks:'500'},guardian:null},capabilities:['worker-process-identity-v1','resource-inventory-v1','file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1'],app_launcher:{implementation:'native',sha256:hash(launcherBytes)},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]}};
  const launcher=r.parent+'/launchers/'+worker;fs.mkdirSync(launcher,{recursive:true,mode:0o700});fs.writeFileSync(launcher+'/app-launcher',launcherBytes,{mode:0o500});
  const proc=f.root+'/proc/73';fs.mkdirSync(proc+'/ns',{recursive:true});fs.mkdirSync(f.root+'/proc/1/ns',{recursive:true});fs.symlinkSync('mnt:[2]',proc+'/ns/mnt');fs.symlinkSync('mnt:[1]',f.root+'/proc/1/ns/mnt');fs.symlinkSync(r.runtime,proc+'/exe');fs.writeFileSync(proc+'/stat','73 (dotnet) S '+Array(18).fill('0').join(' ')+' 500 0\n');
@@ -263,9 +263,10 @@ test('managed readiness rejects unit changes and local ownership changes across 
 });
 
 const {productionRetirementPlan,retireProduction}=require('../research/autonomous-root/service/production-retirement');
-async function productionRetirementFixture(f){
+async function productionRetirementFixture(f,committed=false){
  f.options.record.worker_sha256=hash('native worker');f.options.record.launcher_sha256=hash('native launcher');fs.mkdirSync(f.root+'/native/code',{mode:0o700});fs.writeFileSync(f.root+'/native/code/worker','native worker',{mode:0o500});fs.writeFileSync(f.root+'/native/state/launcher','native launcher',{mode:0o400});
- const r=await managedReadyFixture(f),ready=await readyManaged(r.readyOptions);new SelectionJournal(r.options.selectionFile).commitRollback(selectionStatus(r.options.selectionFile).revision,ready.record.id,ready.readiness_sha256);
+ const r=await managedReadyFixture(f,committed),ready=await readyManaged(r.readyOptions),selection=new SelectionJournal(r.options.selectionFile);
+ if(committed){selection.advance(selection.read().revision,ready.record.id,'trial-ready',ready.readiness_sha256);selection.commit(selection.read().revision,ready.record.id);}else selection.commitRollback(selection.read().revision,ready.record.id,ready.readiness_sha256);
  fs.writeFileSync(r.bin+'/systemctl','#!/bin/sh\nif test "$1" = stop; then touch '+f.root+'/unit-stopped; exit 0; fi\nif test "$#" -gt 4; then printf "LoadState=not-found\\nActiveState=inactive\\nMainPID=0\\n"; exit 0; fi\ncase "$3" in\nLoadState) echo LoadState=loaded;;\nActiveState) echo ActiveState=active;;\nSubState) echo SubState=exited;;\nMainPID) echo MainPID=0;;\nExecMainCode) echo ExecMainCode=1;;\nExecMainStatus) echo ExecMainStatus=0;;\nExecMainStartTimestampMonotonic) echo ExecMainStartTimestampMonotonic=123;;\n*) exit 1;; esac\n');
  return {...r,retireOptions:{managed:ready.record,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,execute:r.execute,confirmManaged:async()=>ready.record.worker_identity},retireFile:r.options.journalDirectory+'/'+ready.record.origin_id+'.production-retirement.json'};
 }
@@ -346,8 +347,9 @@ test('partial retirement refuses unexpected files, links, changed bytes, units a
 });
 
 const {verifyManagedCompletion}=require('../research/autonomous-root/service/managed-completion');
-async function completionFixture(fn){return require('./retirement-test-state.cjs').withRetirementState(()=>fixture(async f=>{
- const r=await productionRetirementFixture(f),dir='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state';fs.mkdirSync(path.dirname(dir),{recursive:true,mode:0o700});fs.renameSync(r.options.journalDirectory,dir);
+async function completionFixture(fn,committed=false){return require('./retirement-test-state.cjs').withRetirementState(()=>fixture(async f=>{
+ f.options.record.token_sha256=hash(Buffer.from('a'.repeat(32)).toString('base64'));
+ const r=await productionRetirementFixture(f,committed),dir='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state';fs.mkdirSync(path.dirname(dir),{recursive:true,mode:0o700});fs.renameSync(r.options.journalDirectory,dir);
  const options={...r.retireOptions,journalDirectory:dir,selectionFile:dir+'/selection.json'};await retireProduction(options);
  const id='1'.repeat(32),retired={schema:1,id,phase:'complete',device:'s90d',manifest_sha256:f.options.record.manifest_sha256,worker_sha256:sha,launcher_sha256:sha,observer_sha256:sha,boot_id:boot,source:f.options.record.source,unit:'couchroot-retirement-'+id+'.service',directory:'/opt/couchroot-retirement-'+id,scope:'/opt/couchroot-retirement-'+id+'/state',token_file:dir+'/retirement-ABC123/token',token_sha256:sha,port:12346,provider_identity:r.readyOptions.providerIdentity,unit_started_monotonic:'123'};
  fs.writeFileSync(dir+'/'+id+'.retirement.json',JSON.stringify(retired),{mode:0o600});
@@ -374,3 +376,42 @@ test('managed completion refuses unresolved provider or changed live evidence',l
   await assert.rejects(verifyManagedCompletion(f.options));assert(fs.existsSync(f.dir+'/managed-launch.pending'));assert(fs.existsSync(f.dir+'/managed-restore.pending'));
  });
 });
+
+const {activateManaged}=require('../research/autonomous-root/service/managed-activation');
+function activationTokens(f){
+ const bytes=Buffer.from('a'.repeat(32)).toString('base64');
+ for(const record of [f.f.options.record,f.options.managed]){fs.mkdirSync(path.dirname(record.token_file),{mode:0o700});fs.writeFileSync(record.token_file,bytes,{mode:0o600});assert.equal(hash(bytes),record.token_sha256);}
+ fs.writeFileSync(f.dir+'/state-install.pending',f.f.options.record.id+'\n',{mode:0o600});fs.writeFileSync(f.dir+'/production-launch.pending',f.f.options.record.id+'\n',{mode:0o600});
+}
+test('managed activation cleans matching local ownership and publishes a bound active receipt',linux,()=>completionFixture(async f=>{
+ activationTokens(f);const before=selectionStatus(f.options.selectionFile),result=await activateManaged(f.options);
+ assert.equal(result.phase,'active');assert.equal(result.readiness_sha256,hash(JSON.stringify(f.options.managed)));assert.deepEqual(selectionStatus(f.options.selectionFile),before);
+ for(const record of [f.f.options.record,f.options.managed])assert(!fs.existsSync(path.dirname(record.token_file)));
+ for(const name of ['state-install.pending','production-launch.pending','managed-restore.pending','managed-launch.pending'])assert(!fs.existsSync(f.dir+'/'+name));
+ assert.equal(hash(fs.readFileSync(f.dir+'/'+result.id+'.managed-activation.json')),result.receipt_sha256);assert(!fs.existsSync(f.dir+'/'+result.id+'.managed-activation.json.pending'));
+ assert(fs.existsSync(f.dir+'/'+result.id+'.managed-restore-input.json'));await assert.rejects(activateManaged(f.options));
+}));
+test('managed activation refuses unmatched local tokens and unresolved native activation',linux,async()=>{
+ for(const mode of ['token','extra','partial','absent'])await completionFixture(async f=>{
+  activationTokens(f);
+  if(mode==='token')fs.writeFileSync(f.options.managed.token_file,'changed');
+  if(mode==='extra')fs.writeFileSync(path.dirname(f.options.managed.token_file)+'/foreign','changed');
+  if(mode==='partial')fs.unlinkSync(f.dir+'/state-install.pending');
+  if(mode==='absent'){fs.unlinkSync(f.f.options.record.token_file);fs.rmdirSync(path.dirname(f.f.options.record.token_file));fs.unlinkSync(f.dir+'/state-install.pending');fs.unlinkSync(f.dir+'/production-launch.pending');}
+  await assert.rejects(activateManaged(f.options));assert(fs.existsSync(f.dir+'/managed-launch.pending'));assert(fs.existsSync(f.options.managed.token_file));assert(!fs.existsSync(f.dir+'/'+f.options.managed.id+'.managed-activation.json'));
+ });
+});
+test('interrupted local activation retains intent and refuses implicit replay',linux,async()=>{
+ for(const boundary of ['token','marker','publication'])await completionFixture(async f=>{
+  activationTokens(f);const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};let injected=false;
+  const fsProxy={...fs,unlinkSync:p=>{fs.unlinkSync(p);if(!injected&&(boundary==='token'&&p===f.f.options.record.token_file||boundary==='marker'&&p===f.dir+'/managed-restore.pending')){injected=true;throw Error('lost local cleanup acknowledgement');}}};
+  require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='fs'?fsProxy:n==='./policy'?{...real(n),atomic:(p,v)=>{real(n).atomic(p,v);if(boundary==='publication'){injected=true;throw Error('lost publication acknowledgement');}}}:real(n)});
+  await assert.rejects(module.exports.activateManaged(f.options),e=>e.outcome==='unknown');assert(injected);assert(fs.existsSync(f.dir+'/'+f.options.managed.id+'.managed-activation.json.pending'));await assert.rejects(activateManaged(f.options));
+ });
+});
+test('managed activation accepts previously retired native tokens only with committed activation evidence',linux,()=>completionFixture(async f=>{
+ activationTokens(f);const native=f.f.options.record;
+ fs.unlinkSync(native.token_file);fs.rmdirSync(path.dirname(native.token_file));fs.unlinkSync(f.dir+'/state-install.pending');fs.unlinkSync(f.dir+'/production-launch.pending');
+ fs.writeFileSync(f.dir+'/'+native.id+'.activation.json',JSON.stringify({schema:1,id:native.id,phase:'active',boot_id:native.boot_id,manifest_sha256:native.manifest_sha256,readiness_sha256:hash(JSON.stringify(native)),retirement_sha256:sha,worker_identity:native.worker_identity}),{mode:0o600});
+ const result=await activateManaged(f.options);assert.equal(result.phase,'active');assert.equal(result.id,f.options.managed.id);assert.notEqual(result.id,native.id);
+},true));

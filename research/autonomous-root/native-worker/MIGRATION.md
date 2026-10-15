@@ -1062,3 +1062,28 @@ identity drift and unexpected managed resources. Both TVs remain unchanged on
 completion and on-TV migration qualification remain open.
 
 The combined Linux migration suite passes 206 tests without skips.
+
+### Ordered local managed activation — local follow-up
+
+Managed activation now verifies combined live completion evidence, validates the
+matching local tokens/markers, and persists an intent containing the exact cleanup
+steps and bound activation record. It rechecks completion before removing native
+ownership (when still present), then managed token ownership and transition markers,
+and publishes the active receipt last. Historical snapshots, readiness records,
+cleanup receipts and the preserved baseline remain available.
+
+A native token/marker set already absent is accepted only with its prior activation
+receipt and matching committed native history. Partial native ownership, changed
+tokens and foreign token-directory entries refuse fresh activation. Local failure
+or uncertain publication retains the activation intent and refuses implicit replay.
+Explicit interrupted-activation recovery remains required before controller use.
+This function publishes evidence; the held agent still must verify and release
+admission through its completion path.
+
+Tests cover successful ordered cleanup, both retained and previously retired native
+ownership, mismatched/partial token state, and failures after token removal, marker
+removal and receipt publication. They use disposable host state and fixture units,
+not live TV activation. Both TVs remain unchanged on .NET; neither was restarted
+or rebooted. Recovery/controller wiring and both-TV qualification remain open.
+
+The combined Linux migration suite passes 210 tests without skips.
