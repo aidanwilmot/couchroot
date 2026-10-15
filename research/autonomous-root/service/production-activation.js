@@ -2,7 +2,7 @@
 // Finish local transition ownership only after the temporary provider is gone.
 const fs=require('fs'),path=require('path');
 const {atomic,hash}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {selectionStatus}=require('./worker-selection');
 const {validateLaunch}=require('./production-readiness');
 const {validateTeardownRecord}=require('./retirement-teardown');
@@ -24,7 +24,7 @@ async function activateProduction({record,retired,journalDirectory,selectionFile
  check([retired.source,retired.provider_identity].every(s=>s.worker_id!==worker_identity.worker_id&&Object.values(worker_identity.processes).every(p=>Object.values(s.processes).every(q=>!q||p.pid!==q.pid))));
  check(retired.phase==='complete'&&retired.id!==record.id&&retired.boot_id===record.boot_id&&retired.device===record.device&&retired.manifest_sha256===record.manifest_sha256&&JSON.stringify(retired.source)===JSON.stringify(record.source));
  check(typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof selectionFile==='string'&&path.dirname(selectionFile)===journalDirectory&&typeof execute==='function'&&typeof confirmNative==='function');
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const tokenDirectory=path.dirname(record.token_file);check(path.dirname(tokenDirectory)===journalDirectory&&record.token_file===tokenDirectory+'/token'&&path.dirname(path.dirname(retired.token_file))===journalDirectory);
  const readiness=hash(JSON.stringify(record)),retirement=hash(JSON.stringify(retired)),selected=selectionStatus(selectionFile),history=selected.history&&selected.history[selected.history.length-1];
  check(selected.phase==='stable'&&selected.selected_implementation==='native-prototype'&&selected.selected_manifest_sha256===record.manifest_sha256&&history&&history.id===record.id&&history.outcome==='committed'&&history.readiness_sha256===readiness&&history.state_sha256===record.state_receipt_sha256);

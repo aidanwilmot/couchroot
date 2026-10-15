@@ -2,7 +2,7 @@
 // One-shot launch from accepted retained state. Never selects or declares ready.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {atomic}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {selectionStatus}=require('./worker-selection');
 const {planInstallation}=require('./retained-install');
 const {sourceExitGuard}=require('./retained-state');
@@ -42,7 +42,7 @@ function productionPlan({device,id,payload,manifestSha256,receiptSha256,snapshot
 async function submitProduction(options){
  const {journalDirectory,selectionFile,id,execute}=options;
  check(typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof selectionFile==='string'&&path.dirname(selectionFile)===journalDirectory&&hex(id,32)&&typeof execute==='function');
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const installationFile=path.join(journalDirectory,id+'.state-install.json'),snapshotFile=path.join(journalDirectory,id+'.retained-snapshot.json'),stateMarker=path.join(journalDirectory,'state-install.pending');
  const installationText=privateRead(installationFile,16384),snapshotText=privateRead(snapshotFile,262144);
  const installation=JSON.parse(installationText),snapshot=JSON.parse(snapshotText);

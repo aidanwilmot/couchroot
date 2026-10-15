@@ -1,4 +1,5 @@
 'use strict';
+const {privateDirectory}=require('./private-state');
 // One-shot native maintenance launch. Submission is not readiness or cleanup.
 const fs=require('fs'),path=require('path');
 const {atomic}=require('./policy');
@@ -41,7 +42,7 @@ async function submitRetirement(options){
  const {command,record}=launchPlan(options),{journalDirectory,execute,id}=options;
  if(typeof execute!=='function'||typeof journalDirectory!=='string'||!path.isAbsolute(journalDirectory))throw Error('Retirement launch journal required');
  const st=fs.lstatSync(journalDirectory);
- if(!st.isDirectory()||st.isSymbolicLink()||st.uid!==process.geteuid()||(st.mode&0o7777)!==0o700)throw Error('Private retirement journal required');
+ if(!privateDirectory(st))throw Error('Private retirement journal required');
  const file=path.join(journalDirectory,id+'.retirement.json'),marker=path.join(journalDirectory,'retirement-launch.pending');
  for(const target of [file,marker])try{fs.lstatSync(target);throw Error('Retirement launch requires reconciliation');}catch(error){if(error.code!=='ENOENT')throw error;}
  const exclusive=(target,data)=>{const fd=fs.openSync(target,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);try{fs.writeFileSync(fd,data);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}};

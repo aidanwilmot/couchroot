@@ -2,7 +2,7 @@
 // Return an adopted native trial to its original managed version under one hold.
 const fs=require('fs'),path=require('path');
 const {hash}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {SelectionJournal,managedVersion}=require('./worker-selection');
 const {validateLaunch}=require('./production-readiness');
 const {openManagedSession}=require('./managed-session');
@@ -22,7 +22,7 @@ function createManagedReturn({hold,retirement,record,payload,selectionFile,runti
    check(hold&&['snapshotNative','shutdownNative','adoptManaged','completeManaged'].every(k=>typeof hold[k]==='function')&&retirement&&retirement.provider);
    const provider=retirement.provider;check(['snapshotNativeJobs','restoreManagedState','acceptManagedRestore','launchManaged','verifyManaged'].every(k=>typeof provider[k]==='function'));
    const {worker_identity,unit_started_monotonic,...launch}=record;check(record.phase==='ready'&&worker_identity&&unit_started_monotonic);validateLaunch({...launch,phase:'submitted'});
-   const directory=path.dirname(selectionFile),st=fs.lstatSync(directory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+   const directory=path.dirname(selectionFile),st=fs.lstatSync(directory);check(privateDirectory(st));
    for(const name of ['managed-restore.pending','managed-launch.pending'])try{fs.lstatSync(path.join(directory,name));throw Error('Managed return requires reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}
    const journal=new SelectionJournal(selectionFile),initial=journal.read(),h=initial&&initial.history[initial.history.length-1],managed=managedVersion(payload);
    check(initial&&!initial.pending&&initial.selected.implementation==='native-prototype'&&initial.selected.manifest_sha256===record.manifest_sha256&&h&&h.id===record.id&&h.outcome==='committed'&&h.from.implementation==='managed'&&h.from.manifest_sha256===managed&&h.readiness_sha256===hash(JSON.stringify(record))&&h.state_sha256===record.state_receipt_sha256);

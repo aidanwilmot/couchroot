@@ -7,7 +7,7 @@ const {createObserverRetirement,validateProvider}=require('./observer-retirement
 const {inspectRetirementUnit}=require('./observer-unit');
 const {processIdentities}=require('./worker-processes');
 function check(ok){if(!ok)throw Error('Retirement readiness ownership unavailable');}
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 function validateRecord(record){
  check(record&&Object.keys(record).sort().join('|')==='boot_id|device|directory|id|launcher_sha256|manifest_sha256|observer_sha256|phase|port|schema|scope|source|token_file|token_sha256|unit|worker_sha256');
  check(record.schema===1&&record.phase==='submitted'&&typeof record.id==='string'&&record.id.length===32&&/^[a-f0-9]+$/.test(record.id)&&['s90d','qn90a'].includes(record.device));
@@ -20,7 +20,7 @@ function validateRecord(record){
 }
 async function readyRetirement({record,journalDirectory,channel,execute,confirmSource}){
  validateRecord(record);check(typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof execute==='function'&&typeof confirmSource==='function');
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const file=path.join(journalDirectory,record.id+'.retirement.json'),marker=path.join(journalDirectory,'retirement-launch.pending'),intent=file+'.readiness.pending',serialized=JSON.stringify(record);
  const owned=()=>{check(privateRead(file,16384)===serialized);check(privateRead(marker,64)===record.id+'\n');};
  owned();

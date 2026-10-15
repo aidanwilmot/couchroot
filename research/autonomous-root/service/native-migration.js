@@ -1,4 +1,5 @@
 'use strict';
+const {privateDirectory}=require('./private-state');
 // Single-use live handoff controller. Uncertain work stays held for recovery.
 const fs=require('fs'),path=require('path');
 const {hash}=require('./policy');
@@ -17,7 +18,7 @@ function createNativeMigration({agent,device,payload,selectionFile}){
   check(!entered);entered=true;
   try{
    move('preflight');check(typeof returnToManaged==='boolean'&&(!returnToManaged||typeof runtimeSha256==='string'&&/^[a-f0-9]{64}$/.test(runtimeSha256)));check(['s90d','qn90a'].includes(device)&&typeof selectionFile==='string'&&path.isAbsolute(selectionFile)&&typeof manifestSha256==='string'&&manifestSha256.length===64&&/^[a-f0-9]+$/.test(manifestSha256));
-   const journalDirectory=path.dirname(selectionFile),st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+   const journalDirectory=path.dirname(selectionFile),st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
    for(const name of ['retirement-launch.pending','production-launch.pending','state-install.pending'])try{fs.lstatSync(path.join(journalDirectory,name));throw Error('Existing native transition requires reconciliation');}catch(error){if(error.code!=='ENOENT')throw error;}
    const candidate=loadCandidate(payload,device);check(candidate&&candidate.manifest_sha256===manifestSha256);
    const journal=new SelectionJournal(selectionFile),managed=managedVersion(payload);let state=journal.read();

@@ -11,7 +11,7 @@ for(const mode of ['normal','activation-recovery','shutdown-response-lost'])test
 },async()=>withRetirementState(async()=>{
  const recoverActivation=mode==='activation-recovery';let shutdownCalls=0;
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-rehearsal-')),state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',selectionFile=state+'/selection.json';fs.mkdirSync(state,{recursive:true,mode:0o700});
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-rehearsal-')),state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',selectionFile=state+'/selection.json';fs.mkdirSync(state,{recursive:true,mode:0o700});if(mode==='shutdown-response-lost')fs.chmodSync(state,0o2700);
  const managed='a'.repeat(64),native='b'.repeat(64),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),launcherSha=sha(fs.readFileSync('/bin/true')),workerSha=sha(fs.readFileSync(process.env.NATIVE_WORKER)),runtimeSha=sha(fs.readFileSync('/opt/dotnet/bin/dotnet'));
  const children=[],servers=[],roots=['/opt/couchroot-agent'],units=new Map(),modules=new Map();let agent,returnedChannel,productionChannel,runtimeChecks=0,activationInterrupted=false;
  const unitRoot=root+'/units';fs.mkdirSync(unitRoot);

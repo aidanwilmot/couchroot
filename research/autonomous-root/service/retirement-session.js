@@ -1,4 +1,5 @@
 'use strict';
+const {privateDirectory}=require('./private-state');
 // Own the private callback for one journaled provider launch. Closing this
 // transport is not evidence that the provider or its staging has been retired.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
@@ -10,7 +11,7 @@ async function openRetirementSession(options){
  const {journalDirectory}=options;
  if(typeof journalDirectory!=='string'||!path.isAbsolute(journalDirectory))throw Error('Private retirement directory required');
  const parent=fs.lstatSync(journalDirectory);
- if(!parent.isDirectory()||parent.isSymbolicLink()||parent.uid!==process.geteuid()||(parent.mode&0o7777)!==0o700)throw Error('Private retirement directory required');
+ if(!privateDirectory(parent))throw Error('Private retirement directory required');
  // Refuse an unfinished launch before creating another token or listener.
  try{fs.lstatSync(path.join(journalDirectory,'retirement-launch.pending'));throw Error('Retirement launch requires reconciliation');}catch(error){if(error.code!=='ENOENT')throw error;}
  const directory=fs.mkdtempSync(path.join(journalDirectory,'retirement-'));

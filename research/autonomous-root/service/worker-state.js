@@ -2,10 +2,11 @@
 // Bootstrap a private child of the app-owned, searchable data directory.
 // Never move or ignore a legacy selection journal or unfinished writer.
 const fs=require('fs'),path=require('path');
+const {privateDirectory}=require('./private-state');
 function requireDirectory(stat,privateMode){
  // An inherited setgid bit changes group inheritance, not access. Accept it
  // on reuse so a crash between mkdir and fchmod does not strand private state.
- if(!stat.isDirectory()||stat.uid!==process.geteuid()||(privateMode?(stat.mode&0o5777)!==0o700:!!(stat.mode&0o022)))throw Error('Worker state directory ownership or permissions invalid');
+ if(!stat.isDirectory()||stat.uid!==process.geteuid()||(privateMode?!privateDirectory(stat):!!(stat.mode&0o022)))throw Error('Worker state directory ownership or permissions invalid');
 }
 function absent(file){
  try{fs.lstatSync(file);}catch(e){if(e.code==='ENOENT')return;throw e;}

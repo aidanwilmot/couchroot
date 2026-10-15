@@ -1,4 +1,5 @@
 'use strict';
+const {privateDirectory}=require('./private-state');
 // Launch and readiness use the held managed worker. Handoff cleanup must be
 // supplied independently; the probe may use the same worker throughout.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
@@ -54,7 +55,7 @@ function journalDirectory(directory){
  const parent=fs.openSync(directory,flags);
  try{
   const st=fs.fstatSync(parent),now=fs.lstatSync(directory);
-  if(!st.isDirectory()||st.uid!==process.geteuid()||(st.mode&0o7777)!==0o700||now.dev!==st.dev||now.ino!==st.ino)throw Error('Invalid observer state directory');
+  if(!privateDirectory(st)||now.dev!==st.dev||now.ino!==st.ino)throw Error('Invalid observer state directory');
   const target=path.join(directory,'observer-launches');let created=false;
   try{fs.mkdirSync(target,{mode:0o700});created=true;}catch(e){if(e.code!=='EEXIST')throw e;}
   const fd=fs.openSync(target,flags);
@@ -62,7 +63,7 @@ function journalDirectory(directory){
    const child=fs.fstatSync(fd);
    if(!child.isDirectory()||child.uid!==process.geteuid())throw Error('Invalid observer journal owner');
    if(created)fs.fchmodSync(fd,0o700);
-   if((fs.fstatSync(fd).mode&0o7777)!==0o700)throw Error('Invalid observer journal permissions');
+   if(!privateDirectory(fs.fstatSync(fd)))throw Error('Invalid observer journal permissions');
    fs.fsyncSync(fd);fs.fsyncSync(parent);
   }finally{fs.closeSync(fd);}
   return target;

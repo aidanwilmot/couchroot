@@ -2,7 +2,7 @@
 // Final live evidence before local activation cleanup. Does not release admission.
 const fs=require('fs'),path=require('path');
 const {hash}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {retireProduction}=require('./production-retirement');
 const {managedRuntimeCommand,validateManagedLaunch}=require('./managed-readiness');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
@@ -18,7 +18,7 @@ async function verifyManagedCompletion({managed,retired,journalDirectory,selecti
  check(managed.phase==='ready');const {worker_identity,launcher_sha256,unit_started_monotonic,...launch}=managed;validateManagedLaunch({...launch,phase:'submitted'});validateTeardownRecord(retired);
  check(retired.phase==='complete'&&retired.boot_id===managed.boot_id&&typeof execute==='function'&&typeof confirmManaged==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
  check(path.dirname(path.dirname(retired.token_file))===journalDirectory);
- const directory=fs.lstatSync(journalDirectory);check(directory.isDirectory()&&!directory.isSymbolicLink()&&directory.uid===process.geteuid()&&(directory.mode&0o7777)===0o700);
+ const directory=fs.lstatSync(journalDirectory);check(privateDirectory(directory));
  const saved=path.join(journalDirectory,managed.id+'.managed-restore-input.json'),inputText=privateRead(saved,524288),inputs=JSON.parse(inputText);
  check(JSON.stringify(retired.source)===JSON.stringify(inputs.record.source)&&retired.manifest_sha256===inputs.record.manifest_sha256&&retired.device===inputs.record.device&&retired.id!==managed.id&&retired.id!==managed.origin_id);
  check([retired.source,retired.provider_identity,managed.source].every(s=>s.worker_id!==worker_identity.worker_id&&Object.values(s.processes).every(p=>!p||p.pid!==worker_identity.processes.worker.pid)));

@@ -3,7 +3,7 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {RootAgentServer}=require('./vendor/root-agent');
 const {selectionStatus}=require('./worker-selection');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {productionIdentity}=require('./production-readiness');
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 function check(ok){if(!ok)throw Error('Production session ownership unavailable');}
@@ -11,7 +11,7 @@ async function openProductionSession(options){
  const {journalDirectory,selectionFile,id,provider}=options;
  check(typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof selectionFile==='string'&&path.dirname(selectionFile)===journalDirectory&&typeof id==='string'&&id.length===32&&/^[a-f0-9]+$/.test(id));
  check(provider&&provider.identity&&typeof provider.launchProduction==='function'&&typeof provider.verifyProduction==='function');
- const parent=fs.lstatSync(journalDirectory);check(parent.isDirectory()&&!parent.isSymbolicLink()&&parent.uid===process.geteuid()&&(parent.mode&0o7777)===0o700);
+ const parent=fs.lstatSync(journalDirectory);check(privateDirectory(parent));
  const marker=path.join(journalDirectory,'production-launch.pending');
  try{fs.lstatSync(marker);throw Error('Production session requires reconciliation');}catch(error){if(error.code!=='ENOENT')throw error;}
  const selection=selectionStatus(selectionFile),pending=selection.pending;

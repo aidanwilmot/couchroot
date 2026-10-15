@@ -3,7 +3,7 @@
 // keeps native startup closed until all records and the source are rechecked.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {atomic}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {validateRecord,sourceExitGuard,snapshotManagedJobs}=require('./retained-state');
 const {SelectionJournal,selectionStatus}=require('./worker-selection');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
@@ -54,7 +54,7 @@ function planInstallation({snapshot,id,manifestSha256}){
 async function installRetainedState(options){
  const {journalDirectory,selectionFile,execute}=options;
  check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof selectionFile==='string'&&path.dirname(selectionFile)===journalDirectory);
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const snapshot=JSON.parse(JSON.stringify(options.snapshot)),plan=planInstallation({...options,snapshot}),{id}=plan.record;
  const selected=()=>{const s=selectionStatus(selectionFile),p=s.pending;check(s.phase==='reconciliation-required'&&p&&p.id===id&&p.phase==='prepared'&&p.from.implementation==='managed'&&p.to.implementation==='native-prototype'&&p.to.manifest_sha256===options.manifestSha256);return p.quiescence_sha256;};
  const quiescence=selected(),file=path.join(journalDirectory,id+'.state-install.json'),saved=path.join(journalDirectory,id+'.retained-snapshot.json'),marker=path.join(journalDirectory,'state-install.pending');
@@ -85,7 +85,7 @@ async function installRetainedState(options){
 // inventories again. Selection remains pending; this is not launch readiness.
 async function acceptRetainedState({id,manifestSha256,receiptSha256,journalDirectory,selectionFile,execute}){
  check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof selectionFile==='string'&&path.dirname(selectionFile)===journalDirectory);
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  check(typeof id==='string'&&/^[a-f0-9]{32}$/.test(id)&&id.length===32&&typeof receiptSha256==='string'&&/^[a-f0-9]{64}$/.test(receiptSha256)&&receiptSha256.length===64);
  const file=path.join(journalDirectory,id+'.state-install.json'),saved=path.join(journalDirectory,id+'.retained-snapshot.json'),marker=path.join(journalDirectory,'state-install.pending');
  const snapshotText=privateRead(saved,262144),snapshot=validateSnapshot(JSON.parse(snapshotText));

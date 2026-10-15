@@ -1,4 +1,5 @@
 'use strict';
+const {privateDirectory}=require('./private-state');
 const fs=require('fs'),path=require('path');
 const {atomic}=require('./policy');
 const {validateRecord,privateRead}=require('./retirement-readiness');
@@ -19,7 +20,7 @@ function validate(record){
 }
 function journal(record,directory){
  validate(record);check(typeof directory==='string'&&path.isAbsolute(directory));
- const st=fs.lstatSync(directory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(directory);check(privateDirectory(st));
  const file=path.join(directory,record.id+'.retirement.json'),marker=path.join(directory,'retirement-launch.pending');
  const owned=()=>{check(privateRead(file,16384)===JSON.stringify(record));check(privateRead(marker,64)===record.id+'\n');};
  const sync=()=>{const fd=fs.openSync(directory,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}};

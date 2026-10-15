@@ -1479,3 +1479,27 @@ inode-based native runtime check and bounded failure-cause diagnostics are now
 installed. No native rehearsal has yet been retried on this version. The earlier
 QN90A failed-transition evidence remains preserved, and .NET remains selected.
 Neither TV was rebooted; signed packages and raw evidence remain private.
+
+### Inherited journal-directory setgid — rejected before handoff
+
+The 0.7.16 QN90A retry was rejected during preflight, before a selection transaction
+or worker shutdown. Inspection found the app-owned journal directory at mode
+2700 after package installation. Bootstrap already permits inherited setgid, but
+migration and downstream journal consumers required exactly 0700. The managed
+worker remained ready on the same boot throughout. The unused SDK recovery timer
+was disarmed while SDK access remained loopback. The completed test-job fixture
+was explicitly forgotten after confirming its exit status; no native trial ran.
+
+A shared private-directory predicate now consistently accepts 0700 or 2700 for
+app-owned journal directories. It still rejects symlinks, other owners, group or
+other access, sticky and setuid bits. It does not change existing metadata or
+relax private-file/token checks. Bootstrap, migration, observer journals, retained
+state, launch/readiness, rollback and completion now use the same predicate for
+their shared journal parent.
+
+All 245 Linux migration tests pass without skips. All three isolated real-process
+rehearsals pass, including a complete managed/native/managed cycle under a 2700
+journal parent. Focused tests cover invalid modes, file-mode strictness and
+unchanged metadata; the observer fixture runs its shared predicate under the
+simulated app identity. The correction is local and not yet deployed. Both TVs
+remain on 0.7.16 with .NET selected; no TV was rebooted.

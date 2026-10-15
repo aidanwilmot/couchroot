@@ -3,7 +3,7 @@
 // launch/readiness and selection are reconciled by the owning controller.
 const fs=require('fs'),path=require('path');
 const {atomic,hash}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {selectionStatus,SelectionJournal}=require('./worker-selection');
 const {snapshotNativeJobs}=require('./native-retained-state');
 const {planManagedRestore}=require('./managed-restore-plan');
@@ -22,7 +22,7 @@ function restoreTransition(initial,record,accepted=false){
 async function restoreManagedJobs(options){
  const {journalDirectory,selectionFile,execute}=options;
  check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const {record,installation,baseline,snapshot}=JSON.parse(JSON.stringify(options));
  const plan=planManagedRestore({record,installation,baseline,snapshot}),id=record.id;
  const initial=selectionStatus(selectionFile),p=initial.pending;
@@ -65,7 +65,7 @@ async function restoreManagedJobs(options){
 async function acceptManagedRestore({transitionId,receiptSha256,journalDirectory,selectionFile,execute}){
  check(typeof transitionId==='string'&&transitionId.length===32&&/^[a-f0-9]+$/.test(transitionId)&&typeof receiptSha256==='string'&&receiptSha256.length===64&&/^[a-f0-9]+$/.test(receiptSha256));
  check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const file=path.join(journalDirectory,transitionId+'.managed-restore.json'),saved=path.join(journalDirectory,transitionId+'.managed-restore-input.json'),marker=path.join(journalDirectory,'managed-restore.pending');
  const inputText=privateRead(saved,524288),inputs=JSON.parse(inputText),plan=planManagedRestore(inputs),{record,installation,baseline,snapshot}=inputs;
  check(Object.keys(inputs).sort().join('|')==='baseline|installation|record|snapshot');

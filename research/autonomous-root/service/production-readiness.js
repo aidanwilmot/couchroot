@@ -2,7 +2,7 @@
 // Observe a submitted production peer; keep admission and selection pending.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {atomic}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {selectionStatus,SelectionJournal}=require('./worker-selection');
 const {planInstallation}=require('./retained-install');
 const {sourceExitGuard,validateRecord}=require('./retained-state');
@@ -52,7 +52,7 @@ function runtimeCommand(record,identity,snapshot,installation){
 }
 async function readyProduction({record,journalDirectory,selectionFile,channel,execute,providerIdentity}){
  validateLaunch(record);check(typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&typeof selectionFile==='string'&&path.dirname(selectionFile)===journalDirectory&&typeof execute==='function');
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const file=path.join(journalDirectory,record.id+'.production.json'),marker=path.join(journalDirectory,'production-launch.pending'),intent=file+'.readiness.pending';
  const saved=path.join(journalDirectory,record.id+'.retained-snapshot.json'),installed=path.join(journalDirectory,record.id+'.state-install.json'),stateMarker=path.join(journalDirectory,'state-install.pending');
  const snapshotText=privateRead(saved,262144),snapshot=JSON.parse(snapshotText),installationText=privateRead(installed,16384),installation=JSON.parse(installationText);

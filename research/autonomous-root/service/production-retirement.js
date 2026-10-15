@@ -3,7 +3,7 @@
 // has been restored to managed state. Keep local launch/token ownership pending.
 const fs=require('fs'),path=require('path');
 const {atomic,hash}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {selectionStatus}=require('./worker-selection');
 const {planManagedRestore}=require('./managed-restore-plan');
 const {planNativeSnapshot}=require('./native-retained-state');
@@ -43,7 +43,7 @@ async function retireProduction({managed,journalDirectory,selectionFile,execute,
  check(typeof execute==='function'&&typeof confirmManaged==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
  check(typeof launcher_sha256==='string'&&launcher_sha256.length===64&&/^[a-f0-9]+$/.test(launcher_sha256)&&typeof unit_started_monotonic==='string'&&/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic));
  check(worker_identity&&JSON.stringify(processIdentities({...worker_identity,capabilities:['worker-process-identity-v1']},worker_identity.processes.worker.pid))===JSON.stringify(worker_identity)&&worker_identity.boot_id===managed.boot_id);
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const inputFile=path.join(journalDirectory,managed.id+'.managed-restore-input.json'),inputText=privateRead(inputFile,524288),inputs=JSON.parse(inputText),plan=productionRetirementPlan(inputs);
  check(inputs.record.id===managed.origin_id&&JSON.stringify(inputs.record.worker_identity)===JSON.stringify(managed.source));
  const selected=selectionStatus(selectionFile),h=selected.history&&selected.history[selected.history.length-1],rollback=managed.id===managed.origin_id;

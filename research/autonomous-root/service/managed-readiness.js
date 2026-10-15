@@ -3,7 +3,7 @@
 // retire the independent provider before committing/releasing managed service.
 const fs=require('fs'),path=require('path');
 const {hash,atomic}=require('./policy');
-const {privateRead}=require('./private-state');
+const {privateRead,privateDirectory}=require('./private-state');
 const {selectionStatus}=require('./worker-selection');
 const {acceptManagedRestore}=require('./managed-restore');
 const {planManagedRestore}=require('./managed-restore-plan');
@@ -53,7 +53,7 @@ function managedRuntimeCommand(record,identity,inputs,launcherSha256){
 }
 async function readyManaged({record,journalDirectory,selectionFile,channel,execute,providerIdentity}){
  validateManagedLaunch(record);check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
- const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const file=path.join(journalDirectory,record.id+'.managed-launch.json'),marker=path.join(journalDirectory,'managed-launch.pending'),intent=file+'.readiness.pending';
  const saved=path.join(journalDirectory,record.id+'.managed-restore-input.json'),restored=path.join(journalDirectory,record.id+'.managed-restore.json'),restoreMarker=path.join(journalDirectory,'managed-restore.pending');
  const inputText=privateRead(saved,524288),restoreText=privateRead(restored,16384),inputs=JSON.parse(inputText),selected=selectionStatus(selectionFile),p=selected.pending;
