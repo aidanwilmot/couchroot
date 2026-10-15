@@ -284,7 +284,10 @@ static void *job_monitor(void *unused) {
          */
         if (j->save_failed && (stop || now >= j->save_retry)) {
           j->save_failed = !job_save(j, 0);
-          j->save_retry = now + 1000;
+          /* Back off after the I/O completes. A slow failed save must not
+           * leave an expired retry deadline and repeatedly take jobs_mutex.
+           */
+          j->save_retry = stamp() + 1000;
         }
         if (j->save_failed && j->save_retry < wake)
           wake = j->save_retry;
@@ -354,7 +357,7 @@ static void *job_monitor(void *unused) {
             j->pipes[s] = -1;
           }
         j->save_failed = !job_save(j, 0);
-        j->save_retry = now + 1000;
+        j->save_retry = stamp() + 1000;
         if (j->save_failed && j->save_retry < wake)
           wake = j->save_retry;
         continue;
@@ -631,10 +634,18 @@ static J *job_operation_locked(J *request, const char *op) {
       j->pipes[s] = pipes[s][0];
       pipes[s][0] = -1;
     }
-    j->deadline = stamp() + timeout;
     strcpy(j->state, "running");
-    if (!job_identity(pid, j->identity) || !job_save(j, 0) ||
-        !job_write(gate[1], "1", 1)) {
+    int prepared = job_identity(pid, j->identity) && job_save(j, 0);
+    if (prepared) {
+      /* The child cannot execute before this gate. Slow durable preparation
+       * must not spend its execution budget or release an already-expired job.
+       * jobs_mutex keeps the monitor out until launch succeeds or is cancelled;
+       * the existing progress watchdog still bounds stalled preparation.
+       */
+      j->deadline = stamp() + timeout;
+      prepared = job_write(gate[1], "1", 1);
+    }
+    if (!prepared) {
       job_kill(j);
       close(gate[1]);
       strcpy(j->state, "cancelling");

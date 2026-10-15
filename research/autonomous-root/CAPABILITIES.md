@@ -27,6 +27,12 @@ two-second command-fault timeout; its cause remains unresolved despite the later
 pass at unchanged limits. The .NET entry bridge, worker fallback and independent
 rescue remain deployed. See [startup/guardian evidence](native-worker/startup-resource-results.json).
 
+Signed 0.7.41 starts native job execution budgets after durable launch preparation
+and backs off slow failed result saves from I/O completion. Four focused local
+fixtures cover these boundaries; both TVs passed the fourteen resource groups on
+the updated ordinary binary. Forced slow-storage behavior remains locally tested
+only. See [job timing evidence](native-worker/job-start-timing-results.json).
+
 All examples use the existing enrolled, certificate-pinned client:
 
 ```sh
@@ -387,11 +393,17 @@ python3 research/autonomous-root/client.py --config /private/client.json \
   job-forget --job-id stress-example-0001
 ```
 
-Job start returns promptly; it does not occupy the command request until completion.
+Job start returns after launch preparation; it does not wait for command completion.
 Timeouts range from 100 ms to 24 hours. At most 16 jobs are retained in the worker,
 with at most 64 durable records. `job-forget` removes a finished job and its record;
 keep IDs unique even after forgetting. Intent is persisted before spawning.
 Duplicate retained job IDs are refused. Root and app profiles are explicit.
+
+For native jobs, the execution timeout starts after the running record is durable,
+immediately before the command gate opens. Slow preparation can delay the start
+response without spending the command's execution budget. Failed preparation
+keeps the gate closed and retains the intent for inspection; it never retries the
+command. The existing progress watchdog still bounds stalled preparation.
 
 Each stdout/stderr stream retains its latest 1 MiB in memory. Tail responses contain
 base64 bytes, `next_cursor`, `end_cursor`, and `truncated`; each read returns up to

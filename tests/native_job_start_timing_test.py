@@ -1,0 +1,134 @@
+"""Job execution deadlines exclude durable launch preparation; Linux fixture only."""
+import base64
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import threading
+import time
+import unittest
+
+import native_worker_test
+
+
+@unittest.skipUnless(os.environ.get('NATIVE_WORKER') and os.environ.get('COUCHROOT_PARITY_CONTAINER'),
+                     'isolated native container required')
+class JobStartTimingTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        library = Path(self.tmp.name)/'delay.so'
+        subprocess.run(['gcc', '-shared', '-fPIC', '-Wall', '-Wextra', '-Werror',
+                        str(Path(__file__).parent/'native-io/delay.c'),
+                        '-ldl', '-o', str(library)], check=True)
+        self.n = native_worker_test.NativeWorkerTests('runTest')
+        self.n.extra_worker_args = ['--production']
+        self.n.setUp()
+        self.n.seq += 1
+        self.n.send(f'SHUTDOWN\t{self.n.seq}')
+        self.n.receive()
+        self.n.proc.wait(timeout=5)
+        self.id = 'native-delayed-start'
+        pid_file = Path(self.tmp.name)/'worker-pid'
+        self.n.restart(extra_env={
+            'LD_PRELOAD': str(library),
+            'COUCHROOT_IO_TEST_PATH': str(self.n.root/'.jobs'/f'{self.id}.json.next'),
+            'COUCHROOT_IO_TEST_OP': 'fsync',
+            'COUCHROOT_IO_TEST_MODE': ('blocked' if 'stalled' in self._testMethodName else
+                                      'fail' if 'failed' in self._testMethodName else 'progress'),
+            **({'COUCHROOT_IO_TEST_PID_FILE': str(pid_file)}
+               if 'stalled' in self._testMethodName else {}),
+        })
+        pid_file.write_text(str(self.n.worker_pid))
+
+    def tearDown(self):
+        self.n.tearDown()
+        self.tmp.cleanup()
+
+    def delayed_start(self, command, timeout):
+        witness = self.n.root/'executed'
+        observations = []
+
+        def observe_gate():
+            time.sleep(1)
+            observations.append(witness.exists())
+
+        observer = threading.Thread(target=observe_gate)
+        observer.start()
+        before = time.monotonic()
+        try:
+            result = self.n.start_job('printf x >> '+str(witness)+'; '+command,
+                                      timeout=timeout, id=self.id)
+        finally:
+            observer.join(timeout=3)
+        self.assertGreaterEqual(time.monotonic()-before, 2)
+        self.assertEqual(observations, [False], 'command ran before durable preparation')
+        return result, witness
+
+    def test_slow_preparation_does_not_consume_command_timeout(self):
+        _, witness = self.delayed_start('sleep .05; exit 7', 500)
+        terminal = self.n.completed(self.id)
+        self.assertEqual(terminal['state'], 'completed')
+        self.assertEqual(terminal['exit_code'], 7)
+        self.assertFalse(terminal['timed_out'])
+        self.assertFalse(terminal['persistence_failed'])
+        record = self.n.root/'.jobs'/f'{self.id}.json'
+        saved = record.read_bytes()
+        self.assertEqual(json.loads(saved)['exit_code'], 7)
+        self.n.seq += 1
+        self.n.send(f'SHUTDOWN\t{self.n.seq}')
+        self.n.receive()
+        self.n.proc.wait(timeout=5)
+        self.n.restart()
+        self.assertEqual(self.n.job('job.status', self.id)['result']['state'], 'completed')
+        self.assertEqual(record.read_bytes(), saved)
+        self.assertEqual(witness.read_bytes(), b'x')
+
+    def test_command_timeout_remains_active_after_slow_preparation(self):
+        survivor = self.n.root/'survived'
+        _, witness = self.delayed_start('sleep 2; touch '+str(survivor), 200)
+        terminal = self.n.completed(self.id)
+        self.assertEqual(terminal['state'], 'timed_out')
+        self.assertEqual(terminal['exit_code'], 137)
+        self.assertTrue(terminal['timed_out'])
+        self.assertEqual(witness.read_bytes(), b'x')
+        self.assertFalse(survivor.exists())
+
+    def test_failed_preparation_never_releases_or_replays_command(self):
+        witness = self.n.root/'executed'
+        result = self.n.job('job.start', self.id, command='touch '+str(witness),
+                            timeout_ms=500, profile='root')
+        self.assertFalse(result['ok'])
+        self.assertIn('Launch failed after intent', result['error'])
+        terminal = self.n.completed(self.id)
+        self.assertEqual(terminal['exit_code'], 137)
+        self.assertFalse(witness.exists())
+        self.assertFalse(self.n.job('job.start', self.id, command='touch '+str(witness),
+                                    timeout_ms=500, profile='root')['ok'])
+        self.n.seq += 1
+        self.n.send(f'SHUTDOWN\t{self.n.seq}')
+        self.n.receive()
+        self.n.proc.wait(timeout=5)
+        self.n.restart()
+        self.assertEqual(self.n.job('job.status', self.id)['result']['state'], 'interrupted')
+        self.assertFalse(witness.exists())
+        self.n.start_job('exit 9', id='native-after-failed-save')
+        self.assertEqual(self.n.completed('native-after-failed-save')['exit_code'], 9)
+
+    def test_stalled_preparation_watchdog_keeps_command_gated(self):
+        witness = self.n.root/'executed'
+        request = dict(op='job.start', id=self.id, command='touch '+str(witness),
+                       timeout_ms=500, profile='root')
+        self.n.seq += 1
+        self.n.send(f'OP\t{self.n.seq}\t'+base64.b64encode(json.dumps(request).encode()).decode())
+        before = time.monotonic()
+        self.assertEqual(self.n.proc.wait(timeout=38), 137)
+        self.assertGreaterEqual(time.monotonic()-before, 25)
+        self.assertFalse(witness.exists())
+        self.n.restart()
+        self.assertEqual(self.n.job('job.status', self.id)['result']['state'], 'interrupted')
+        self.assertFalse(witness.exists())
+
+
+if __name__ == '__main__':
+    unittest.main()

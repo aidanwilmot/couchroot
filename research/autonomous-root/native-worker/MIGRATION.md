@@ -7,9 +7,16 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.40 packages with native service acquisition enabled,
+Both TVs are on signed 0.7.41 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 28 settled history entries (22 committed,
 six rolled back); S90D has 29 (22 committed, seven rolled back).
+The native job execution budget now starts after durable launch preparation,
+immediately before releasing the command gate. Slow failed persistence retries
+back off from completion of the write. Local fixtures reproduce both preceding
+bugs and verify execution, timeout, refusal, watchdog termination and recovery
+without replay. Both TVs passed the fourteen resource groups and seventy
+command-fault jobs each on the updated ordinary binary. See
+[job timing evidence](job-start-timing-results.json).
 Both passed fourteen bounded resource checks on exact ordinary production
 worker bytes: startup descriptor admission, guardian exhaustion/reconciliation,
 zero-descriptor idle and partial-frame deadlines, full/read-only storage,
@@ -2857,3 +2864,62 @@ wider storage stalls, remaining lifecycle faults, endurance and native-default
 observation remain open. Native-only capability entry remains unqualified; the
 .NET entry bridge, worker fallback and rescue remain deployed. No reboot, standby
 or global-policy change occurred.
+
+### Job execution budgets after durable preparation — 2026-10-15
+
+Signed 0.7.41 moves the native background-job deadline to just before the command
+release gate, after the running record and directory entry have been synced.
+Previously, the deadline was armed before that persistence: a slow save could
+consume the entire execution budget while the child was still unable to run.
+This differs from managed jobs, whose timeout task starts after launch state is
+saved. The native child remains gated throughout preparation, and failed identity
+or persistence still cancels it without executing the command or reusing its ID.
+The existing progress watchdog remains responsible for stalled preparation.
+
+A host-only fsync fixture reproduced premature expiry on the preceding binary:
+a two-second running-record save caused a command with a 500 ms budget to return
+`timed_out` instead of exit 7. With the corrected deadline, it runs once, persists
+exit 7 and retains the exact record across restart. A separate genuinely long
+command still times out after slow preparation and cannot write its final witness.
+
+A second fixture exposed overdue persistence retries: the retry timestamp was
+computed before the save, so a two-second failed write could leave its next retry
+already due and repeatedly occupy the jobs mutex. A status request timed out in
+that fixture before the fix. Retry backoff now starts one second after the save
+returns. The delayed EIO case returns status, refuses the duplicate start and
+reconciles its retained intent without ever executing the command.
+
+A fourth case blocks only the protocol worker's preparation fsync for forty
+seconds. The progress watchdog terminates the worker before it executes the
+command, and ordinary same-boot recovery reports interruption without replay.
+The fixture explicitly selects the worker PID, keeping the independent
+guardian's persistence available.
+This does not qualify recovery while the guardian's storage is itself stalled.
+No interposer or failure interface is packaged or used on either TV.
+
+Both TVs passed the existing fourteen production resource groups with their exact
+installed ordinary worker bytes and a private timing controller. This includes
+seventy command-fault jobs per device at the unchanged 2000 ms execution and
+3000 ms observation limits. S90D's slowest start response took 2292 ms and its
+terminal result was observed at 2326 ms with a completed outcome. These are
+controller timings including admission and persistence, not measurements of a
+particular fsync or guardian phase. Their scopes, helpers and outer jobs were removed;
+retained records, enrollment, protected hashes and selection history are unchanged.
+Both remain managed-ready and settled on the original boot, with SDK on loopback
+and independent managed rescue timers inactive. All three packaged managed DLLs
+remain unchanged. See [job timing evidence](job-start-timing-results.json).
+
+Local validation passed four focused cases, 60 unique Python cases overall with
+12 optional cases skipped, 404 Node tests with 143 skips, six fresh-container
+rehearsals and nineteen fresh-container restart cases. Native and managed scratch
+fixtures were rebuilt; each signed native build reproduced twice. No client or
+setup source changed, so full Python discovery was not repeated.
+
+The original 0.7.40 QN90A timeout remains historically unexplained: it did not
+record phase timings. The premature-budget bug is consistent with the subsequent
+long admission observations but does not prove that original cause. These local
+simulations and bounded hardware runs do not qualify forced slow storage on a TV,
+strict job deadlines during concurrent persistence stalls, broad pressure or
+endurance. Native-only entry, remaining lifecycle coverage and native-default
+rollout stay open. The .NET entry bridge, worker fallback and independent rescue
+remain available. No reboot, standby or global-policy change occurred.

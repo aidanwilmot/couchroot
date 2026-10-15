@@ -15,6 +15,18 @@ static int selected(int fd, const char *operation) {
   const char *op = getenv("COUCHROOT_IO_TEST_OP");
   if (!prefix || !*prefix || !op || strcmp(op, operation))
     return 0;
+  /* Optionally delay only the protocol worker, leaving its independent
+   * guardian free to persist recovery after the watchdog terminates it. */
+  const char *pid_file = getenv("COUCHROOT_IO_TEST_PID_FILE");
+  if (pid_file) {
+    FILE *file = fopen(pid_file, "r");
+    long pid = 0;
+    int matched = file && fscanf(file, "%ld", &pid) == 1 && pid == getpid();
+    if (file)
+      fclose(file);
+    if (!matched)
+      return 0;
+  }
   char link[64], path[PATH_MAX];
   snprintf(link, sizeof link, "/proc/self/fd/%d", fd);
   ssize_t n = readlink(link, path, sizeof path - 1);
@@ -28,6 +40,10 @@ static int delay(void) {
   int interrupted = mode && !strcmp(mode, "eintr");
   struct timespec wait = {interrupted ? 1 : mode && !strcmp(mode, "blocked") ? 40 : 2, 0};
   while (nanosleep(&wait, &wait) && errno == EINTR) {}
+  if (mode && !strcmp(mode, "fail")) {
+    errno = EIO;
+    return -1;
+  }
   if (interrupted) {
     errno = EINTR;
     return -1;

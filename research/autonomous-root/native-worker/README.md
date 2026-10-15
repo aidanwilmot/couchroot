@@ -32,9 +32,15 @@ stays reserved until explicitly forgotten. Recovery resumes interrupted repair
 writes and preserves existing final records and foreign-owner intents. Invalid
 owned metadata fails closed. Legacy orphan `.json.next` files without a final
 record lack this ownership proof and remain preserved for inspection.
+The job execution deadline starts after the running record and directory entry
+are synced, just before releasing the command gate. Slow launch persistence does
+not consume that execution budget; failed preparation keeps the gate closed. The
+existing progress watchdog continues to bound stalled preparation.
 Terminal-result save failures remain visible as
 `persistence_failed`; the supervisor retries the known result at most once per
-second per retained job, without rerunning commands. Restarted workers report saved outcomes
+second per retained job, measured from completion of the previous attempt so a
+slow failed save cannot leave the next retry already overdue. Commands are never
+rerun. Restarted workers report saved outcomes
 and refuse to replay starts. Logs are in-memory only. Cancellation of a saved,
 previous-worker job is deliberately refused on these older kernels: process-group
 ownership cannot be established atomically from a saved PID. Unknown records
