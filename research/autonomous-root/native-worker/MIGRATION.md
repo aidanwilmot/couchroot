@@ -795,3 +795,27 @@ and forgotten records. The real-process integration exports through an independe
 native connection after production shutdown, preserving ordinary and BOM records.
 Both TVs and their deployed packages remain unchanged; no reboot was performed.
 The prepared 0.7.14 artifacts predate this source-only export addition.
+
+### Exact managed rollback replacement — local follow-up
+
+The managed restore command plan binds the stopped native production identity,
+original installation receipt and original managed snapshot. It builds a fresh
+inventory, checks every byte digest and file/directory owner/mode, then preserves
+the old managed directory before publishing the replacement. Forgotten native
+records are not merged back. Ordinary and BOM-prefixed bytes remain unchanged.
+
+Inspection distinguishes fully staged state, the interruption between the two
+directory moves, and completed publication. Resuming publication requires an
+absent managed destination, exact staged inventory and exact preserved baseline;
+replaying either completed move is refused. Live source/native processes, changed
+records, extra entries and links prevent replacement. The original backup remains
+available. An absent empty managed inventory is normalized only when the original
+snapshot is empty. Commands fit the protocol limit at full retention.
+
+All 23 focused Linux retained-state/import/restore tests pass without skips. These
+are actual filesystem/shell tests in a disposable container, not TV rollback
+qualification. This module only produces commands: durable controller intent,
+current native snapshot revalidation around restoration, admission ownership,
+early partial-copy reconciliation, managed restart/readiness and selection rollback
+must still be integrated before live use. Both TVs remain unchanged on managed
+fallback; no reboot or native production cutover was performed.

@@ -37,3 +37,50 @@ test('wrong installation binding and metadata are refused',linux,()=>fixture(asy
  await assert.rejects(snapshotNativeJobs({...f.options,installation:{...f.options.installation,installed_manifest_sha256:'f'.repeat(64)}}));assert.equal(f.commands.length,0);
  fs.chmodSync(f.jobs+'/lock',0o644);await assert.rejects(snapshotNativeJobs(f.options));
 }));
+
+const {planManagedRestore}=require('../research/autonomous-root/service/managed-restore-plan');
+async function restoreFixture(f){
+ const baselineBody={schema:1,implementation:'managed',source:f.options.record.source,records:f.records.map(r=>({name:r.name,size:r.bytes.length,sha256:hash(r.bytes),base64:r.bytes.toString('base64')}))};
+ const baseline={...baselineBody,sha256:hash(JSON.stringify(baselineBody))};
+ f.options.installation.snapshot_sha256=baseline.sha256;f.options.record.state_receipt_sha256=hash(JSON.stringify(f.options.installation));
+ const snapshot=await snapshotNativeJobs(f.options);
+ const parent=f.root+'/managed';fs.mkdirSync(parent,{mode:0o755});fs.mkdirSync(parent+'/jobs',{mode:0o700});
+ for(const r of f.records)fs.writeFileSync(parent+'/jobs/'+r.name,r.bytes,{mode:0o600});
+ const plan=planManagedRestore({...f.options,snapshot,baseline});
+ const execute=c=>f.execute(c.replaceAll('/opt/couchroot-agent',parent));
+ const run=async c=>{const r=await execute(c);assert.equal(r.exit_code,0,r.stderr);return r.stdout;};
+ return {snapshot,baseline,parent,plan,execute,run};
+}
+test('managed rollback replaces inventory exactly and retains original bytes across cutover interruption',linux,()=>fixture(async f=>{
+ // Forget one existing record and change the retained result under native.
+ fs.unlinkSync(f.jobs+'/'+f.records[0].name);
+ const changed=Buffer.from(f.records[1].bytes.toString().replace('unknown','interrupted'));fs.writeFileSync(f.jobs+'/'+f.records[1].name,changed);
+ const r=await restoreFixture(f);await r.run(r.plan.begin);for(const c of r.plan.copies)await r.run(c);
+ assert.equal(await r.run(r.plan.inspect),'RESTORE-STAGED\n');
+ await r.run(r.plan.retire);assert.equal(fs.existsSync(r.parent+'/jobs'),false);
+ // A restart can identify the exact two-rename window without replaying retire.
+ assert.equal(await r.run(r.plan.inspect),'RESTORE-CUTOVER\n');await r.run(r.plan.publish);
+ assert.equal(await r.run(r.plan.inspect),'RESTORE-READY\n');await r.run(r.plan.verify);
+ assert.deepEqual(fs.readdirSync(r.parent+'/jobs'),[f.records[1].name]);assert.deepEqual(fs.readFileSync(r.parent+'/jobs/'+f.records[1].name),changed);
+ const backup=r.parent+'/rollback-'+f.options.record.id+'/previous';for(const old of f.records)assert.deepEqual(fs.readFileSync(backup+'/'+old.name),old.bytes);
+ assert.notEqual((await r.execute(r.plan.retire)).exit_code,0);assert.notEqual((await r.execute(r.plan.publish)).exit_code,0);
+}));
+test('managed restoration rejects drift, foreign staging and live native processes without replacing baseline',linux,async()=>{
+ for(const mode of ['baseline','extra','symlink','worker'])await fixture(async f=>{
+  const r=await restoreFixture(f);await r.run(r.plan.begin);for(const c of r.plan.copies)await r.run(c);
+  const staged=r.parent+'/rollback-'+f.options.record.id+'/next';
+  if(mode==='baseline')fs.writeFileSync(r.parent+'/jobs/'+f.records[0].name,'changed');
+  if(mode==='extra')fs.writeFileSync(staged+'/extra','unexpected');
+  if(mode==='symlink'){fs.unlinkSync(staged+'/'+f.records[0].name);fs.symlinkSync(r.parent+'/jobs/'+f.records[0].name,staged+'/'+f.records[0].name);}
+  if(mode==='worker'){fs.mkdirSync(f.root+'/proc/52');fs.writeFileSync(f.root+'/proc/52/stat','52 (worker) S '+Array(18).fill('0').join(' ')+' 200 0\n');}
+  assert.notEqual((await r.execute(r.plan.retire)).exit_code,0);assert(fs.existsSync(r.parent+'/jobs'));assert(!fs.existsSync(r.parent+'/rollback-'+f.options.record.id+'/previous'));
+ });
+});
+test('managed restore supports empty and full inventories and rejects altered snapshot receipts',linux,async()=>{
+ for(const count of [0,64])await fixture(async f=>{
+  const r=await restoreFixture(f);assert.throws(()=>planManagedRestore({...f.options,snapshot:{...r.snapshot,sha256:'f'.repeat(64)},baseline:r.baseline}));
+  if(count===0)fs.rmdirSync(r.parent+'/jobs');
+  await r.run(r.plan.begin);for(const c of r.plan.copies)await r.run(c);await r.run(r.plan.retire);await r.run(r.plan.publish);await r.run(r.plan.verify);
+  assert.equal(fs.readdirSync(r.parent+'/jobs').length,count);
+ },count);
+});
