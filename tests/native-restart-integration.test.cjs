@@ -8,7 +8,7 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready'])test('service restart reconciles an interrupted forward trial ('+mode+')',{
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready'])test('service restart reconciles an interrupted forward trial ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
@@ -46,6 +46,13 @@ done
   constructor(options){super({...options,onConnect:peer=>{const executable=fs.readlinkSync('/proc/'+peer.identity.pid+'/exe'),launched=children.find(v=>v.child.pid===peer.identity.pid||v.command===executable);assert(launched);peer.identity.smack=launched.command==='dotnet'?'User':'System';options.onConnect(peer);}});servers.push(this);commands.set(this,[]);}
   async execute(command,timeout){
    syncUnits();commands.get(this).push(command);
+   if(command.includes('NATIVE-RESTART-SUBMITTED')){
+    const filename=fs.readdirSync(state).find(n=>n.endsWith('.startup.json')),a=JSON.parse(fs.readFileSync(state+'/'+filename)),r=JSON.parse(fs.readFileSync(state+'/'+a.origin_id+'.production.json'));
+    assert.equal(a.phase,'submitted');assert.equal(sha(fs.readFileSync(a.token_file)),a.token_sha256);
+    fs.copyFileSync(a.token_file,r.scope+'/token');fs.chmodSync(r.scope+'/token',0o600);
+    start(r.directory+'/code/worker',['127.0.0.1',String(a.port),r.scope+'/token',r.scope,r.scope+'/launcher',launcherSha,'--production'],r.unit);
+    return {exit_code:0,timed_out:false,stdout:'NATIVE-RESTART-SUBMITTED\n',stderr:''};
+   }
    if(command.includes('FALLBACK-RUNTIME-VERIFIED'))command=command.replaceAll('/usr/bin/dotnet','/opt/dotnet/bin/dotnet');
    if(command.includes('MANAGED-VERIFIED')){
     // As in the rehearsal fixture: substitute only the TV runtime/mount gate.
@@ -77,13 +84,15 @@ done
    if(inject)inject(name,module);return module.exports;
   };
  }
- const until=async(predicate,ms=5000)=>{const end=Date.now()+ms;while(!await predicate()){if(Date.now()>end)throw Error('Restart rehearsal deadline '+children.map(c=>c.stderr()).join('\n'));await pause();}};
+ const until=async(predicate,ms=5000)=>{const end=Date.now()+ms;while(!await predicate()){if(Date.now()>end)throw Error('Restart rehearsal deadline '+JSON.stringify(second&&second.restartInventory())+' '+children.map(c=>c.stderr()).join('\n'));await pause();}};
  const createAgent=load=>load('agent').createAgent({device:'qn90a',hashes:{'/usr/bin/dotnet':runtimeSha}},{selectionFile,verifyFirmware:()=>{},managedVersion:()=>managed,restartRollbackRetryMs:200});
  // Acquisition: the fixture starts the managed parity worker against the agent's listener.
- async function acquire(agent){const before=servers.length;agent.start();await until(()=>servers.length>before&&servers[servers.length-1].listeningPort());const server=servers[servers.length-1];fs.writeFileSync(root+'/token',server.secret.toString('base64'),{mode:0o600});return {server,worker:start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(server.listeningPort()),root])};}
+ async function acquire(agent){const before=servers.length;agent.start();await until(()=>servers.length>before&&servers[servers.length-1].listeningPort(),12000);const server=servers[servers.length-1];fs.writeFileSync(root+'/token',server.secret.toString('base64'),{mode:0o600});return {server,worker:start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(server.listeningPort()),root])};}
  const injected=Error('injected service restart');
  try{
   first=createAgent(loader(new Map(),(name,module)=>{
+   if(name==='managed-return'&&['return-prepared','return-stopped'].includes(mode)){const create=module.exports.createManagedReturn;module.exports.createManagedReturn=o=>{if(mode==='return-prepared')o.openRetirement=async()=>{throw injected;};else{const stop=o.hold.shutdownNative;o.hold.shutdownNative=async(...a)=>{await stop(...a);throw injected;};}return create(o);};}
+   if(name==='managed-session'&&mode.startsWith('return-')&&mode.endsWith('ready')){const open=module.exports.openManagedSession;module.exports.openManagedSession=async o=>{if(mode==='return-state-ready')throw injected;await open(o);throw injected;};}
    if(name==='production-session'&&['state-ready','trial-ready'].includes(mode)){const open=module.exports.openProductionSession;module.exports.openProductionSession=async options=>{if(mode==='state-ready')throw injected;await open(options);throw injected;};}
   }));
   const source=await acquire(first);await until(()=>first.status().worker_ready);
@@ -93,6 +102,30 @@ done
    if(mode==='abandon-prepared')hold.prepareNative=async()=>{throw injected;};
    if(mode==='provider-ready'){const prepare=hold.prepareNative;hold.prepareNative=async id=>{await prepare(id);throw injected;};}
    return hold;};
+  if(mode.startsWith('native-')||mode.startsWith('return-')){
+   await first.migrateNative(native,runtimeSha);const before=first.status(),id=before.native_runtime.transaction_id,history=JSON.stringify(before.worker_selection.history),committed=fs.readFileSync(state+'/'+id+'.production.json'),activation=fs.readFileSync(state+'/'+id+'.activation.json');
+   await first.operation({op:'job.start',id:'native-keep-00001',profile:'root',timeout_ms:1000,command:'exit 9'});await until(async()=>(await first.operation({op:'status'})).resources.jobs.every(j=>j.monitor_finished));
+   let returnId=null;
+   if(mode.startsWith('return-')){
+    const hold=first.holdAdmission;first.holdAdmission=o=>{const h=hold(o);if(mode==='return-prepared')h.openReturnProvider=async()=>{throw injected;};if(mode==='return-stopped'){const stop=h.shutdownNative;h.shutdownNative=async(...a)=>{await stop(...a);throw injected;};}return h;};
+    await assert.rejects(first.returnManaged(runtimeSha,'original-return-request-0001'));returnId=first.status().worker_selection.pending.id;
+   }
+   const old=children.slice();
+   if(mode==='native-lost')servers[servers.length-1]._conn._socket.destroy();else{first.stop();for(const s of servers.slice())s.close();}
+   await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
+   second=mode==='native-committed'||mode.startsWith('return-')?createAgent(loader(new Map())):first;await acquire(second);
+   await until(()=>second.status().worker_ready,15000);
+   if(mode.startsWith('return-')){
+    const after=second.status();assert.equal(after.selected_implementation,'managed');assert.equal(after.worker_selection.history.slice(-1)[0].id,returnId);assert.equal(after.worker_selection.history.length,2);
+    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(second.restartInventory().boundary,'settled');assert.equal(second.restartInventory().restart_return.phase,'complete');return;
+   }
+   const after=second.status();assert.equal(after.selected_implementation,'native-prototype');assert.notEqual(after.worker_id,before.worker_id);assert.equal(after.native_runtime.transaction_id,id);assert.equal(JSON.stringify(after.worker_selection.history),history);
+   assert.deepEqual(fs.readFileSync(state+'/'+id+'.production.json'),committed);assert.deepEqual(fs.readFileSync(state+'/'+id+'.activation.json'),activation);
+   assert.equal((await second.execute('printf restarted',1000)).stdout,'restarted');assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);
+   await second.returnManaged(runtimeSha).catch(e=>{for(let c=e;c;c=c.cause)console.error(c.stack);throw e;});assert.equal(second.status().worker_ready,true);assert.equal(second.status().selected_implementation,'managed');
+   assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
+   assert.equal(second.restartInventory().boundary,'settled');return;
+  }
   await assert.rejects(first.rehearseNative(native,runtimeSha),e=>{for(let c=e;c;c=c.cause)if(c===injected)return true;return false;});
   const pending=load=>load('worker-selection').selectionStatus(selectionFile).pending;
   const id=pending(loader(new Map()))&&pending(loader(new Map())).id;assert(id);

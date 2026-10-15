@@ -28,7 +28,7 @@ test('forward transition distinguishes not-submitted, unknown and verified steps
  f.write(obs+'.retirement.json',{phase:'complete'});f.write(id+'.activation.json.pending','x');r=f.state();assert.equal(statuses(r)['provider-retirement'],'verified-complete');assert.equal(statuses(r)['native-activation'],'submitted-unknown');assert.equal(r.action,'pending-reconciliation');
  f.write(id+'.activation.json',{phase:'active'});assert.equal(statuses(f.state())['native-activation'],'submitted-unknown','a published receipt with its intent is not finished');
  for(const n of [id+'.activation.json.pending','production-launch.pending','state-install.pending','retirement-launch.pending'])fs.rmSync(f.dir+'/'+n,{force:true});
- r=f.state();assert(Object.values(statuses(r)).every(s=>s==='verified-complete'));assert.equal(r.boundary,'native-active');assert.equal(r.action,'none');assert.match(r.diagnostics.join('\n'),/cold start, which is not integrated/);
+ r=f.state();assert(Object.values(statuses(r)).every(s=>s==='verified-complete'));assert.equal(r.boundary,'native-active');assert.equal(r.action,'none');assert.match(r.diagnostics.join('\n'),/held managed bootstrap/);
 }));
 test('return transition classifies native stop, restoration, managed launch, retirement and activation',()=>fixture(f=>{
  const origin=f.journal.begin(1,native,d('c')).pending.id;f.journal.advance(2,origin,'state-ready',d('d'));f.journal.advance(3,origin,'trial-ready',d('e'));f.journal.commit(4,origin);

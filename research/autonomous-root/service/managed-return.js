@@ -3,6 +3,7 @@
 const fs=require('fs'),path=require('path');
 const {hash}=require('./policy');
 const {privateRead,privateDirectory}=require('./private-state');
+const {runtimeRead,nativeReadiness}=require('./native-runtime');
 const {SelectionJournal,managedVersion}=require('./worker-selection');
 const {validateLaunch}=require('./production-readiness');
 const {openManagedSession}=require('./managed-session');
@@ -11,7 +12,7 @@ const {validateSnapshot}=require('./retained-install');
 function check(ok){if(!ok)throw Error('Managed return prerequisites unavailable');}
 // Without a live provider (native already active), openRetirement launches one
 // through the native worker only after the return transition is journaled.
-function createManagedReturn({hold,retirement,openRetirement,record,payload,selectionFile,runtimeSha256}){
+function createManagedReturn({hold,retirement,openRetirement,record,payload,selectionFile,runtimeSha256,requestId}){
  record=JSON.parse(JSON.stringify(record));
  let entered=false,closed=false,begun=false,phase='idle',failedPhase=null,id=null,session=null,resuming=false,continueReturn=null;
  const status=()=>({phase,failed_phase:failedPhase,transaction_id:id,origin_id:record.id});
@@ -27,16 +28,17 @@ function createManagedReturn({hold,retirement,openRetirement,record,payload,sele
    const directory=path.dirname(selectionFile),st=fs.lstatSync(directory);check(privateDirectory(st));
    for(const name of ['managed-restore.pending','managed-launch.pending'])try{fs.lstatSync(path.join(directory,name));throw Error('Managed return requires reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}
    const journal=new SelectionJournal(selectionFile),initial=journal.read(),h=initial&&initial.history[initial.history.length-1],managed=managedVersion(payload);
-   check(initial&&!initial.pending&&initial.selected.implementation==='native-prototype'&&initial.selected.manifest_sha256===record.manifest_sha256&&h&&h.id===record.id&&h.outcome==='committed'&&h.from.implementation==='managed'&&h.from.manifest_sha256===managed&&h.readiness_sha256===hash(JSON.stringify(record))&&h.state_sha256===record.state_receipt_sha256);
+   check(initial&&!initial.pending&&initial.selected.implementation==='native-prototype'&&initial.selected.manifest_sha256===record.manifest_sha256&&h&&h.id===record.id&&h.outcome==='committed'&&h.from.implementation==='managed'&&h.from.manifest_sha256===managed&&h.readiness_sha256===nativeReadiness(directory,record)&&h.state_sha256===record.state_receipt_sha256);
    const inputs={record,installation:JSON.parse(privateRead(path.join(directory,record.id+'.state-install.json'),262144)),baseline:JSON.parse(privateRead(path.join(directory,record.id+'.retained-snapshot.json'),262144))};
    planNativeSnapshot(record,inputs.installation);validateSnapshot(inputs.baseline);check(inputs.baseline.sha256===inputs.installation.snapshot_sha256&&JSON.stringify(inputs.baseline.source)===JSON.stringify(record.source));
    const saved=[[record.id+'.production.json',JSON.stringify(record)],[record.id+'.state-install.json',JSON.stringify(inputs.installation)],[record.id+'.retained-snapshot.json',JSON.stringify(inputs.baseline)]];
-   const owned=()=>{check(!closed);for(const [name,text] of saved)check(privateRead(path.join(directory,name),262144)===text);};owned();
+   const owned=()=>{check(!closed);for(const [name,text] of saved)check(runtimeRead(path.join(directory,name),262144)===text);};owned();
    move('draining');const inventory=await hold.snapshotNative();owned();
    check(JSON.stringify({boot_id:inventory.boot_id,worker_id:inventory.worker_id,processes:inventory.processes})===JSON.stringify(worker_identity));
    const r=inventory.resources;check(r&&!r.transfers.length&&!r.helpers.length&&r.jobs.every(j=>j.monitor_finished&&['completed','cancelled','timed_out','interrupted'].includes(j.state)));
    check(JSON.stringify(journal.read())===JSON.stringify(initial));begun=true;
    const transition=journal.begin(initial.revision,{implementation:'managed',manifest_sha256:managed},hash(JSON.stringify(inventory)));id=transition.pending.id;
+   if(requestId){check(/^[-a-zA-Z0-9]{16,64}$/.test(requestId));require('./policy').atomic(path.join(directory,id+'.return-request.json'),{schema:1,id,origin_id:record.id,request_id:requestId,runtime_sha256:runtimeSha256});}
    continueReturn=async stopped=>{owned();check(stopped.phase==='stopped'&&stopped.id===id&&stopped.origin_id===record.id&&stopped.inventory_sha256===transition.pending.quiescence_sha256);
    const provider=retirement.provider;move('restoring-state');await provider.snapshotNativeJobs(inputs);owned();const restored=await provider.restoreManagedState({journalDirectory:directory,selectionFile});owned();check(restored.phase==='restored'&&restored.transition_id===id&&restored.id===record.id);
    const accepted=await provider.acceptManagedRestore({journalDirectory:directory,selectionFile});owned();check(accepted.pending&&accepted.pending.id===id&&accepted.pending.phase==='state-ready'&&accepted.pending.state_sha256===restored.receipt_sha256);

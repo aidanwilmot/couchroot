@@ -22,7 +22,7 @@ function inventoryRestart(selectionFile){
  let transaction=null,direction=null,origin=null;
  if(pending&&ID.test(pending.id)){transaction=pending.id;direction=pending.to.implementation==='managed'?'to-managed':'to-native';}
  else if(last&&last.outcome==='committed'&&ID.test(last.id)&&last.to&&last.to.implementation!=='managed')transaction=last.id,direction='to-native';
- else if(last&&last.outcome==='committed'&&ID.test(last.id)&&last.to&&last.to.implementation==='managed'&&last.from&&last.from.implementation==='native-prototype'&&(phaseOf(last.id+'.managed-activation.json')!=='active'||markers.length))transaction=last.id,direction='to-managed';
+ else if(last&&last.outcome==='committed'&&ID.test(last.id)&&last.to&&last.to.implementation==='managed'&&last.from&&last.from.implementation==='native-prototype'&&(phaseOf(last.id+'.managed-activation.json')!=='active'&&phaseOf(last.id+'.restart-return.json')!=='complete'||markers.length))transaction=last.id,direction='to-managed';
  if(direction==='to-managed'){const prior=pending?last:history[history.length-2];origin=prior&&ID.test(prior.id)&&prior.to&&prior.to.implementation==='native-prototype'?prior.id:null;}
  const native=direction==='to-native'?transaction:origin,committed=id=>!!id&&history.some(h=>h.id===id&&h.outcome==='committed');
  if(native){
@@ -44,6 +44,7 @@ function inventoryRestart(selectionFile){
    const active=phaseOf(native+'.activation.json'),intent=exists(native+'.activation.json.pending'),teardown=['shutdown','cleanup','finish'].some(k=>exists(obs+'.retirement.json.'+k+'.pending'));
    step('provider-retirement',provider==='complete'||active==='active'?'verified-complete':teardown||['shutdown-acknowledged','shutdown-observed','staging-retired'].includes(provider)?'submitted-unknown':'not-submitted',[provider&&'provider-retirement:'+provider,teardown&&'provider-teardown-pending']);
    step('native-activation',active==='active'&&!intent?'verified-complete':active||intent?'submitted-unknown':'not-submitted',[active&&native+'.activation.json:'+active,intent&&native+'.activation.json.pending']);
+   const startup=phaseOf(native+'.startup.json');if(startup)step('native-startup',startup==='ready'?'verified-complete':'submitted-unknown',[native+'.startup.json:'+startup]);
   }
  }
  // A return from an activated native launches its own provider through native.
@@ -74,7 +75,7 @@ function inventoryRestart(selectionFile){
  if(selection.phase==='inspection-required')diagnostics.push('selection journal requires inspection: '+selection.reason);
  if(unknown.length)diagnostics.push('submitted with unknown outcome: '+unknown.join(', ')+'; verify through an independent executor before any further mutation');
  if(pending&&!unknown.length)diagnostics.push('transition '+pending.phase+' has no unknown submission; '+(open?'next unsubmitted step: '+open.name:'all steps verified; selection publication remains'));
- if(!pending&&selection.phase==='stable'&&selection.selected_implementation!=='managed')diagnostics.push(open?'native selected without verified activation; return to managed requires the durable native state':'native active; a service restart needs native cold start, which is not integrated');
+ if(!pending&&selection.phase==='stable'&&selection.selected_implementation!=='managed')diagnostics.push(open?'native selected without verified activation; return to managed requires the durable native state':'native active; startup verifies the committed receipts and reacquires through a held managed bootstrap');
  for(const name of markers)diagnostics.push('ownership marker present: '+name);
  const settled=selection.phase==='stable'&&selection.selected_implementation==='managed'&&!markers.length&&!unknown.length;
  const nativeActive=selection.phase==='stable'&&selection.selected_implementation==='native-prototype'&&direction==='to-native'&&!markers.length&&!unknown.length&&!open;

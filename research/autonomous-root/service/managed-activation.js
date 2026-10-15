@@ -3,6 +3,7 @@
 const fs=require('fs'),path=require('path');
 const {hash,atomic}=require('./policy');
 const {privateRead}=require('./private-state');
+const {readRuntime,nativeReadiness}=require('./native-runtime');
 const {verifyManagedCompletion}=require('./managed-completion');
 const {selectionStatus}=require('./worker-selection');
 function check(ok){if(!ok)throw Error('Managed activation ownership unavailable');}
@@ -15,9 +16,9 @@ function cleanupSteps(native,managed,journalDirectory,includeNative){
  return steps;
 }
 function verifyNativeActivation(native,journalDirectory,selectionFile){
-  const active=JSON.parse(privateRead(path.join(journalDirectory,native.id+'.activation.json'),16384)),selected=selectionStatus(selectionFile);
-  check(selected.history&&selected.history.some(h=>h.id===native.id&&h.outcome==='committed'&&h.to.implementation==='native-prototype'&&h.to.manifest_sha256===native.manifest_sha256&&h.readiness_sha256===hash(JSON.stringify(native))));
-  check(active.schema===1&&active.id===native.id&&active.phase==='active'&&active.boot_id===native.boot_id&&active.manifest_sha256===native.manifest_sha256&&active.readiness_sha256===hash(JSON.stringify(native))&&JSON.stringify(active.worker_identity)===JSON.stringify(native.worker_identity));
+  const active=JSON.parse(privateRead(path.join(journalDirectory,native.id+'.activation.json'),16384)),selected=selectionStatus(selectionFile),readiness=nativeReadiness(journalDirectory,native),original=readRuntime(journalDirectory,native.id).original;
+  check(selected.history&&selected.history.some(h=>h.id===native.id&&h.outcome==='committed'&&h.to.implementation==='native-prototype'&&h.to.manifest_sha256===native.manifest_sha256&&h.readiness_sha256===readiness));
+  check(active.schema===1&&active.id===native.id&&active.phase==='active'&&active.boot_id===native.boot_id&&active.manifest_sha256===native.manifest_sha256&&active.readiness_sha256===readiness&&JSON.stringify(active.worker_identity)===JSON.stringify(original.worker_identity));
 }
 async function resumeManaged(options,managed,proof,inputsText,file,intent){
  const {journalDirectory,selectionFile}=options,native=JSON.parse(inputsText).record,activation=activationRecord(managed,proof),text=JSON.stringify(activation);

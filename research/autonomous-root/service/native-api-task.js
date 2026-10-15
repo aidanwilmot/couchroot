@@ -41,7 +41,7 @@ function createNativeTasks({agent,journal}){
   returnManaged:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|runtime_sha256'&&id(value.id)&&digest(value.runtime_sha256));
    check((!task||task.state==='completed'&&['native.migrate','native.resume-native'].includes(task.kind))&&typeof agent.returnManaged==='function');const s=agent.status();check(s.connected&&s.worker_ready===true&&!s.admission_held&&s.selected_implementation==='native-prototype'&&s.native_runtime);
-   return launch('native.return-managed',value,()=>agent.returnManaged(value.runtime_sha256),value.id);
+   return launch('native.return-managed',value,()=>agent.returnManaged(value.runtime_sha256,value.id),value.id);
   },
   cleanupRestart:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|transaction_id'&&id(value.id)&&typeof value.transaction_id==='string'&&/^[a-f0-9]{32}$/.test(value.transaction_id));
@@ -50,8 +50,8 @@ function createNativeTasks({agent,journal}){
   },
   resume:value=>{
    check(value&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='id|rehearsal_id'&&id(value.id)&&id(value.rehearsal_id)&&value.id!==value.rehearsal_id);
-   check(task&&task.rehearsal_id===value.rehearsal_id&&task.state==='unknown'&&typeof agent.resumeManagedActivation==='function');
-   return launch('native.resume-managed',value,()=>agent.resumeManagedActivation(),value.rehearsal_id);
+   check(typeof agent.resumeManagedActivation==='function'&&(task&&task.rehearsal_id===value.rehearsal_id&&task.state==='unknown'||!task&&typeof agent.canResumeManaged==='function'&&agent.canResumeManaged(value.rehearsal_id)&&journal.rows.some(r=>r.id===value.rehearsal_id)));
+   return launch('native.resume-managed',value,()=>agent.resumeManagedActivation(value.rehearsal_id),value.rehearsal_id);
   }
  });
 }

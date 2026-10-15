@@ -52,7 +52,7 @@ exit is recovered by republishing the retained evidence; that case is tested
 locally only. Status keeps the original failed phase and causes after a
 successful recovery; the operation state and migration phase show the outcome.
 
-### Native public admission (local only)
+### Native public admission (installed migration candidate)
 
 `POST /v1/native/migrate` accepts exactly `{id, manifest_sha256,
 runtime_sha256}` and has the same preconditions, fallback-runtime check and
@@ -95,9 +95,10 @@ remain available through managed `job.status`. The client command is
 ENROLLED_RUNTIME_SHA256`. The durable inventory reports the return provider as
 `return-provider-launch`.
 
-A service restart, disable/enable or a lost native transport still leaves native
-selected without a cold start, so admission stays closed with diagnostics.
-These routes are not qualified on hardware.
+Selected-native startup now reconstructs the runtime on the same boot; see
+[recovery](#selected-native-recovery). Signed 0.7.27 passed native admission,
+disable/enable, worker transport loss, service restart and return to managed
+on both supported TVs. Pending-return restart recovery is locally qualified.
 
 ### Restart reconciliation of an uncommitted forward trial
 
@@ -113,9 +114,9 @@ requests and read-only root commands. The service checks the following:
 
 It then records a `rolled-back` selection outcome under a durable intent.
 Admission opens only after that commit. A pending launch that has no provider
-record is still blocked, because the source identity is unknown. So are committed
-native selections, return transitions, writer locks, unknown files, cross-boot
-records and a changed managed package. `GET /v1/native/status` reports the
+record is still blocked, because the source identity is unknown. Activated native selections and pending active-native returns use the separate
+startup recovery path below. Writer locks, unknown files, cross-boot records and
+a changed managed package remain blocked. `GET /v1/native/status` reports the
 attempt as `durable.restart_rollback`.
 
 Staging, units and ownership markers survive the rollback. While they remain,
@@ -839,3 +840,22 @@ supports unprivileged pidfd binding and exit polling, verified across an ordinar
 native sidecar's shutdown. A production pidfd bridge and actual wrt-service
 integration remain required. The probes match service credentials in separate
 processes; they do not update or exercise new code inside the installed service.
+
+## Selected-native recovery
+
+An activated native selection now survives service restart, disable/enable and
+worker transport loss on the same boot. A temporary managed bootstrap acquires
+root using the existing SDK and archive path, with public admission closed,
+then verifies and launches native from the committed staging. The original
+selection and activation receipts remain unchanged; a separate runtime receipt
+binds the new worker identity. `.NET` remains required for this acquisition path.
+
+Transfer/helper IDs and in-memory job output belong to the worker lifetime.
+Retained job metadata survives; interrupted public operations retain unknown
+outcomes and are never replayed. A stale or cross-boot binding refuses admission.
+A pending active-native return is reconciled under its original transaction,
+including existing restore receipts and any previous managed launch. Status
+reports `durable.native_startup` and `durable.restart_return`. An explicit
+`resume-managed` after restart must name the original return request ID.
+Previously launched managed staging is retained and reported after return
+recovery; native/provider staging is removed only after exact verification.

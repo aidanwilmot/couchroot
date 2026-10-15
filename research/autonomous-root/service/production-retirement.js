@@ -4,6 +4,7 @@
 const fs=require('fs'),path=require('path');
 const {atomic,hash}=require('./policy');
 const {privateRead,privateDirectory}=require('./private-state');
+const {runtimeRead,nativeReadiness}=require('./native-runtime');
 const {selectionStatus}=require('./worker-selection');
 const {planManagedRestore}=require('./managed-restore-plan');
 const {planNativeSnapshot}=require('./native-retained-state');
@@ -51,7 +52,7 @@ async function retireProduction({managed,journalDirectory,selectionFile,execute,
  const refs=[[managed.origin_id+'.production.json',JSON.stringify(inputs.record)],[managed.id+'.managed-launch.json',JSON.stringify(managed)],[managed.origin_id+'.state-install.json',JSON.stringify(inputs.installation)]];
  const restoreFile=path.join(journalDirectory,managed.id+'.managed-restore.json'),restoreText=privateRead(restoreFile,16384),expectedRestore={...planManagedRestore(inputs).receipt,transition_id:managed.id,quiescence_sha256:h.quiescence_sha256,input_sha256:hash(inputText)};check(hash(restoreText)===managed.state_receipt_sha256&&restoreText===JSON.stringify(expectedRestore));
  check(h.from.implementation===(rollback?'managed':'native-prototype')&&h.to.implementation===(rollback?'native-prototype':'managed')&&h.from.manifest_sha256===(rollback?managed.manifest_sha256:inputs.record.manifest_sha256)&&h.to.manifest_sha256===(rollback?inputs.record.manifest_sha256:managed.manifest_sha256));
- const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(selected)&&privateRead(inputFile,524288)===inputText&&privateRead(restoreFile,16384)===restoreText&&(verifyOnly||privateRead(path.join(journalDirectory,'managed-restore.pending'),64)===managed.id+'\n'&&privateRead(path.join(journalDirectory,'managed-launch.pending'),64)===managed.id+'\n'));for(const [name,text] of refs)check(privateRead(path.join(journalDirectory,name),262144)===text);};
+ const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(selected)&&privateRead(inputFile,524288)===inputText&&privateRead(restoreFile,16384)===restoreText&&(verifyOnly||privateRead(path.join(journalDirectory,'managed-restore.pending'),64)===managed.id+'\n'&&privateRead(path.join(journalDirectory,'managed-launch.pending'),64)===managed.id+'\n'));for(const [name,text] of refs)check(runtimeRead(path.join(journalDirectory,name),262144)===text);};
  const confirm=async()=>{owned();const identity=await confirmManaged();owned();check(JSON.stringify(identity)===JSON.stringify(worker_identity)&&identity.worker_id!==managed.source.worker_id&&Object.values(managed.source.processes).every(p=>p.pid!==identity.processes.worker.pid));};
  await confirm();const file=path.join(journalDirectory,managed.origin_id+'.production-retirement.json'),intent=file+'.pending';
  const receipt={...plan.record,transition_id:managed.id,managed_readiness_sha256:hash(JSON.stringify(managed))};

@@ -72,6 +72,9 @@ class SelectionJournal {
  // Only a prepared transition with no state or readiness evidence may be abandoned.
  // The caller must independently prove that no remote mutation was submitted.
  abandon(revision,id){return this.change(revision,s=>{check(s&&s.pending&&s.pending.id===id&&s.pending.phase==='prepared'&&s.pending.state_sha256===null&&s.pending.readiness_sha256===null);const {phase,...receipt}=s.pending;return {...s,pending:null,history:s.history.concat({...receipt,outcome:'abandoned'}).slice(-32)};});}
+ // Rebind an uncommitted ready trial only after independent restart recovery
+ // proves the old executor absent. Its original launch receipt remains on disk.
+ rebindTrial(revision,id,previous,readiness){check(HEX.test(previous)&&HEX.test(readiness));return this.change(revision,s=>{check(s&&s.pending&&s.pending.id===id&&s.pending.phase==='trial-ready'&&s.pending.readiness_sha256===previous);s.pending.readiness_sha256=readiness;return s;});}
  commit(revision,id){return this.change(revision,s=>{check(s&&s.pending&&s.pending.id===id&&s.pending.phase==='trial-ready');const {phase,...receipt}=s.pending;return {...s,selected:s.pending.to,last_known_good:s.pending.to,pending:null,history:s.history.concat({...receipt,outcome:'committed'}).slice(-32)};});}
  commitRollback(revision,id,readiness){check(typeof readiness==='string'&&HEX.test(readiness));return this.change(revision,s=>{check(s&&s.pending&&s.pending.id===id&&s.pending.phase==='rollback-state-ready');const {phase,...receipt}=s.pending;receipt.readiness_sha256=readiness;return {...s,selected:s.pending.from,last_known_good:s.pending.from,pending:null,history:s.history.concat({...receipt,outcome:'rolled-back'}).slice(-32)};});}
 }

@@ -7,8 +7,13 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.26 packages from `54a06be`, with .NET selected and ready.
-On 0.7.26 each TV completed one native admission round: a committed migration
+Both TVs are on signed 0.7.27 packages, with .NET selected and ready after native
+startup acceptance. Each completed native disable/enable, worker transport loss,
+and a service restart while native was selected, then returned to managed with
+retained job records preserved. Committed history and activation records stayed
+unchanged across native reacquisition. See [startup evidence](startup-results.json).
+Pending-return restart recovery is locally qualified at four interruption points.
+Previously, on 0.7.26 each TV completed one native admission round: a committed migration
 opened public admission on native, public requests ran there, and the active
 native worker returned to managed through a provider it launched (see [native
 admission evidence](native-admission-results.json)). Each completed a normal
@@ -28,8 +33,8 @@ The trials held public admission while native was selected. Remaining work inclu
   installed service and enrolled client.
 - Recovery from earlier handoff failures, coordinator restart and provider loss,
   including durable reconciliation without replaying operations.
-- Handoff/rollback from an already active native worker and selected-native startup,
-  reconnect and maintenance lifecycle.
+- Hardware interruption of an active return to managed, and wider maintenance
+  lifecycle coverage beyond the same-boot startup checks.
 - Replacing agent-required managed acquisition, installation and recovery utilities.
 - Final production-binary performance, resource-pressure and endurance validation
   on both TVs; reboot and standby/resume gates remain unqualified.
@@ -2002,3 +2007,57 @@ TV then completed one round:
   committed history entries per TV.
 
 No failure, recovery route or restart was exercised on hardware.
+
+### Selected-native startup and pending managed returns — 2026-10-15
+
+A selected, activated native worker now starts through a temporary managed root
+executor acquired by the existing SDK / SamsungTvArchiveRoot path. Public
+admission stays closed throughout bootstrap. The executor proves the old native
+process identities absent and its systemd unit idle with an empty cgroup, checks
+retained jobs, and launches the existing digest-bound native staging with a new
+single-use token. Authentication, root/System identity, process start ticks,
+launcher digest, executable inode and systemd guardian readiness precede admission.
+The managed bootstrap then loses its transport and exits.
+
+Committed history, `<id>.production.json` and `<id>.activation.json` remain
+unchanged. `<id>.runtime.json` binds the current process identities to those
+original receipts. Return-to-managed consumers resolve this effective identity
+without changing the committed readiness digest. `<id>.startup.json` journals
+launch attempts; an uncertain attempt must have an empty unit before its token
+can be reconciled and a new attempt launched. Prior attempts are archived under
+unique IDs. Reacquisition never replays public commands, writes or jobs.
+
+Disable/enable clears obsolete coordinator handles. Losing an admitted native
+transport schedules acquisition with the existing bounded retry budget. A held
+transition continues to block ordinary acquisition. Cross-boot bindings remain
+refused; this milestone does not qualify reboot or standby.
+
+A pending active-native return is resumed through a fresh managed bootstrap
+under its original selection transaction. Recovery observes the old native,
+provider and any managed launch before touching retained state. Existing restore
+inputs and receipts drive the resumable restore plan; an uncertain mutation is
+inspected rather than submitted again. The bootstrap verifies every saved job,
+commits the original return, and removes digest-checked native/provider staging
+and ownership markers. A replaced uncommitted readiness binding has its own
+retained receipt. Original request IDs are stored separately so `resume-managed`
+after restart can bind to the original request; its unknown request-journal entry
+is not rewritten as a success. Previously launched managed code/staging remains
+as explicitly reported audit material after restart recovery.
+
+Local qualification: all 11 real-process restart cases and six rehearsal cases
+passed in fresh containers with rebuilt native and managed fixtures. The restart
+cases cover the four existing forward interruptions, committed-native restart,
+disable/enable, transport loss, and pending returns before provider launch, after
+native stop, after state restoration and after managed readiness. Native-created
+and imported retained job records survive. The Node suite passed 359 tests with
+125 platform/environment skips. Hardware qualification follows below.
+
+Signed 0.7.27 passed the same-boot lifecycle round on both TVs. Each reacquired
+native after disable/enable, identity-bound worker termination (transport loss),
+and an application service restart; each then returned to managed with the
+imported job (exit 7) and native-created job (exit 9) preserved. Native/provider
+scopes were removed, rescue timers disarmed within their windows, SDK restored
+to loopback, and history settled at 14 entries. The first QN90A loss-test timer
+failed before signalling; inspection proved the worker unchanged before a new
+ID and corrected quoting were used. Test timers were reconciled separately.
+Pending-return interruption remains hardware-unqualified at this version.

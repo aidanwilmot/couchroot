@@ -76,3 +76,12 @@ test('managed return follows a completed migration, is journaled and recovers th
  const recovery={id:'native-recovery-0001',rehearsal_id:back.id};assert.equal(f.tasks.resume(recovery).state,'submitted');await tick();await tick();assert.equal(f.tasks.status().state,'completed');assert.equal(f.tasks.status().kind,'native.resume-managed');
  assert.deepEqual(f.journal.rows.map(r=>r.state),['completed','submitted','completed']);
 }));
+
+test('restart recovery binds the original journaled return ID without replaying it',()=>fixture(async f=>{
+ const original='original-return-0001';f.journal.begin({id:original,command:'native.return-managed',timeout_ms:25000});
+ f.agent.canResumeManaged=id=>id===original;let calls=0;f.agent.resumeManagedActivation=async id=>{assert.equal(id,original);calls++;return {selected_implementation:'managed',admission_held:false};};
+ assert.throws(()=>f.tasks.resume({id:'restart-recovery-0001',rehearsal_id:'unrelated-return-0001'}));
+ f.tasks.resume({id:'restart-recovery-0001',rehearsal_id:original});await tick();await tick();
+ assert.equal(calls,1);assert.equal(f.tasks.status().state,'completed');assert.equal(f.journal.rows[0].state,'submitted');assert.equal(f.journal.rows[1].state,'completed');
+ assert.throws(()=>f.tasks.resume({id:'restart-recovery-0001',rehearsal_id:original}));
+}));
