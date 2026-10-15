@@ -84,3 +84,46 @@ test('managed restore supports empty and full inventories and rejects altered sn
   assert.equal(fs.readdirSync(r.parent+'/jobs').length,count);
  },count);
 });
+
+const {restoreManagedJobs}=require('../research/autonomous-root/service/managed-restore');
+const {SelectionJournal,selectionStatus}=require('../research/autonomous-root/service/worker-selection');
+async function durableRestoreFixture(f,committed=false){
+ const r=await restoreFixture(f),journalDirectory=f.root+'/journal';fs.mkdirSync(journalDirectory,{mode:0o700});
+ const selectionFile=journalDirectory+'/selection.json',j=new SelectionJournal(selectionFile);let s=j.initialize({implementation:'managed',manifest_sha256:'e'.repeat(64)});
+ s=j.begin(s.revision,{implementation:'native-prototype',manifest_sha256:f.options.record.manifest_sha256},sha);
+ s.pending.id=f.options.record.id;fs.writeFileSync(selectionFile,JSON.stringify(s));
+ if(committed){s=j.advance(s.revision,s.pending.id,'state-ready',f.options.record.state_receipt_sha256);s=j.advance(s.revision,s.pending.id,'trial-ready',hash(JSON.stringify(f.options.record)));s=j.commit(s.revision,s.pending.id);s=j.begin(s.revision,{implementation:'managed',manifest_sha256:'e'.repeat(64)},sha);}
+ else s=j.advance(s.revision,s.pending.id,'rollback-required',sha);
+ for(const [suffix,value] of [['.production.json',f.options.record],['.state-install.json',f.options.installation],['.retained-snapshot.json',r.baseline]])fs.writeFileSync(journalDirectory+'/'+f.options.record.id+suffix,JSON.stringify(value),{mode:0o600});
+ const options={...f.options,baseline:r.baseline,snapshot:r.snapshot,journalDirectory,selectionFile,execute:r.execute};
+ return {...r,options,selection:s,marker:journalDirectory+'/managed-restore.pending'};
+}
+test('durable restore supports failed trial and committed native rollback without selecting or starting managed',linux,async()=>{
+ for(const committed of [false,true])await fixture(async f=>{
+  const r=await durableRestoreFixture(f,committed),before=selectionStatus(r.options.selectionFile),result=await restoreManagedJobs(r.options);
+  assert.equal(result.phase,'restored');assert.equal(result.transition_id,r.selection.pending.id);assert.deepEqual(selectionStatus(r.options.selectionFile),before);assert(fs.existsSync(r.marker));
+  assert.deepEqual(await restoreManagedJobs({...r.options,resume:true}),result);
+  await assert.rejects(restoreManagedJobs(r.options));
+ });
+});
+test('durable restore resumes lost replies without repeating completed directory moves',linux,async()=>{
+ for(const boundary of ['begin','copy','retire','publish'])await fixture(async f=>{
+  const r=await durableRestoreFixture(f),target=boundary==='copy'?r.plan.copies[0]:r.plan[boundary];let failed=false;
+  await assert.rejects(restoreManagedJobs({...r.options,execute:async c=>{const result=await r.execute(c);if(!failed&&c===target){failed=true;throw Error('lost reply');}return result;}}),e=>e.outcome==='unknown');assert(failed);assert(fs.existsSync(r.marker));
+  const replay=[];await restoreManagedJobs({...r.options,resume:true,execute:async c=>{replay.push(c);return r.execute(c);}});
+  if(['begin','retire','publish'].includes(boundary))assert(!replay.includes(target));
+  assert.equal(await r.run(r.plan.verify),'RESTORE-READY\n');
+ });
+});
+test('durable restore refuses changed native state, local ownership and selection on resume',linux,async()=>{
+ for(const mode of ['native','marker','selection','receipt'])await fixture(async f=>{
+  const r=await durableRestoreFixture(f);let interrupted=false;
+  await assert.rejects(restoreManagedJobs({...r.options,execute:async c=>{const result=await r.execute(c);if(c===r.plan.begin&&!interrupted){interrupted=true;throw Error('lost reply');}return result;}}));
+  if(mode==='native')fs.unlinkSync(f.jobs+'/'+f.records[0].name);
+  if(mode==='marker')fs.writeFileSync(r.marker,'f'.repeat(32)+'\n');
+  if(mode==='selection'){const s=JSON.parse(fs.readFileSync(r.options.selectionFile));s.pending.quiescence_sha256='f'.repeat(64);fs.writeFileSync(r.options.selectionFile,JSON.stringify(s));}
+  if(mode==='receipt')fs.writeFileSync(r.options.journalDirectory+'/'+f.options.record.id+'.production.json','{}');
+  await assert.rejects(restoreManagedJobs({...r.options,resume:true}));
+  assert(fs.existsSync(r.parent+'/jobs'));assert(!fs.existsSync(r.parent+'/rollback-'+f.options.record.id+'/previous'));
+ });
+});

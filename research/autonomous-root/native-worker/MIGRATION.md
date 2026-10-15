@@ -819,3 +819,33 @@ current native snapshot revalidation around restoration, admission ownership,
 early partial-copy reconciliation, managed restart/readiness and selection rollback
 must still be integrated before live use. Both TVs remain unchanged on managed
 fallback; no reboot or native production cutover was performed.
+
+### Durable managed state restoration — local follow-up
+
+Managed restoration now saves a private intent, complete input snapshot and receipt
+before submitting remote changes. It binds the production/readiness record,
+original installation and baseline snapshot to a held selection transition. It
+supports both rollback of a failed native trial and a new return transition after
+native selection was committed. Every remote operation checks unchanged local
+ownership/selection; native records are independently re-read before mutation,
+before each directory move and after publication.
+
+Resume inspects exact remote state rather than replaying completed moves. It can
+continue an absent destination, a partially copied inventory of complete verified
+records, the directory-swap gap or a completed publication whose reply was lost.
+Changed or truncated records, missing ownership metadata and unexpected entries
+remain unresolved and refuse automatic overwrite. The restore marker, original
+baseline backup and pending selection remain until managed readiness is accepted.
+The caller must retain exclusive admission/controller ownership throughout.
+
+The combined Linux suite passes 174 tests without skips. Lost-reply tests cover
+begin, record copy, baseline retirement and replacement publication. Drift tests
+cover native inventory, local marker, selection and durable production receipt.
+The real-process integration restores through an independent native connection
+after production shutdown, preserving ordinary and BOM-prefixed bytes and checking
+the retained baseline. Systemd/Smack/mount boundaries remain host fixtures.
+
+This is state restoration, not completed rollback: managed restart/readiness,
+selection acceptance and controller wiring remain open. Neither TV was changed or
+rebooted; .NET remains the deployed fallback. Full native cutover and sunset gates
+remain unfulfilled.

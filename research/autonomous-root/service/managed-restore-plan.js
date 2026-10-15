@@ -34,8 +34,9 @@ function planManagedRestore({record,installation,snapshot,baseline}){
  const begin=prefix+absent(directory)+oldOrEmpty+'mkdir '+directory+' '+next+'\n'+create(marker,data)+'sync\n'+owned+'printf "RESTORE-PENDING\\n"\n';
  const copies=snapshot.records.map(r=>prefix+owned+absent(backup)+old(jobs)+dir(next)+
   'if test -e '+next+'/'+r.name+' || test -L '+next+'/'+r.name+'; then\n'+file(next+'/'+r.name,r.sha256)+'else\n'+create(next+'/'+r.name,Buffer.from(r.base64,'base64'))+file(next+'/'+r.name,r.sha256)+'fi\n');
- const inspect=prefix+owned+'if test -e '+backup+' || test -L '+backup+'; then\n'+old(backup)+
-  'if test -e '+next+' || test -L '+next+'; then\n'+fresh(next)+absent(jobs)+'printf "RESTORE-CUTOVER\\n"\nelse\n'+absent(next)+fresh(jobs)+'printf "RESTORE-READY\\n"\nfi\nelse\n'+absent(backup)+old(jobs)+fresh(next)+'printf "RESTORE-STAGED\\n"\nfi\n'+native.guard;
+ const partial=dir(next)+'test "$(find '+next+' -mindepth 1 -maxdepth 1 '+snapshot.records.map(r=>'! -name '+r.name).join(' ')+' | wc -l)" -eq 0\n'+snapshot.records.map(r=>'if test -e '+next+'/'+r.name+' || test -L '+next+'/'+r.name+'; then\n'+file(next+'/'+r.name,r.sha256)+'fi\n').join('');
+ const inspect=prefix+'if test ! -e '+directory+'; then\n'+absent(directory)+'printf "RESTORE-ABSENT\\n"\nelse\n'+owned+'if test -e '+backup+' || test -L '+backup+'; then\n'+old(backup)+
+  'if test -e '+next+' || test -L '+next+'; then\n'+fresh(next)+absent(jobs)+'printf "RESTORE-CUTOVER\\n"\nelse\n'+absent(next)+fresh(jobs)+'printf "RESTORE-READY\\n"\nfi\nelse\n'+absent(backup)+old(jobs)+partial+'if test "$(find '+next+' -mindepth 1 -maxdepth 1 | wc -l)" -eq '+snapshot.records.length+'; then printf "RESTORE-STAGED\\n"; else printf "RESTORE-PENDING\\n"; fi\nfi\nfi\n'+native.guard;
  const retire=prefix+owned+absent(backup)+old(jobs)+fresh(next)+'sync\n'+native.guard+'mv '+jobs+' '+backup+'\nsync\n';
  const publish=prefix+owned+old(backup)+fresh(next)+absent(jobs)+native.guard+'mv '+next+' '+jobs+'\nsync\n'+native.guard+fresh(jobs)+'printf "RESTORE-READY\\n"\n';
  const verify=prefix+owned+old(backup)+absent(next)+fresh(jobs)+native.guard+'printf "RESTORE-READY\\n"\n';
