@@ -5,6 +5,11 @@ This is a source/caller inventory and removal plan, not a native-only qualificat
 The deployed managed payloads, SDK rescue utility and runtime remain available.
 See [migration status](MIGRATION.md) and [public contract](../CAPABILITIES.md).
 
+Follow-up: the [native SDK recovery utility](../recovery/native/README.md) now
+implements the conditional setting contract and has independent-rescue acceptance
+on both TVs. The .NET recovery bytes remain unchanged; older private deployment
+kits still use them until their callers explicitly adopt the native unit launch.
+
 ## Dependency paths
 
 | Entry point | Required managed path today | Why native selection does not remove it |
@@ -133,10 +138,10 @@ verifiable during the fallback window.
 
 ## Removal order and concrete next step
 
-1. Implement and qualify a native Recovery equivalent first. Add deterministic
-   tests with a fake vconf library for invalid arguments, drift, already-restored,
-   setter failure and failed readback; test the delay separately. Package it beside
-   the current utility, then qualify independent rescue and disarm on both TVs.
+1. Completed: the native Recovery equivalent, fake-vconf/error/delay tests,
+   reproducible ARM build and independent rescue on both TVs. Keep the managed
+   utility available and migrate individual private rescue callers only through
+   their journaled workflows and verified read-only code mounts.
 2. Establish the native capability-entry strategy on each supported firmware.
    Port the shared private-mount/archive mechanics and bounded setup runner, then
    qualify NamespaceRootProbe's replacement without depending on a running agent.
@@ -156,9 +161,9 @@ verifiable during the fallback window.
    Preserve a verified offline managed recovery release. Do not remove Samsung's
    system runtime or unrelated applications' managed components.
 
-The next implementation is step 1: a native, independently deployable SDK-host
-recovery utility with the existing conditional-change contract. No new native
-utility was installed during this inventory. The prerequisites delivered by the
-preceding milestones—immutable selection binding, fresh runtime receipts, held
-startup, same-transaction return recovery and operation parity—remain reusable
+The inventory itself installed no utility; the subsequent native SDK recovery
+milestone completed step 1. The next work is step 2: establish the capability-entry
+strategy before replacing the setup and service acquisition adapters. The
+prerequisites delivered by the preceding milestones—immutable selection binding,
+fresh runtime receipts, held startup, same-transaction return recovery and operation parity—remain reusable
 regardless of the eventual acquisition adapter.

@@ -915,3 +915,23 @@ The local seven-group managed/native differential suite, six process rehearsals
 and eleven restart scenarios passed with freshly rebuilt fixtures. The installed
 round is bounded acceptance, not a 2 GiB hardware transfer, endurance, reboot,
 standby/resume or native-default qualification. .NET remains required and deployed.
+
+
+## Independent native SDK rescue
+
+The [standalone native recovery utility](recovery/native/README.md) can restore
+`db/sdk/develop/ip` through system libvconf with no managed runtime or active
+Couchroot worker. It supports immediate conditional `set` and delayed `watch`,
+refuses drift and verifies readback. The caller still owns root acquisition,
+firmware/boot/digest checks, the private read-only executable mount, SDB restart,
+timer ownership and reconciliation. No new HTTP operation is added.
+
+Both TVs passed external SDK restoration while their worker was disabled and
+HTTPS coordinator suspended, then native restoration to loopback and managed
+readiness. Existing .NET rescue bytes, enrollment and retained state were
+preserved; the backup .NET timer never fired in the final acceptance rounds.
+Earlier S90D harness-resumption failures used the preserved backup; see the
+[migration record](native-worker/MIGRATION.md). The native utility is installed
+separately, leaving signed agent 0.7.28 unchanged. This closes the utility's runtime
+dependency, not the managed acquisition/bootstrap dependencies or all existing
+private rescue callers. Reboot and standby remain outside this qualification.

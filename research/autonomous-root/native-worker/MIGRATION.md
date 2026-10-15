@@ -46,6 +46,11 @@ rounds above. Native-default and .NET-free completion still require:
 - Native-default rollout, fallback observation, verified retirement of old staging,
   public release review and eventual removal of managed agent dependencies.
 
+The standalone [native SDK-host recovery utility](../recovery/native/README.md)
+now restores external SDK access independently of a suspended coordinator and
+disabled worker on both TVs, then restores loopback. The original .NET utility
+remains installed and unchanged; signed agent packages remain 0.7.28.
+
 The no-reboot constraint and deployed managed fallback remain in force. Earlier
 failed journals and staging are preserved separately, not marked successful by
 these later rehearsals.
@@ -2122,3 +2127,46 @@ selected-native bootstrap and managed return remain deployed fallback paths.
 Validation is source/caller inspection, resolved local documentation links,
 360 passing Node tests (125 platform/environment skips), and the privacy audit;
 there is no additional device-behavior change or hardware acceptance claim.
+
+
+### Native SDK-host recovery utility — 2026-10-15
+
+The standalone C utility preserves `Recovery.dll`'s conditional SDK-host change,
+late drift check, already-restored success, single setter call and readback
+verification. It requires both real/effective root and canonical arguments;
+there is no alternate key, production fault switch or retry. Ten Linux test
+groups use fake vconf and a separate clock/identity interposer; a real 30-second
+wait also verifies drift introduced while waiting. Two pinned-toolchain ARM builds
+are byte-identical, with GLIBC 2.4 maximum requirements and no managed dependency.
+
+Both TVs accepted `watch` rescue with the worker disabled and the identity-bound
+HTTPS coordinator suspended. External SDK access returned while the coordinator
+was still stopped and the 300-second .NET fallback remained armed. Prearmed
+resumption and a native reverse switch restored loopback, after which
+managed readiness, unchanged enrollment/selection/job bytes and the .NET utility digest
+were verified. All final-round timers were disarmed; the .NET rescue never fired
+in those final rounds. Earlier S90D trials restored SDK natively but lost their
+coordinator listener after suspension; the preserved .NET backup
+restored access for recovery. A trial relaunch unit also failed. The final harness
+keeps the native-restored SDK window open long enough to relaunch the service
+through SDK if its listener is unavailable, then restores loopback and enables
+the worker. Earlier trials remain separate evidence rather than completed
+acceptance; the cause of the platform listener loss is not established.
+
+QN90A initially refused direct execution from writable staging before any vconf
+call. Qualification then used the established root/System transient-unit pattern
+with a private read-only code bind on both TVs. No security policy or file
+capability was changed. The utility is installed separately beside the managed
+recovery material; no WGT update or selection migration was required.
+
+S90D exposed an undeclared `shm_open` import in system vconf. The final binary
+explicitly retains `librt.so.1`; a link regression check and fake library with
+the same import cover that dependency. Both TVs qualified the final identical
+bytes, including a fresh QN90A round after the link correction.
+
+Validation: ten Linux native groups passed; the repository Node suite passed
+360 tests (125 skips); Python discovery passed 252 tests (118 skips, including
+Linux-only cases exercised separately). The utility does not replace root
+acquisition, migrate every older deployment-kit caller, or qualify reboot/standby.
+See [contract and launch procedure](../recovery/native/README.md) and
+[aggregate evidence](../recovery/native/results.json).
