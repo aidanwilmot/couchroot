@@ -23,14 +23,23 @@ function productionRetirementPlan(inputs){
   'test "$(printf "%s\\n" "$state" | wc -l)" -eq 3\nprintf "%s\\n" "$state" | grep -qx "LoadState=\\(loaded\\|not-found\\)"\n'+
   'if printf "%s\\n" "$state" | grep -qx ActiveState=inactive && printf "%s\\n" "$state" | grep -qx MainPID=0; then stopped=1; break; fi\nsleep 0.1\ndone\ntest "$stopped" = 1\nverify_native\n'+
   'rm '+[d+'/code/worker',s+'/launcher',j+'/lock',j+'/.import-manifest',...snapshot.records.map(r=>j+'/'+r.name)].join(' ')+'\nrmdir '+j+' '+s+' '+d+'/code '+d+'\nsync\n'+native.guard+'test ! -e '+d+'; test ! -L '+d+'\nprintf "PRODUCTION-RETIRED\\n"\n';
- const verifyRetired=restored.verify+'export DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+native.guard+'test ! -e '+d+'; test ! -L '+d+'\n'+
-  'state=$(systemctl show -p LoadState -p ActiveState -p MainPID '+u+')\ntest "$(printf "%s\\n" "$state" | wc -l)" -eq 3\nprintf "%s\\n" "$state" | grep -qx ActiveState=inactive\nprintf "%s\\n" "$state" | grep -qx MainPID=0\n'+
+ const inactive='state=$(systemctl show -p LoadState -p ActiveState -p MainPID '+u+')\ntest "$(printf "%s\\n" "$state" | wc -l)" -eq 3\nprintf "%s\\n" "$state" | grep -qx ActiveState=inactive\nprintf "%s\\n" "$state" | grep -qx MainPID=0\n'+
   'if printf "%s\\n" "$state" | grep -qx LoadState=loaded; then\n'+[['ExecMainStartTimestampMonotonic',record.unit_started_monotonic],['ExecMainCode','1'],['ExecMainStatus','0']].map(([key,value])=>'test "$(systemctl show -p '+key+' '+u+')" = '+key+'='+value+'\n').join('')+
-  'else printf "%s\\n" "$state" | grep -qx LoadState=not-found; fi\n'+native.guard+'printf "PRODUCTION-ABSENT\\n"\n';
- check(Buffer.byteLength(command)<=65536&&Buffer.byteLength(verifyRetired)<=65536);return {command,verifyRetired,record:{schema:1,id:record.id,phase:'staging-retired',boot_id:record.boot_id,worker_identity:record.worker_identity,unit:u,unit_started_monotonic:record.unit_started_monotonic,snapshot_sha256:snapshot.sha256,installation_sha256:record.state_receipt_sha256}};
+  'else printf "%s\\n" "$state" | grep -qx LoadState=not-found; fi\n';
+ const prefix=restored.verify+'export DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+native.guard+inactive;
+ const absent='test ! -e '+d+'; test ! -L '+d+'\n';
+ const verifyRetired=prefix+absent+native.guard+'printf "PRODUCTION-ABSENT\\n"\n';
+ const remaining=[[d+'/code/worker','500',record.worker_sha256],[s+'/launcher','400',record.launcher_sha256],[j+'/lock','600',hash('')],[j+'/.import-manifest','600',installation.installed_manifest_sha256],...snapshot.records.map(r=>[j+'/'+r.name,'600',r.sha256])];
+ const optionalDir=(p,names)=>'if test -e '+p+' || test -L '+p+'; then\n'+dir(p)+'test "$(find '+p+' -mindepth 1 -maxdepth 1 '+names.map(n=>'! -name '+n).join(' ')+' | wc -l)" -eq 0\nfi\n';
+ const partialInventory=optionalDir(d,['code','state'])+optionalDir(d+'/code',['worker'])+optionalDir(s,['launcher','.jobs'])+optionalDir(j,['lock','.import-manifest',...snapshot.records.map(r=>r.name)])+
+  'remaining_file() { if test -e "$1" || test -L "$1"; then test -f "$1"; test ! -L "$1"; test "$(stat -c "%u:%h:%a" "$1")" = "0:1:$2"; test "$(sha256sum "$1" | cut -d " " -f1)" = "$3"; fi; }\n'+remaining.map(([p,m,h])=>'remaining_file '+p+' '+m+' '+h+'\n').join('');
+ const finishPartial=prefix+partialInventory+native.guard+
+  'for file in '+remaining.map(r=>r[0]).join(' ')+'; do if test -e "$file"; then rm "$file"; fi; done\n'+
+  'for directory in '+[j,s,d+'/code',d].join(' ')+'; do if test -d "$directory"; then rmdir "$directory"; fi; done\nsync\n'+inactive+native.guard+absent+'printf "PRODUCTION-ABSENT\\n"\n';
+ check(Buffer.byteLength(command)<=65536&&Buffer.byteLength(verifyRetired)<=65536&&Buffer.byteLength(finishPartial)<=65536);return {command,verifyRetired,finishPartial,record:{schema:1,id:record.id,phase:'staging-retired',boot_id:record.boot_id,worker_identity:record.worker_identity,unit:u,unit_started_monotonic:record.unit_started_monotonic,snapshot_sha256:snapshot.sha256,installation_sha256:record.state_receipt_sha256}};
 }
-async function retireProduction({managed,journalDirectory,selectionFile,execute,confirmManaged,resume=false}){
- check(typeof resume==='boolean'&&managed&&managed.phase==='ready');const {worker_identity,launcher_sha256,unit_started_monotonic,...launch}=managed;validateManagedLaunch({...launch,phase:'submitted'});
+async function retireProduction({managed,journalDirectory,selectionFile,execute,confirmManaged,resume=false,finishPartial=false}){
+ check(typeof resume==='boolean'&&typeof finishPartial==='boolean'&&(!finishPartial||resume)&&managed&&managed.phase==='ready');const {worker_identity,launcher_sha256,unit_started_monotonic,...launch}=managed;validateManagedLaunch({...launch,phase:'submitted'});
  check(typeof execute==='function'&&typeof confirmManaged==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
  check(typeof launcher_sha256==='string'&&launcher_sha256.length===64&&/^[a-f0-9]+$/.test(launcher_sha256)&&typeof unit_started_monotonic==='string'&&/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic));
  check(worker_identity&&JSON.stringify(processIdentities({...worker_identity,capabilities:['worker-process-identity-v1']},worker_identity.processes.worker.pid))===JSON.stringify(worker_identity)&&worker_identity.boot_id===managed.boot_id);
@@ -50,9 +59,10 @@ async function retireProduction({managed,journalDirectory,selectionFile,execute,
  const optional=name=>{try{return privateRead(name,16384);}catch(e){if(e.code==='ENOENT')return null;throw e;}};
  if(resume){
   const pending=optional(intent),published=optional(file),text=JSON.stringify(receipt);check((pending===text||published===text)&&(pending===null||pending===text)&&(published===null||published===text));
+  if(finishPartial)check(pending===text&&published===null);
   const recoveryOwned=()=>{owned();check(optional(intent)===pending&&optional(file)===published);};
   try{
-   recoveryOwned();const r=await execute(plan.verifyRetired,10000);await confirm();recoveryOwned();
+   recoveryOwned();const r=await execute(finishPartial?plan.finishPartial:plan.verifyRetired,10000);await confirm();recoveryOwned();
    check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='RESTORE-READY\nPRODUCTION-ABSENT\n');
    if(published===null)atomic(file,receipt);if(pending!==null)fs.unlinkSync(intent);sync();
    return Object.freeze({...receipt,receipt_sha256:hash(text)});

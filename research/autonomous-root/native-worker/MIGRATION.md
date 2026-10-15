@@ -1017,3 +1017,26 @@ Both TVs remain unchanged on deployed .NET; no restart or reboot was performed.
 
 The combined Linux migration suite passes 202 tests without skips. These are host
 results; activation/controller integration and both-TV qualification remain open.
+
+### Explicit partial production cleanup recovery — local follow-up
+
+Interrupted native deletion can now be resumed with an explicit partial-finish
+option. Unlike default read-only resume, this requires the exact pending cleanup
+intent and no published completion receipt. It verifies an inactive/absent unit
+(with original successful start/exit identity when loaded), stopped source/native
+processes, unchanged managed restoration and backup, and every remaining native
+entry before removing anything. Only a subset of the recorded files/directories
+is allowed; existing files retain their expected hash, owner, mode and link count.
+All entries are checked before the remaining explicit files and empty directories
+are removed. No recursive deletion, wildcard target or unit stop is issued.
+
+Tests interrupt before deletion, between file removals and between directory
+removals, then verify completion and unchanged managed records. Unexpected entries,
+changed bytes, file/directory links, changed units and missing intents refuse all
+removal. Published completion cannot authorize partial deletion again; default
+read-only receipt verification remains available. Full retention is included.
+These are disposable host filesystem/unit-fixture tests, not on-TV qualification.
+Both TVs remain unchanged on .NET; neither was restarted or rebooted. Activation
+and controller integration remain required before live rollback qualification.
+
+The combined Linux migration suite passes 204 tests without skips.

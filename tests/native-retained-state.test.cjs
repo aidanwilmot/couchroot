@@ -295,7 +295,7 @@ test('lost production cleanup reply retains intent and never repeats deletion',l
 }));
 test('production cleanup supports full retained inventory within protocol bounds',linux,()=>fixture(async f=>{
  const r=await productionRetirementFixture(f),inputs=JSON.parse(fs.readFileSync(r.options.journalDirectory+'/'+r.retireOptions.managed.id+'.managed-restore-input.json')),plan=productionRetirementPlan(inputs);
- assert(Buffer.byteLength(plan.command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:plan.command}).status,0);await retireProduction(r.retireOptions);assert(!fs.existsSync(f.root+'/native'));assert.equal(fs.readdirSync(r.parent+'/jobs').length,64);
+ assert(Buffer.byteLength(plan.command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:plan.command}).status,0);await interruptProductionDeletion(r);await retireProduction({...r.retireOptions,resume:true,finishPartial:true});assert(!fs.existsSync(f.root+'/native'));assert.equal(fs.readdirSync(r.parent+'/jobs').length,64);
 },64));
 test('production retirement resume refuses incomplete cleanup and changed ownership or unit state',linux,async()=>{
  for(const mode of ['partial','unit','intent','missing','managed'])await fixture(async f=>{
@@ -315,3 +315,32 @@ test('production retirement resumes an uncertain receipt publication without del
  await assert.rejects(module.exports.retireProduction(r.retireOptions),e=>e.outcome==='unknown');assert(fs.existsSync(r.retireFile));assert(fs.existsSync(r.retireFile+'.pending'));
  const before=fs.readFileSync(r.retireFile,'utf8'),result=await retireProduction({...r.retireOptions,resume:true});assert.equal(result.phase,'staging-retired');assert.equal(fs.readFileSync(r.retireFile,'utf8'),before);assert(!fs.existsSync(r.retireFile+'.pending'));
 }));
+async function interruptProductionDeletion(r){
+ await assert.rejects(retireProduction({...r.retireOptions,execute:c=>r.execute(c.replace('\nrm ','\nexit 73\nrm '))}),e=>e.outcome==='unknown');
+ assert(fs.existsSync(r.retireFile+'.pending'));
+}
+test('explicit partial retirement finishes verified subsets across file and directory removal boundaries',linux,async()=>{
+ for(const step of ['none','worker','records','files','directories','absent'])await fixture(async f=>{
+  const r=await productionRetirementFixture(f);await interruptProductionDeletion(r);
+  const root=f.root+'/native',files=[root+'/code/worker',root+'/state/launcher',f.jobs+'/lock',f.jobs+'/.import-manifest',...f.records.map(v=>f.jobs+'/'+v.name)];
+  if(step==='worker')fs.unlinkSync(files[0]);if(step==='records')fs.unlinkSync(files[4]);
+  if(['files','directories','absent'].includes(step))for(const file of files)fs.unlinkSync(file);
+  if(['directories','absent'].includes(step)){fs.rmdirSync(f.jobs);fs.rmdirSync(root+'/state');fs.rmdirSync(root+'/code');}
+  if(step==='absent')fs.rmdirSync(root);
+  const result=await retireProduction({...r.retireOptions,resume:true,finishPartial:true});assert.equal(result.phase,'staging-retired');assert(!fs.existsSync(root));assert(!fs.existsSync(r.retireFile+'.pending'));
+  assert.deepEqual(await retireProduction({...r.retireOptions,resume:true}),result);await assert.rejects(retireProduction({...r.retireOptions,resume:true,finishPartial:true}));
+  for(const saved of f.records)assert.deepEqual(fs.readFileSync(r.parent+'/jobs/'+saved.name),saved.bytes);
+ });
+});
+test('partial retirement refuses unexpected files, links, changed bytes, units and absent intents without deleting',linux,async()=>{
+ for(const mode of ['extra','bytes','link','directory-link','unit','intent'])await fixture(async f=>{
+  const r=await productionRetirementFixture(f);await interruptProductionDeletion(r);
+  if(mode==='extra')fs.writeFileSync(f.jobs+'/foreign','new',{mode:0o600});
+  if(mode==='bytes')fs.writeFileSync(f.jobs+'/'+f.records[0].name,'changed');
+  if(mode==='link'){fs.unlinkSync(f.jobs+'/'+f.records[0].name);fs.symlinkSync('/dev/null',f.jobs+'/'+f.records[0].name);}
+  if(mode==='directory-link'){fs.renameSync(f.root+'/native/code',f.root+'/saved-code');fs.symlinkSync(f.root+'/saved-code',f.root+'/native/code');}
+  if(mode==='unit')fs.writeFileSync(r.bin+'/systemctl','#!/bin/sh\nif test "$#" -gt 4; then printf "LoadState=loaded\\nActiveState=inactive\\nMainPID=0\\n"; else echo ExecMainStartTimestampMonotonic=999; fi\n');
+  if(mode==='intent')fs.unlinkSync(r.retireFile+'.pending');
+  await assert.rejects(retireProduction({...r.retireOptions,resume:true,finishPartial:true}));assert(fs.existsSync(f.root+'/native/code/worker'));assert(fs.existsSync(f.root+'/native/state/launcher'));assert(!fs.existsSync(r.retireFile));
+ });
+});
