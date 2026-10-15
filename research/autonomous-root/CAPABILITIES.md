@@ -45,9 +45,12 @@ recovery does not rewrite an unknown original request as completed.
 Only one rehearsal is admitted per live coordinator. A service restart retains
 request replay protection but does not reconstruct in-memory recovery handles.
 The rehearsal routes and interrupted-exit recovery code are deployed on both TVs
-in 0.7.22. Normal round trips passed on both TVs. The interrupted-exit recovery
-boundary passed local real-process tests; controlled hardware interruption testing
-remains open.
+in 0.7.23. Normal round trips passed on both TVs, and a controlled hardware
+interruption at the native exit-observation deadline was recovered on each TV
+with one explicit request. A failed stopped-receipt publication after verified
+exit is recovered by republishing the retained evidence; that case is tested
+locally only. Status keeps the original failed phase and causes after a
+successful recovery; the operation state and migration phase show the outcome.
 
 ## Results and readiness
 

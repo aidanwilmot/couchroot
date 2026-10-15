@@ -7,15 +7,16 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.22 packages from `00c328a`, with .NET selected and ready.
-Each completed an installed-service managed/native/managed rehearsal, including
-native readiness/adoption, managed return/activation, byte-identical retention of
-one completed job, current-trial provider/native staging removal and unchanged
-boot identity. No recovery timer or setup operation is pending. See
-[bounded hardware evidence](roundtrip-results.json).
+Both TVs are on signed 0.7.23 packages from `6b6016a`, with .NET selected and ready.
+Each completed a normal installed managed/native/managed rehearsal on 0.7.22 and,
+on 0.7.23, an installed rehearsal whose native exit observation was deliberately
+interrupted and then explicitly recovered. Retained job bytes, prior selection
+history and boot identity were preserved; no recovery timer or setup operation is
+pending. See [round-trip evidence](roundtrip-results.json) and
+[interrupted-exit evidence](exit-recovery-results.json).
 
 This is a handoff-and-return milestone, not native-default or .NET-free completion.
-The trial held public admission while native was selected. Remaining work includes:
+The trials held public admission while native was selected. Remaining work includes:
 
 - Public native operation parity and native-created retained results through the
   installed service and enrolled client.
@@ -1719,3 +1720,54 @@ credentials, signed packages and receipts remain private. The sanitized evidence
 in `roundtrip-results.json` explicitly excludes full public native parity,
 native-created job migration, failure injection, restart/endurance and power-cycle
 qualification. .NET remains deployed and selected; migration is not complete.
+
+### Interrupted native exit recovered on both TVs — 0.7.23
+
+Local review of the explicit exit-recovery path found that a failure while
+publishing the stopped receipt, after independent exit verification had succeeded,
+left no recovery path. The agent now retains the verified evidence before
+publication; explicit recovery republishes it, or adopts the identical receipt
+already renamed into place, without observing again or resending shutdown.
+Provider failures now report bounded causes (earlier failure, closed or replaced
+transport, deadline expiry). New local tests cover publication failure before and
+after rename, a resumed return that fails at a later mutation (held, no further
+resume, no replay), overlapping and repeated API recovery, and provider exit during
+recovery. A fifth real-process rehearsal pauses only the real native guardian
+after commit, so the exited worker stays a zombie and the real 10-second exit
+deadline expires; after the guardian continues, explicit recovery completes with
+one shutdown and preserved imported/native-created results. All five isolated
+real-process rehearsals and the focused suites pass. Fixtures were rebuilt from
+current source because the earlier host builds were not reproducible.
+
+Signed 0.7.23 packages from `6b6016a` were installed on QN90A and then S90D through
+the shared setup engine, using each TV's actual 0.7.22 package as the baseline.
+Installed members (65), enrollment, protected files and startup flags verified;
+boots were unchanged and rescue timers disarmed.
+
+Each TV then ran one installed-service rehearsal with a test-only root transient
+unit that waited for the new native commit, verified the guardian by unit MainPID
+and start ticks, paused it with SIGSTOP and continued the same process 25 seconds
+later. An SDK rescue timer and a separate continue-only safety timer were armed as
+independent routes; neither was needed. No production API or package change was
+made for the test. On both TVs the rehearsal stopped at `stopping-native` with
+`exit deadline expired`, outcome unknown and admission held. One explicit
+`POST /v1/native/resume-managed` request per TV re-observed the original bound
+identities through the existing provider, published the stopped receipt and
+completed restoration, managed readiness, provider/native retirement and
+activation. The original rehearsal request remains submitted; the recovery has its
+own completed journal entry. Retained bytes matched, current-trial scopes and
+markers were absent, prior history was preserved (six committed entries) and boots
+were unchanged.
+
+The first QN90A arming attempt was refused before submission: Samsung's execution
+protection rejects an unsigned shell script file. That attempt was cleaned up and
+the watcher was instead passed inline to `systemd-run`, with `$` escaped for
+systemd's argument expansion. On S90D, `systemd-run --wait` did not return within
+the command budget during a harmless watcher check; the watcher had completed and
+its leftover test files were removed explicitly.
+
+This hardware evidence covers only the exit-deadline boundary while the live
+coordinator and bounded provider remain available. Publication failure, transport
+closure and provider loss are qualified locally only. Service-restart
+reconciliation, earlier-phase recovery, public parity, native default and agent
+.NET sunset remain open; no reboot was performed and .NET remains selected.
