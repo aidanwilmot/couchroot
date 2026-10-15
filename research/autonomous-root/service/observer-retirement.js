@@ -7,6 +7,10 @@ const {snapshotManagedJobs}=require('./retained-state');
 const {installRetainedState,acceptRetainedState}=require('./retained-install');
 const {submitProduction}=require('./production-launch');
 const {readyProduction}=require('./production-readiness');
+const {snapshotNativeJobs}=require('./native-retained-state');
+const {restoreManagedJobs,acceptManagedRestore}=require('./managed-restore');
+const {submitManaged}=require('./managed-launch');
+const {readyManaged}=require('./managed-readiness');
 const {inspectObserverUnit,retireObserverUnit}=require('./observer-unit');
 const HEX=/^[a-f0-9]{64}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const CAPS=['prototype-scoped-files-v1','worker-process-identity-v1','guardian-parent-identity-v1','resource-inventory-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1'];
@@ -61,37 +65,71 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
   }catch(error){failed=true;throw error;}
   finally{busy=false;}
  }
+ let rollbackEntered=false,rollbackInputs=null,restoreEntered=false,restored=null,restoreAccepted=false,restoreAcceptEntered=false,managedEntered=false,managedRecord=null,managedReadyEntered=false;
+ async function rollbackOperation(timeout,body){
+  requireValue(!busy&&!failed);busy=true;expires=clock()+timeout;
+  try{await verify();const result=await body();await verify();return result;}
+  catch(error){failed=true;throw error;}
+  finally{busy=false;}
+ }
+ const copy=value=>JSON.parse(JSON.stringify(value));
  const identity=JSON.parse(pinned);Object.freeze(identity.processes.worker);Object.freeze(identity.processes.guardian);Object.freeze(identity.processes);Object.freeze(identity);
  return Object.freeze({
   identity,
+  snapshotNativeJobs:async options=>{
+   requireValue(!busy&&!failed&&!rollbackEntered);
+   const inputs=copy({record:options.record,installation:options.installation,baseline:options.baseline}),record=inputs.record;
+   requireValue(record&&record.phase==='ready'&&record.boot_id===target.bootId&&JSON.stringify(record.source)===JSON.stringify(sourceIdentity));
+   const native=processIdentities({...record.worker_identity,implementation:'native-prototype',guardian_pid:record.worker_identity.processes.guardian.pid,capabilities:['worker-process-identity-v1']},record.worker_identity.processes.worker.pid);
+   requireValue(native.boot_id===target.bootId&&native.worker_id!==identity.worker_id&&Object.values(native.processes).every(p=>Object.values(identity.processes).every(q=>p.pid!==q.pid)));
+   if(retainedSnapshot)requireValue(JSON.stringify(inputs.baseline)===JSON.stringify(retainedSnapshot));
+   rollbackEntered=true;
+   return rollbackOperation(60000,async()=>{const snapshot=await snapshotNativeJobs({...inputs,execute});rollbackInputs=copy({...inputs,snapshot});return snapshot;});
+  },
+  restoreManagedState:async options=>{
+   requireValue(!busy&&!failed&&!restoreEntered&&rollbackInputs);restoreEntered=true;
+   return rollbackOperation(120000,async()=>{restored=copy(await restoreManagedJobs({...options,...copy(rollbackInputs),resume:false,execute}));return copy(restored);});
+  },
+  acceptManagedRestore:async options=>{
+   requireValue(!busy&&!failed&&!restoreAcceptEntered&&restored);restoreAcceptEntered=true;
+   return rollbackOperation(120000,async()=>{const result=await acceptManagedRestore({...options,transitionId:restored.transition_id,receiptSha256:restored.receipt_sha256,execute});restoreAccepted=true;return result;});
+  },
+  launchManaged:async options=>{
+   requireValue(!busy&&!failed&&!managedEntered&&restoreAccepted&&restored);managedEntered=true;
+   return rollbackOperation(120000,async()=>{managedRecord=copy(await submitManaged({...options,transitionId:restored.transition_id,receiptSha256:restored.receipt_sha256,execute}));return copy(managedRecord);});
+  },
+  verifyManaged:async options=>{
+   requireValue(!busy&&!failed&&!managedReadyEntered&&managedRecord);managedReadyEntered=true;
+   return rollbackOperation(120000,()=>readyManaged({...options,record:copy(managedRecord),providerIdentity:identity,execute}));
+  },
   inspectUnit:request=>operation(request,false),
   retireUnit:request=>operation(request,true),
   snapshotManagedJobs:async()=>{
-   requireValue(!busy&&!failed&&!snapshotEntered);busy=true;snapshotEntered=true;expires=clock()+60000;
+   requireValue(!busy&&!failed&&!rollbackEntered&&!snapshotEntered);busy=true;snapshotEntered=true;expires=clock()+60000;
    try{const result=await snapshotManagedJobs({source:sourceIdentity,execute});retainedSnapshot=JSON.parse(JSON.stringify(result));return result;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   verifyProduction:async options=>{
-   requireValue(!busy&&!failed&&!readinessEntered&&productionRecord);busy=true;readinessEntered=true;expires=clock()+120000;
+   requireValue(!busy&&!failed&&!rollbackEntered&&!readinessEntered&&productionRecord);busy=true;readinessEntered=true;expires=clock()+120000;
    try{return await readyProduction({...options,record:productionRecord,providerIdentity:identity,execute});}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   launchProduction:async options=>{
-   requireValue(!busy&&!failed&&!productionEntered&&stateAccepted&&retainedInstallation);busy=true;productionEntered=true;expires=clock()+30000;
+   requireValue(!busy&&!failed&&!rollbackEntered&&!productionEntered&&stateAccepted&&retainedInstallation);busy=true;productionEntered=true;expires=clock()+30000;
    try{productionRecord=await submitProduction({...options,id:retainedInstallation.id,manifestSha256:retainedInstallation.manifest_sha256,receiptSha256:retainedInstallation.receipt_sha256,execute});return productionRecord;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   acceptManagedState:async options=>{
-   requireValue(!busy&&!failed&&!acceptEntered&&retainedInstallation);busy=true;acceptEntered=true;expires=clock()+120000;
+   requireValue(!busy&&!failed&&!rollbackEntered&&!acceptEntered&&retainedInstallation);busy=true;acceptEntered=true;expires=clock()+120000;
    try{const result=await acceptRetainedState({...options,id:retainedInstallation.id,manifestSha256:retainedInstallation.manifest_sha256,receiptSha256:retainedInstallation.receipt_sha256,execute});stateAccepted=true;return result;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   installManagedState:async options=>{
-   requireValue(!busy&&!failed&&!installEntered&&retainedSnapshot);busy=true;installEntered=true;expires=clock()+120000;
+   requireValue(!busy&&!failed&&!rollbackEntered&&!installEntered&&retainedSnapshot);busy=true;installEntered=true;expires=clock()+120000;
    try{retainedInstallation=await installRetainedState({...options,snapshot:retainedSnapshot,execute});return retainedInstallation;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}

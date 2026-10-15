@@ -63,3 +63,48 @@ test('failed source-exit check cannot be retried or followed by mutation',async(
  const f=fixture(),p=await f.create();let calls=0;f.channel.execute=async()=>{calls++;return {exit_code:1,stdout:''};};
  await assert.rejects(p.snapshotManagedJobs());await assert.rejects(p.snapshotManagedJobs());await assert.rejects(p.retireUnit(bound));assert.equal(calls,1);
 });
+
+function rollbackFixture(failure){
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{createRequire}=require('node:module');
+ const file=path.resolve(__dirname,'../research/autonomous-root/service/observer-retirement.js'),module={exports:{}},real=createRequire(file),f=fixture(),events=[];
+ const native={boot_id:boot,worker_id:'e'.repeat(32),processes:{worker:{pid:92,start_ticks:'300'},guardian:{pid:91,start_ticks:'299'}}};
+ const inputs={record:{id:'f'.repeat(32),phase:'ready',boot_id:boot,source,worker_identity:native},installation:{id:'f'.repeat(32)},baseline:{sha256:sha}},snapshot={sha256:'b'.repeat(64),records:[]};
+ const receipt={transition_id:'f'.repeat(32),receipt_sha256:'c'.repeat(64)},launch={id:'f'.repeat(32),phase:'submitted'};
+ const step=async(name,o,result)=>{events.push(name);await o.execute(name,1000);if(failure===name)throw Error('lost '+name+' response');return structuredClone(result);};
+ const modules={
+  './native-retained-state':{snapshotNativeJobs:async o=>{assert.equal(o.record.id,inputs.record.id);return step('snapshot',o,snapshot);}},
+  './managed-restore':{restoreManagedJobs:async o=>{assert.equal(o.snapshot.sha256,snapshot.sha256);assert.equal(o.record.id,inputs.record.id);assert.equal(o.baseline.sha256,sha);assert.equal(o.resume,false);return step('restore',o,receipt);},acceptManagedRestore:async o=>{assert.equal(o.transitionId,receipt.transition_id);assert.equal(o.receiptSha256,receipt.receipt_sha256);return step('accept',o,{pending:{phase:'rollback-state-ready'}});}},
+  './managed-launch':{submitManaged:async o=>{assert.equal(o.transitionId,receipt.transition_id);assert.equal(o.receiptSha256,receipt.receipt_sha256);return step('launch',o,launch);}},
+  './managed-readiness':{readyManaged:async o=>{assert.equal(o.record.id,launch.id);assert.equal(o.providerIdentity.worker_id,f.info.worker_id);return step('ready',o,{record:{...launch,phase:'ready'}});}}
+ };
+ vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>modules[n]||real(n)});
+ return {...f,inputs,events,create:()=>module.exports.createObserverRetirement({channel:f.channel,source,bound,launcherSha256:sha})};
+}
+test('rollback provider binds snapshot, restore and managed launch without exposing its executor',async()=>{
+ const f=rollbackFixture(),p=await f.create(),foreign={execute:()=>{throw Error('foreign executor');},record:{id:'foreign'},snapshot:{sha256:'foreign'},baseline:{sha256:'foreign'},receiptSha256:'foreign',transitionId:'foreign',providerIdentity:{worker_id:'foreign'},resume:true};
+ for(const name of ['restoreManagedState','acceptManagedRestore','launchManaged','verifyManaged'])await assert.rejects(p[name](foreign));assert.deepEqual(f.events,[]);
+ const snapshot=await p.snapshotNativeJobs(f.inputs);snapshot.sha256='foreign';
+ await assert.rejects(p.snapshotManagedJobs());await assert.rejects(p.installManagedState({}));
+ const restored=await p.restoreManagedState(foreign);restored.receipt_sha256='foreign';
+ await p.acceptManagedRestore(foreign);const launched=await p.launchManaged(foreign);launched.id='foreign';
+ assert.equal((await p.verifyManaged(foreign)).record.phase,'ready');assert.deepEqual(f.events,['snapshot','restore','accept','launch','ready']);assert.equal(p.execute,undefined);
+ for(const name of ['snapshotNativeJobs','restoreManagedState','acceptManagedRestore','launchManaged','verifyManaged'])await assert.rejects(p[name](f.inputs));assert.equal(f.calls.length,5);
+});
+test('rollback provider rejects unrelated native source and provider overlap before snapshot',async()=>{
+ for(const mode of ['source','boot','pid','worker']){
+  const f=rollbackFixture(),p=await f.create(),inputs=structuredClone(f.inputs);
+  if(mode==='source')inputs.record.source.worker_id='0'.repeat(32);
+  if(mode==='boot')inputs.record.boot_id=boot.slice(0,-1)+'2';
+  if(mode==='pid')inputs.record.worker_identity.processes.guardian.pid=76;
+  if(mode==='worker')inputs.record.worker_identity.worker_id=f.info.worker_id;
+  await assert.rejects(p.snapshotNativeJobs(inputs));assert.deepEqual(f.events,[]);assert.equal(f.calls.length,0);
+ }
+});
+test('uncertainty in any rollback provider phase forbids retries and later mutation',async()=>{
+ for(const failure of ['snapshot','restore','accept','launch','ready']){
+  const f=rollbackFixture(failure),p=await f.create(),steps=[['snapshotNativeJobs',f.inputs],['restoreManagedState',{}],['acceptManagedRestore',{}],['launchManaged',{}],['verifyManaged',{}]];
+  for(let i=0;i<steps.length;i++){const [name,o]=steps[i];if(['snapshot','restore','accept','launch','ready'][i]===failure){await assert.rejects(p[name](o));break;}await p[name](o);}
+  const count=f.calls.length;
+  for(const [name,o] of steps)await assert.rejects(p[name](o));await assert.rejects(p.retireUnit(bound));assert.equal(f.calls.length,count);
+ }
+});

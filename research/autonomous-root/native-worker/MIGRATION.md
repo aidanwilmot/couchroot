@@ -1141,3 +1141,30 @@ earlier-phase reconciliation and live handoff/rollback qualification remain open
 
 The combined Linux migration suite passes 211 tests without skips. The tracked-file
 privacy audit reports no findings across 607 files.
+
+### Independent provider managed-rollback adapter — local follow-up
+
+The authenticated independent provider now exposes native retained-job snapshot,
+managed restoration/acceptance, managed launch and managed readiness operations.
+It pins the native record to its original managed source and boot, excludes its own
+worker/guardian from the retiring native identity, and retains copies of verified
+snapshot inputs, restoration receipts and launch records internally. Caller-supplied
+executors, replacement records or receipt identifiers cannot replace those bindings.
+Entering rollback prevents subsequent forward state installation or native launch.
+
+Each phase verifies the same idle provider before and after work, uses its bounded
+executor, serializes operations, and is single-use. An uncertain phase poisons the
+adapter rather than allowing replay. This supplies the missing provider methods
+required by the existing managed-session listener and readiness path. It does not
+yet add the top-level rollback controller or recovery of a poisoned provider.
+
+Adapter tests cover phase prerequisites/order, source and boot mismatch, provider
+process overlap, mutation of returned records, caller override attempts and unknown
+outcomes at every phase. Lower-level filesystem and wire tests remain separate;
+this adapter coverage is not an integrated TV rollback. No device was changed or
+rebooted, and .NET remains deployed. Native shutdown under held admission, complete
+controller orchestration, earlier-phase reconciliation and live validation remain
+required. The provider's existing bounded lifetime is unchanged.
+
+The combined Linux migration suite passes 214 tests without skips. The tracked-file
+privacy audit reports no findings across 607 files.
