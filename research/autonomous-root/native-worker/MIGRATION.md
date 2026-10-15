@@ -1231,3 +1231,34 @@ qualification remain open.
 
 The combined Linux migration suite passes 223 tests without skips. The tracked-file
 privacy audit reports no findings across 609 files.
+
+### Held trial return controller and rehearsal path — local follow-up
+
+A return-to-managed controller now connects the original held native trial to
+managed restoration and activation. Before starting, it verifies the committed
+native selection, package-bound original managed version, native ready record,
+installation receipt and baseline snapshot. It drains the held native inventory,
+begins a separately journaled managed transition, stops native through the verified
+provider path, snapshots/restores retained jobs, accepts restored state, opens the
+managed session, commits readiness, adopts its channel and completes activation.
+Admission remains held until the existing final completion checks pass.
+
+The native migration controller has an explicit internal rehearsal mode requiring
+a pinned managed runtime digest before acquiring admission. After native adoption
+it returns to managed through that controller instead of releasing native admission.
+The agent exposes internal rehearsal and managed-activation-resume methods; no HTTP
+route or deployed default is enabled. This exercises a committed but still-held
+trial, not return from an already activated native service or recovery of a native
+launch that never produced a verified ready record.
+
+Failures retain the hold and live sessions; ordinary retry is refused. Only a
+failed final activation can delegate to explicit managed activation recovery.
+Closing the controller while a listener resolves prevents commit and closes the
+returned transport. Local controller tests use actual selection journals and
+retained-state preflight validation with operation/session fixtures; they cover
+phase order, every failure boundary, stale ownership, stopped-controller races,
+rehearsal routing and activation retry. Full real-process rehearsal and both-TV
+qualification remain required. No TV was changed or rebooted; .NET stays deployed.
+
+The combined Linux migration suite passes 230 tests without skips. The tracked-file
+privacy audit reports no findings across 611 files.

@@ -5,16 +5,17 @@ const {hash}=require('./policy');
 const {loadCandidate}=require('./native-candidate');
 const {SelectionJournal,managedVersion}=require('./worker-selection');
 const {openProductionSession}=require('./production-session');
+const {createManagedReturn}=require('./managed-return');
 function check(ok){if(!ok)throw Error('Native migration prerequisites unavailable');}
 function createNativeMigration({agent,device,payload,selectionFile}){
- let entered=false,closed=false,phase='idle',failedPhase=null,resuming=false,id=null,hold=null,retirement=null,production=null,begun=false;
- const status=()=>({phase,transaction_id:id});
- const closeTransport=()=>{closed=true;if(production)production.closeTransport();if(retirement)retirement.closeTransport();};
+ let entered=false,closed=false,phase='idle',failedPhase=null,resuming=false,id=null,hold=null,retirement=null,production=null,begun=false,managedReturn=null;
+ const status=()=>({phase,transaction_id:id,managed_return:managedReturn?managedReturn.status():null});
+ const closeTransport=()=>{closed=true;if(managedReturn)managedReturn.closeTransport();if(production)production.closeTransport();if(retirement)retirement.closeTransport();};
  const move=next=>{check(!closed);phase=next;};
- async function run(manifestSha256){
+ async function run(manifestSha256,{returnToManaged=false,runtimeSha256}={}){
   check(!entered);entered=true;
   try{
-   move('preflight');check(['s90d','qn90a'].includes(device)&&typeof selectionFile==='string'&&path.isAbsolute(selectionFile)&&typeof manifestSha256==='string'&&manifestSha256.length===64&&/^[a-f0-9]+$/.test(manifestSha256));
+   move('preflight');check(typeof returnToManaged==='boolean'&&(!returnToManaged||typeof runtimeSha256==='string'&&/^[a-f0-9]{64}$/.test(runtimeSha256)));check(['s90d','qn90a'].includes(device)&&typeof selectionFile==='string'&&path.isAbsolute(selectionFile)&&typeof manifestSha256==='string'&&manifestSha256.length===64&&/^[a-f0-9]+$/.test(manifestSha256));
    const journalDirectory=path.dirname(selectionFile),st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
    for(const name of ['retirement-launch.pending','production-launch.pending','state-install.pending'])try{fs.lstatSync(path.join(journalDirectory,name));throw Error('Existing native transition requires reconciliation');}catch(error){if(error.code!=='ENOENT')throw error;}
    const candidate=loadCandidate(payload,device);check(candidate&&candidate.manifest_sha256===manifestSha256);
@@ -35,6 +36,10 @@ function createNativeMigration({agent,device,payload,selectionFile}){
    const trial=journal.read();check(trial.pending&&trial.pending.id===id&&trial.pending.phase==='trial-ready'&&trial.pending.readiness_sha256===production.readiness_sha256&&trial.pending.state_sha256===installation.receipt_sha256);
    move('committing');journal.commit(trial.revision,id);
    move('adopting');await hold.adoptProduction(production);
+   if(returnToManaged){
+    move('returning-managed');managedReturn=createManagedReturn({hold,retirement,record:production.record,payload,selectionFile,runtimeSha256});
+    const returned=await managedReturn.run();move('managed-active');return returned;
+   }
    move('activating');const activated=await hold.completeProduction(retirement);check(activated.transaction_id===id&&activated.admission_held===false);
    move('active');return {...activated,selected_implementation:'native-prototype'};
   }catch(cause){
@@ -52,6 +57,11 @@ function createNativeMigration({agent,device,payload,selectionFile}){
   catch(cause){phase='reconciliation-required';throw Object.assign(Error('Native activation resume requires reconciliation'),{outcome:'unknown',cause});}
   finally{resuming=false;}
  }
- return Object.freeze({run,resumeActivation,status,closeTransport});
+ async function resumeManagedActivation(){
+  check(!closed&&!resuming&&phase==='reconciliation-required'&&failedPhase==='returning-managed'&&managedReturn);resuming=true;
+  try{const result=await managedReturn.resumeActivation();move('managed-active');return result;}
+  finally{resuming=false;}
+ }
+ return Object.freeze({run,resumeActivation,resumeManagedActivation,status,closeTransport});
 }
 module.exports={createNativeMigration};
