@@ -29,7 +29,7 @@ async function verifyManagedCompletion({managed,retired,journalDirectory,selecti
  const confirm=async()=>{current();const info=await confirmManaged();current();validateReadiness(info,{implementation:'managed',bootId:managed.boot_id,launcherSha256:launcher_sha256});const identity=processIdentities(info,worker_identity.processes.worker.pid),r=validateResourceInventory(info);check(JSON.stringify(identity)===JSON.stringify(worker_identity)&&!r.jobs.length&&!r.helpers.length&&!r.transfers.length);return identity;};
  const run=async(c,t)=>{current();const result=await execute(c,t);current();return result;};
  await confirm();
- const production=await retireProduction({managed,journalDirectory,selectionFile,execute:run,confirmManaged:confirm,resume:true});current();
+ const production=await retireProduction({managed,journalDirectory,selectionFile,execute:run,confirmManaged:confirm,verifyOnly:true});current();
  const unit=await inspectRetirementUnit({unit:retired.unit,bootId:managed.boot_id,execute:run,allowMissing:true});
  check(unit.active_state==='inactive'&&unit.sub_state==='dead'&&unit.main_pid===0&&(unit.load_state==='not-found'||unit.started_monotonic===retired.unit_started_monotonic&&unit.exec_code===1&&unit.exec_status===0));
  const result=await run(providerAbsentCommand(retired),5000);check(result&&result.exit_code===0&&!result.timed_out&&!result.stderr&&result.stdout==='PROVIDER-ABSENT\n');

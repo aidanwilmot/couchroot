@@ -1109,3 +1109,35 @@ full rollback controller wiring and on-TV stopping handoff remain open.
 
 The combined Linux migration suite passes 210 tests without skips. The tracked-file
 privacy audit reports no findings across 607 files.
+
+### Interrupted managed activation recovery — local follow-up
+
+Managed activation now supports explicit resume from its durable cleanup intent.
+It reconstructs the exact allowlisted steps from verified restoration records and
+requires the saved intent to match current completion evidence. Missing entries
+must form an ordered prefix; remaining tokens, directories and markers retain
+expected bytes, ownership and modes. Published activation requires all cleanup
+steps absent. A completed receipt can be reverified without replaying deletion.
+Previously activated native ownership still requires its original activation
+history when resuming the shorter managed-only cleanup sequence.
+
+Completed native production retirement has a separate read-only verification mode.
+It requires an exact published retirement receipt and no retirement intent, checks
+live absence and restored state, and cannot publish or remove entries. This allows
+combined runtime verification after activation has removed launch markers without
+recreating those markers or weakening the mutation path's ownership requirements.
+
+The held agent permits explicit activation retry only after both retirement phases
+returned successfully and activation began. It retains admission on uncertainty,
+rechecks the managed channel and selection, and does not replay provider or native
+retirement. Earlier cleanup failures cannot skip forward through this retry.
+
+Tests cover token/directory/marker/publication interruptions, completed readback,
+previously activated native ownership, mismatched intents, missing intents,
+out-of-order removal, extra entries, changed tokens/runtime/receipts, and agent
+retry ordering. These are local fixtures, not on-TV qualification. No device was
+changed or rebooted; .NET remains deployed. Full rollback controller orchestration,
+earlier-phase reconciliation and live handoff/rollback qualification remain open.
+
+The combined Linux migration suite passes 211 tests without skips. The tracked-file
+privacy audit reports no findings across 607 files.

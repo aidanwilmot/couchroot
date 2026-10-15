@@ -402,16 +402,38 @@ test('managed activation refuses unmatched local tokens and unresolved native ac
  });
 });
 test('interrupted local activation retains intent and refuses implicit replay',linux,async()=>{
- for(const boundary of ['token','marker','publication'])await completionFixture(async f=>{
+ for(const boundary of ['token','marker','publication','directory','managed-token','final-marker'])await completionFixture(async f=>{
   activationTokens(f);const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};let injected=false;
-  const fsProxy={...fs,unlinkSync:p=>{fs.unlinkSync(p);if(!injected&&(boundary==='token'&&p===f.f.options.record.token_file||boundary==='marker'&&p===f.dir+'/managed-restore.pending')){injected=true;throw Error('lost local cleanup acknowledgement');}}};
+  const fsProxy={...fs,unlinkSync:p=>{fs.unlinkSync(p);if(!injected&&(boundary==='token'&&p===f.f.options.record.token_file||boundary==='marker'&&p===f.dir+'/managed-restore.pending'||boundary==='managed-token'&&p===f.options.managed.token_file||boundary==='final-marker'&&p===f.dir+'/managed-launch.pending')){injected=true;throw Error('lost local cleanup acknowledgement');}},rmdirSync:p=>{fs.rmdirSync(p);if(boundary==='directory'&&!injected){injected=true;throw Error('lost directory acknowledgement');}}};
   require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='fs'?fsProxy:n==='./policy'?{...real(n),atomic:(p,v)=>{real(n).atomic(p,v);if(boundary==='publication'){injected=true;throw Error('lost publication acknowledgement');}}}:real(n)});
   await assert.rejects(module.exports.activateManaged(f.options),e=>e.outcome==='unknown');assert(injected);assert(fs.existsSync(f.dir+'/'+f.options.managed.id+'.managed-activation.json.pending'));await assert.rejects(activateManaged(f.options));
+  const resumed=await activateManaged({...f.options,resume:true});assert.equal(resumed.phase,'active');assert(!fs.existsSync(f.dir+'/'+resumed.id+'.managed-activation.json.pending'));assert.deepEqual(await activateManaged({...f.options,resume:true}),resumed);
  });
 });
 test('managed activation accepts previously retired native tokens only with committed activation evidence',linux,()=>completionFixture(async f=>{
  activationTokens(f);const native=f.f.options.record;
  fs.unlinkSync(native.token_file);fs.rmdirSync(path.dirname(native.token_file));fs.unlinkSync(f.dir+'/state-install.pending');fs.unlinkSync(f.dir+'/production-launch.pending');
  fs.writeFileSync(f.dir+'/'+native.id+'.activation.json',JSON.stringify({schema:1,id:native.id,phase:'active',boot_id:native.boot_id,manifest_sha256:native.manifest_sha256,readiness_sha256:hash(JSON.stringify(native)),retirement_sha256:sha,worker_identity:native.worker_identity}),{mode:0o600});
- const result=await activateManaged(f.options);assert.equal(result.phase,'active');assert.equal(result.id,f.options.managed.id);assert.notEqual(result.id,native.id);
+ const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='fs'?{...fs,unlinkSync:p=>{fs.unlinkSync(p);throw Error('interrupted managed token cleanup');}}:real(n)});
+ await assert.rejects(module.exports.activateManaged(f.options));
+ const result=await activateManaged({...f.options,resume:true});assert.equal(result.phase,'active');assert.equal(result.id,f.options.managed.id);assert.notEqual(result.id,native.id);
+ assert.deepEqual(await activateManaged({...f.options,resume:true}),result);
 },true));
+
+test('managed activation recovery rejects missing intents, out-of-order cleanup and changed evidence',linux,async()=>{
+ for(const mode of ['missing-intent','order','token','extra','intent','runtime','receipt'])await completionFixture(async f=>{
+  activationTokens(f);const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};
+  const fsProxy={...fs,unlinkSync:p=>{fs.unlinkSync(p);throw Error('interrupt first cleanup');}};
+  require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='fs'?fsProxy:real(n)});
+  await assert.rejects(module.exports.activateManaged(f.options));const intent=f.dir+'/'+f.options.managed.id+'.managed-activation.json.pending';
+  if(mode==='missing-intent')fs.unlinkSync(intent);
+  if(mode==='order')fs.unlinkSync(f.dir+'/managed-launch.pending');
+  if(mode==='token')fs.writeFileSync(f.options.managed.token_file,'changed');
+  if(mode==='extra')fs.writeFileSync(path.dirname(f.f.options.record.token_file)+'/foreign','foreign');
+  if(mode==='intent'){const v=JSON.parse(fs.readFileSync(intent));v.steps[0].path=f.options.managed.token_file;fs.writeFileSync(intent,JSON.stringify(v));}
+  if(mode==='runtime')fs.writeFileSync(f.r.runtime,'changed');
+  if(mode==='receipt')fs.writeFileSync(f.dir+'/'+f.options.managed.id+'.managed-activation.json','{}',{mode:0o600});
+  const before=fs.readdirSync(f.dir).sort();await assert.rejects(activateManaged({...f.options,resume:true}));assert.deepEqual(fs.readdirSync(f.dir).sort(),before);assert(fs.existsSync(f.options.managed.token_file));
+ });
+});

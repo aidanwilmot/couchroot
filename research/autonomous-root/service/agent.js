@@ -316,10 +316,10 @@ function createAgent(config,options={}){
      return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
     }catch(error){session.closeTransport();throw Object.assign(Error('Managed channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
    },
-   completeManaged:async retirementSession=>{
+   completeManaged:async (retirementSession,{resume=false}={})=>{
     const adopted=token.adopted;
     const bound=()=>{if(!adopted||!adopted.managed||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted managed ownership required');};
-    bound();if(token.completionBusy||token.managedCompleting)throw Error('Managed completion requires reconciliation');
+    bound();if(typeof resume!=='boolean'||token.completionBusy||(!resume&&token.managedCompleting)||(resume&&(!token.managedActivating||!token.managedProviderRetired)))throw Error('Managed completion requires reconciliation');
     if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||token.targetVersion!=='native-prototype|'+retirementSession.record.manifest_sha256)throw Error('Matching retirement session required');
     const selected=JSON.stringify(selectionStatus(options.selectionFile)),peer=channel._conn;
     const confirm=async()=>{
@@ -333,9 +333,9 @@ function createAgent(config,options={}){
     token.managedCompleting=true;token.completionBusy=true;
     try{
      const optionsManaged={managed:adopted.record,journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile,execute};
-     token.productionRetired=await retireProduction({...optionsManaged,confirmManaged:async()=>processIdentities(await confirm(),peer.identity.pid)});
-     await confirm();token.managedProviderRetired=JSON.parse(JSON.stringify(await retirementSession.retire({execute,confirmExecutor:confirm,executorPid:peer.identity.pid})));
-     await confirm();const activation=await activateManaged({...optionsManaged,retired:token.managedProviderRetired,confirmManaged:confirm});
+     if(!resume){token.productionRetired=await retireProduction({...optionsManaged,confirmManaged:async()=>processIdentities(await confirm(),peer.identity.pid)});
+     await confirm();token.managedProviderRetired=JSON.parse(JSON.stringify(await retirementSession.retire({execute,confirmExecutor:confirm,executorPid:peer.identity.pid})));}
+     await confirm();token.managedActivating=true;const activation=await activateManaged({...optionsManaged,resume,retired:token.managedProviderRetired,confirmManaged:confirm});
      const info=await confirm();bound();if(!runtimeAllowed(selection()))throw Error('Managed selection changed before admission');
      workerStatus=info;workerStatusAt=process.uptime();nativeRuntime=null;admissionHold=null;
      return {transaction_id:adopted.record.id,worker_id:info.worker_id,admission_held:false,activation_sha256:activation.receipt_sha256};

@@ -473,7 +473,7 @@ test('held handoff adopts managed rollback with admission closed and stale callb
   const events=[];let finalDrift=false;
   const modules={
    './production-retirement':{retireProduction:async o=>{events.push('native');assert.equal((await o.confirmManaged()).processes.worker.pid,73);await o.execute('native cleanup',1000);if(mode==='cleanup-failure')throw Error('cleanup unknown');return {phase:'staging-retired'};}},
-   './managed-activation':{activateManaged:async o=>{events.push('activate');assert.equal(o.retired.phase,'complete');await o.confirmManaged();await o.execute('activation check',1000);if(mode==='activation-failure')throw Error('publication unknown');if(mode==='final-drift')finalDrift=true;return {receipt_sha256:'9'.repeat(64)};}}
+   './managed-activation':{activateManaged:async o=>{events.push('activate');assert.equal(o.retired.phase,'complete');await o.confirmManaged();await o.execute('activation check',1000);if(mode==='activation-failure'&&!o.resume)throw Error('publication unknown');if(mode==='final-drift')finalDrift=true;return {receipt_sha256:'9'.repeat(64)};}}
   };
   const {agent,channels,timers}=fixture({selectionFile:file,managedVersion:()=>DIGEST,readProcessFile},modules);agent.start();const old=channels[0],ready=old.connect();
   try{
@@ -510,7 +510,9 @@ test('held handoff adopts managed rollback with admission closed and stale callb
      await assert.rejects(hold.completeManaged(provider),e=>e.outcome==='unknown');assert.equal(agent.status().admission_held,true);await assert.rejects(agent.execute('not admitted',100));assert.deepEqual(events,mode==='cleanup-failure'?['native']:mode==='provider-failure'?['native','provider']:['native','provider','activate']);
     }
     const count=events.length;await assert.rejects(hold.completeManaged(provider));assert.equal(events.length,count);
-    next.close();assert.equal(agent.status().connected,false);assert.equal(agent.status().admission_held,!(mode==='ok'||mode==='after-native-adoption'));assert.match(agent.status().last_error,/reconciliation required/);assert.equal(timers.length,0);
+    if(mode==='activation-failure'){provider.retire=async()=>{throw Error('must not repeat provider retirement');};assert.equal((await hold.completeManaged(provider,{resume:true})).admission_held,false);assert.deepEqual(events,['native','provider','activate','activate']);assert.equal((await agent.execute('recovered',100)).stdout,'managed');}
+    else if(!['ok','after-native-adoption','final-drift'].includes(mode)){await assert.rejects(hold.completeManaged(provider,{resume:true}));assert.equal(events.length,count);}
+    next.close();assert.equal(agent.status().connected,false);assert.equal(agent.status().admission_held,!(mode==='ok'||mode==='after-native-adoption'||mode==='activation-failure'));assert.match(agent.status().last_error,/reconciliation required/);assert.equal(timers.length,0);
    }else{await assert.rejects(hold.adoptManaged(session),e=>e.outcome==='unknown');assert.equal(closed,1);assert.equal(agent.status().admission_held,true);assert.equal(taken,1);await assert.rejects(hold.adoptManaged(session));}
   }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
  }

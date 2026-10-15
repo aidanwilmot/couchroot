@@ -38,8 +38,8 @@ function productionRetirementPlan(inputs){
   'for directory in '+[j,s,d+'/code',d].join(' ')+'; do if test -d "$directory"; then rmdir "$directory"; fi; done\nsync\n'+inactive+native.guard+absent+'printf "PRODUCTION-ABSENT\\n"\n';
  check(Buffer.byteLength(command)<=65536&&Buffer.byteLength(verifyRetired)<=65536&&Buffer.byteLength(finishPartial)<=65536);return {command,verifyRetired,finishPartial,record:{schema:1,id:record.id,phase:'staging-retired',boot_id:record.boot_id,worker_identity:record.worker_identity,unit:u,unit_started_monotonic:record.unit_started_monotonic,snapshot_sha256:snapshot.sha256,installation_sha256:record.state_receipt_sha256}};
 }
-async function retireProduction({managed,journalDirectory,selectionFile,execute,confirmManaged,resume=false,finishPartial=false}){
- check(typeof resume==='boolean'&&typeof finishPartial==='boolean'&&(!finishPartial||resume)&&managed&&managed.phase==='ready');const {worker_identity,launcher_sha256,unit_started_monotonic,...launch}=managed;validateManagedLaunch({...launch,phase:'submitted'});
+async function retireProduction({managed,journalDirectory,selectionFile,execute,confirmManaged,resume=false,finishPartial=false,verifyOnly=false}){
+ check(typeof verifyOnly==='boolean'&&(!verifyOnly||!resume&&!finishPartial)&&typeof resume==='boolean'&&typeof finishPartial==='boolean'&&(!finishPartial||resume)&&managed&&managed.phase==='ready');const {worker_identity,launcher_sha256,unit_started_monotonic,...launch}=managed;validateManagedLaunch({...launch,phase:'submitted'});
  check(typeof execute==='function'&&typeof confirmManaged==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
  check(typeof launcher_sha256==='string'&&launcher_sha256.length===64&&/^[a-f0-9]+$/.test(launcher_sha256)&&typeof unit_started_monotonic==='string'&&/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic));
  check(worker_identity&&JSON.stringify(processIdentities({...worker_identity,capabilities:['worker-process-identity-v1']},worker_identity.processes.worker.pid))===JSON.stringify(worker_identity)&&worker_identity.boot_id===managed.boot_id);
@@ -51,12 +51,20 @@ async function retireProduction({managed,journalDirectory,selectionFile,execute,
  const refs=[[managed.origin_id+'.production.json',JSON.stringify(inputs.record)],[managed.id+'.managed-launch.json',JSON.stringify(managed)],[managed.origin_id+'.state-install.json',JSON.stringify(inputs.installation)]];
  const restoreFile=path.join(journalDirectory,managed.id+'.managed-restore.json'),restoreText=privateRead(restoreFile,16384),expectedRestore={...planManagedRestore(inputs).receipt,transition_id:managed.id,quiescence_sha256:h.quiescence_sha256,input_sha256:hash(inputText)};check(hash(restoreText)===managed.state_receipt_sha256&&restoreText===JSON.stringify(expectedRestore));
  check(h.from.implementation===(rollback?'managed':'native-prototype')&&h.to.implementation===(rollback?'native-prototype':'managed')&&h.from.manifest_sha256===(rollback?managed.manifest_sha256:inputs.record.manifest_sha256)&&h.to.manifest_sha256===(rollback?inputs.record.manifest_sha256:managed.manifest_sha256));
- const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(selected)&&privateRead(inputFile,524288)===inputText&&privateRead(restoreFile,16384)===restoreText&&privateRead(path.join(journalDirectory,'managed-restore.pending'),64)===managed.id+'\n'&&privateRead(path.join(journalDirectory,'managed-launch.pending'),64)===managed.id+'\n');for(const [name,text] of refs)check(privateRead(path.join(journalDirectory,name),262144)===text);};
+ const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(selected)&&privateRead(inputFile,524288)===inputText&&privateRead(restoreFile,16384)===restoreText&&(verifyOnly||privateRead(path.join(journalDirectory,'managed-restore.pending'),64)===managed.id+'\n'&&privateRead(path.join(journalDirectory,'managed-launch.pending'),64)===managed.id+'\n'));for(const [name,text] of refs)check(privateRead(path.join(journalDirectory,name),262144)===text);};
  const confirm=async()=>{owned();const identity=await confirmManaged();owned();check(JSON.stringify(identity)===JSON.stringify(worker_identity)&&identity.worker_id!==managed.source.worker_id&&Object.values(managed.source.processes).every(p=>p.pid!==identity.processes.worker.pid));};
  await confirm();const file=path.join(journalDirectory,managed.origin_id+'.production-retirement.json'),intent=file+'.pending';
  const receipt={...plan.record,transition_id:managed.id,managed_readiness_sha256:hash(JSON.stringify(managed))};
  const sync=()=>{const fd=fs.openSync(journalDirectory,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}};
  const optional=name=>{try{return privateRead(name,16384);}catch(e){if(e.code==='ENOENT')return null;throw e;}};
+ if(verifyOnly){
+  // Completed evidence is independently verifiable after activation removes
+  // launch markers. This mode cannot publish, reconcile or delete anything.
+  const text=JSON.stringify(receipt),verified=()=>{owned();check(optional(intent)===null&&optional(file)===text);};
+  verified();const r=await execute(plan.verifyRetired,10000);await confirm();verified();
+  check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='RESTORE-READY\nPRODUCTION-ABSENT\n');
+  return Object.freeze({...receipt,receipt_sha256:hash(text)});
+ }
  if(resume){
   const pending=optional(intent),published=optional(file),text=JSON.stringify(receipt);check((pending===text||published===text)&&(pending===null||pending===text)&&(published===null||published===text));
   if(finishPartial)check(pending===text&&published===null);
