@@ -1087,3 +1087,25 @@ not live TV activation. Both TVs remain unchanged on .NET; neither was restarted
 or rebooted. Recovery/controller wiring and both-TV qualification remain open.
 
 The combined Linux migration suite passes 210 tests without skips.
+
+### Held managed rollback completion — local follow-up
+
+The held agent now completes a freshly adopted managed rollback by retiring stopped
+native production staging, retiring the matching independent provider through the
+managed channel, and publishing managed activation after combined verification.
+It confirms the same boot, channel, process identity, selection and empty resource
+inventory around every command and again before releasing admission. Original
+source callbacks remain invalidated. Failure at any phase retains admission and
+refuses implicit replay; this entry point does not yet resume interrupted activation.
+
+Agent tests exercise ordered completion from a failed native trial and from a
+still-held adopted native worker, foreign-provider rejection before cleanup,
+cleanup/provider/activation failures, final identity drift, public command admission
+only after success, and refusal to repeat completion. These are host orchestration
+fixtures; the underlying cleanup and activation modules have separate filesystem
+and unit-fixture coverage. No TV deployment, worker restart or reboot was performed.
+Both TVs retain their deployed managed fallback. Explicit activation recovery,
+full rollback controller wiring and on-TV stopping handoff remain open.
+
+The combined Linux migration suite passes 210 tests without skips. The tracked-file
+privacy audit reports no findings across 607 files.

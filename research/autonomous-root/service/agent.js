@@ -14,6 +14,8 @@ const {validateLaunch}=require('./production-readiness');
 const {validateManagedLaunch}=require('./managed-readiness');
 const {privateRead}=require('./private-state');
 const {activateProduction}=require('./production-activation');
+const {retireProduction}=require('./production-retirement');
+const {activateManaged}=require('./managed-activation');
 const {createNativeMigration}=require('./native-migration');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
@@ -313,6 +315,31 @@ function createAgent(config,options={}){
      previousChannel.close();token.adopted={generation:adoptedGeneration,channel:next,record:readyRecord,managed:true};
      return {transaction_id:launch.id,worker_id:info.worker_id,admission_held:true};
     }catch(error){session.closeTransport();throw Object.assign(Error('Managed channel adoption requires reconciliation'),{outcome:'unknown',cause:error});}
+   },
+   completeManaged:async retirementSession=>{
+    const adopted=token.adopted;
+    const bound=()=>{if(!adopted||!adopted.managed||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted managed ownership required');};
+    bound();if(token.completionBusy||token.managedCompleting)throw Error('Managed completion requires reconciliation');
+    if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||token.targetVersion!=='native-prototype|'+retirementSession.record.manifest_sha256)throw Error('Matching retirement session required');
+    const selected=JSON.stringify(selectionStatus(options.selectionFile)),peer=channel._conn;
+    const confirm=async()=>{
+     bound();const info=await adopted.channel.operation({op:'status'});bound();
+     if(adopted.channel._conn!==peer||currentBoot()!==boot||JSON.stringify(selectionStatus(options.selectionFile))!==selected)throw Error('Managed completion ownership changed');
+     validateReadiness(info,{implementation:'managed',bootId:boot,launcherSha256:adopted.record.launcher_sha256});
+     if(JSON.stringify(processIdentities(info,peer.identity.pid))!==JSON.stringify(adopted.record.worker_identity))throw Error('Managed identity changed');
+     const r=validateResourceInventory(info);if(r.jobs.length||r.helpers.length||r.transfers.length)throw Error('Managed resources changed before activation');return info;
+    };
+    const execute=async(command,timeout)=>{await confirm();const result=await adopted.channel.execute(command,timeout);await confirm();return result;};
+    token.managedCompleting=true;token.completionBusy=true;
+    try{
+     const optionsManaged={managed:adopted.record,journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile,execute};
+     token.productionRetired=await retireProduction({...optionsManaged,confirmManaged:async()=>processIdentities(await confirm(),peer.identity.pid)});
+     await confirm();token.managedProviderRetired=JSON.parse(JSON.stringify(await retirementSession.retire({execute,confirmExecutor:confirm,executorPid:peer.identity.pid})));
+     await confirm();const activation=await activateManaged({...optionsManaged,retired:token.managedProviderRetired,confirmManaged:confirm});
+     const info=await confirm();bound();if(!runtimeAllowed(selection()))throw Error('Managed selection changed before admission');
+     workerStatus=info;workerStatusAt=process.uptime();nativeRuntime=null;admissionHold=null;
+     return {transaction_id:adopted.record.id,worker_id:info.worker_id,admission_held:false,activation_sha256:activation.receipt_sha256};
+    }catch(cause){throw Object.assign(Error('Managed completion requires reconciliation'),{outcome:'unknown',cause});}finally{token.completionBusy=false;}
    },
    completeProduction:async (retirementSession,{resume=false}={})=>{
     const adopted=token.adopted;
