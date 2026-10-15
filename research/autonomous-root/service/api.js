@@ -25,7 +25,7 @@ function createApi(options){
   if(req.method==='GET'&&req.url==='/v1/status'){reply(200,agent.status());return;}
   if(req.method==='GET'&&req.url==='/v1/native/status'){reply(200,{operation:nativeTasks.status(),migration:agent.status().native_migration||null,durable:typeof agent.restartInventory==='function'?agent.restartInventory():null});return;}
   if(req.method==='GET'&&req.url==='/v1/requests'){reply(200,{requests:journal.rows,sha256:journal.digest()});return;}
-  if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable','/v1/journal/archive','/v1/op','/v1/files/read','/v1/files/write','/v1/observer/probe','/v1/native/rehearse','/v1/native/resume-managed','/v1/native/cleanup-restart'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
+  if(req.method!=='POST'||!['/v1/exec','/v1/disable','/v1/enable','/v1/journal/archive','/v1/op','/v1/files/read','/v1/files/write','/v1/observer/probe','/v1/native/rehearse','/v1/native/resume-managed','/v1/native/cleanup-restart','/v1/native/migrate','/v1/native/resume-native'].includes(req.url)){reply(404,{error:'Unknown operation'});return;}
   if(busy||nativeTasks.busy()){reply(409,{error:'Another administrative operation is in progress'});return;}
   busy=true;
   let submitted=false,operationId=null;
@@ -33,9 +33,8 @@ function createApi(options){
    let bytes=0,chunks=[];for await(const part of req){bytes+=part.length;if(bytes>(req.url==='/v1/files/write'?1048576:20000)){reply(413,{error:'Request too large'});req.destroy();return;}chunks.push(part);}
    const raw=Buffer.concat(chunks);
    const value=JSON.parse(req.url==='/v1/files/write'?(req.headers['x-operation']||'{}'):(raw.toString()||'{}'));
-   if(req.url==='/v1/native/rehearse'||req.url==='/v1/native/resume-managed'||req.url==='/v1/native/cleanup-restart'){
-    const accepted=req.url==='/v1/native/rehearse'?nativeTasks.rehearse(value):req.url==='/v1/native/resume-managed'?nativeTasks.resume(value):nativeTasks.cleanupRestart(value);reply(202,accepted);return;
-   }
+   const nativeRoutes={'/v1/native/rehearse':'rehearse','/v1/native/resume-managed':'resume','/v1/native/cleanup-restart':'cleanupRestart','/v1/native/migrate':'migrate','/v1/native/resume-native':'resumeNative'};
+   if(Object.prototype.hasOwnProperty.call(nativeRoutes,req.url)){reply(202,nativeTasks[nativeRoutes[req.url]](value));return;}
    if(req.url==='/v1/observer/probe'){
     if(!value||Array.isArray(value)||Object.keys(value).sort().join('|')!=='id|manifest_sha256'||typeof value.id!=='string'||value.id.length<16||value.id.length>64||!/^[-a-zA-Z0-9]+$/.test(value.id)||typeof value.manifest_sha256!=='string'||value.manifest_sha256.length!==64||!/^[a-f0-9]{64}$/.test(value.manifest_sha256))throw Error('Observer probe identity required');
     if(!agent.status().connected||agent.status().worker_ready===false){reply(503,{outcome:'rejected',error:'Root agent unavailable'});return;}

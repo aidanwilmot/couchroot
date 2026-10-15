@@ -119,7 +119,7 @@ done
   assert.equal(second.status().boot_id,boot);assert.equal((await second.execute('printf restored',1000)).stdout,'restored');
   assert.equal((await second.operation({op:'job.status',id:'retained-keep-0001'})).record.exit_code,7);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
   if(mode!=='abandon-prepared'){
-   await assert.rejects(second.migrateNative(native),e=>e.outcome==='rejected'&&/Existing native transition requires reconciliation/.test(e.cause&&e.cause.message));
+   await assert.rejects(second.migrateNative(native,runtimeSha),e=>e.outcome==='rejected'&&/Existing native transition requires reconciliation/.test(e.cause&&e.cause.message));
    const obs=require('../research/autonomous-root/service/restart-inventory').providerId(id),cleaned=await second.cleanupRestart(id);
    assert.equal(cleaned.id,id);assert.equal(second.status().admission_held,false);
    for(const p of ['/opt/couchroot-worker-'+id,'/opt/couchroot-retirement-'+obs])assert(!fs.existsSync(p),p);

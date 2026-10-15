@@ -53,7 +53,7 @@ function createAgent(config,options={}){
   return !!(nativeRuntime&&running&&connected&&workerReady&&generation===nativeRuntime.generation&&channel===nativeRuntime.channel&&JSON.stringify(selected)===nativeRuntime.selection&&selected.phase==='stable'&&selected.selected_implementation==='native-prototype'&&selected.selected_manifest_sha256===nativeRuntime.record.manifest_sha256&&h&&h.id===nativeRuntime.record.id&&h.outcome==='committed'&&h.readiness_sha256===nativeRuntime.activation.readiness_sha256);
  }
  function diagnostics(){const out={};if(stage)for(const n of ['launcher.log','root-agent.status','root-agent.log']){try{out[n]=read(stage+'/'+n,65536).toString().slice(-2048);}catch(_){}}return out;}
- function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,native_migration:migration?migration.status():null,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold&&!restartHeld(),worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:restartHeld()&&connected?'reconciling':!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
+ function status(){const selected=selection();let boot=null,uptime=null;try{boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();uptime=Number(fs.readFileSync('/proc/uptime','utf8').split(' ')[0]);}catch(_){}if(workerStatus){boot=workerStatus.boot_id;uptime=workerStatus.uptime_seconds+process.uptime()-workerStatusAt;}return {schema:2,native_migration:migration?migration.status():null,native_runtime:nativeRuntime&&runtimeAllowed(selected)?{transaction_id:nativeRuntime.record.id,manifest_sha256:nativeRuntime.record.manifest_sha256,activation_sha256:nativeRuntime.activation.receipt_sha256}:null,admission_held:admissionHold!==null,in_flight_requests:inFlight.size,selected_implementation:selected.selected_implementation||null,worker_selection:selected,native_candidate:nativeCandidate,boot_id:boot,uptime_seconds:uptime,worker_ready:workerReady&&runtimeAllowed(selected)&&!admissionHold&&!restartHeld(),worker_id:workerStatus&&workerStatus.worker_id,capabilities:workerStatus?workerStatus.capabilities:[],last_root_acquired_at:lastAcquired,device:config.device,enabled:running,connected,phase:restartHeld()&&connected?'reconciling':!runtimeAllowed(selected)&&!selected.launch_allowed?'selection-required':admissionHold?'draining':workerReady?'ready':connected?'checking':launching?'acquiring':running?'waiting':'disabled',attempts,last_error:lastError,identity,diagnostics:diagnostics()};}
  function clean(){
   if(!stage)return;
   // Do not remove other tools' staging directories or recursively delete unknown files.
@@ -484,7 +484,8 @@ function createAgent(config,options={}){
   // markers, which block another handoff, while managed admission reopens.
   try{return await hold.cleanupRestart(transactionId);}finally{try{hold.release();}catch(_){}}
  }
- async function rehearseNative(manifestSha256,runtimeSha256){
+ // Both directions keep .NET as the deployed fallback: verify it before handoff.
+ async function verifyFallback(runtimeSha256,label){
   try{
    if(typeof runtimeSha256!=='string'||runtimeSha256.length!==64||!/^[a-f0-9]{64}$/.test(runtimeSha256)||!config.hashes||config.hashes['/usr/bin/dotnet']!==runtimeSha256)throw Error('Managed fallback runtime must match the configured digest');
    firmware(config);
@@ -494,13 +495,20 @@ function createAgent(config,options={}){
    const command="set -eu\ntest -f /usr/bin/dotnet\ntest ! -L /usr/bin/dotnet\ntest \"$(sha256sum /usr/bin/dotnet | cut -d ' ' -f 1)\" = '"+runtimeSha256+"'\nprintf 'FALLBACK-RUNTIME-VERIFIED\\n'\n";
    const result=await submit(worker=>worker.execute(command,10000));
    if(!running||!connected||!workerReady||channel!==owner||!owner||owner._conn!==peer||generation!==gen||!result||result.exit_code!==0||result.timed_out||result.stdout!=='FALLBACK-RUNTIME-VERIFIED\n')throw Error('Managed fallback runtime verification failed');
-  }catch(cause){throw Object.assign(Error('Native rehearsal rejected before handoff'),{outcome:'rejected',cause});}
-  // A migration rejected before handoff changed nothing durable; replace it.
-  if(!migration||migration.status().phase==='rejected')migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});
-  return migration.run(manifestSha256,{returnToManaged:true,runtimeSha256});
+  }catch(cause){throw Object.assign(Error(label+' rejected before handoff'),{outcome:'rejected',cause});}
+ }
+ // A migration rejected before handoff changed nothing durable; replace it.
+ function freshMigration(){if(!migration||migration.status().phase==='rejected')migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration;}
+ async function rehearseNative(manifestSha256,runtimeSha256){
+  await verifyFallback(runtimeSha256,'Native rehearsal');
+  return freshMigration().run(manifestSha256,{returnToManaged:true,runtimeSha256});
+ }
+ async function migrateNative(manifestSha256,runtimeSha256){
+  await verifyFallback(runtimeSha256,'Native migration');
+  return freshMigration().run(manifestSha256);
  }
  // Durable evidence only; live coordinator handles are reported separately.
  const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null},restart_rollback:restartRollback&&{transaction_id:restartRollback.id,phase:restartRollback.phase,attempts:restartRollback.attempts,error:restartRollback.error,receipt_sha256:restartRollback.result?restartRollback.result.receipt_sha256:null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
- const api={status,start,stop,holdAdmission,probeObserver,restartInventory,cleanupRestart,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative,migrateNative:manifestSha256=>{if(!migration||migration.status().phase==='rejected')migration=createNativeMigration({agent:api,device:config.device,payload,selectionFile:options.selectionFile});return migration.run(manifestSha256);}};return api;
+ const api={status,start,stop,holdAdmission,probeObserver,restartInventory,cleanupRestart,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},resumeManagedActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();},rehearseNative,migrateNative};return api;
 }
 module.exports={createAgent,launchRequest};

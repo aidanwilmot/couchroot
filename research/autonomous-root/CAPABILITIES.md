@@ -52,6 +52,32 @@ exit is recovered by republishing the retained evidence; that case is tested
 locally only. Status keeps the original failed phase and causes after a
 successful recovery; the operation state and migration phase show the outcome.
 
+### Native public admission (local only)
+
+`POST /v1/native/migrate` accepts exactly `{id, manifest_sha256,
+runtime_sha256}` and has the same preconditions, fallback-runtime check and
+journaling as a rehearsal. It runs the same held handoff and commits native.
+Instead of returning to managed, the coordinator retires the bounded provider
+and publishes `<id>.activation.json`. It then opens public admission on the
+adopted native worker. `/v1/exec`, `/v1/op` and the file routes then reach
+native. Retained managed job records stay readable through `job.status`, and
+`job.forget` removes them. `GET /v1/status` reports `native_runtime`, which holds
+the transaction, manifest and activation receipt digests. The durable inventory
+reports boundary `native-active` with action `none`. While admission is held,
+nothing may run on native: activation refuses a native worker with live
+resources.
+
+`POST /v1/native/resume-native` accepts exactly `{id, migration_id}`. It only
+resumes the final activation of that live coordinator's unknown migration. It
+never repeats provider retirement. The client commands are `native-migrate`
+(same arguments as `native-rehearse`) and `native-resume-native --request-id
+NEW_REQUEST_ID --migration-id ORIGINAL_REQUEST_ID`.
+
+Limits until the following steps land: returning from active native to managed
+needs a fresh provider. A service restart, disable/enable or a lost native
+transport leaves native selected without a cold start, so admission stays closed
+with diagnostics. Neither route is qualified on hardware.
+
 ### Restart reconciliation of an uncommitted forward trial
 
 A rehearsal can be interrupted by a service restart before native is committed.

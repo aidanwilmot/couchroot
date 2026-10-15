@@ -39,6 +39,12 @@ function inventoryRestart(selectionFile){
   step('production-launch',accepted('trial')?'verified-complete':production===null&&!markers.includes('production-launch.pending')?'not-submitted':'submitted-unknown',[production&&native+'.production.json:'+production,readiness&&native+'.production.json.readiness.pending',markers.includes('production-launch.pending')&&'production-launch.pending']);
   step('native-commit',committed(native)?'verified-complete':'not-submitted',[committed(native)&&'selection-history']);
   proven=false;
+  if(forward&&committed(native)){
+   // Public admission: provider retirement, then the activation receipt.
+   const active=phaseOf(native+'.activation.json'),intent=exists(native+'.activation.json.pending'),teardown=['shutdown','cleanup','finish'].some(k=>exists(obs+'.retirement.json.'+k+'.pending'));
+   step('provider-retirement',provider==='complete'||active==='active'?'verified-complete':teardown||['shutdown-acknowledged','shutdown-observed','staging-retired'].includes(provider)?'submitted-unknown':'not-submitted',[provider&&'provider-retirement:'+provider,teardown&&'provider-teardown-pending']);
+   step('native-activation',active==='active'&&!intent?'verified-complete':active||intent?'submitted-unknown':'not-submitted',[active&&native+'.activation.json:'+active,intent&&native+'.activation.json.pending']);
+  }
  }
  if(direction==='to-managed'){
   const stop=phaseOf(transaction+'.native-stop.json');
@@ -62,10 +68,11 @@ function inventoryRestart(selectionFile){
  if(selection.phase==='inspection-required')diagnostics.push('selection journal requires inspection: '+selection.reason);
  if(unknown.length)diagnostics.push('submitted with unknown outcome: '+unknown.join(', ')+'; verify through an independent executor before any further mutation');
  if(pending&&!unknown.length)diagnostics.push('transition '+pending.phase+' has no unknown submission; '+(open?'next unsubmitted step: '+open.name:'all steps verified; selection publication remains'));
- if(!pending&&selection.phase==='stable'&&selection.selected_implementation!=='managed')diagnostics.push('native selected without integrated cold start; return to managed requires the durable native state');
+ if(!pending&&selection.phase==='stable'&&selection.selected_implementation!=='managed')diagnostics.push(open?'native selected without verified activation; return to managed requires the durable native state':'native active; a service restart needs native cold start, which is not integrated');
  for(const name of markers)diagnostics.push('ownership marker present: '+name);
  const settled=selection.phase==='stable'&&selection.selected_implementation==='managed'&&!markers.length&&!unknown.length;
- return {schema:1,selection_phase:selection.phase,transaction_id:transaction,direction,origin_id:origin,boundary:settled?'settled':open?open.name:pending?'selection-publication':'markers',mutations,markers,action:settled?'none':'pending-reconciliation',diagnostics:diagnostics.slice(0,12).map(d=>d.slice(0,200))};
+ const nativeActive=selection.phase==='stable'&&selection.selected_implementation==='native-prototype'&&direction==='to-native'&&!markers.length&&!unknown.length&&!open;
+ return {schema:1,selection_phase:selection.phase,transaction_id:transaction,direction,origin_id:origin,boundary:settled?'settled':nativeActive?'native-active':open?open.name:pending?'selection-publication':'markers',mutations,markers,action:settled||nativeActive?'none':'pending-reconciliation',diagnostics:diagnostics.slice(0,12).map(d=>d.slice(0,200))};
 }
 // After a restart, abandon only a forward transition proven to have submitted
 // nothing remote: prepared selection, no markers, and no file naming either the

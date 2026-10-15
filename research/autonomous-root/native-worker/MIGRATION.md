@@ -1919,3 +1919,29 @@ acceptance completed. S90D then received 0.7.25 the same way (68 members verifie
 and completed one normal round trip, accepted within the rescue window, with the
 same retained-state, cleanup and settled-inventory results. No real service restart has been
 performed on either TV, so restart rollback and cleanup remain hardware-unqualified.
+
+### Native public admission after a committed trial — local
+
+A migration through `POST /v1/native/migrate` follows the rehearsal handoff to
+commit. Then `completeProduction` retires the provider, verifies its unit and
+processes are gone through the adopted native worker, and publishes the
+activation receipt under an intent. It sets the live native runtime binding and
+opens admission. Rehearsals keep `returnToManaged`. The managed fallback runtime
+is verified before either direction starts. A lost activation acknowledgement
+is resumed once through `POST /v1/native/resume-native`, and retirement is never
+repeated. The durable inventory adds forward `provider-retirement` and
+`native-activation` steps. A committed native with its receipt, no intent and
+no markers is `native-active` / `none`.
+
+Local validation: unit tests for the task routes, recovery binding,
+fallback-pin refusal, status binding and inventory boundaries. The real-process
+`native-active` mode in the parity container does the following:
+
+- migrates with retained managed jobs;
+- confirms that public exec, `job.status`, `job.forget`, `job.start` and
+  `job.output` run on the staged native binary;
+- confirms that the managed job bytes are unchanged.
+
+The other five rehearsal modes and four restart modes still pass. Hardware is not
+exercised. A hardware migration waits for the active-native return route, so a
+TV is never left native without a way back.

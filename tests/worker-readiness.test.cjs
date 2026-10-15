@@ -442,9 +442,9 @@ test('stopped handoff adopts matching native channel while retaining admission a
     await assert.rejects(agent.execute('not admitted',100),e=>e.outcome==='rejected');await assert.rejects(hold.adoptProduction(session));assert.throws(()=>hold.release());assert.equal(taken,1);assert.equal(timers.length,0);
     const retirementSession={record:{source,manifest_sha256:record.manifest_sha256},retire:async o=>{assert.equal(o.executorPid,52);assert.equal((await o.confirmExecutor()).worker_id,info.worker_id);await o.execute('retire provider',1000);return {phase:'complete'};}};
     if(mode==='activation-failure'){await assert.rejects(hold.completeProduction(retirementSession),e=>e.outcome==='unknown');assert.equal(agent.status().admission_held,true);await assert.rejects(agent.execute('not admitted',100));retirementSession.retire=async()=>{throw Error('Must not repeat retirement');};const resumed=await hold.completeProduction(retirementSession,{resume:true});assert.equal(resumed.admission_held,false);assert.equal(agent.status().worker_ready,true);}
-    else{const active=await hold.completeProduction(retirementSession);assert.equal(active.admission_held,false);assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().phase,'ready');assert.equal((await agent.execute('public request',100)).stdout,'native');old.options.onClose();assert.equal(agent.status().worker_ready,true);}
+    else{const active=await hold.completeProduction(retirementSession);assert.equal(active.admission_held,false);assert.equal(agent.status().worker_ready,true);assert.equal(agent.status().phase,'ready');assert.equal(agent.status().native_runtime.transaction_id,session.record.id);assert.equal(agent.status().native_runtime.activation_sha256,active.activation_sha256);assert.equal((await agent.execute('public request',100)).stdout,'native');old.options.onClose();assert.equal(agent.status().worker_ready,true);}
     await assert.rejects(hold.completeProduction(retirementSession));
-    next.close();assert.equal(agent.status().connected,false);assert.match(agent.status().last_error,/reconciliation required/);assert.equal(timers.length,0);
+    next.close();assert.equal(agent.status().connected,false);assert.equal(agent.status().native_runtime,null);assert.match(agent.status().last_error,/reconciliation required/);assert.equal(timers.length,0);
    }else{await assert.rejects(hold.adoptProduction(session),e=>e.outcome==='unknown');assert.equal(closed,1);assert.equal(agent.status().admission_held,true);await assert.rejects(hold.adoptProduction(session));assert.equal(taken,1);}
   }finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
  }
@@ -547,6 +547,7 @@ test('rehearsal rejects missing or mismatched fallback pins before migration cre
   let checked=0,created=0;
   const {agent}=fixture({verifyFirmware:()=>{checked++;}},{'./native-migration':{createNativeMigration:()=>{created++;throw Error('must not create');}}},'qn90a',{hashes});
   await assert.rejects(agent.rehearseNative(DIGEST,DIGEST),e=>e.outcome==='rejected');
+  await assert.rejects(agent.migrateNative(DIGEST,DIGEST),e=>e.outcome==='rejected'&&/Native migration rejected/.test(e.message));await assert.rejects(agent.migrateNative(DIGEST),e=>e.outcome==='rejected');
   assert.equal(checked,0);assert.equal(created,0);assert.equal(agent.status().admission_held,false);
  }
 });

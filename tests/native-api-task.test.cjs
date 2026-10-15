@@ -45,3 +45,21 @@ test('a completed restart cleanup leaves the live coordinator free for one rehea
  f.agent.cleanupRestart=async()=>({id:'c'.repeat(32)});f.tasks.cleanupRestart({id:'native-cleanup-0001',transaction_id:'c'.repeat(32)});await tick();await tick();assert.equal(f.tasks.status().state,'completed');assert.equal(f.journal.rows[0].exit_code,0);
  assert.equal(f.tasks.rehearse(value).state,'submitted');
 }));
+test('native migration is journaled, needs the pinned fallback digest and recovers only its own activation',()=>fixture(async f=>{
+ let finish;const seen=[];f.agent.migrateNative=async(m,r)=>{seen.push([m,r]);assert.equal(f.journal.rows.at(-1).state,'submitted');return new Promise((yes,no)=>{finish={yes,no};});};
+ f.agent.resumeNativeActivation=async()=>{seen.push('resume');return {selected_implementation:'native-prototype',admission_held:false};};
+ for(const v of [{id:value.id,manifest_sha256:value.manifest_sha256},{...value,extra:1},{...value,id:'short'}])assert.throws(()=>f.tasks.migrate(v));assert.equal(f.journal.rows.length,0);
+ const accepted=f.tasks.migrate(value);assert.equal(accepted.migration_id,value.id);assert.equal(accepted.rehearsal_id,null);await tick();assert.deepEqual(seen,[[value.manifest_sha256,value.runtime_sha256]]);
+ assert.throws(()=>f.tasks.rehearse({...value,id:'native-rehearsal-0002'}));assert.throws(()=>f.tasks.resumeNative({id:'native-recovery-0001',migration_id:value.id}),'a running migration is not recoverable');
+ finish.no(Error('activation acknowledgement lost'));await tick();assert.equal(f.tasks.status().state,'unknown');assert.equal(f.journal.rows[0].state,'submitted');
+ assert.throws(()=>f.tasks.resume({id:'native-recovery-0001',rehearsal_id:value.id}),'managed recovery is bound to rehearsals');
+ assert.throws(()=>f.tasks.resumeNative({id:value.id,migration_id:value.id}));assert.throws(()=>f.tasks.resumeNative({id:'native-recovery-0001',migration_id:'unrelated-trial-0001'}));
+ const recovery={id:'native-recovery-0001',migration_id:value.id};assert.equal(f.tasks.resumeNative(recovery).state,'submitted');await tick();await tick();
+ assert.deepEqual(seen.slice(1),['resume']);assert.equal(f.tasks.status().kind,'native.resume-native');assert.equal(f.tasks.status().migration_id,value.id);assert.equal(f.tasks.status().state,'completed');assert.equal(f.journal.rows[1].state,'completed');
+ assert.throws(()=>f.tasks.resumeNative({id:'native-recovery-0002',migration_id:value.id}));assert.throws(()=>f.tasks.migrate({...value,id:'native-migrate-0002'}));
+}));
+test('native migration requires ready managed admission',()=>fixture(async f=>{
+ f.agent.migrateNative=async()=>{throw Error('must not run');};
+ for(const status of [{connected:true,worker_ready:true,selected_implementation:'native-prototype',admission_held:false},{connected:true,worker_ready:true,selected_implementation:'managed',admission_held:true},{connected:false,worker_ready:false,selected_implementation:'managed'}]){f.agent.status=()=>status;assert.throws(()=>f.tasks.migrate(value));}
+ assert.equal(f.journal.rows.length,0);
+}));
