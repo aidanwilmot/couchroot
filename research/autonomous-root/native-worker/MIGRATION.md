@@ -1599,3 +1599,35 @@ The retained test job remained byte-identical with exit 7 and was then explicitl
 forgotten. Both TVs remain managed-ready with loopback SDK access and unchanged
 boot IDs. Original failed-transition evidence remains preserved. The managed
 identity correction is local and still needs packaged hardware validation.
+
+### QN90A 0.7.20 exit-observation race
+
+QN90A's signed 0.7.20 update passed installed-file and managed readiness checks.
+The rehearsal then stopped during independent native shutdown verification,
+before managed restoration or launch. The native-stop receipt remained
+`submitting`. After the SDK rescue timer restored access, independent inspection
+found the native unit active/exited with MainPID 0, exit code 1 (normal exit),
+exit status 0, and its original start timestamp. The provider was still running.
+No abort is established by this attempt; the old observer did not retain which
+process-read or unit-state predicate failed.
+
+A concrete race was found in the remote observer: a process can disappear after
+`test -d /proc/PID` and before `cat /proc/PID/stat`, causing an otherwise successful
+exit to be classified as unavailable evidence. A deterministic shell test removes
+the process fixture at that exact read boundary. It fails against the previous
+observer and passes with the correction. The observer now attempts the read
+first and accepts absence only after independently confirming the process
+directory is gone. A failed read while the directory remains still fails closed.
+Successful matching unit termination and both original process exits remain
+mandatory. Unit-state/start/deadline and process-read failures now have bounded,
+specific diagnostic messages. This fixes a demonstrated race but does not prove
+it was the sole cause of the hardware attempt's generic failure.
+
+Recovery closed the provider, independently verified process exits and unchanged
+managed retained bytes, archived the failed transition, and restored .NET without
+a reboot. The completed fixture still reported exit 7 and its original digest;
+only that fixture was forgotten. Both TVs remain managed-ready on their original
+boots, with no pending setup operation. S90D remains on 0.7.17 and was not rehearsed.
+Seven focused exit-observer tests and all three isolated real-process rehearsals
+pass. The observer correction is local pending hardware validation; no completed
+both-TV round trip or automatic earlier-phase recovery is claimed.

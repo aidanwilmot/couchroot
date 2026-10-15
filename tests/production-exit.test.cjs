@@ -53,3 +53,25 @@ test('exit observation shell preserves process stat bytes and rejects failed boo
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
  }
 });
+
+
+test('process disappearance between existence and stat read still proves absence', {skip:process.platform!=='linux'},async()=>{
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawnSync}=require('node:child_process');
+ const f=fixture(),dir=fs.mkdtempSync(path.join(os.tmpdir(),'production-exit-race-'));let racing=false;
+ try{
+  fs.writeFileSync(dir+'/boot',boot);
+  for(const [name,p] of Object.entries(f.r.worker_identity.processes)){fs.mkdirSync(dir+'/'+p.pid);fs.writeFileSync(dir+'/'+p.pid+'/stat',Buffer.from(f.states[name],'base64'));}
+  const execute=async c=>{
+   if(c.includes('--property=Id,'))return f.execute(c);
+   const hook=racing?'cat() { if test "$1" = "'+dir+'/87/stat"; then rm "$1"; rmdir "'+dir+'/87"; return 1; fi; /bin/cat "$@"; }\n':'';
+   const r=spawnSync('/bin/sh',['-c',hook+c.replaceAll('/proc/sys/kernel/random/boot_id',dir+'/boot').replaceAll('/proc/87',dir+'/87').replaceAll('/proc/86',dir+'/86')],{encoding:'utf8'});
+   return {exit_code:r.status,stdout:r.stdout,stderr:r.stderr};
+  };
+  const observer=await prepareProductionExit({record:f.r,execute});racing=true;fs.rmSync(dir+'/86',{recursive:true});f.exit();
+  const result=await observer.waitForExit();assert.equal(result.observation.processes.worker.observation,'absent');assert.equal(result.observation.processes.guardian.observation,'absent');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('unexpected unit exit details are retained without treating failure as success',async()=>{
+ const f=fixture(),observer=await prepareProductionExit({record:f.r,execute:f.execute});f.setUnit('failed');
+ await assert.rejects(observer.waitForExit(),/unexpected unit active\/failed pid=0 code=1 status=0/);
+});
