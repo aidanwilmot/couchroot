@@ -979,11 +979,28 @@ then shut down; its boot/PID/start-time/unit identities and exact staging conten
 are checked before retirement and public admission. It never becomes a selected
 public worker.
 
-`bootstrap-launch.pending` and the private bootstrap receipt precede submission.
-An interrupted bootstrap requires independent inspection and cleanup; the service
-will not automatically launch another or silently switch acquisition paths.
-Interrupted returns and forward rollback retain the managed held executor and
-original transaction receipts. There is no new public operation or fault hook.
+The schema 2 private bootstrap receipt precedes an exclusive, atomic
+`bootstrap-launch.pending` pointer and SDK submission. The pointer is a relative
+symlink to that exact receipt in the private state directory; recovery never
+follows an arbitrary target. The receipt binds the boot, selection bytes, artifact
+hashes and unique root scope. A root-owned launch fence serializes launch against
+recovery and retains a seal that prevents a delayed original command from starting.
+
+After a coordinator restart, a fresh managed executor stays held while it seals
+the original fence and verifies that the old unit/cgroup and any recorded process
+identities are gone. It accepts only absent files or the exact expected bytes,
+types, owners, modes and link counts, and refuses extra scope contents. A failed
+unit is reset only after these ownership/absence checks. Cleanup can continue
+after a lost reply without submitting the launch again. The retired receipt is
+durable before the pending pointer is removed; selected-native startup then resumes
+under the unchanged selection. `durable.bootstrap_recovery` reports this progress.
+
+The seal and lock remain as small root-owned tombstones after scope retirement;
+they are not silently removed while a delayed SDK command could still exist.
+Changed boot or selection, legacy schema 1 launches, unbound or malformed receipts,
+unknown bytes and live processes remain blocked. Interrupted returns and forward
+rollback retain the managed held executor and original transaction receipts.
+There is no new public operation or production fault hook.
 
 The original managed acquisition adapter and worker remain packaged. Omitting
 `--native-acquisition` retains the prior path. Private configuration may explicitly
@@ -999,3 +1016,11 @@ on both TVs, with three verified bootstrap retirements per TV and preserved jobs
 Both ended managed-ready on SDK loopback. This round qualified interrupted return
 on QN90A and normal return on S90D; see
 [service acquisition results](native-worker/service-acquisition-results.json).
+
+
+Signed 0.7.32 additionally passed automatic same-receipt recovery after coordinator
+interruption at both submitted and ready native-bootstrap phases on each TV.
+Both returned to managed with retained jobs preserved, scope/process absence
+verified, SDK on loopback and all owned test/rescue units inactive. The original
+launch was not replayed; root-owned fence tombstones remain. See
+[bootstrap recovery results](native-worker/bootstrap-recovery-results.json).

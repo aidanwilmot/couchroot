@@ -7,15 +7,19 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.30 packages with native service acquisition enabled,
-managed selected and ready, and settled histories of 18 committed entries on
-QN90A and 20 on S90D. Each passed native disable/enable, worker transport loss
-and service restart using three separately verified native held bootstraps.
-Every bootstrap was retired before public admission; its processes and root scope
-were confirmed absent. Retained jobs, enrollment and the .NET recovery bytes were
-preserved. SDK is on loopback and all owned test/rescue units are inactive.
-QN90A recovered an interrupted return; S90D's return completed before the restart
-stimulus interrupted it, so that round qualifies a normal return only. See
+Both TVs are on signed 0.7.32 packages with native service acquisition enabled,
+managed selected and ready, and settled histories of 22 committed entries each.
+Each passed native disable/enable, worker transport loss and coordinator restart,
+then automatic recovery after coordinator interruption at both the submitted and
+ready native-bootstrap phases. Recovery retired the original receipt without
+replaying its launch, and native reacquisition preserved selection and retained
+jobs. Bootstrap scopes/processes are absent; small sealed launch-fence tombstones
+remain intentionally. Enrollment and .NET recovery bytes are unchanged, SDK is
+on loopback, and all owned test/rescue units are inactive. See
+[bootstrap recovery evidence](bootstrap-recovery-results.json).
+
+The preceding 0.7.30 round qualified native held-bootstrap lifecycle on both TVs,
+interrupted return on QN90A and normal return on S90D; see
 [service acquisition evidence](service-acquisition-results.json).
 
 On 0.7.28, both passed public-operation parity and interrupted-return acceptance.
@@ -51,7 +55,9 @@ rounds above. Native-default and .NET-free completion still require:
   including durable reconciliation without replaying operations.
 - Wider interruption boundaries and maintenance lifecycle coverage beyond the
   same-boot startup and active-return checks.
-- Replacing agent-required managed acquisition, installation and recovery utilities.
+- Establishing a .NET-free capability entry, then adopting it in agent-required
+  setup/acquisition and recovery callers. The setup-control audit is complete;
+  unrelated Hub `Control.dll` operations are outside this agent migration.
 - Final production-binary performance, resource-pressure and endurance validation
   on both TVs; reboot and standby/resume gates remain unqualified.
 - Native-default rollout, fallback observation, verified retirement of old staging,
@@ -2301,3 +2307,60 @@ Native-default rollout, endurance, reboot/standby and fully native capability
 entry remain unqualified. The next step is durable interrupted-bootstrap
 reconciliation without launch replay, followed by the remaining setup-control
 dependency audit. The .NET fallback remains installed and available.
+
+
+### Interrupted native-bootstrap reconciliation — 2026-10-15
+
+Signed 0.7.32 publishes a complete schema-2 receipt before its exclusive atomic
+pending pointer. The receipt binds the current boot, selection bytes, artifact
+hashes and exact root scope. Original launch and recovery serialize on the same
+root-owned file lock; recovery persists a seal that prevents a delayed original
+SDK command from launching. Lock/seal tombstones remain after scope retirement.
+
+A fresh authenticated managed executor remains held while it checks unit/cgroup
+emptiness, recorded process absence and the complete remaining scope inventory.
+Only exact known files or already-absent files are accepted. Cleanup can converge
+after a lost reply without replaying launch or signalling any process. A failed
+owned unit is reset only after those checks. The retired receipt is durable before
+the pointer is removed. Native startup then resumes under the original selection;
+malformed, legacy, changed-selection or changed-boot evidence still blocks.
+
+Both TVs passed the same-boot lifecycle round and coordinator interruption at
+submitted and ready bootstrap phases. A private watcher captured each exact
+receipt before signalling only the observed endpoint coordinator, bound to its
+boot, PID and start time. All four interrupted receipts were reconciled
+independently and retired; admission reopened on a newly verified native worker.
+Both then returned normally to managed with imported and native-created job
+records preserved. Final history is 22 entries each, SDK is loopback, enrollment
+and managed recovery digests are unchanged, and no setup/selection operation is
+pending. QN90A has 23 and S90D 33 owned trial/rescue units verified inactive.
+
+QN90A's preceding 0.7.31 trial remained held because an empty systemd unit stayed
+failed after stop. Its independent 300-second .NET rescue restored SDK access.
+Inspection and same-receipt cleanup established the missing reset-failed step;
+the corrected implementation checks ownership, process absence and files before
+reset. A Linux regression reproduces the failed-unit state. That earlier attempt
+is failed autonomous qualification, preserved separately from accepted 0.7.32.
+
+S90D's application-manager restart returned success while the coordinator kept
+running, so it was not counted as interruption. An initial targeted timer then
+failed before signalling; inspection confirmed the same live identity. A fresh
+300-second rescue and a separately journaled timer with corrected command
+encoding restarted only that bound coordinator. The original migration and its
+operations were not replayed. Subsequent submitted/ready interruption checks
+passed, and all extra timers were reconciled during final verification.
+
+Validation: 377 Node tests passed with 135 platform/environment skips. Six focused
+host recovery cases and six Linux filesystem/flock cases cover bindings, unsafe
+state, late launches, missing files, lost cleanup replies and failed systemd units.
+Fresh-fixture held-bootstrap, rehearsal and restart suites passed 4, 6 and 11
+cases. Signed installed service trees match the working source on both TVs.
+No Python/client code changed in this milestone.
+
+The setup-control caller audit now confirms that standalone agent install/update
+does not invoke Hub's Control.dll. A local capability-entry artifact audit found
+no established native replacement for the trusted bridge; historical in-process
+loader behavior is only a candidate pending current-firmware and package-route
+evidence. See [the dependency inventory](DOTNET-INVENTORY.md). Broader handoff
+failure/provider loss, final production endurance, native-default rollout and
+power-lifecycle qualification remain open. The .NET fallback stays available.

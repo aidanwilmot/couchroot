@@ -26,6 +26,7 @@ const {createNativeMigration}=require('./native-migration');
 const {createManagedReturn}=require('./managed-return');
 const {loadAcquisition,stageAcquisition}=require('./service-acquisition');
 const {prepareBootstrap,validateBootstrap,bindBootstrap,retireBootstrap}=require('./held-bootstrap');
+const {recoveryCandidate,reconcileBootstrap}=require('./bootstrap-recovery');
 const BASE='/home/owner/share/tmp/sdk_tools';
 const quote=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 function launchRequest(stage,gate){
@@ -42,7 +43,7 @@ function createAgent(config,options={}){
  const payload=options.payload||path.join(__dirname,'../payload');
  let nativeCandidate=candidateStatus(payload,config.device);
  let acquisitionMode=null;
- let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null,managedReturn=null,reconciliation=null,restartRollback=null,nativeStartup=null,restartReturn=null;
+ let managedDigest=null,admissionHold=null,nativeRuntime=null,migration=null,managedReturn=null,reconciliation=null,restartRollback=null,nativeStartup=null,restartReturn=null,bootstrapRecovery=null;
  const inFlight=new Set();
  function selection(refresh=false){
   if(!options.selectionFile)return {phase:'legacy-managed',selected_implementation:'managed',launch_allowed:true};
@@ -79,7 +80,7 @@ function createAgent(config,options={}){
  function schedule(){if(!running||timer||connected||admissionHold)return;if(attempts>=8){lastError='Acquisition retry budget exhausted; use authenticated disable/enable after diagnosis';return;}timer=setTimeout(()=>{timer=null;launch();},Math.min(60000,5000*Math.pow(2,Math.max(0,attempts-1))));}
  function prepare(port,secret,attempt){
   firmware(config);
-  if(options.selectionFile){const marker=path.join(path.dirname(options.selectionFile),'bootstrap-launch.pending');try{fs.lstatSync(marker);throw Error('Uncertain bootstrap requires independent reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}}
+  if(options.selectionFile){const prior=recoveryCandidate(options.selectionFile,currentBoot);if(prior&&(!attempt.recovery||prior.id!==attempt.recovery.id))throw Error('Bootstrap recovery must precede acquisition');}
   const pkg='archive-root-'+crypto.randomBytes(8).toString('hex');stage=BASE+'/'+pkg;
   fs.mkdirSync(stage,{mode:0o755});
   const onDemand=BASE+'/on-demand';try{fs.mkdirSync(onDemand,{mode:0o755});}catch(e){if(e.code!=='EEXIST')throw e;const s=fs.lstatSync(onDemand);if(!s.isDirectory()||s.isSymbolicLink())throw Error('Unsafe staging directory');}
@@ -99,8 +100,8 @@ function createAgent(config,options={}){
   fs.writeFileSync(stage+'/root-agent.token',secret.toString('base64')+'\n',{mode:0o600,flag:'wx'});
   let script='/usr/bin/dotnet '+stage+'/SamsungTvRootAgent.dll 127.0.0.1 '+port+' '+stage+'/root-agent.token '+stage+' </dev/null >'+stage+'/root-agent.log 2>&1 &\n';
   if(attempt.acquisition){
-   if(nativeStartup&&nativeStartup.phase!=='complete'&&!restartReturn&&!restartRollback){
-    const prepared=prepareBootstrap({payload,device:config.device,stage,port,bootId:currentBoot(),journalDirectory:path.dirname(options.selectionFile)});
+   if(nativeStartup&&nativeStartup.phase!=='complete'&&!restartReturn&&!restartRollback&&!attempt.recovery){
+    const prepared=prepareBootstrap({payload,device:config.device,stage,port,bootId:currentBoot(),journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile});
     attempt.bootstrap=prepared.record;script=prepared.command;
    }
    fs.writeFileSync(stage+'/operation.sh',script,{mode:0o644,flag:'wx'});
@@ -120,14 +121,15 @@ function createAgent(config,options={}){
   if(!migration&&options.selectionFile&&(!restartRollback||restartRollback.phase==='complete')){try{const c=restartRollbackCandidate(options.selectionFile,(options.managedVersion||managedVersion)(payload));if(c)restartRollback={id:c.id,phase:'acquiring',running:false,attempts:0,error:null,result:null};}catch(error){reconciliation={...(reconciliation||{}),error:String(error.message).slice(0,160)};}}
   if(options.selectionFile&&!managedReturn){const c=restartReturnCandidate(options.selectionFile,(options.managedVersion||managedVersion)(payload));if(c)restartReturn={...c,phase:'acquiring',attempts:0,error:null};}
   if(options.selectionFile&&selection().selected_implementation==='native-prototype'&&selection().phase==='stable'){try{const c=startupCandidate(options.selectionFile);if(c)nativeStartup={id:c.record.id,phase:'acquiring',error:null};}catch(e){lastError=e.message;}}
+  if(options.selectionFile){try{const prior=recoveryCandidate(options.selectionFile,currentBoot);if(prior)bootstrapRecovery={id:prior.id,phase:'acquiring',attempts:0,error:null};}catch(error){running=false;lastError=String(error.message);return;}}
   if(!selection(true).launch_allowed&&!restartHeld()){running=false;lastError='Worker selection requires reconciliation';return;}
-  launching=true;attempts++;const gen=++generation,attempt={acquisition:null,bootstrap:null};let step='firmware verification';
+  launching=true;attempts++;const gen=++generation,attempt={acquisition:null,bootstrap:null,recovery:bootstrapRecovery&&bootstrapRecovery.phase!=='complete'?bootstrapRecovery:null};let step='firmware verification';
   try{
    nativeCandidate=candidateStatus(payload,config.device);
    firmware(config);
    const secret=crypto.randomBytes(32);
    if(channel)channel.close();
-   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation||(admissionHold&&admissionHold.stopping)){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;if(attempt.bootstrap)validateBootstrap(info,{bootId:currentBoot(),launcherSha256:attempt.bootstrap.launcher_sha256});else validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();if(restartReturn&&restartReturn.phase!=='complete')runRestartReturn(conn,gen);else if(nativeStartup&&nativeStartup.phase!=='complete')runNativeStartup(conn,gen,attempt.bootstrap);else if(restartHeld())runRestartRollback(conn,gen);}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation||(attempt.bootstrap&&nativeStartup&&nativeStartup.retiring))return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
+   channel=new RootAgentServer({secret,onConnect:conn=>{if(!running||gen!==generation||(admissionHold&&admissionHold.stopping)){conn._socket.destroy();return;}connected=true;workerReady=false;identity=conn.identity;conn.operation({op:'status'}).then(info=>{if(!running||gen!==generation||!connected||channel._conn!==conn)return;if(attempt.bootstrap)validateBootstrap(info,{bootId:currentBoot(),launcherSha256:attempt.bootstrap.launcher_sha256});else validateReadiness(info,{implementation:'managed',bootId:currentBoot()});workerStatus=info;workerStatusAt=process.uptime();workerReady=true;lastAcquired=new Date().toISOString();if(attempt.recovery)runBootstrapRecovery(conn,gen);else if(restartReturn&&restartReturn.phase!=='complete')runRestartReturn(conn,gen);else if(nativeStartup&&nativeStartup.phase!=='complete')runNativeStartup(conn,gen,attempt.bootstrap);else if(restartHeld())runRestartRollback(conn,gen);}).catch(error=>{if(gen===generation&&connected&&channel._conn===conn){lastError=String(error.message);conn._socket.destroy();}});lastError=null;launching=false;if(timer){clearTimeout(timer);timer=null;}if(client){sdb.close(client);client=null;}},onClose:()=>{if(gen!==generation||(attempt.bootstrap&&nativeStartup&&nativeStartup.retiring))return;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;schedule();}});
    await new Promise((resolve,reject)=>{channel.start(resolve);channel._server.once('error',reject);});
    if(!running||gen!==generation)return;
    step='loopback connection';
@@ -151,7 +153,22 @@ function createAgent(config,options={}){
   }catch(e){if(running&&gen===generation&&!connected)lastError=(step+': '+String(e.message||e.code)).slice(0,300);}
   finally{if(gen===generation){launching=false;if(client){sdb.close(client);client=null;}if(!connected)schedule();}}
  }
- function restartHeld(){return !!restartRollback&&restartRollback.phase!=='complete'||!!nativeStartup&&nativeStartup.phase!=='complete'||!!restartReturn&&restartReturn.phase!=='complete';}
+ function restartHeld(){return !!bootstrapRecovery&&bootstrapRecovery.phase!=='complete'||!!restartRollback&&restartRollback.phase!=='complete'||!!nativeStartup&&nativeStartup.phase!=='complete'||!!restartReturn&&restartReturn.phase!=='complete';}
+ async function runBootstrapRecovery(conn,gen){
+  const r=bootstrapRecovery,owner=channel;if(r.running)return;r.running=true;r.phase='reconciling';r.attempts++;
+  const owned=()=>{if(!running||gen!==generation||channel!==owner||owner._conn!==conn||!connected||bootstrapRecovery!==r)throw Error('Bootstrap recovery executor changed');};
+  try{
+   r.result=await reconcileBootstrap({selectionFile:options.selectionFile,bootId:currentBoot(),executor:{pid:conn.identity.pid,status:async()=>{owned();const v=await conn.operation({op:'status'});owned();return v;},execute:async(c,t)=>{owned();const v=await owner.execute(c,t);owned();return v;}}});
+   owned();r.phase='complete';r.error=null;lastError=null;
+   if(restartReturn&&restartReturn.phase!=='complete')runRestartReturn(conn,gen);
+   else if(nativeStartup&&nativeStartup.phase!=='complete')runNativeStartup(conn,gen);
+   else if(restartRollback&&restartRollback.phase!=='complete')runRestartRollback(conn,gen);
+  }catch(error){r.phase='failed';r.error=String(error.message).slice(0,160);lastError=r.error;
+   // The fence/cleanup contract is convergent: re-observe on the same held
+   // executor, never submit the interrupted launch again.
+   if(r.attempts<36)setTimeout(()=>{if(bootstrapRecovery===r&&running&&gen===generation&&connected)runBootstrapRecovery(conn,gen);},options.restartRollbackRetryMs||10000);
+  }finally{r.running=false;}
+ }
  async function runRestartReturn(conn,gen){
   const r=restartReturn,owner=channel;if(r.running)return;r.running=true;r.phase='reconciling';r.attempts++;
   const owned=()=>{if(!running||gen!==generation||channel!==owner||owner._conn!==conn||!connected||restartReturn!==r)throw Error('Return bootstrap executor changed');};
@@ -206,7 +223,7 @@ function createAgent(config,options={}){
   finally{r.running=false;}
  }
  function start(){if(running)return;running=true;attempts=0;lastError=null;launch();}
- function stop(){admissionHold=null;nativeRuntime=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(migration)migration.closeTransport();if(managedReturn)managedReturn.closeTransport();migration=null;managedReturn=null;nativeStartup=null;restartRollback=null;restartReturn=null;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
+ function stop(){admissionHold=null;nativeRuntime=null;running=false;connected=false;workerReady=false;identity=null;workerStatus=null;workerStatusAt=0;++generation;if(migration)migration.closeTransport();if(managedReturn)managedReturn.closeTransport();migration=null;managedReturn=null;nativeStartup=null;restartRollback=null;restartReturn=null;bootstrapRecovery=null;if(timer)clearTimeout(timer);timer=null;if(client)sdb.close(client);client=null;if(channel)channel.close();channel=null;launching=false;const stopped=generation;setTimeout(()=>{if(!running&&generation===stopped){try{clean();}catch(e){lastError='Staging cleanup incomplete';}}},1000);}
  function submit(call){
   if(admissionHold||restartHeld()||!running||!connected||!workerReady||!channel||!runtimeAllowed(selection()))return Promise.reject(Object.assign(Error('Root worker unavailable or admission held'),{outcome:'rejected'}));
   let request;try{request=Promise.resolve(call(channel));}catch(e){request=Promise.reject(e);}
@@ -628,7 +645,7 @@ function createAgent(config,options={}){
   if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeManagedActivation();
  }
  // Durable evidence only; live coordinator handles are reported separately.
- const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),native_startup:nativeStartup,restart_return:restartReturn&&{transaction_id:restartReturn.id,phase:restartReturn.phase,attempts:restartReturn.attempts,error:restartReturn.error,result:restartReturn.result||null},startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null},restart_rollback:restartRollback&&{transaction_id:restartRollback.id,phase:restartRollback.phase,attempts:restartRollback.attempts,error:restartRollback.error,receipt_sha256:restartRollback.result?restartRollback.result.receipt_sha256:null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
+ const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),bootstrap_recovery:bootstrapRecovery&&{id:bootstrapRecovery.id,phase:bootstrapRecovery.phase,attempts:bootstrapRecovery.attempts,error:bootstrapRecovery.error},native_startup:nativeStartup,restart_return:restartReturn&&{transaction_id:restartReturn.id,phase:restartReturn.phase,attempts:restartReturn.attempts,error:restartReturn.error,result:restartReturn.result||null},startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null},restart_rollback:restartRollback&&{transaction_id:restartRollback.id,phase:restartRollback.phase,attempts:restartRollback.attempts,error:restartRollback.error,receipt_sha256:restartRollback.result?restartRollback.result.receipt_sha256:null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
  const api={status,start,stop,holdAdmission,probeObserver,restartInventory,cleanupRestart,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},canResumeManaged,resumeManagedActivation,returnManaged,rehearseNative,migrateNative};return api;
 }
 module.exports={createAgent,launchRequest};

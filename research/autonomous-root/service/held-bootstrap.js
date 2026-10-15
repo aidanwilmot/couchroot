@@ -6,6 +6,7 @@ const {loadCandidate}=require('./native-candidate');
 const {validateResourceInventory}=require('./worker-readiness');
 const {processIdentities}=require('./worker-processes');
 const {inspectBootstrapUnit}=require('./observer-unit');
+const {fenceCommand,markerId,clearMarker}=require('./bootstrap-recovery');
 const q=s=>"'"+s.replace(/'/g,"'\\''")+"'";
 const check=v=>{if(!v)throw Error('Held native bootstrap evidence unavailable');};
 function validateBootstrap(info,{bootId,launcherSha256}){
@@ -14,22 +15,24 @@ function validateBootstrap(info,{bootId,launcherSha256}){
  const r=validateResourceInventory(info);check(!r.jobs.length&&!r.transfers.length&&!r.helpers.length);
  processIdentities(info,info.processes.worker.pid);return info;
 }
-function prepareBootstrap({payload,device,stage,port,bootId,journalDirectory}){
+function prepareBootstrap({payload,device,stage,port,bootId,journalDirectory,selectionFile}){
  check(/^\/home\/owner\/share\/tmp\/sdk_tools\/archive-root-[a-f0-9]{16}$/.test(stage)&&Number.isInteger(port)&&port>=1024&&port<=65535&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(bootId));
  const candidate=loadCandidate(payload,device);check(candidate);
  const id=path.basename(stage).slice(13).repeat(2),d='/opt/couchroot-bootstrap-'+id,s=d+'/state',unit='couchroot-bootstrap-'+id+'.service';
  for(const n of ['native-worker','native-app-launcher']){const b=read(payload+'/'+n,4*1024*1024);check(hash(b)===candidate.artifacts[n].sha256);fs.writeFileSync(stage+'/code/'+n,b,{mode:0o644,flag:'wx'});}
- const record={schema:1,id,phase:'submitted',boot_id:bootId,directory:d,scope:s,unit,worker_sha256:candidate.artifacts['native-worker'].sha256,launcher_sha256:candidate.artifacts['native-app-launcher'].sha256,token_sha256:hash(read(stage+'/root-agent.token')),file:path.join(journalDirectory,id+'.bootstrap.json')};
- const marker=path.join(journalDirectory,'bootstrap-launch.pending'),fd=fs.openSync(marker,'wx',0o600);
- try{fs.writeSync(fd,id+'\n');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
- atomic(record.file,record); // Intent precedes the single SDK submission; uncertain launches block another.
+ const record={schema:2,selection_sha256:hash(privateRead(selectionFile,65536)),fence:'/opt/couchroot-bootstrap-fence-'+id,id,phase:'submitted',boot_id:bootId,directory:d,scope:s,unit,worker_sha256:candidate.artifacts['native-worker'].sha256,launcher_sha256:candidate.artifacts['native-app-launcher'].sha256,token_sha256:hash(read(stage+'/root-agent.token')),file:path.join(journalDirectory,id+'.bootstrap.json')};
+ const marker=path.join(journalDirectory,'bootstrap-launch.pending');
+ // Persist the complete receipt before publishing an atomic, exclusive pointer.
+ // A crash cannot expose an empty marker or permit a launch without its receipt.
+ atomic(record.file,record);fs.symlinkSync(id+'.bootstrap.json',marker);
+ const fd=fs.openSync(journalDirectory,'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
 
  const copy=(src,dest,sha,mode)=>'test -f '+q(src)+'; test ! -L '+q(src)+'\ntest "$(sha256sum '+q(src)+' | cut -d " " -f1)" = '+sha+'\n(set -C; cat '+q(src)+' > '+dest+')\nchmod '+mode+' '+dest+'\ntest "$(sha256sum '+dest+' | cut -d " " -f1)" = '+sha+'\n';
  const command='set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\numask 077\n'+
   'test "$(cat /proc/sys/kernel/random/boot_id)" = '+bootId+'\ntest ! -e '+d+'; test ! -L '+d+'\nmkdir '+d+' '+d+'/code '+s+'\n'+
   copy(stage+'/code/native-worker',d+'/code/worker',record.worker_sha256,'500')+copy(stage+'/code/native-app-launcher',s+'/launcher',record.launcher_sha256,'400')+copy(stage+'/root-agent.token',s+'/token',record.token_sha256,'600')+
   'systemd-run --quiet --unit='+unit+' '+['User=0','Group=0','SmackProcessLabel=System','PrivateMounts=yes','BindReadOnlyPaths='+d+'/code','TimeoutStopSec=5s','RemainAfterExit=yes','KillMode=control-group','NoNewPrivileges=yes','AmbientCapabilities=','StandardOutput=null','StandardError=null'].map(p=>'--property='+q(p)).join(' ')+' /usr/bin/env -i PATH=/usr/bin:/bin DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus '+[d+'/code/worker','127.0.0.1',String(port),s+'/token',s,s+'/launcher',record.launcher_sha256,'--held-bootstrap'].map(q).join(' ')+'\n';
- return {record,command};
+ return {record,command:fenceCommand(record,command)};
 }
 async function bindBootstrap(record,channel,bootId){
  check(record.boot_id===bootId);const peer=channel._conn;check(peer&&['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)&&peer.identity.smack==='System');
@@ -50,7 +53,7 @@ function cleanupCommand(r){
 }
 async function retireBootstrap(record,owner,next){
  const marker=path.join(path.dirname(record.file),'bootstrap-launch.pending');
- check(privateRead(record.file,16384)===JSON.stringify(record)&&privateRead(marker,64)===record.id+'\n');
+ check(privateRead(record.file,16384)===JSON.stringify(record)&&markerId(marker)===record.id);
  const result=await owner.shutdown();check(result.acknowledged&&result.disconnected);
  for(let i=0;;i++){
   const u=await inspectBootstrapUnit({unit:record.unit,bootId:record.boot_id,execute:(c,t)=>next.execute(c,t)});
@@ -58,6 +61,7 @@ async function retireBootstrap(record,owner,next){
   if(u.main_pid===0&&u.active_state==='active'&&u.sub_state==='exited'&&u.exec_code===1)break;
   check(i<50&&u.main_pid===record.worker_identity.processes.guardian.pid);await new Promise(r=>setTimeout(r,100));
  }
- const r=await next.execute(cleanupCommand(record),5000);check(r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='BOOTSTRAP-RETIRED\n');atomic(record.file,{...record,phase:'retired'});check(privateRead(marker,64)===record.id+'\n');fs.unlinkSync(marker);const fd=fs.openSync(path.dirname(marker),'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+ const cleanup=cleanupCommand(record);
+ const r=await next.execute(record.schema===2?fenceCommand(record,cleanup,{seal:true}):cleanup,5000);check(r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='BOOTSTRAP-RETIRED\n');atomic(record.file,{...record,phase:'retired'});clearMarker(record);
 }
 module.exports={validateBootstrap,prepareBootstrap,bindBootstrap,retireBootstrap,cleanupCommand};

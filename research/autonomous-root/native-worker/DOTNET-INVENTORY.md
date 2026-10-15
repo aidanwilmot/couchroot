@@ -1,7 +1,7 @@
 # Agent .NET dependency inventory
 
-Inspected 2026-10-15; updated after signed 0.7.30 service acquisition qualification
-on QN90A and S90D.
+Inspected 2026-10-15; includes service acquisition, interrupted-bootstrap
+reconciliation and the standalone setup-control caller audit.
 This is a source/caller inventory and removal plan, not a native-only qualification.
 The deployed managed payloads, SDK rescue utility and runtime remain available.
 See [migration status](MIGRATION.md) and [public contract](../CAPABILITIES.md).
@@ -154,8 +154,11 @@ bounded exec only, and no public admission. Startup verifies the original
 selection, retired processes and retained state before launching native. It then
 shuts down and verifies the bootstrap's boot/PID/start-time/unit identities,
 removes exact staging, and opens public admission. A durable bootstrap marker
-blocks another acquisition after uncertainty. Automatic reconciliation of that
-marker after a coordinator crash remains a separate boundary.
+blocks another native launch after uncertainty. Schema-2 receipts now permit
+same-boot reconciliation through a fresh held managed executor. Recovery seals
+the original launch fence, verifies absent processes and exact remaining files,
+and retires that receipt without replaying its launch. Legacy, changed-boot or
+changed-selection receipts still require independent inspection.
 
 Managed selection, pending returns and forward rollback still acquire a managed
 worker, preserving the existing same-transaction adoption rules. The original
@@ -166,6 +169,50 @@ bridge needs a separately qualified native capability entry on each firmware,
 without relaxing platform policy or granting persistent capabilities.
 
 ## Removal order and concrete next step
+
+### Setup-control caller audit
+
+`Driver.prepare_control` builds `Control.dll` only for `setting`, `home_operation`
+and `routes` actions. `control_call` is reached by those actions and their inverse
+operations, plus the engine's route-reload recovery. Its modes change Hub home
+routing, first-screen/autostart settings, or notify the context database reload.
+The QN90A resume trial adds its own first-screen caller. These are Hub integration
+controls, not autonomous-agent installation requirements.
+
+The agent's `PilotDriver.prepare` accepts only its package and four provisioning
+files; every other action is refused. `install` and `update` construct only those
+package/file actions. Consequently, the guarded standalone agent installation,
+update and provisioning paths do not build or invoke `Control.dll`. Replacing
+that utility would expand this migration into unrelated Hub behavior and would
+not remove a dependency from the agent's current install path.
+
+The remaining installer dependency is instead `PilotTransport`'s privileged
+snapshots and inherited `Driver` file/package operations through `Transport.root`
+and its managed default acquisition. SDK transport admission also checks the
+pinned runtime directory and host. The opt-in native acquisition still enters
+through the trusted managed bridge, so merely changing the default argument or
+dropping those guards would not establish a .NET-free installer. That capability
+entry and its independently qualified replacement remain the blocking dependency
+for removing the host SDK and managed acquisition payloads from agent builds.
+
+### Capability-entry evidence boundary
+
+A local artifact audit has not established a direct native replacement for the
+trusted bridge. QN90A's pinned development launcher performs a zone transition
+and `exec`; that does not demonstrate retained effective mount capabilities in
+an arbitrary native child. Its archive launcher performs the already-used
+signature and owner-identity transition, which still requires the private
+passwd/key views created by a capable host. S90D's capability inventory alone
+does not establish equivalent launcher behavior.
+
+Historical Tizen loader source suggests an in-process native-library entry as a
+candidate, but current-firmware binaries and Couchroot's own package route have
+not been bound to that behavior on either TV. The next investigation is passive
+binary/manifest verification before any prototype or launch trial. Do not treat
+this lead as qualified acquisition, or grant persistent capabilities or relax
+platform policy to make it work. Detailed vendor-artifact evidence stays private.
+
+### Remaining removal order
 
 1. Completed: the native Recovery equivalent, fake-vconf/error/delay tests,
    reproducible ARM build and independent rescue on both TVs. Keep the managed
@@ -178,12 +225,12 @@ without relaxing platform policy or granting persistent capabilities.
 3. The opt-in service archive adapter and selected-native held bootstrap now use
    the shared native acquisition path and bounded native protocol mode. Keep
    managed pending-return/rollback adoption and explicit acquisition fallback.
-   Broaden bootstrap-interruption reconciliation before default selection changes.
-4. Audit remaining agent-required setup controls. `Driver.prepare_control` and
-   `control_call` still build/invoke `tvsetup/native/Control.dll` for settings,
-   home operations and reloads, even over an enrolled agent transport. Separate
-   necessary agent installation/recovery calls from unrelated Hub/telemetry work.
-   The telemetry `native_bootstrap` pilot is not a root-acquisition replacement.
+   Same-boot submitted/ready bootstrap reconciliation is implemented; wider
+   handoff/provider-failure and power-lifecycle gates remain before default changes.
+4. Completed: the setup-control caller audit above establishes that `Control.dll`
+   serves Hub settings/routing and is not invoked by standalone agent install or
+   update. Keep those unrelated controls unchanged. The telemetry
+   `native_bootstrap` pilot is not a root-acquisition replacement.
 5. After native-default lifecycle, endurance, reboot and standby qualification,
    retire the managed worker payload and agent-specific build requirements.
    Preserve a verified offline managed recovery release. Do not remove Samsung's
@@ -191,9 +238,10 @@ without relaxing platform policy or granting persistent capabilities.
 
 The inventory itself installed no utility; the subsequent native SDK recovery
 milestone completed step 1. The acquisition pilot advances step 2 through an
-explicitly managed entry bridge. The service adapter and selected-native held bootstrap are now integrated;
-next broaden interrupted-bootstrap reconciliation and audit remaining agent-required
-setup controls. Keep .NET-free capability entry as a separate open boundary. The
+explicitly managed entry bridge. The service adapter, selected-native held bootstrap and same-boot interrupted
+bootstrap reconciliation are integrated. The setup-control audit above is complete.
+The next acquisition boundary is a verified .NET-free capability entry on both
+firmwares, followed by adoption in agent-required setup and recovery callers. The
 prerequisites delivered by the preceding milestones—immutable selection binding,
 fresh runtime receipts, held startup, same-transaction return recovery and operation parity—remain reusable
 regardless of the eventual acquisition adapter.
