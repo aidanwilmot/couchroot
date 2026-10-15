@@ -1262,3 +1262,39 @@ qualification remain required. No TV was changed or rebooted; .NET stays deploye
 
 The combined Linux migration suite passes 230 tests without skips. The tracked-file
 privacy audit reports no findings across 611 files.
+
+### Real-process held rehearsal — local Linux qualification
+
+The complete agent/controller rehearsal now passes with real managed source,
+independent native provider, native production worker/guardian and restored managed
+processes. It uses actual authenticated listeners, protocol commands, process exit
+observation, retained-state installation/restoration, selection journals, channel
+adoption, production/provider teardown and activation cleanup. The held native
+trial forgets one original job and creates a completed job with a one-time side
+effect. After return, managed reports both preserved outcomes, the forgotten job
+remains absent, original retained bytes match, and the side effect occurred once.
+Public commands resume only after managed activation. Both retired native scopes,
+provider tokens and pending ownership markers are independently checked absent.
+
+A second real-process run injects a lost acknowledgement after managed activation
+publication. Admission remains held, public execution refuses, and explicit
+activation recovery rechecks the completed state before reopening requests. Neither
+retirement nor the recorded job runs again. Both runs pass without skips.
+
+This test intentionally runs alone in a fresh disposable Linux container because
+it owns the real `/opt/couchroot-agent` fixture directory. Enable
+`COUCHROOT_REHEARSAL=1` and `COUCHROOT_PARITY_CONTAINER=1`, provide the existing
+`NATIVE_WORKER` and `MANAGED_PARITY` host test builds, and run
+`node --test tests/native-rehearsal-integration.test.cjs`. The container needs the
+existing SYS_PTRACE capability, disabled seccomp filter and disabled core dumps.
+The native host build stubs Smack/mount setup and must never be deployed.
+
+Boundaries remain explicit: artifact staging and process launch substitute host
+binaries for signed TV packages; systemd inspection/stop uses a fixture tied to
+real child exit state; credentials are normalized for the host; managed runtime
+mount/staging checks are replaced by real process/executable and restored-state
+checks. The other production controller and cleanup code is loaded unchanged.
+This establishes integrated wire/process/state behavior, not TV runtime, signing,
+mount-policy or power-lifecycle qualification. Both TVs remain unchanged on .NET;
+neither was restarted or rebooted. Both-TV rehearsal and unresolved earlier-phase
+recovery remain open before native-default or sunset decisions.
