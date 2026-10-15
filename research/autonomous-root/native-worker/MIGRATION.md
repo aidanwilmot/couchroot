@@ -152,6 +152,9 @@ why Opus paused. No motive should be inferred from the absence of an acquisition
 
 ## Dependency inventory
 
+The [2026-10-15 caller and runtime inventory](DOTNET-INVENTORY.md) expands the
+three remaining acquisition/setup/recovery dependencies and their removal order.
+
 | Component | Current responsibility | Migration disposition |
 | --- | --- | --- |
 | `payload/SamsungTvRootAgent.cs`, `AgentOperations.cs`, `AgentJobs.cs`, `AgentHelpers.cs`, `AgentLauncher.cs` | Managed protocol worker, operations and launcher embedding | Replace with native worker after parity gates; retain managed artifacts during rollback window |
@@ -2102,3 +2105,20 @@ groups, six real-process rehearsals and eleven restart scenarios passed in fresh
 containers with rebuilt native and managed fixtures. No client or tvsetup code
 changed. No TV reboot or standby was requested. Signal-handler compatibility,
 endurance, wider fault boundaries and native-only acquisition remain open.
+
+
+### .NET caller inventory — 2026-10-15
+
+[DOTNET-INVENTORY.md](DOTNET-INVENTORY.md) traces setup's NamespaceRootProbe and
+RootIdentity, the private SDK rescue utility, and service SamsungTvArchiveRoot
+through their actual callers, build paths, runtime requirements and replacement
+options. The acquisition ports must preserve the capability context supplied by
+Samsung's trusted runtime; a C translation alone does not establish that context.
+The next implementation is a native conditional SDK-host recovery utility with
+fake-vconf tests, followed by independent rescue qualification on both TVs.
+
+No managed component was removed or replaced in this inventory milestone. The
+selected-native bootstrap and managed return remain deployed fallback paths.
+Validation is source/caller inspection, resolved local documentation links,
+360 passing Node tests (125 platform/environment skips), and the privacy audit;
+there is no additional device-behavior change or hardware acceptance claim.

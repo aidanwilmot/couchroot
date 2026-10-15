@@ -855,7 +855,9 @@ worker transport loss on the same boot. A temporary managed bootstrap acquires
 root using the existing SDK and archive path, with public admission closed,
 then verifies and launches native from the committed staging. The original
 selection and activation receipts remain unchanged; a separate runtime receipt
-binds the new worker identity. `.NET` remains required for this acquisition path.
+binds the new worker identity. `.NET` remains required for this acquisition path. See the
+[dependency inventory](native-worker/DOTNET-INVENTORY.md) for setup, rescue and
+service callers, replacement options and removal order.
 
 Transfer/helper IDs and in-memory job output belong to the worker lifetime.
 Retained job metadata survives; interrupted public operations retain unknown
