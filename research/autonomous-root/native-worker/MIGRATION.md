@@ -7,10 +7,11 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.23 packages from `6b6016a`, with .NET selected and ready.
-Each completed a normal installed managed/native/managed rehearsal on 0.7.22 and,
-on 0.7.23, an installed rehearsal whose native exit observation was deliberately
-interrupted and then explicitly recovered. Retained job bytes, prior selection
+Both TVs are on signed 0.7.24 packages from `977230b`, with .NET selected and ready.
+Each completed a normal installed managed/native/managed rehearsal on 0.7.22 and
+again on 0.7.24, and on 0.7.23 an installed rehearsal whose native exit observation
+was deliberately interrupted and then explicitly recovered. On 0.7.24 the
+read-only durable inventory reports both TVs as settled. Retained job bytes, prior selection
 history and boot identity were preserved; no recovery timer or setup operation is
 pending. See [round-trip evidence](roundtrip-results.json) and
 [interrupted-exit evidence](exit-recovery-results.json).
@@ -1811,5 +1812,17 @@ provider records, transaction-named files, later phases, return transitions and
 writer locks. They also cover idempotent repetition and journal validation. The
 real-process rehearsals assert the interrupted inventory (`native-stop` unknown)
 and a settled inventory after recovery. Read-only copies of both TVs' current
-journals classify as settled with no diagnostics. A real restart at the abandonment
-boundary has not been exercised on either TV.
+journals classify as settled with no diagnostics.
+
+Signed 0.7.24 packages from `977230b` were installed on both TVs through the shared
+engine, using the installed 0.7.23 packages as the baseline. All 66 members,
+enrollment, protected files and startup flags verified, and boots were unchanged.
+The first QN90A acceptance check failed after installation only because the
+private acceptance script expected the native status object without the new
+`durable` field. The engine journal stayed pending and the rescue timer stayed
+armed until the corrected check completed. Both services then reported
+`durable.action` `none`. Each TV completed one normal installed round trip on
+0.7.24 with retained bytes, scope cleanup and prior history preserved, now eight
+committed entries per TV. The inventory was settled again afterwards. A real
+restart at the abandonment boundary has not been exercised on either TV; no TV
+was rebooted.
