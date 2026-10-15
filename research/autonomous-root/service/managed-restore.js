@@ -4,10 +4,21 @@
 const fs=require('fs'),path=require('path');
 const {atomic,hash}=require('./policy');
 const {privateRead}=require('./private-state');
-const {selectionStatus}=require('./worker-selection');
+const {selectionStatus,SelectionJournal}=require('./worker-selection');
 const {snapshotNativeJobs}=require('./native-retained-state');
 const {planManagedRestore}=require('./managed-restore-plan');
 function check(ok){if(!ok)throw Error('Managed restoration evidence unavailable');}
+function restoreTransition(initial,record,accepted=false){
+ const p=initial.pending,id=record.id;check(initial.phase==='reconciliation-required'&&p);
+ // A failed native trial rolls back its existing transaction. Once native was
+ // committed, returning to managed is a new, separately quiesced transition.
+ if(p.phase==='rollback-required'||accepted&&p.phase==='rollback-state-ready')check(p.id===id&&p.from.implementation==='managed'&&p.to.implementation==='native-prototype'&&p.to.manifest_sha256===record.manifest_sha256);
+ else{
+  check((p.phase==='prepared'||accepted&&p.phase==='state-ready')&&p.from.implementation==='native-prototype'&&p.from.manifest_sha256===record.manifest_sha256&&p.to.implementation==='managed');
+  const h=initial.history[initial.history.length-1];check(h&&h.id===id&&h.outcome==='committed'&&h.from.implementation==='managed'&&h.from.manifest_sha256===p.to.manifest_sha256&&h.state_sha256===record.state_receipt_sha256&&h.readiness_sha256===hash(JSON.stringify(record)));
+ }
+ return p.from.implementation==='managed'?'rollback-state-ready':'state-ready';
+}
 async function restoreManagedJobs(options){
  const {journalDirectory,selectionFile,execute}=options;
  check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
@@ -16,13 +27,7 @@ async function restoreManagedJobs(options){
  const plan=planManagedRestore({record,installation,baseline,snapshot}),id=record.id;
  const initial=selectionStatus(selectionFile),p=initial.pending;
  check(initial.phase==='reconciliation-required'&&p);
- // A failed native trial rolls back its existing transaction. Once native was
- // committed, returning to managed is a new, separately quiesced transition.
- if(p.phase==='rollback-required')check(p.id===id&&p.from.implementation==='managed'&&p.to.implementation==='native-prototype'&&p.to.manifest_sha256===record.manifest_sha256);
- else{
-  check(p.phase==='prepared'&&p.from.implementation==='native-prototype'&&p.from.manifest_sha256===record.manifest_sha256&&p.to.implementation==='managed');
-  const h=initial.history[initial.history.length-1];check(h&&h.id===id&&h.outcome==='committed'&&h.from.implementation==='managed'&&h.from.manifest_sha256===p.to.manifest_sha256&&h.state_sha256===record.state_receipt_sha256&&h.readiness_sha256===hash(JSON.stringify(record)));
- }
+ restoreTransition(initial,record);
  const selectionText=JSON.stringify(initial),inputs={record,installation,baseline,snapshot},inputText=JSON.stringify(inputs);
  const file=path.join(journalDirectory,p.id+'.managed-restore.json'),saved=path.join(journalDirectory,p.id+'.managed-restore-input.json'),marker=path.join(journalDirectory,'managed-restore.pending');
  const receipt={...plan.receipt,transition_id:p.id,quiescence_sha256:p.quiescence_sha256,input_sha256:hash(inputText)},pending={...receipt,phase:'pending'};
@@ -56,4 +61,28 @@ async function restoreManagedJobs(options){
   return Object.freeze({...receipt,receipt_sha256:hash(JSON.stringify(receipt))});
  }catch(cause){throw Object.assign(Error('Managed state restoration requires reconciliation'),{outcome:'unknown',cause});}
 }
-module.exports={restoreManagedJobs};
+// Acceptance advances only the retained-state gate, never worker selection.
+async function acceptManagedRestore({transitionId,receiptSha256,journalDirectory,selectionFile,execute}){
+ check(typeof transitionId==='string'&&transitionId.length===32&&/^[a-f0-9]+$/.test(transitionId)&&typeof receiptSha256==='string'&&receiptSha256.length===64&&/^[a-f0-9]+$/.test(receiptSha256));
+ check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
+ const st=fs.lstatSync(journalDirectory);check(st.isDirectory()&&!st.isSymbolicLink()&&st.uid===process.geteuid()&&(st.mode&0o7777)===0o700);
+ const file=path.join(journalDirectory,transitionId+'.managed-restore.json'),saved=path.join(journalDirectory,transitionId+'.managed-restore-input.json'),marker=path.join(journalDirectory,'managed-restore.pending');
+ const inputText=privateRead(saved,524288),inputs=JSON.parse(inputText),plan=planManagedRestore(inputs),{record,installation,baseline,snapshot}=inputs;
+ check(Object.keys(inputs).sort().join('|')==='baseline|installation|record|snapshot');
+ const initial=selectionStatus(selectionFile),target=restoreTransition(initial,record,true),p=initial.pending;
+ check(p.id===transitionId);if(p.phase===target)check(p.state_sha256===receiptSha256);
+ const expected={...plan.receipt,transition_id:p.id,quiescence_sha256:p.quiescence_sha256,input_sha256:hash(inputText)},text=privateRead(file,16384);
+ check(text===JSON.stringify(expected)&&hash(text)===receiptSha256);
+ const refs=[[record.id+'.production.json',record],[record.id+'.state-install.json',installation],[record.id+'.retained-snapshot.json',baseline]];
+ const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(initial)&&privateRead(marker,64)===transitionId+'\n'&&privateRead(file,16384)===text&&privateRead(saved,524288)===inputText);for(const [name,value] of refs)check(privateRead(path.join(journalDirectory,name),262144)===JSON.stringify(value));};
+ const started=process.hrtime();
+ const checkedExecute=async(command,timeout)=>{owned();const r=await execute(command,timeout),t=process.hrtime(started);owned();check(t[0]*1000+t[1]/1000000<120000);return r;};
+ const verifySource=async()=>{const current=await snapshotNativeJobs({record,installation,execute:checkedExecute});check(current.sha256===snapshot.sha256);};
+ owned();await verifySource();
+ const result=await checkedExecute(plan.verify,25000);check(result&&result.exit_code===0&&!result.timed_out&&!result.stderr&&result.stdout==='RESTORE-READY\n');
+ await verifySource();owned();
+ if(p.phase===target)return new SelectionJournal(selectionFile).read();
+ try{return new SelectionJournal(selectionFile).advance(initial.revision,transitionId,target,receiptSha256);}
+ catch(cause){throw Object.assign(Error('Managed restore acceptance requires reconciliation'),{outcome:'unknown',cause});}
+}
+module.exports={restoreManagedJobs,acceptManagedRestore};

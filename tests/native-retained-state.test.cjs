@@ -127,3 +127,41 @@ test('durable restore refuses changed native state, local ownership and selectio
   assert(fs.existsSync(r.parent+'/jobs'));assert(!fs.existsSync(r.parent+'/rollback-'+f.options.record.id+'/previous'));
  });
 });
+
+const {acceptManagedRestore}=require('../research/autonomous-root/service/managed-restore');
+async function restoredForAcceptance(f,committed=false){
+ const r=await durableRestoreFixture(f,committed),receipt=await restoreManagedJobs(r.options);
+ return {...r,receipt,accept:{transitionId:receipt.transition_id,receiptSha256:receipt.receipt_sha256,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,execute:r.execute}};
+}
+test('restore acceptance rechecks bytes and advances only the proper state gate, including repeat readback',linux,async()=>{
+ for(const committed of [false,true])await fixture(async f=>{
+  const r=await restoredForAcceptance(f,committed),before=selectionStatus(r.options.selectionFile),accepted=await acceptManagedRestore(r.accept);
+  assert.equal(accepted.pending.phase,committed?'state-ready':'rollback-state-ready');assert.equal(accepted.pending.state_sha256,r.receipt.receipt_sha256);assert.equal(accepted.selected.implementation,before.selected_implementation);assert(fs.existsSync(r.marker));
+  assert.deepEqual(await acceptManagedRestore(r.accept),accepted);
+  fs.writeFileSync(r.parent+'/jobs/'+f.records[0].name,'changed');await assert.rejects(acceptManagedRestore(r.accept));
+ });
+});
+test('restore acceptance rejects changed receipt, marker, source, backup and destination',linux,async()=>{
+ for(const mode of ['receipt','digest','marker','source','backup','destination','extra','writer'])await fixture(async f=>{
+  const r=await restoredForAcceptance(f),before=fs.readFileSync(r.options.selectionFile,'utf8');
+  if(mode==='receipt')fs.writeFileSync(r.options.journalDirectory+'/'+r.receipt.transition_id+'.managed-restore.json','{}');
+  if(mode==='digest')r.accept.receiptSha256='f'.repeat(64);
+  if(mode==='marker')fs.unlinkSync(r.marker);
+  if(mode==='source')fs.unlinkSync(f.jobs+'/'+f.records[0].name);
+  if(mode==='backup')fs.writeFileSync(r.parent+'/rollback-'+f.options.record.id+'/previous/'+f.records[0].name,'changed');
+  if(mode==='destination')fs.writeFileSync(r.parent+'/jobs/'+f.records[0].name,'changed');
+  if(mode==='extra')fs.writeFileSync(r.parent+'/jobs/extra','changed');
+  if(mode==='writer')fs.writeFileSync(r.options.selectionFile+'.writer','busy',{mode:0o600});
+  await assert.rejects(acceptManagedRestore(r.accept));assert.equal(fs.readFileSync(r.options.selectionFile,'utf8'),before);
+ });
+});
+test('restore acceptance catches mutation during asynchronous verification before advancing selection',linux,async()=>{
+ for(const mode of ['selection','receipt','native'])await fixture(async f=>{
+  const r=await restoredForAcceptance(f);let changed=false;
+  await assert.rejects(acceptManagedRestore({...r.accept,execute:async c=>{const result=await r.execute(c);if(!changed&&c===r.plan.verify){changed=true;
+   if(mode==='selection'){const s=JSON.parse(fs.readFileSync(r.options.selectionFile));s.pending.quiescence_sha256='f'.repeat(64);fs.writeFileSync(r.options.selectionFile,JSON.stringify(s));}
+   if(mode==='receipt')fs.writeFileSync(r.options.journalDirectory+'/'+r.receipt.transition_id+'.managed-restore.json','{}');
+   if(mode==='native')fs.unlinkSync(f.jobs+'/'+f.records[0].name);
+  }return result;}}));assert(changed);assert.equal(selectionStatus(r.options.selectionFile).pending.phase,'rollback-required');
+ });
+});

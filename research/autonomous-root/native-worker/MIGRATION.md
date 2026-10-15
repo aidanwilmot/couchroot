@@ -849,3 +849,22 @@ This is state restoration, not completed rollback: managed restart/readiness,
 selection acceptance and controller wiring remain open. Neither TV was changed or
 rebooted; .NET remains the deployed fallback. Full native cutover and sunset gates
 remain unfulfilled.
+
+### Managed restore acceptance gate — local follow-up
+
+A restored-state receipt can now advance the pending selection state only after
+rereading its complete saved inputs, production/installation/baseline receipts,
+current native inventory, restored managed inventory and preserved original
+backup. Selection and local ownership are checked around every asynchronous
+operation. A failed native trial advances to rollback-state-ready; a new return
+transition after native commit advances to state-ready. Neither path commits
+selection, starts a worker, removes the restore marker or releases admission.
+Repeated acceptance verifies the same evidence again without adding a revision.
+
+The combined Linux suite passes 177 tests without skips. Tests reject altered
+receipts/digests/markers, pending selection writers, changed source/destination/
+backup inventories and mutations during verification. Both real-process ordinary
+and BOM record round trips include acceptance through the independent native
+connection. These remain host results with fixture systemd/Smack/mount boundaries;
+managed launch/readiness and controller integration are still required. Both TVs
+remain unchanged on their deployed .NET fallback; no reboot occurred.
