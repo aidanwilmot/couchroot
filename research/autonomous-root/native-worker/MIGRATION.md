@@ -868,3 +868,30 @@ and BOM record round trips include acceptance through the independent native
 connection. These remain host results with fixture systemd/Smack/mount boundaries;
 managed launch/readiness and controller integration are still required. Both TVs
 remain unchanged on their deployed .NET fallback; no reboot occurred.
+
+### One-shot managed rollback launch — local follow-up
+
+Accepted rollback state can now produce a journaled managed-worker submission
+through an independent executor. The launch binds the selected managed package
+version, individual managed assembly/config/dependency hashes, runtime hash,
+restoration receipt, boot/source identities, callback port and private token.
+It reaccepts restored state before persisting exclusive launch intent. Remote
+checks require absent staging/unit names, expected package/token metadata and
+unchanged restored inventory. The managed assembly runs from root-owned read-only
+code in a private systemd mount namespace; its writable token/status staging
+remains beneath the worker's existing allowed SDK root. No acquisition launcher
+is invoked by this rollback path.
+
+Acknowledgement records submitted only. Lost replies retain unknown ownership
+and refuse another launch; neither submission nor a copied package marks a worker
+ready or changes selection. Partial staging/uncertain launch reconciliation still
+requires the forthcoming session/readiness controller.
+
+The combined Linux suite passes 181 tests without skips. Launch tests execute
+actual staging/check commands against disposable files with fixture systemd tools,
+cover full 64-record retention and command bounds, and reject runtime/token/package/
+unit/selection drift. They do not run the TV-managed entry point or qualify this
+systemd invocation on-device. Read-only inspection confirmed /usr/bin/dotnet is a
+regular root-owned mode-755 file on both TVs. Neither worker nor TV was restarted;
+both deployed .NET fallbacks remain unchanged. Managed session/readiness, cleanup,
+controller integration and full native migration qualification remain open.

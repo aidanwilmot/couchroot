@@ -165,3 +165,49 @@ test('restore acceptance catches mutation during asynchronous verification befor
   }return result;}}));assert(changed);assert.equal(selectionStatus(r.options.selectionFile).pending.phase,'rollback-required');
  });
 });
+
+async function managedLaunchFixture(f){
+ const r=await restoredForAcceptance(f),payload='/opt/usr/apps/MiniRoot01/res/wgt/payload',payloadLocal=f.root+'/package-root/apps/MiniRoot01/res/wgt/payload';
+ fs.mkdirSync(payloadLocal,{recursive:true,mode:0o755});const manifest={};
+ for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const ext of ['dll','runtimeconfig.json','deps.json']){const n=name+'.'+ext,bytes=Buffer.from(n);manifest[n]=hash(bytes);fs.writeFileSync(payloadLocal+'/'+n,bytes,{mode:0o644});fs.chownSync(payloadLocal+'/'+n,201,201);}
+ fs.writeFileSync(payloadLocal+'/manifest.json',JSON.stringify(manifest));
+ const selectionModule=require('../research/autonomous-root/service/worker-selection'),version=selectionModule.managedVersion(payloadLocal);
+ fs.writeFileSync(r.options.selectionFile,fs.readFileSync(r.options.selectionFile,'utf8').replaceAll('e'.repeat(64),version));
+ await acceptManagedRestore(r.accept);
+ const tokenFile='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/managed-ABC123/token',tokenLocal=tokenFile.replace('/opt/usr',f.root+'/package-root');
+ fs.mkdirSync(path.dirname(tokenLocal),{recursive:true,mode:0o700});fs.chownSync(path.dirname(tokenLocal),5001,100);const token=Buffer.from('a'.repeat(32)).toString('base64');fs.writeFileSync(tokenLocal,token,{mode:0o600});fs.chownSync(tokenLocal,5001,100);
+ const runtime=f.root+'/dotnet';fs.writeFileSync(runtime,'fixture runtime',{mode:0o755});fs.mkdirSync(f.root+'/owner/share/tmp/sdk_tools',{recursive:true,mode:0o755});
+ const bin=f.root+'/bin';fs.mkdirSync(bin);fs.writeFileSync(bin+'/systemctl','#!/bin/sh\necho LoadState=not-found\n',{mode:0o755});fs.writeFileSync(bin+'/systemd-run','#!/bin/sh\nprintf "%s\\n" "$@" > '+f.root+'/launched\n',{mode:0o755});
+ const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-launch.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./worker-selection'?{...real(n),managedVersion:p=>real(n).managedVersion(p.replace(payload,payloadLocal))}:n==='./policy'?{...real(n),read:(p,l)=>real(n).read(p.replace(payload,payloadLocal),l)}:real(n)});
+ const execute=c=>r.execute(c.replaceAll('/opt/usr',f.root+'/package-root').replaceAll('/opt/couchroot-managed-',f.root+'/launch-').replaceAll("'/home/owner","'"+f.root+'/owner').replaceAll('/usr/bin/dotnet',runtime).replaceAll('PATH=/usr/bin:/bin','PATH='+bin+':/usr/bin:/bin'));
+ const options={transitionId:r.receipt.transition_id,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,receiptSha256:r.receipt.receipt_sha256,payload,managedSha256:version,runtimeSha256:hash('fixture runtime'),port:12345,tokenFile,tokenSha256:hash(token),execute};
+ return {...r,api:module.exports,launchOptions:options,execute,tokenLocal,payloadLocal,runtime,bin,launchFile:r.options.journalDirectory+'/'+options.transitionId+'.managed-launch.json'};
+}
+test('managed restart journals before submission and keeps rollback selection pending',linux,()=>fixture(async f=>{
+ const r=await managedLaunchFixture(f),before=selectionStatus(r.options.selectionFile);let submissions=0;
+ const result=await r.api.submitManaged({...r.launchOptions,execute:async c=>{if(c.includes('systemd-run')){submissions++;assert.equal(JSON.parse(fs.readFileSync(r.launchFile)).phase,'submitting');assert.match(c,/PrivateMounts=yes/);assert.match(c,/BindReadOnlyPaths=/);assert.doesNotMatch(c,/archive-root|launch-sdk/);}const output=await r.execute(c);if(c.includes('systemd-run'))assert.equal(output.stdout,'RESTORE-READY\nMANAGED-SUBMITTED\n',JSON.stringify(output));return output;}}).catch(e=>{throw e.cause||e;});
+ assert.equal(result.phase,'submitted');assert.equal(submissions,1);assert.deepEqual(selectionStatus(r.options.selectionFile),before);
+ assert.match(fs.readFileSync(f.root+'/launched','utf8'),/SamsungTvRootAgent.dll/);assert.equal(hash(fs.readFileSync(f.root+'/launch-'+result.id+'/code/SamsungTvRootAgent.dll')),result.files['SamsungTvRootAgent.dll']);
+ await assert.rejects(r.api.submitManaged(r.launchOptions));
+}));
+test('managed launch uncertain response retains intent and cannot launch twice',linux,()=>fixture(async f=>{
+ const r=await managedLaunchFixture(f);let submissions=0;
+ await assert.rejects(r.api.submitManaged({...r.launchOptions,execute:async c=>{const result=await r.execute(c);if(c.includes('systemd-run')){submissions++;assert.equal(result.exit_code,0,result.stderr);throw Error('lost reply');}return result;}}),e=>e.outcome==='unknown');
+ assert(fs.existsSync(f.root+'/launched'));assert.equal(JSON.parse(fs.readFileSync(r.launchFile)).phase,'unknown');await assert.rejects(r.api.submitManaged(r.launchOptions));assert.equal(submissions,1);
+}));
+test('managed launch rejects runtime, token, package, unit and selection drift',linux,async()=>{
+ for(const mode of ['runtime','token','package','unit','selection'])await fixture(async f=>{
+  const r=await managedLaunchFixture(f);
+  if(mode==='runtime')fs.writeFileSync(r.runtime,'changed');if(mode==='token')fs.writeFileSync(r.tokenLocal,'changed');
+  if(mode==='package')fs.writeFileSync(r.payloadLocal+'/SamsungTvRootAgent.dll','changed');
+  if(mode==='unit')fs.writeFileSync(r.bin+'/systemctl','#!/bin/sh\necho LoadState=loaded\n');
+  if(mode==='selection'){const s=JSON.parse(fs.readFileSync(r.options.selectionFile));s.pending.state_sha256='f'.repeat(64);fs.writeFileSync(r.options.selectionFile,JSON.stringify(s));}
+  await assert.rejects(r.api.submitManaged(r.launchOptions));assert(!fs.existsSync(f.root+'/launched'));
+ });
+});
+test('managed launch plan handles full retention and rejects malformed callback and package binding',linux,()=>fixture(async f=>{
+ const r=await managedLaunchFixture(f),inputs={record:f.options.record,installation:f.options.installation,baseline:r.baseline,snapshot:r.snapshot};
+ const o={...r.launchOptions,inputs},plan=r.api.managedLaunchPlan(o);assert(Buffer.byteLength(plan.command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:plan.command}).status,0);
+ for(const patch of [{port:0},{tokenFile:'/tmp/token'},{tokenFile:o.tokenFile.replace('ABC123','ABC123\n')},{managedSha256:'f'.repeat(64)},{runtimeSha256:'invalid'},{transitionId:o.transitionId+'\n'},{payload:'/tmp/payload'}])assert.throws(()=>r.api.managedLaunchPlan({...o,...patch}));
+},64));
