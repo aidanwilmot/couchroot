@@ -8,7 +8,7 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
@@ -96,6 +96,24 @@ done
   first=createAgent(loader(new Map(),(name,module)=>{
    if(name==='managed-return'&&['return-prepared','return-stopped'].includes(mode)){const create=module.exports.createManagedReturn;module.exports.createManagedReturn=o=>{if(mode==='return-prepared')o.openRetirement=async()=>{throw injected;};else{const stop=o.hold.shutdownNative;o.hold.shutdownNative=async(...a)=>{await stop(...a);throw injected;};}return create(o);};}
    if(name==='managed-session'&&mode.startsWith('return-')&&mode.endsWith('ready')){const open=module.exports.openManagedSession;module.exports.openManagedSession=async o=>{if(mode==='return-state-ready')throw injected;await open(o);throw injected;};}
+   if(name==='production-readiness'&&mode==='live-production-loss'){
+    const ready=module.exports.readyProduction;
+    module.exports.readyProduction=async o=>{
+     const execute=o.execute;
+     return ready({...o,execute:async(command,timeout)=>{
+      // Kill a real connected production guardian during file verification,
+      // after readiness intent publication but before trial-ready acceptance.
+      if(!faulted&&command.includes('PRODUCTION-VERIFIED')){
+       faulted=true;const production=units.get(o.record.unit);assert(production);
+       assert(o.channel._conn,'production callback must already be connected');
+       assert.equal(JSON.parse(fs.readFileSync(state+'/'+o.record.id+'.production.json')).phase,'submitted');
+       assert.equal(fs.readFileSync(state+'/'+o.record.id+'.production.json.readiness.pending','utf8'),o.record.id+'\n');
+       production.child.kill('SIGTERM');await production.ended;
+      }
+      return execute(command,timeout);
+     }});
+    };
+   }
    if(name==='production-session'&&mode==='live-state-ready'){const open=module.exports.openProductionSession;module.exports.openProductionSession=async o=>{if(!faulted){faulted=true;throw injected;}return open(o);};}
    if(name==='production-session'&&['state-ready','trial-ready'].includes(mode)){const open=module.exports.openProductionSession;module.exports.openProductionSession=async options=>{if(mode==='state-ready')throw injected;await open(options);throw injected;};}
   }));
@@ -139,7 +157,7 @@ done
    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
    assert.equal(second.restartInventory().boundary,'settled');return;
   }
-  await assert.rejects(first.rehearseNative(native,runtimeSha),e=>{if(mode==='live-provider-loss'||observerLoss)return e.outcome==='unknown'&&/^[a-f0-9]{32}$/.test(e.recovery_transaction_id);for(let c=e;c;c=c.cause)if(c===injected)return true;return false;});
+  await assert.rejects(first.rehearseNative(native,runtimeSha),e=>{if(mode==='live-provider-loss'||mode==='live-production-loss'||observerLoss)return e.outcome==='unknown'&&/^[a-f0-9]{32}$/.test(e.recovery_transaction_id);for(let c=e;c;c=c.cause)if(c===injected)return true;return false;});
   if(['live-published-commit','live-ambiguous-commit'].includes(mode)){
    const held=first.status(),count=servers.length;assert.equal(held.admission_held,true);assert.equal(held.worker_ready,false);assert.equal(first.restartInventory().restart_rollback,null);
    assert.equal(held.native_migration.phase,'reconciliation-required');assert.equal(held.native_migration.failed_phase,'committing');
@@ -147,7 +165,8 @@ done
   }
   const pending=load=>load('worker-selection').selectionStatus(selectionFile).pending;
   const id=pending(loader(new Map()))&&pending(loader(new Map())).id;assert(id);
-  assert.equal(pending(loader(new Map())).phase,{'abandon-prepared':'prepared','provider-ready':'prepared','state-ready':'state-ready','trial-ready':'trial-ready','live-provider-loss':'prepared','live-state-ready':'state-ready','live-trial-ready':'trial-ready','live-observer-loss':'prepared','live-observer-ack-lost':'prepared'}[mode]);
+  assert.equal(pending(loader(new Map())).phase,{'abandon-prepared':'prepared','provider-ready':'prepared','state-ready':'state-ready','trial-ready':'trial-ready','live-provider-loss':'prepared','live-state-ready':'state-ready','live-trial-ready':'trial-ready','live-observer-loss':'prepared','live-observer-ack-lost':'prepared','live-production-loss':'state-ready'}[mode]);
+  if(mode==='live-production-loss'){assert(faulted);assert.equal(JSON.parse(fs.readFileSync(state+'/'+id+'.production.json')).phase,'submitted');assert(fs.existsSync(state+'/'+id+'.production.json.readiness.pending'));}
   // Live recovery keeps the same agent; restart cases discard all old handles.
   const old=children.slice();if(!live){first.stop();for(const s of servers.slice())s.close();}else{assert.equal(first.canCleanupRestart(id),false);await assert.rejects(first.execute('echo admission-escape',1000),e=>e.outcome==='rejected');}
   await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);

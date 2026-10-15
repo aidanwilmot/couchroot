@@ -1117,3 +1117,14 @@ continuation. Original migration and cleanup rows remain submitted; the continua
 alone is completed. Both TVs ended managed-ready and settled on SDK loopback,
 with retained state, enrollment and .NET recovery preserved. See
 [observer cleanup results](native-worker/observer-cleanup-results.json).
+
+
+The unchanged signed 0.7.36 packages also passed production-readiness guardian
+loss on both TVs. With a submitted production record and readiness still pending,
+the bound guardian was terminated without pausing the coordinator. Automatic
+rollback/readmission and explicit staging cleanup completed on the same
+coordinator. Retained state and enrollment stayed unchanged, original migration
+journal rows remain submitted, and both TVs returned to settled managed readiness
+on SDK loopback. This qualifies that pre-commit boundary; wider interruption and
+power-lifecycle cases remain open. See
+[production recovery results](native-worker/production-recovery-results.json).

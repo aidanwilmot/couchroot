@@ -8,8 +8,14 @@ below for installed state. The plan itself does not authorize device changes.
 ## Current qualification snapshot
 
 Both TVs are on signed 0.7.36 packages with native service acquisition enabled,
-managed selected and ready. QN90A has 27 settled history entries (22 committed,
-five rolled back); S90D has 28 (22 committed, six rolled back).
+managed selected and ready. QN90A has 28 settled history entries (22 committed,
+six rolled back); S90D has 29 (22 committed, seven rolled back).
+Both now also qualify native production guardian loss while the production record
+is submitted and readiness is pending, before selection commit. Each original
+coordinator automatically rolled back and completed explicit cleanup, preserving
+retained state and the original uncertain request. Installed package contents
+were verified before the trials. See
+[production readiness recovery evidence](production-recovery-results.json).
 Both qualified automatic rollback/readmission after unpaused provider loss,
 cleanup refusal on an inert owned test file, and a bound continuation of that
 cleanup. The original coordinator stayed unchanged throughout. S90D's terminal
@@ -70,11 +76,10 @@ pending. See [round-trip evidence](roundtrip-results.json) and
 
 Native public admission and same-boot recovery are qualified for the bounded
 rounds above. Native-default and .NET-free completion still require:
-- Later forward-handoff interruption boundaries, including installed production
-  readiness. Provider-ready/state-ready interruption and provider-loss rollback
-  now have both-TV evidence without operation replay.
-- Wider interruption boundaries and maintenance lifecycle coverage beyond the
-  same-boot startup and active-return checks.
+- Wider interruption boundaries and maintenance lifecycle coverage beyond
+  same-boot startup, active return, provider-ready/state-ready interruption and
+  pre-commit provider/production guardian loss. Those bounded recovery cases now
+  have both-TV evidence without operation replay.
 - Establishing a .NET-free capability entry, then adopting it in agent-required
   setup/acquisition and recovery callers. The setup-control audit is complete;
   unrelated Hub `Control.dll` operations are outside this agent migration.
@@ -2611,3 +2616,45 @@ entry investigation. The earlier paused S90D coordinator exit, wider maintenance
 lifecycle, final resource-pressure/endurance evidence, native-default rollout and
 power lifecycle remain open. No reboot or standby was performed; .NET fallback
 and independent rescue remain deployed.
+
+### Production-readiness guardian loss — 2026-10-15
+
+Both TVs passed an additional interruption boundary on the unchanged signed
+0.7.36 packages. The private watcher waited for state-ready selection, a submitted
+production record and the matching readiness intent. It verified the running unit,
+executable inode and digest, boot, and guardian PID/start time twice before
+terminating only that guardian. It never paused the coordinator or modified the
+production API. The witness captures the production record and unit at that bound
+fault point. Readiness had not been accepted or selection committed.
+
+The same coordinator automatically acquired a fresh held managed executor,
+verified old process/unit absence and unchanged retained state, and recorded a
+rollback under the original transaction. The production record stayed submitted
+and its readiness intent remained for explicit cleanup. Cleanup then retired all
+recorded handoff units and removed their staging and intents without separate
+maintenance. A final endpoint PID/start-time check confirmed the coordinator had
+not restarted, and the original guardian identity was gone. The migration request
+remains submitted in the durable journal; its separate cleanup request is completed.
+
+Both TVs ended managed-ready and settled on SDK loopback. QN90A has 28 history
+entries (22 committed, six rolled back); S90D has 29 (22 committed, seven rolled
+back). Retained jobs, enrollment/configuration, protected files and managed rescue
+hashes match their baselines. All three trial/rescue units and three handoff units
+per device are inactive, and exact test witness scopes were removed. Installed
+package members were verified against the preceding accepted installation before
+each trial; no new deployment or production-code change was needed.
+
+The new real-process test kills the connected production guardian during readiness
+file verification after the intent is durable. It checks unknown outcome binding,
+held admission, automatic read-only rollback, preserved jobs, explicit cleanup and
+a subsequent normal handoff on the same coordinator. Validation passed 404 Node
+tests with 143 platform/fixture skips, six fresh-container rehearsal cases and
+nineteen fresh-container recovery cases with rebuilt scratch native/managed
+fixtures. No Python/client/setup code changed. See
+[production recovery evidence](production-recovery-results.json).
+
+Next: continue the native-only capability-entry investigation and the remaining
+maintenance, pressure and endurance qualification. This one pre-commit fault does
+not establish every interruption or post-commit failure. The earlier paused S90D
+coordinator exit remains unexplained; .NET fallback and rescue stay deployed, and
+reboot/standby remain excluded.
