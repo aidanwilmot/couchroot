@@ -462,6 +462,12 @@ static void guardian_start(void) {
     errno = saved;
     fatal("native fault supervision unavailable");
   }
+  /* From this point EXITKILL owns task termination. A fatal error must retain
+   * the journal and views until a fresh owner proves those tasks gone; generic
+   * atexit cleanup cannot establish that proof. Normal completion below drains
+   * descendants and explicitly sweeps resources before retiring the journal.
+   */
+  runtime_owned = 0;
   if (!job_write(gate[1], "R", 1))
     fatal("release supervised worker");
   close(gate[1]);

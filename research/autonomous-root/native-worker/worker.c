@@ -1,5 +1,6 @@
-/* Experimental sidecar, not installed or selected by the production service.
+/* Native worker candidate; managed remains the deployed fallback.
  * Original Couchroot code. SPDX-License-Identifier: 0BSD */
+#define COUCHROOT_NATIVE_WORKER 1
 #include "common.h"
 #include "fault-events.h"
 #include "progress.h"
@@ -41,25 +42,6 @@ static DIR *scan_directory(int dir) {
   if (!d && scan >= 0)
     close(scan);
   return d;
-}
-/* The supported TV kernels force SIGABRT on descriptor exhaustion instead
- * of returning EMFILE. Check without allocating a descriptor. Bound the scan
- * and fail closed if capacity cannot be established. */
-static int descriptor_capacity(int needed) {
-  struct rlimit limit;
-  if (getrlimit(RLIMIT_NOFILE, &limit))
-    return 0;
-  rlim_t bound = limit.rlim_cur < 4096 ? limit.rlim_cur : 4096;
-  int available = 0;
-  for (int fd = 0; (rlim_t)fd < bound; fd++) {
-    if (fcntl(fd, F_GETFD) < 0) {
-      if (errno != EBADF)
-        return 0;
-      if (++available == needed)
-        return 1;
-    }
-  }
-  return 0;
 }
 /* Lifecycle signals are delivered only to the protocol thread or guardian. */
 static void lifecycle_signals(sigset_t *set) {
@@ -749,6 +731,16 @@ int main(int argc, char **argv) {
   }
   if (getuid() || geteuid() || getgid() || getegid())
     return 77;
+  /* Conservative admission before dlopen, token consumption, or scope changes.
+   * Includes persistent scope/runtime/freezer descriptors, both pipes, monitor,
+   * transport, and temporary reconciliation scans. Per-allocation guards remain
+   * active throughout startup and in the guardian. This cannot protect the ELF
+   * loader before main, nor reserve capacity against external concurrent changes.
+   */
+  if (!descriptor_capacity(32)) {
+    errno = EMFILE;
+    fatal("insufficient startup descriptors; state untouched");
+  }
   signal(SIGPIPE, SIG_IGN);
   signal(SIGTERM, stop_signal);
   signal(SIGINT, stop_signal);
@@ -898,6 +890,10 @@ int main(int argc, char **argv) {
   sendframe(&w, auth);
   free(label);
   free(auth);
+  /* The guardian's fork retains its own enabled guard. The initialized worker
+   * now uses operation admission under the job mutex, including monitor reserve.
+   */
+  __atomic_store_n(&descriptor_guard, 0, __ATOMIC_RELAXED);
   int64_t previous = 0;
   for (;;) {
     progress_idle(&progress_main);

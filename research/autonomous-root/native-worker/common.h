@@ -28,6 +28,9 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef COUCHROOT_NATIVE_WORKER
+#include "descriptor-budget.h"
+#endif
 #define CHUNK 1048576
 #define FRAME (4 * CHUNK)
 #define LIMIT INT64_C(2147483648)

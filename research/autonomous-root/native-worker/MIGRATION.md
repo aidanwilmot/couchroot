@@ -7,14 +7,19 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.38 packages with native service acquisition enabled,
+Both TVs are on signed 0.7.40 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 28 settled history entries (22 committed,
 six rolled back); S90D has 29 (22 committed, seven rolled back).
-Both also passed eleven bounded resource checks on exact ordinary production
-worker bytes: zero-descriptor idle and partial-frame deadlines, full/read-only
-storage recovery, retention, descriptor admission and transfers. The installed
+Both passed fourteen bounded resource checks on exact ordinary production
+worker bytes: startup descriptor admission, guardian exhaustion/reconciliation,
+zero-descriptor idle and partial-frame deadlines, full/read-only storage,
+retention, descriptor admission, command faults and transfers. The installed
 managed workers stayed ready throughout these separate-worker trials. All owned
-test scopes are removed and independent rescue timers are inactive. See
+test scopes are removed and independent rescue timers are inactive. The first
+0.7.40 QN90A run failed an existing two-second command-fault timeout after eleven
+checks; the subsequent instrumented run passed unchanged limits. That initial
+timeout remains unexplained and broader timing/endurance qualification is open.
+See [startup/guardian evidence](startup-resource-results.json) and the preceding
 [production resource evidence](production-resource-results.json).
 Both now also qualify native production guardian loss while the production record
 is submitted and readiness is pending, before selection commit. Each original
@@ -2768,3 +2773,87 @@ wider storage stalls and remaining maintenance/interruption boundaries, followed
 by ordinary production endurance. The native-only entry investigation and native
 default rollout remain open. The .NET entry bridge, worker fallback and independent
 rescue remain deployed; no reboot, standby or global-policy change occurred.
+
+### Startup admission and guardian descriptor exhaustion — 2026-10-15
+
+Signed 0.7.40 qualifies startup refusal and two guardian-pressure recovery paths
+on both TVs, followed by all eleven prior production resource checks. Each
+controller-owned production launch receives exactly 32 free descriptor slots
+below its soft limit, counting only descriptors that survive exec. The installed
+managed worker stays ready throughout these separate-worker trials.
+
+The worker now requires 32 free slots before optional-library loading, token
+consumption or scope mutation. A 31-slot launch refuses with the token unchanged
+and no job directory. The scan counts holes rather than using the largest open
+descriptor. Startup and the single-threaded guardian also check their explicit
+file, directory, pipe, socket and eventfd allocations before calling libc, since
+these firmware kernels can abort on exhaustion instead of returning `EMFILE`.
+The initialized protocol worker retains its existing operation admission under
+the job mutex and monitor reserve. No limit is raised or inherited descriptor
+closed to obtain capacity.
+
+With the authenticated fixture guardian's soft limit held at zero, graceful
+worker shutdown exits through incomplete guardian cleanup (125), retaining the
+unchanged ownership journal. A fresh launch performs ordinary same-boot
+reconciliation and preserves the known interrupted job exit code 137 byte for
+byte. In the second case, SIGSEGV is directed only to the authenticated fixture
+worker. Its ptrace stop requires task-identity inspection; the guardian refuses
+that allocation and exits 1. `PTRACE_O_EXITKILL` terminates its owned tasks. The
+controller observes the original task identities dead before a fresh launch
+reconciles the job as interrupted with unknown exit status. Both cases preserve
+prior terminal records, verify a single command execution and clean up through
+normal job APIs. The controller never deletes the journal to force takeover.
+
+Review also exposed an unsafe generic fatal-exit cleanup path: with spare
+descriptors, an identity-allocation failure could remove the journal before
+traced tasks had exited. The guardian now disables generic runtime cleanup once
+ptrace supervision is active. Its normal completion path still drains tasks and
+explicitly retires resources; fatal exits preserve evidence for takeover. A local
+interposer returning `ENOMEM` for task-identity inspection reproduces journal
+loss on the interim build and passes after this fix. This simulated allocation
+failure was not injected on either TV.
+
+Six focused Linux cases cover refusal, admitted startup, sparse inherited
+handles, both guardian descriptor failures and a simulated identity-allocation
+failure. A test-only interposer models the fatal
+firmware boundary by exiting 93 if an exhausted allocation reaches libc. Both
+previous-binary guardian cases reach that sentinel; the guarded cases recover.
+The previous binary also fails the new early-startup refusal test. No interposer
+or fault interface is included in a signed package or used on a TV.
+
+Across the broader native and policy/bootstrap runs, 78 Python cases passed and
+19 optional fixture/extended cases were skipped. Validation also passed 404 Node
+tests with 143 platform/fixture skips,
+six fresh-container rehearsals and nineteen fresh-container recovery cases with
+rebuilt native and managed fixtures. Both ordinary native builds reproduced
+twice and matched each other. No client/setup source changed.
+
+The first final-candidate QN90A trial passed eleven checks, including all three
+new cases, then failed when an existing command-fault job reached its unchanged
+two-second timeout. Its result was preserved and cleanup verified before another
+trial. A private controller added per-iteration timing and slow-result snapshots;
+it retained all original checks and the 2000 ms job/3000 ms observation limits.
+The subsequent full QN90A trial passed with the exact same ordinary worker bytes.
+Its 70 fault jobs had a median start-to-terminal-observation duration of 221 ms
+and a maximum of 1629 ms. This includes admission and persistence, not solely
+guardian processing. The earlier timeout is not explained by this passing run;
+it remains an explicit timing/endurance gap. No threshold was relaxed. S90D passed the same instrumented full trial; its
+70 fault jobs had a median of 79 ms and maximum of 1388 ms.
+
+Both devices ended managed-ready and settled on their original boots, with
+unchanged selection history, enrollment and retained job records across the
+package update. QN90A has 28 history entries (22 committed, six rolled back),
+S90D 29 (22 committed, seven rolled back). All owned test jobs, helpers and scopes
+are removed; SDK is on loopback and independent 300-second managed rescue timers
+are inactive. All three packaged managed DLLs remain unchanged. See
+[startup and guardian resource evidence](startup-resource-results.json).
+
+These checks do not cover dynamic ELF-loader allocation before `main`; the
+hardware refusal deliberately leaves 31 free slots for that phase. Capacity
+inspection and allocation are not atomic against an unrelated concurrent limit
+change. Guardian exhaustion preserves ownership for later takeover rather than
+claiming cleanup completed at zero capacity. Concurrent memory/process pressure,
+wider storage stalls, remaining lifecycle faults, endurance and native-default
+observation remain open. Native-only capability entry remains unqualified; the
+.NET entry bridge, worker fallback and rescue remain deployed. No reboot, standby
+or global-policy change occurred.

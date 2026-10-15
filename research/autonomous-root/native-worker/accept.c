@@ -10,6 +10,27 @@
 static const char *binary, *app, *appsha, *source_helper;
 static int production_resources;
 static char boot[80], namespace_before[80];
+/* Count only descriptors surviving exec; controller sockets and pipes marked
+ * CLOEXEC do not consume the candidate's startup budget. Runs in a forked child.
+ */
+static void startup_slots(unsigned slots) {
+  struct rlimit limit;
+  if (getrlimit(RLIMIT_NOFILE, &limit))
+    fatal("startup limit read");
+  unsigned available = 0, bound = 0;
+  while (bound < 4096 && available < slots) {
+    int flags = fcntl((int)bound++, F_GETFD);
+    if (flags < 0 && errno != EBADF)
+      fatal("startup descriptor inventory");
+    if (flags < 0 || (flags & FD_CLOEXEC))
+      available++;
+  }
+  if (available != slots || bound > limit.rlim_cur)
+    fatal("startup limit cannot be established");
+  limit.rlim_cur = bound;
+  if (setrlimit(RLIMIT_NOFILE, &limit))
+    fatal("startup limit set");
+}
 static void launch(void) {
   sequence = 0;
   memset(&w, 0, sizeof w);
@@ -38,6 +59,8 @@ static void launch(void) {
   if (child < 0)
     fatal("fork");
   if (!child) {
+    if (production_resources)
+      startup_slots(32);
     execl(binary, binary, "127.0.0.1", port, token, filescope, app, appsha,
           production_resources || getenv("COUCHROOT_NATIVE_HANDOFF_ONLY") ? "--production" :
           getenv("COUCHROOT_NATIVE_PARITY_ONLY") ? "--production-files"
@@ -431,6 +454,7 @@ static void soak(int seconds) {
 #include "json-upload-accept.h"
 #include "parity-accept.h"
 #include "resource-accept.h"
+#include "startup-resource-accept.h"
 #include "storage-accept.h"
 #include "handoff-accept.h"
 int main(int argc, char **argv) {
@@ -482,6 +506,8 @@ int main(int argc, char **argv) {
   if (ns < 0)
     fatal("parent namespace");
   namespace_before[ns] = 0;
+  if (production_resources)
+    startup_refusal_checks();
   launch();
   if (getenv("COUCHROOT_NATIVE_HANDOFF_ONLY")) {
     handoff_checks();
@@ -493,6 +519,8 @@ int main(int argc, char **argv) {
   }
   if (production_resources || getenv("COUCHROOT_NATIVE_RESOURCE_ONLY")) {
     if (production_resources) {
+      guardian_resource_checks(0);
+      guardian_resource_checks(1);
       production_idle_limit_checks();
       storage_recovery_checks();
     }

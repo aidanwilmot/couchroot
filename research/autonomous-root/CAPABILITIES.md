@@ -17,6 +17,16 @@ were separate production worker instances with managed still selected, not nativ
 default or endurance qualification. See
 [resource evidence](native-worker/production-resource-results.json).
 
+Signed 0.7.40 adds startup descriptor admission and guardian-exhaustion
+reconciliation on both TVs. Startup refuses one slot below its 32-free-slot
+budget before consuming the token or creating state. Exhausted guardians retain
+ownership evidence for same-boot reconciliation; fatal exits after ptrace attach
+cannot discard that evidence through generic cleanup. Both final instrumented
+trials passed all fourteen resource checks. The first QN90A trial hit an existing
+two-second command-fault timeout; its cause remains unresolved despite the later
+pass at unchanged limits. The .NET entry bridge, worker fallback and independent
+rescue remain deployed. See [startup/guardian evidence](native-worker/startup-resource-results.json).
+
 All examples use the existing enrolled, certificate-pinned client:
 
 ```sh

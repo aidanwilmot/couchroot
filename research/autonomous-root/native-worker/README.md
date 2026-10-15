@@ -78,6 +78,13 @@ ignoring it. Status reports `lifetime_mode=production` and `lifetime_seconds=0`
 The `--production-files` option alone keeps the bounded experiment lifetime. Disconnect,
 SIGTERM and graceful shutdown clean up owned active jobs and helper views.
 
+Startup requires 32 free descriptor slots before optional-library loading, token
+consumption or scope changes. The scan counts holes below the soft limit without
+opening files. Startup and the single-threaded guardian guard their explicit
+descriptor allocations; the ready worker uses its existing operation admission
+and monitor reserve. The admission check cannot protect the ELF loader before
+`main`, or make allocation atomic against an external concurrent limit change.
+
 The worker executable starts a small guardian before the protocol worker and its
 threads. The guardian is a Linux child subreaper and holds the scope lock, runtime
 mount namespace and durable ownership journal. After a worker dies, it kills and
@@ -87,6 +94,11 @@ It never signals a PID from a saved job file. Completed records remain unchanged
 crash records have an unknown exit code and unavailable in-memory output. A new
 worker invocation reads those records and refuses duplicate starts. It does not
 automatically restart or replay commands. The protocol worker is non-dumpable.
+Once tracing is active, fatal guardian errors bypass generic runtime exit cleanup:
+`EXITKILL` stops owned tasks and the journal remains for verified takeover. Only
+the normal guardian path drains descendants and explicitly retires resources.
+This also preserves the ownership proof when task-identity inspection fails with
+descriptors still available, such as an allocation failure.
 Before allowing that child to create threads, the guardian attaches with
 `PTRACE_SEIZE` and follows clone, fork, vfork and exec events with
 `PTRACE_O_EXITKILL`. This covers the owned worker, command descendants and their
@@ -499,7 +511,10 @@ tests and skipped those 47 native tests. See
 
 For ordinary production-binary qualification, use the separate controller mode
 `COUCHROOT_NATIVE_PRODUCTION_RESOURCES=1`. It requires `--production` status,
-adds zero-descriptor idle/partial-frame deadlines and full/read-only storage
+verifies refusal at 31 free startup slots, admits each launch with 32, and tests
+guardian exhaustion during graceful shutdown and supervised fault handling.
+Both cases retain the journal for ordinary takeover without command replay.
+It also tests zero-descriptor idle/partial-frame deadlines and full/read-only storage
 recovery, then runs descriptor admission, retained-intent reconciliation, fault
 diagnostics and mixed uploads. It rejects other experiment modes before creating
 state. Only the controller-owned worker's limit and private storage are changed;
