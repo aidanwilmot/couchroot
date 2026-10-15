@@ -79,3 +79,17 @@ test('failed exit binding or observation keeps provider retirement blocked',asyn
   await assert.rejects(session.retire({}));assert.deepEqual(f.state().lifecycle,[]);session.closeTransport();
  });
 });
+
+
+test('session retains pending exit across explicit recovery and refuses overlap or closed transport',async()=>{
+ for(const mode of ['recover','close'])await fixture('ok',async f=>{
+  let release,resumes=0;
+  f.provider.prepareNativeExit=async()=>({waitForExit:async()=>{throw Error('interrupted');},resumeExitObservation:async()=>{resumes++;return new Promise(resolve=>{release=resolve;});}});
+  const session=await f.open(),observer=await session.provider.prepareNativeExit({});
+  await assert.rejects(observer.resumeExitObservation());await assert.rejects(observer.waitForExit());await assert.rejects(session.retire({}));
+  const pending=observer.resumeExitObservation();await assert.rejects(observer.resumeExitObservation());await assert.rejects(session.retire({}));
+  if(mode==='close')session.closeTransport();release({record_id:'native'});
+  if(mode==='close')await assert.rejects(pending);else assert.equal((await pending).record_id,'native');
+  await assert.rejects(observer.resumeExitObservation());await assert.rejects(observer.waitForExit());assert.equal(resumes,1);session.closeTransport();
+ });
+});

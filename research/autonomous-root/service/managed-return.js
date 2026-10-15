@@ -11,7 +11,7 @@ const {validateSnapshot}=require('./retained-install');
 function check(ok){if(!ok)throw Error('Managed return prerequisites unavailable');}
 function createManagedReturn({hold,retirement,record,payload,selectionFile,runtimeSha256}){
  record=JSON.parse(JSON.stringify(record));
- let entered=false,closed=false,begun=false,phase='idle',failedPhase=null,id=null,session=null,resuming=false;
+ let entered=false,closed=false,begun=false,phase='idle',failedPhase=null,id=null,session=null,resuming=false,continueReturn=null;
  const status=()=>({phase,transaction_id:id,origin_id:record.id});
  const move=next=>{check(!closed);phase=next;};
  const closeTransport=()=>{closed=true;if(session)session.closeTransport();};
@@ -35,7 +35,7 @@ function createManagedReturn({hold,retirement,record,payload,selectionFile,runti
    const r=inventory.resources;check(r&&!r.transfers.length&&!r.helpers.length&&r.jobs.every(j=>j.monitor_finished&&['completed','cancelled','timed_out','interrupted'].includes(j.state)));
    check(JSON.stringify(journal.read())===JSON.stringify(initial));begun=true;
    const transition=journal.begin(initial.revision,{implementation:'managed',manifest_sha256:managed},hash(JSON.stringify(inventory)));id=transition.pending.id;
-   move('stopping-native');const stopped=await hold.shutdownNative(id,retirement);owned();check(stopped.phase==='stopped'&&stopped.id===id&&stopped.origin_id===record.id&&stopped.inventory_sha256===transition.pending.quiescence_sha256);
+   continueReturn=async stopped=>{owned();check(stopped.phase==='stopped'&&stopped.id===id&&stopped.origin_id===record.id&&stopped.inventory_sha256===transition.pending.quiescence_sha256);
    move('restoring-state');await provider.snapshotNativeJobs(inputs);owned();const restored=await provider.restoreManagedState({journalDirectory:directory,selectionFile});owned();check(restored.phase==='restored'&&restored.transition_id===id&&restored.id===record.id);
    const accepted=await provider.acceptManagedRestore({journalDirectory:directory,selectionFile});owned();check(accepted.pending&&accepted.pending.id===id&&accepted.pending.phase==='state-ready'&&accepted.pending.state_sha256===restored.receipt_sha256);
    move('managed-session');session=await openManagedSession({id,payload,journalDirectory:directory,selectionFile,provider,managedSha256:managed,runtimeSha256});owned();
@@ -44,12 +44,16 @@ function createManagedReturn({hold,retirement,record,payload,selectionFile,runti
    move('adopting');await hold.adoptManaged(session);owned();
    move('activating');const active=await hold.completeManaged(retirement);check(active.transaction_id===id&&active.admission_held===false);
    move('active');return {...active,selected_implementation:'managed',native_origin_id:record.id};
+   };
+   move('stopping-native');return await continueReturn(await hold.shutdownNative(id,retirement));
   }catch(cause){if(closed)closeTransport();failedPhase=phase;phase='reconciliation-required';throw Object.assign(Error('Managed return requires reconciliation'),{outcome:'unknown',transition_started:begun,cause});}
  }
  async function resumeActivation(){
-  check(!closed&&!resuming&&phase==='reconciliation-required'&&failedPhase==='activating'&&session);resuming=true;
-  try{move('resuming-activation');const active=await hold.completeManaged(retirement,{resume:true});check(active.transaction_id===id&&active.admission_held===false);move('active');return {...active,selected_implementation:'managed',native_origin_id:record.id};}
-  catch(cause){phase='reconciliation-required';throw Object.assign(Error('Managed return activation requires reconciliation'),{outcome:'unknown',cause});}
+  check(!closed&&!resuming&&phase==='reconciliation-required'&&((failedPhase==='activating'&&session)||(failedPhase==='stopping-native'&&continueReturn&&typeof hold.resumeNativeExit==='function')));resuming=true;
+  try{
+   if(failedPhase==='stopping-native'){move('stopping-native');return await continueReturn(await hold.resumeNativeExit(id,retirement));}
+   move('resuming-activation');const active=await hold.completeManaged(retirement,{resume:true});check(active.transaction_id===id&&active.admission_held===false);move('active');return {...active,selected_implementation:'managed',native_origin_id:record.id};}
+  catch(cause){if(phase!=='resuming-activation')failedPhase=phase;phase='reconciliation-required';throw Object.assign(Error('Managed return recovery requires reconciliation'),{outcome:'unknown',cause});}
   finally{resuming=false;}
  }
  return Object.freeze({run,resumeActivation,status,closeTransport});

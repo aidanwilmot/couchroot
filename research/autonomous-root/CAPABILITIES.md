@@ -32,15 +32,20 @@ persisted before submission; neither the client nor service retries a submission
 
 `POST /v1/native/resume-managed` accepts exactly `{id, rehearsal_id}`. The new ID
 must differ from the original rehearsal ID and bind to the live coordinator's
-unknown rehearsal. The controller permits only its final managed-activation
-recovery boundary; this is not general rollback or restart recovery. The client
+unknown rehearsal. The controller permits final managed-activation recovery or
+read-only recovery of an interrupted native-exit observation, followed by the
+remaining managed-return steps. Exit recovery retains the original transaction,
+provider and process identities and never resubmits shutdown. Provider identity
+failures, closed transports and other interrupted mutation phases remain blocked;
+this is not general rollback or restart recovery. The client
 command is `native-resume-managed --request-id NEW_REQUEST_ID --rehearsal-id
 ORIGINAL_REQUEST_ID`. Recovery has a separate journal entry, and a successful
 recovery does not rewrite an unknown original request as completed.
 
 Only one rehearsal is admitted per live coordinator. A service restart retains
 request replay protection but does not reconstruct in-memory recovery handles.
-These routes are locally qualified and are not yet deployed to either TV.
+The rehearsal routes are deployed on both TVs in 0.7.21. The additional
+interrupted-exit recovery boundary is locally qualified but not yet deployed.
 
 ## Results and readiness
 

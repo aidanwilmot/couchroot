@@ -16,7 +16,7 @@ async function fixture(failure,run){
  const provider={snapshotNativeJobs:async inputs=>{step('snapshot');assert.equal(inputs.record.id,id);assert.equal(inputs.baseline.sha256,baseline.sha256);},restoreManagedState:async()=>{step('restore');return {phase:'restored',id,transition_id:journal.read().pending.id,receipt_sha256:'9'.repeat(64)};},acceptManagedRestore:async()=>{step('accept');const s=journal.read();return journal.advance(s.revision,s.pending.id,'state-ready','9'.repeat(64));},launchManaged:async()=>{},verifyManaged:async()=>{}};
  const module={exports:{}};vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='./worker-selection'?{...real(n),managedVersion:()=>managed}:n==='./managed-session'?{openManagedSession:async o=>{step('session');assert.equal(o.provider,provider);assert.equal(o.runtimeSha256,'8'.repeat(64));assert.equal(o.managedSha256,managed);const s=journal.read();journal.advance(s.revision,s.pending.id,'trial-ready','f'.repeat(64));if(failure==='close')controller.closeTransport();return {readiness_sha256:'f'.repeat(64),closeTransport:()=>closes++};}}:real(n)});
  controller=module.exports.createManagedReturn({hold,retirement:{provider},record,payload:'/fixture/payload',selectionFile,runtimeSha256:'8'.repeat(64)});
- try{await run({controller,events,journal,dir,record,closes:()=>closes});}finally{fs.rmSync(dir,{recursive:true,force:true});}
+ try{await run({controller,events,journal,dir,record,hold,closes:()=>closes});}finally{fs.rmSync(dir,{recursive:true,force:true});}
 }
 test('managed return orders stopped native state restoration, managed session, commit and activation',()=>fixture(null,async f=>{
  const result=await f.controller.run();assert.equal(result.selected_implementation,'managed');assert.equal(result.native_origin_id,f.record.id);assert.equal(result.admission_held,false);assert.deepEqual(f.events,['drain','stop','snapshot','restore','accept','session','adopt','activate']);assert.equal(f.journal.read().pending,null);assert.equal(f.journal.read().history.length,2);assert.equal(f.controller.status().phase,'active');await assert.rejects(f.controller.run());
@@ -33,3 +33,30 @@ test('existing managed ownership refuses return before native shutdown',()=>fixt
 test('closing while managed listener resolves prevents commit and retains transition',()=>fixture('close',async f=>{
  await assert.rejects(f.controller.run());assert.equal(f.journal.read().pending.phase,'trial-ready');assert.equal(f.events.includes('adopt'),false);assert.equal(f.closes(),1);
 }));
+
+
+test('interrupted native exit resumes the same transition without another shutdown',()=>fixture('stop',async f=>{
+ await assert.rejects(f.controller.run(),e=>e.outcome==='unknown');const id=f.journal.read().pending.id;
+ f.hold.resumeNativeExit=async tx=>{assert.equal(tx,id);f.events.push('observe-exit');return {phase:'stopped',id,origin_id:f.record.id,inventory_sha256:f.journal.read().pending.quiescence_sha256};};
+ const result=await f.controller.resumeActivation();assert.equal(result.transaction_id,id);assert.equal(result.admission_held,false);
+ assert.deepEqual(f.events,['drain','stop','observe-exit','snapshot','restore','accept','session','adopt','activate']);
+ await assert.rejects(f.controller.resumeActivation());assert.equal(f.journal.read().history.length,2);
+}));
+
+test('exit recovery remains explicit, excludes concurrency and refuses changed records',async()=>{
+ for(const mode of ['read-failure','drift','closed','concurrent'])await fixture('stop',async f=>{
+  await assert.rejects(f.controller.run());const id=f.journal.read().pending.id;let release;
+  f.hold.resumeNativeExit=async()=>{
+   f.events.push('observe-exit');
+   if(mode==='read-failure')throw Error('still unavailable');
+   if(mode==='concurrent')await new Promise(resolve=>{release=resolve;});
+   return {phase:'stopped',id,origin_id:f.record.id,inventory_sha256:f.journal.read().pending.quiescence_sha256};
+  };
+  if(mode==='drift')fs.writeFileSync(f.dir+'/'+f.record.id+'.production.json','{}');
+  if(mode==='closed')f.controller.closeTransport();
+  if(mode==='concurrent'){
+   const pending=f.controller.resumeActivation();await assert.rejects(f.controller.resumeActivation());release();await pending;
+  }else{await assert.rejects(f.controller.resumeActivation());assert.equal(f.events.includes('restore'),false);}
+  assert.equal(f.events.filter(e=>e==='stop').length,1);
+ });
+});

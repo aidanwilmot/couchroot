@@ -496,12 +496,18 @@ test('held handoff adopts managed rollback with admission closed and stale callb
    for(const [name,value] of [[origin+'.production.json',nativeRecord],[id+'.managed-restore.json',restored],[id+'.managed-launch.json',record]])fs.writeFileSync(dir+'/'+name,JSON.stringify(value),{mode:0o600});
    if(nativeReturn){
     const nativeInventory=await hold.snapshotNative();assert.equal(nativeInventory.worker_id,nativeInfo.worker_id);
-    let binds=0,stops=0;const provider={record:{source,manifest_sha256:nativeRecord.manifest_sha256},provider:{prepareNativeExit:async record=>{binds++;assert.equal(record.id,origin);if(mode==='native-stop-identity')nativeInfo.worker_id='0'.repeat(32);if(mode==='native-stop-selection')journal.advance(journal.read().revision,id,'state-ready',DIGEST);return {waitForExit:async()=>{if(['native-stop-exit','native-stop-both'].includes(mode))throw Error('exit observation unknown');return {record_id:origin,identity:nativeIdentity};}};}}};
+    let binds=0,stops=0;const provider={record:{source,manifest_sha256:nativeRecord.manifest_sha256},provider:{prepareNativeExit:async record=>{binds++;assert.equal(record.id,origin);if(mode==='native-stop-identity')nativeInfo.worker_id='0'.repeat(32);if(mode==='native-stop-selection')journal.advance(journal.read().revision,id,'state-ready',DIGEST);return {waitForExit:async()=>{if(['native-stop-exit','native-stop-both'].includes(mode))throw Error('exit observation unknown');return {record_id:origin,identity:nativeIdentity};},resumeExitObservation:async()=>({record_id:origin,identity:nativeIdentity})};}}};
     nativeChannel.shutdown=async()=>{stops++;assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'submitting');nativeChannel.close();if(['native-stop-shutdown','native-stop-both'].includes(mode))throw Error('shutdown response lost');return {acknowledged:true,disconnected:true};};
     if(mode==='native-stop-journal')fs.writeFileSync(dir+'/'+id+'.native-stop.json','existing',{mode:0o600});
     if(mode.startsWith('native-stop-')&&mode!=='native-stop-shutdown'){
      await assert.rejects(hold.shutdownNative(id,provider),e=>e.outcome==='unknown');const before=[binds,stops];await assert.rejects(hold.shutdownNative(id,provider));assert.deepEqual([binds,stops],before);assert.equal(agent.status().admission_held,true);await assert.rejects(agent.execute('blocked',100));
-     assert.equal(stops,['native-stop-shutdown','native-stop-both','native-stop-exit'].includes(mode)?1:0);if(stops)assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'submitting');continue;
+     assert.equal(stops,['native-stop-shutdown','native-stop-both','native-stop-exit'].includes(mode)?1:0);if(stops){
+      assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'submitting');
+      await assert.rejects(hold.resumeNativeExit(id,{...provider}));await assert.rejects(hold.resumeNativeExit(origin,provider));
+      const recovered=await hold.resumeNativeExit(id,provider);assert.equal(recovered.phase,'stopped');assert.equal(stops,1);assert.equal(binds,1);
+      if(mode==='native-stop-both')assert.deepEqual(JSON.parse(JSON.stringify(recovered.shutdown)),{acknowledged:false,outcome:'unknown'});
+      await assert.rejects(hold.resumeNativeExit(id,provider));assert.equal(agent.status().admission_held,true);
+     }else await assert.rejects(hold.resumeNativeExit(id,provider));continue;
     }
     const stopped=await hold.shutdownNative(id,provider);assert.equal(stopped.phase,'stopped');assert.equal(stops,1);if(mode==='native-stop-shutdown')assert.deepEqual(JSON.parse(JSON.stringify(stopped.shutdown)),{acknowledged:false,outcome:'unknown'});assert.equal(stopped.inventory_sha256,digest(nativeInventory));assert.equal(agent.status().admission_held,true);assert.equal(JSON.parse(fs.readFileSync(dir+'/'+id+'.native-stop.json')).phase,'stopped');await assert.rejects(hold.shutdownNative(id,provider));
    }

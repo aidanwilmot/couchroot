@@ -43,12 +43,13 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
  const clock=()=>{const t=process.hrtime();return t[0]*1000+t[1]/1000000;};
  let expires=clock()+5000;
  const peer=channel._conn,expected={bootId:target.bootId,launcherSha256};
- let pinned=null,busy=false,failed=false,retirementEntered=false,retired=false,snapshotEntered=false,retainedSnapshot=null,installEntered=false,retainedInstallation=null,acceptEntered=false,stateAccepted=false,productionEntered=false,productionRecord=null,readinessEntered=false;
+ let pinned=null,busy=false,failed=false,exitInterrupted=false,retirementEntered=false,retired=false,snapshotEntered=false,retainedSnapshot=null,installEntered=false,retainedInstallation=null,acceptEntered=false,stateAccepted=false,productionEntered=false,productionRecord=null,readinessEntered=false;
  function current(){requireValue(!failed&&channel._conn===peer&&peer&&clock()<expires);}
  async function verify(){
-  current();const info=await channel.operation({op:'status'});current();
+  try{current();const info=await channel.operation({op:'status'});current();
   const actual=validateProvider(info,peer,expected,sourceIdentity),serialized=JSON.stringify(actual);
   if(pinned===null)pinned=serialized;else requireValue(pinned===serialized);
+  }catch(error){failed=true;throw error;}
  }
  await verify();
  function match(request){const actual=binding(request);requireValue(JSON.stringify(actual)===JSON.stringify(target));}
@@ -56,7 +57,7 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
   await verify();const remaining=Math.floor(expires-clock());requireValue(remaining>=100);const result=await channel.execute(command,Math.min(timeout,remaining));await verify();return result;
  }
  async function operation(request,mutating){
-  match(request);requireValue(!busy&&!failed&&!retired&&(!mutating||!retirementEntered));
+  match(request);requireValue(!busy&&!failed&&!exitInterrupted&&!retired&&(!mutating||!retirementEntered));
   busy=true;expires=clock()+(mutating?8000:5000);if(mutating)retirementEntered=true;
   try{
    const options={...target,execute};
@@ -68,7 +69,7 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
  }
  let nativeExitEntered=false,nativeExitRecord=null,nativeExited=false,rollbackEntered=false,rollbackInputs=null,restoreEntered=false,restored=null,restoreAccepted=false,restoreAcceptEntered=false,managedEntered=false,managedRecord=null,managedReadyEntered=false;
  async function rollbackOperation(timeout,body){
-  requireValue(!busy&&!failed);busy=true;expires=clock()+timeout;
+  requireValue(!busy&&!failed&&!exitInterrupted);busy=true;expires=clock()+timeout;
   try{await verify();const result=await body();await verify();return result;}
   catch(error){failed=true;throw error;}
   finally{busy=false;}
@@ -78,19 +79,28 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
  return Object.freeze({
   identity,
   prepareNativeExit:async record=>{
-   requireValue(!busy&&!failed&&!nativeExitEntered&&!rollbackEntered);
+   requireValue(!busy&&!failed&&!exitInterrupted&&!nativeExitEntered&&!rollbackEntered);
    const saved=copy(record);requireValue(saved&&JSON.stringify(saved.source)===JSON.stringify(sourceIdentity)&&saved.boot_id===target.bootId);
    requireValue(saved.worker_identity&&saved.worker_identity.worker_id!==identity.worker_id&&Object.values(saved.worker_identity.processes).every(p=>p&&Object.values(identity.processes).every(q=>p.pid!==q.pid)));
    nativeExitEntered=true;
    const observer=await rollbackOperation(15000,()=>prepareProductionExit({record:saved,execute}));nativeExitRecord=saved;
    let waited=false;
-   return Object.freeze({waitForExit:async()=>{
-    requireValue(!busy&&!failed&&!waited);waited=true;
-    return rollbackOperation(20000,async()=>{const evidence=await observer.waitForExit();nativeExited=true;return evidence;});
-   }});
+   async function observeExit(resume){
+    requireValue(!busy&&!failed&&!nativeExited&&!rollbackEntered&&(resume?waited&&exitInterrupted:!waited&&!exitInterrupted));
+    waited=true;busy=true;expires=clock()+20000;
+    try{
+     await verify();
+     const evidence=await (resume?observer.resumeExitObservation():observer.waitForExit());
+     await verify();nativeExited=true;exitInterrupted=false;return evidence;
+    }catch(error){exitInterrupted=true;throw error;}
+    finally{busy=false;}
+   }
+   // Only the bound read-only observer may recover an interrupted read. Provider
+   // identity failures remain terminal, and all other operations stay blocked.
+   return Object.freeze({waitForExit:()=>observeExit(false),resumeExitObservation:()=>observeExit(true)});
   },
   snapshotNativeJobs:async options=>{
-   requireValue(!busy&&!failed&&!rollbackEntered);
+   requireValue(!busy&&!failed&&!exitInterrupted&&!rollbackEntered);
    const inputs=copy({record:options.record,installation:options.installation,baseline:options.baseline}),record=inputs.record;
    requireValue(record&&record.phase==='ready'&&record.boot_id===target.bootId&&JSON.stringify(record.source)===JSON.stringify(sourceIdentity));
    if(nativeExitEntered)requireValue(nativeExited&&JSON.stringify(record)===JSON.stringify(nativeExitRecord));
@@ -101,49 +111,49 @@ async function createObserverRetirement({channel,source,bound,launcherSha256}){
    return rollbackOperation(60000,async()=>{const snapshot=await snapshotNativeJobs({...inputs,execute});rollbackInputs=copy({...inputs,snapshot});return snapshot;});
   },
   restoreManagedState:async options=>{
-   requireValue(!busy&&!failed&&!restoreEntered&&rollbackInputs);restoreEntered=true;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!restoreEntered&&rollbackInputs);restoreEntered=true;
    return rollbackOperation(120000,async()=>{restored=copy(await restoreManagedJobs({...options,...copy(rollbackInputs),resume:false,execute}));return copy(restored);});
   },
   acceptManagedRestore:async options=>{
-   requireValue(!busy&&!failed&&!restoreAcceptEntered&&restored);restoreAcceptEntered=true;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!restoreAcceptEntered&&restored);restoreAcceptEntered=true;
    return rollbackOperation(120000,async()=>{const result=await acceptManagedRestore({...options,transitionId:restored.transition_id,receiptSha256:restored.receipt_sha256,execute});restoreAccepted=true;return result;});
   },
   launchManaged:async options=>{
-   requireValue(!busy&&!failed&&!managedEntered&&restoreAccepted&&restored);managedEntered=true;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!managedEntered&&restoreAccepted&&restored);managedEntered=true;
    return rollbackOperation(120000,async()=>{managedRecord=copy(await submitManaged({...options,transitionId:restored.transition_id,receiptSha256:restored.receipt_sha256,execute}));return copy(managedRecord);});
   },
   verifyManaged:async options=>{
-   requireValue(!busy&&!failed&&!managedReadyEntered&&managedRecord);managedReadyEntered=true;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!managedReadyEntered&&managedRecord);managedReadyEntered=true;
    return rollbackOperation(120000,()=>readyManaged({...options,record:copy(managedRecord),providerIdentity:identity,execute}));
   },
   inspectUnit:request=>operation(request,false),
   retireUnit:request=>operation(request,true),
   snapshotManagedJobs:async()=>{
-   requireValue(!busy&&!failed&&!rollbackEntered&&!snapshotEntered);busy=true;snapshotEntered=true;expires=clock()+60000;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!rollbackEntered&&!snapshotEntered);busy=true;snapshotEntered=true;expires=clock()+60000;
    try{const result=await snapshotManagedJobs({source:sourceIdentity,execute});retainedSnapshot=JSON.parse(JSON.stringify(result));return result;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   verifyProduction:async options=>{
-   requireValue(!busy&&!failed&&!rollbackEntered&&!readinessEntered&&productionRecord);busy=true;readinessEntered=true;expires=clock()+120000;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!rollbackEntered&&!readinessEntered&&productionRecord);busy=true;readinessEntered=true;expires=clock()+120000;
    try{return await readyProduction({...options,record:productionRecord,providerIdentity:identity,execute});}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   launchProduction:async options=>{
-   requireValue(!busy&&!failed&&!rollbackEntered&&!productionEntered&&stateAccepted&&retainedInstallation);busy=true;productionEntered=true;expires=clock()+30000;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!rollbackEntered&&!productionEntered&&stateAccepted&&retainedInstallation);busy=true;productionEntered=true;expires=clock()+30000;
    try{productionRecord=await submitProduction({...options,id:retainedInstallation.id,manifestSha256:retainedInstallation.manifest_sha256,receiptSha256:retainedInstallation.receipt_sha256,execute});return productionRecord;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   acceptManagedState:async options=>{
-   requireValue(!busy&&!failed&&!rollbackEntered&&!acceptEntered&&retainedInstallation);busy=true;acceptEntered=true;expires=clock()+120000;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!rollbackEntered&&!acceptEntered&&retainedInstallation);busy=true;acceptEntered=true;expires=clock()+120000;
    try{const result=await acceptRetainedState({...options,id:retainedInstallation.id,manifestSha256:retainedInstallation.manifest_sha256,receiptSha256:retainedInstallation.receipt_sha256,execute});stateAccepted=true;return result;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}
   },
   installManagedState:async options=>{
-   requireValue(!busy&&!failed&&!rollbackEntered&&!installEntered&&retainedSnapshot);busy=true;installEntered=true;expires=clock()+120000;
+   requireValue(!busy&&!failed&&!exitInterrupted&&!rollbackEntered&&!installEntered&&retainedSnapshot);busy=true;installEntered=true;expires=clock()+120000;
    try{retainedInstallation=await installRetainedState({...options,snapshot:retainedSnapshot,execute});return retainedInstallation;}
    catch(error){failed=true;throw error;}
    finally{busy=false;}

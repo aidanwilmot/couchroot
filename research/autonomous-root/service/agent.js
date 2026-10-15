@@ -320,11 +320,24 @@ function createAgent(config,options={}){
      catch(_){shutdown={acknowledged:false,outcome:'unknown'};}
      // A lost BYE is not exit evidence. Use the already-bound independent
      // observer even after a transport failure; never submit shutdown again.
-     owned();const exited=await observer.waitForExit();owned();
-     if(!exited||exited.record_id!==adopted.record.id||JSON.stringify(exited.identity)!==JSON.stringify(adopted.record.worker_identity)||privateRead(file,16384)!==text)throw Error('Native exit evidence changed');
-     const completed={...pending,phase:'stopped',shutdown,exited};atomic(file,completed);owned();
-     token.nativeStopped=JSON.parse(JSON.stringify(completed));return completed;
+     const finishExit=async resume=>{
+      owned();if(privateRead(file,16384)!==text)throw Error('Native stop journal changed');
+      const exited=await (resume?observer.resumeExitObservation():observer.waitForExit());owned();
+      if(!exited||exited.record_id!==adopted.record.id||JSON.stringify(exited.identity)!==JSON.stringify(adopted.record.worker_identity)||privateRead(file,16384)!==text)throw Error('Native exit evidence changed');
+      const completed={...pending,phase:'stopped',shutdown,exited};atomic(file,completed);owned();
+      token.nativeStopped=JSON.parse(JSON.stringify(completed));return completed;
+     };
+     token.nativeExitRecovery={transactionId,retirementSession,finishExit};
+     return await finishExit(false);
     }catch(cause){throw Object.assign(Error('Native rollback shutdown requires reconciliation'),{outcome:'unknown',cause});}finally{token.preparingNativeStop=false;}
+   },
+   resumeNativeExit:async (transactionId,retirementSession)=>{
+    const recovery=token.nativeExitRecovery;
+    if(!recovery||recovery.transactionId!==transactionId||recovery.retirementSession!==retirementSession||token.nativeStopped||token.preparingNativeStop||token.completionBusy)throw Error('Native exit recovery unavailable');
+    token.preparingNativeStop=true;
+    try{return await recovery.finishExit(true);}
+    catch(cause){throw Object.assign(Error('Native rollback exit requires reconciliation'),{outcome:'unknown',cause});}
+    finally{token.preparingNativeStop=false;}
    },
    adoptManaged:async session=>{
     const previous=token.adopted,previousChannel=previous?previous.channel:owner,previousGeneration=previous?previous.generation:gen;

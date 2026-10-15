@@ -41,9 +41,22 @@ binding, rejects overlapping calls and cannot replay a completed observation.
 The original wait remains single-use. Linux validation passed all 22 production
 exit and observer-retirement tests, including the process-disappearance race.
 
-This primitive is not yet wired through the retirement provider, admission hold
-or managed-return controller. The installed packages remain unchanged; recovery
-through the public endpoint and both-TV failure injection are still open.
+The retry is now connected through the retirement provider, session wrapper,
+admission hold and managed-return controller. Explicit managed recovery can
+reobserve the original shutdown and continue the same transaction without sending
+shutdown again. Provider identity failures remain terminal, concurrent recovery
+is refused, and closed transports cannot publish successful exit evidence.
+
+Local validation passed 75 focused Linux tests plus 9 session tests. Four real
+managed/native/managed process rehearsals passed: normal, interrupted activation,
+lost shutdown response and interrupted exit observation. The last scenario
+verified one shutdown, held admission until recovery, preserved imported and
+native-created job results, and completed staging cleanup. TV systemd, mounting
+and launch setup are substituted in this fixture; it is not hardware evidence.
+
+The installed packages remain unchanged. Both-TV recovery validation, coordinator
+restart reconstruction, and recovery from other interrupted mutation phases
+remain open.
 
 ## Decision and scope
 

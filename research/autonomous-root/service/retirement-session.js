@@ -48,11 +48,18 @@ async function openRetirementSession(options){
    snapshotNativeJobs:options=>call('snapshotNativeJobs',options),restoreManagedState:options=>call('restoreManagedState',options),acceptManagedRestore:options=>call('acceptManagedRestore',options),launchManaged:options=>call('launchManaged',options),verifyManaged:options=>call('verifyManaged',options),
    prepareNativeExit:async record=>{
     if(exitPending||retiring||closed)throw Error('Native exit observation already pending');exitPending=true;
-    const observer=await call('prepareNativeExit',record);let waited=false;
-    return Object.freeze({waitForExit:async()=>{
-     if(waited||retiring||closed)throw Error('Native exit observation unavailable');waited=true;inUse++;
-     try{const result=await observer.waitForExit();exitPending=false;return result;}finally{inUse--;}
-    }});
+    const observer=await call('prepareNativeExit',record);let waited=false,observing=false,interrupted=false;
+    async function observe(resume){
+     if(observing||!exitPending||retiring||closed||(resume?!interrupted:waited))throw Error('Native exit observation unavailable');
+     waited=true;observing=true;inUse++;
+     try{
+      const result=await (resume?observer.resumeExitObservation():observer.waitForExit());
+      if(closed||retiring)throw Error('Native exit observation session closed');
+      exitPending=false;interrupted=false;return result;
+     }catch(error){interrupted=true;throw error;}
+     finally{observing=false;inUse--;}
+    }
+    return Object.freeze({waitForExit:()=>observe(false),resumeExitObservation:()=>observe(true)});
    }
   });
   const retire=async executor=>{
