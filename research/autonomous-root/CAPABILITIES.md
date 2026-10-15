@@ -1024,3 +1024,19 @@ Both returned to managed with retained jobs preserved, scope/process absence
 verified, SDK on loopback and all owned test/rescue units inactive. The original
 launch was not replayed; root-owned fence tombstones remain. See
 [bootstrap recovery results](native-worker/bootstrap-recovery-results.json).
+
+
+## Forward migration interruption recovery
+
+Signed 0.7.32 now has both-TV same-boot acceptance for coordinator interruption
+at provider readiness and retained-state readiness, plus provider loss followed
+by coordinator restart. Startup verifies that the original processes and units
+are idle, validates retained managed state, and rolls back the original selection
+transaction. A separate explicit cleanup verifies remaining staging and removes
+its ownership markers before another migration is admitted. Original interrupted
+request rows retain their uncertainty; recovery does not replay the request.
+
+Provider loss with the original coordinator still running, later production
+readiness and cross-boot recovery are not established by these rounds. The managed
+fallback and independent SDK rescue remain available. See
+[forward recovery results](native-worker/forward-recovery-results.json).

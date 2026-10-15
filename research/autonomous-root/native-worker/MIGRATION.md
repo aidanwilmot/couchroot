@@ -8,7 +8,11 @@ below for installed state. The plan itself does not authorize device changes.
 ## Current qualification snapshot
 
 Both TVs are on signed 0.7.32 packages with native service acquisition enabled,
-managed selected and ready, and settled histories of 22 committed entries each.
+managed selected and ready, and settled histories of 25 entries each: 22 committed
+and three rolled back. The latest rounds qualify forward rollback at provider
+readiness and retained-state readiness, plus provider loss followed by coordinator
+restart, with explicit cleanup under each original transaction. See
+[forward recovery evidence](forward-recovery-results.json).
 Each passed native disable/enable, worker transport loss and coordinator restart,
 then automatic recovery after coordinator interruption at both the submitted and
 ready native-bootstrap phases. Recovery retired the original receipt without
@@ -51,8 +55,9 @@ pending. See [round-trip evidence](roundtrip-results.json) and
 
 Native public admission and same-boot recovery are qualified for the bounded
 rounds above. Native-default and .NET-free completion still require:
-- Recovery from earlier handoff failures, coordinator restart and provider loss,
-  including durable reconciliation without replaying operations.
+- Later forward-handoff interruption boundaries and provider-loss handling without
+  coordinator restart; provider-ready, state-ready and provider-loss plus restart
+  now have both-TV rollback/cleanup evidence without operation replay.
 - Wider interruption boundaries and maintenance lifecycle coverage beyond the
   same-boot startup and active-return checks.
 - Establishing a .NET-free capability entry, then adopting it in agent-required
@@ -2364,3 +2369,49 @@ loader behavior is only a candidate pending current-firmware and package-route
 evidence. See [the dependency inventory](DOTNET-INVENTORY.md). Broader handoff
 failure/provider loss, final production endurance, native-default rollout and
 power-lifecycle qualification remain open. The .NET fallback stays available.
+
+
+### Installed forward rollback and provider loss — 2026-10-15
+
+The existing signed 0.7.32 implementation now has hardware acceptance on both TVs
+for three additional fault cases: coordinator interruption with a ready provider
+while selection is prepared; interruption after retained state is accepted; and
+loss of the ready provider followed by coordinator restart. No package, public
+API or production code changed for this milestone.
+
+A private watcher binds only the enrolled endpoint coordinator to its boot, PID
+and start time. It briefly stops that process, rereads the target durable phase
+with no selection writer present, saves exact selection/provider witness bytes,
+then terminates and relaunches that coordinator. The provider-loss case first
+signals only the guardian bound in the ready provider receipt. A separate bound
+resume timer covers watcher failure while stopped, and every round keeps the
+independent 300-second .NET SDK rescue armed. No shared WRT parent, unrelated
+application, reboot or standby path is used.
+
+Each fresh managed executor confirmed prior process/unit absence, retained-state
+integrity and the original transaction binding before publishing rollback. The
+original request remains submitted in its durable request journal, representing
+an interrupted outcome; it is neither replayed nor rewritten as successful.
+Explicit cleanup then removed only the original transaction's checked native and
+provider scopes and ownership markers. Imported jobs and every pre-existing
+retained record survived; fixture records were forgotten only after readback.
+
+Both TVs ended managed-ready and settled, with 22 original committed history
+entries plus three rolled-back entries. SDK is loopback, all 25 owned trial/rescue
+units per TV are inactive, and exact test-only witness scopes were removed after
+private capture. Enrollment, configuration, protected files and managed recovery
+bytes are unchanged. No setup or selection operation remains pending.
+
+QN90A's first acceptance script expected the original request to be rewritten as
+unknown, but inspection found the intentionally retained submitted row. The test
+was corrected to preserve that uncertainty. It also attempted to stop an unloaded
+rescue service; the timer was already disarmed. Readback and guarded inactive-unit
+handling completed acceptance without repeating migration, cleanup or job work.
+These were private-harness corrections; all later rounds passed directly.
+
+Validation: 377 Node tests passed with 135 skips. Fresh scratch native/managed
+fixtures passed all six rehearsal and eleven restart cases in separate fresh
+containers. Hardware evidence covers six interrupted rounds across the two TVs.
+Later production-readiness interruption, provider loss without coordinator restart,
+final production endurance and power lifecycle remain separate gates. See
+[aggregate evidence](forward-recovery-results.json).
