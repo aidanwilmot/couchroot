@@ -1040,3 +1040,25 @@ Both TVs remain unchanged on .NET; neither was restarted or rebooted. Activation
 and controller integration remain required before live rollback qualification.
 
 The combined Linux migration suite passes 204 tests without skips.
+
+### Combined managed completion evidence — local follow-up
+
+A final completion verifier now checks the managed ready record, committed
+selection, exact restored state, completed native production retirement and
+completed independent-provider retirement together. It requires provider tokens
+and pending teardown/readiness entries to be absent, rechecks the provider's
+processes/staging and inactive unit, verifies the managed unit/start identity,
+runtime/command line/private mounts/staged files, and confirms the same managed
+identity with empty resource inventory around those checks. The production cleanup
+receipt is reverified through its completed read-only resume path.
+
+The result is verification evidence only: no activation receipt is published,
+no launch/restore marker is removed and admission is not released. This closes the
+combined evidence check needed before ordered local activation cleanup. Tests use
+actual shell/filesystem checks with fixture process/unit/channel state and reject
+unresolved provider ownership, revived native staging, changed units/runtime,
+identity drift and unexpected managed resources. Both TVs remain unchanged on
+.NET; neither was restarted or rebooted. Local activation cleanup, controller
+completion and on-TV migration qualification remain open.
+
+The combined Linux migration suite passes 206 tests without skips.

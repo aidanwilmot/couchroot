@@ -344,3 +344,33 @@ test('partial retirement refuses unexpected files, links, changed bytes, units a
   await assert.rejects(retireProduction({...r.retireOptions,resume:true,finishPartial:true}));assert(fs.existsSync(f.root+'/native/code/worker'));assert(fs.existsSync(f.root+'/native/state/launcher'));assert(!fs.existsSync(r.retireFile));
  });
 });
+
+const {verifyManagedCompletion}=require('../research/autonomous-root/service/managed-completion');
+async function completionFixture(fn){return require('./retirement-test-state.cjs').withRetirementState(()=>fixture(async f=>{
+ const r=await productionRetirementFixture(f),dir='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state';fs.mkdirSync(path.dirname(dir),{recursive:true,mode:0o700});fs.renameSync(r.options.journalDirectory,dir);
+ const options={...r.retireOptions,journalDirectory:dir,selectionFile:dir+'/selection.json'};await retireProduction(options);
+ const id='1'.repeat(32),retired={schema:1,id,phase:'complete',device:'s90d',manifest_sha256:f.options.record.manifest_sha256,worker_sha256:sha,launcher_sha256:sha,observer_sha256:sha,boot_id:boot,source:f.options.record.source,unit:'couchroot-retirement-'+id+'.service',directory:'/opt/couchroot-retirement-'+id,scope:'/opt/couchroot-retirement-'+id+'/state',token_file:dir+'/retirement-ABC123/token',token_sha256:sha,port:12346,provider_identity:r.readyOptions.providerIdentity,unit_started_monotonic:'123'};
+ fs.writeFileSync(dir+'/'+id+'.retirement.json',JSON.stringify(retired),{mode:0o600});
+ const execute=async c=>{
+  if(c.includes('--property=Id,')&&c.includes(retired.unit))return {exit_code:0,stdout:'Id='+retired.unit+'\nLoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nExecMainCode=1\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n',stderr:''};
+  return r.readyOptions.execute(c.replaceAll('/proc/77/stat',f.root+'/proc/77/stat').replaceAll('/proc/76/stat',f.root+'/proc/76/stat').replaceAll(retired.directory,f.root+'/provider'));
+ };
+ await fn({f,r,dir,retired,options:{managed:options.managed,retired,journalDirectory:dir,selectionFile:options.selectionFile,execute,confirmManaged:async()=>JSON.parse(JSON.stringify(r.info))}});
+}));}
+test('managed completion rechecks retired provider, native cleanup and live managed runtime without releasing markers',linux,()=>completionFixture(async f=>{
+ const before=fs.readdirSync(f.dir).sort(),result=await verifyManagedCompletion(f.options);assert.equal(result.phase,'verified');assert.equal(result.id,f.options.managed.id);assert.deepEqual(fs.readdirSync(f.dir).sort(),before);
+ assert(fs.existsSync(f.dir+'/managed-launch.pending'));assert(fs.existsSync(f.dir+'/managed-restore.pending'));assert.deepEqual(await verifyManagedCompletion(f.options),result);
+}));
+test('managed completion refuses unresolved provider or changed live evidence',linux,async()=>{
+ for(const mode of ['provider-marker','provider-token','provider-unit','native-staging','managed-unit','runtime','identity','resources'])await completionFixture(async f=>{
+  const run=f.options.execute;
+  if(mode==='provider-marker')fs.writeFileSync(f.dir+'/retirement-launch.pending','unresolved',{mode:0o600});
+  if(mode==='provider-token')fs.mkdirSync(path.dirname(f.retired.token_file),{mode:0o700});
+  if(mode==='native-staging')fs.mkdirSync(f.f.root+'/native',{mode:0o700});
+  if(mode==='runtime')fs.writeFileSync(f.r.runtime,'changed');
+  if(mode==='identity')f.options.confirmManaged=async()=>({...f.r.info,worker_id:'0'.repeat(32)});
+  if(mode==='resources')f.options.confirmManaged=async()=>({...f.r.info,resources:{...f.r.info.resources,helpers:['a'.repeat(32)]}});
+  if(['provider-unit','managed-unit'].includes(mode))f.options.execute=async c=>{const r=await run(c);if(c.includes('--property=Id,')&&c.includes(mode==='provider-unit'?f.retired.unit:f.options.managed.unit))r.stdout=r.stdout.replace('Monotonic=123','Monotonic=999');return r;};
+  await assert.rejects(verifyManagedCompletion(f.options));assert(fs.existsSync(f.dir+'/managed-launch.pending'));assert(fs.existsSync(f.dir+'/managed-restore.pending'));
+ });
+});
