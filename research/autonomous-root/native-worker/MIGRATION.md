@@ -1395,3 +1395,19 @@ the SDK setting separately. Missing entries still refuse verification. Focused
 large-inventory and missing-middle-entry tests pass; the full Python suite ran
 360 tests successfully, with 108 environment-dependent skips. Private recovery
 logs and signed packages remain outside Git. Neither TV was rebooted.
+
+### Both 0.7.15 services installed with managed fallback
+
+S90D's signed 0.7.15 update completed through the shared engine with bounded
+inventory reads; no incomplete-output reconciliation or installer retry was
+needed. Its 65 installed package files, existing enrollment, protected files and
+startup flags match the expected state. The managed worker is ready, the original
+boot ID is unchanged, SDK access is back on loopback and the temporary recovery
+timer is disarmed. The installation journal is complete.
+
+A final read-only check of both TVs confirms managed selected and ready, no
+admission hold, no pending shared setup operation, unchanged workers/boots since
+installation acceptance, and an idle native-status endpoint. Native hardware
+rehearsal is still outstanding; installing the candidate does not establish
+native worker readiness or migration parity. No TV was rebooted. Raw acceptance
+and final-check evidence remain in the private candidate deployment directory.
