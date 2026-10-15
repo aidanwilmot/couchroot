@@ -196,8 +196,25 @@ test('managed launch uses canonical staging when home is the TV compatibility sy
  assert(fs.lstatSync(f.root+'/home').isSymbolicLink());
  const result=await r.api.submitManaged(r.launchOptions);
  assert.equal(result.stage,'/opt/usr/home/owner/share/tmp/sdk_tools/managed-'+result.id);
- assert(fs.existsSync(f.root+'/launched'));
+ const args=fs.readFileSync(f.root+'/launched','utf8').trimEnd().split('\n');
+ assert.deepEqual(args.slice(-2),[f.root+'/home/owner/share/tmp/sdk_tools/managed-'+result.id+'/token',f.root+'/home/owner/share/tmp/sdk_tools/managed-'+result.id]);
  assert(fs.existsSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools/managed-'+result.id+'/token'));
+}));
+test('generated managed launch arguments pass the unchanged production staging validator',{
+ skip:linux.skip||!process.env.MANAGED_PARITY
+},()=>fixture(async f=>{
+ const r=await managedLaunchFixture(f),result=await r.api.submitManaged(r.launchOptions);
+ const args=fs.readFileSync(f.root+'/launched','utf8').trimEnd().split('\n');
+ const runtimeStage=args[args.length-1].replace(f.root+'/home','/home');
+ const validate=stage=>spawnSync('dotnet',[process.env.MANAGED_PARITY,'--validate-staging',stage],{encoding:'utf8',timeout:10000});
+ const accepted=validate(runtimeStage);assert.equal(accepted.status,0,accepted.stderr);assert.equal(accepted.stdout,runtimeStage+'/\n');
+ assert.equal(validate(result.stage).status,64);
+ assert.equal(validate('/home/owner/share/tmp/sdk_tools/../foreign').status,64);
+}));
+test('managed launch refuses a compatibility home alias to a different directory',linux,()=>fixture(async f=>{
+ const r=await managedLaunchFixture(f);
+ fs.unlinkSync(f.root+'/home');fs.mkdirSync(f.root+'/foreign-home');fs.symlinkSync('foreign-home',f.root+'/home');
+ await assert.rejects(r.api.submitManaged(r.launchOptions));assert(!fs.existsSync(f.root+'/launched'));
 }));
 test('managed launch still refuses a symlink in the canonical staging parent',linux,()=>fixture(async f=>{
  const r=await managedLaunchFixture(f),parent=f.root+'/package-root/home/owner/share/tmp/sdk_tools';
@@ -233,7 +250,7 @@ async function managedReadyFixture(f,committed=false){
  const info={implementation:'managed',boot_id:boot,worker_id:worker,uptime_seconds:1,processes:{worker:{pid:73,start_ticks:'500'},guardian:null},capabilities:['worker-process-identity-v1','resource-inventory-v1','file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1'],app_launcher:{implementation:'native',sha256:hash(launcherBytes)},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]}};
  const launcher=r.parent+'/launchers/'+worker;fs.mkdirSync(launcher,{recursive:true,mode:0o700});fs.writeFileSync(launcher+'/app-launcher',launcherBytes,{mode:0o500});
  const proc=f.root+'/proc/73';fs.mkdirSync(proc+'/ns',{recursive:true});fs.mkdirSync(f.root+'/proc/1/ns',{recursive:true});fs.symlinkSync('mnt:[2]',proc+'/ns/mnt');fs.symlinkSync('mnt:[1]',f.root+'/proc/1/ns/mnt');fs.symlinkSync(r.runtime,proc+'/exe');fs.writeFileSync(proc+'/stat','73 (dotnet) S '+Array(18).fill('0').join(' ')+' 500 0\n');
- fs.writeFileSync(proc+'/cmdline',['/usr/bin/dotnet',record.directory+'/code/SamsungTvRootAgent.dll','127.0.0.1',String(record.port),record.stage+'/token',record.stage].join('\0')+'\0');
+ fs.writeFileSync(proc+'/cmdline',['/usr/bin/dotnet',record.directory+'/code/SamsungTvRootAgent.dll','127.0.0.1',String(record.port),record.stage.replace('/opt/usr/home/','/home/')+'/token',record.stage.replace('/opt/usr/home/','/home/')].join('\0')+'\0');
  fs.writeFileSync(proc+'/mountinfo','1 0 0:1 / '+f.root+'/launch-'+record.id+'/code ro - tmpfs tmpfs rw\n2 0 0:2 / '+launcher+' ro - tmpfs tmpfs rw\n');
  fs.unlinkSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools/managed-'+record.id+'/token');
  const channel={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async request=>{if(request.op==='status')return JSON.parse(JSON.stringify(info));const item=r.snapshot.records.find(e=>e.name===request.id+'.json'),saved=JSON.parse(Buffer.from(item.base64,'base64').toString().replace(/^\uFEFF/,''));return {id:saved.id,boot_id:saved.boot_id,state:saved.state,record:saved,output_available:false};}};

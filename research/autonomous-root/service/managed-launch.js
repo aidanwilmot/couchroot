@@ -22,12 +22,16 @@ function managedLaunchPlan({transitionId,payload,managedSha256,runtimeSha256,rec
  const tokenDirectory=typeof tokenFile==='string'?path.dirname(tokenFile):'';
  check(path.dirname(tokenDirectory)===STATE&&/^managed-[A-Za-z0-9]{6}$/.test(path.basename(tokenDirectory))&&path.basename(tokenDirectory).length===14&&tokenFile===tokenDirectory+'/token');
  const directory='/opt/couchroot-managed-'+transitionId,code=directory+'/code',stage='/opt/usr/home/owner/share/tmp/sdk_tools/managed-'+transitionId,unit='couchroot-managed-'+transitionId+'.service';
+ // The unchanged managed entry point accepts the compatibility path only.
+ // Bind that alias to the checked canonical tree before passing runtime argv.
+ const invocationStage='/home/owner/share/tmp/sdk_tools/managed-'+transitionId;
  const absent=p=>'test ! -e '+q(p)+'; test ! -L '+q(p)+'\n';
  const digest=(p,h)=>'test "$(sha256sum '+q(p)+' | cut -d " " -f1)" = '+q(h)+'\n';
  const parents=[];for(const leaf of [payload,path.dirname(stage)]){let p=leaf;while(p!=='/'){if(!parents.includes(p))parents.unshift(p);p=path.dirname(p);}}
  const copy=(from,to,h,mode)=>absent(to)+'(set -C; cat '+q(from)+' > '+q(to)+')\nchmod '+mode+' '+q(to)+'\ntest "$(stat -c "%u:%h:%a" '+q(to)+')" = 0:1:'+mode+'\n'+digest(to,h);
  const command=restore.verify+'export DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+
   'test "$(systemctl show -p LoadState '+q(unit)+')" = LoadState=not-found\n'+
+  "test '/home' -ef '/opt/usr/home'\n"+
   parents.map(p=>'test -d '+q(p)+'; test ! -L '+q(p)+'\n').join('')+
   'test -f /usr/bin/dotnet; test ! -L /usr/bin/dotnet\n'+digest('/usr/bin/dotnet',runtimeSha256)+
   'test -d '+q(tokenDirectory)+'; test ! -L '+q(tokenDirectory)+'; test "$(stat -c "%u:%a" '+q(tokenDirectory)+')" = 5001:700\n'+
@@ -35,7 +39,7 @@ function managedLaunchPlan({transitionId,payload,managedSha256,runtimeSha256,rec
   files.map(n=>'test -f '+q(payload+'/'+n)+'; test ! -L '+q(payload+'/'+n)+'; test "$(stat -c "%u:%h" '+q(payload+'/'+n)+')" = 201:1\n'+digest(payload+'/'+n,manifest[n])).join('')+
   absent(directory)+absent(stage)+'mkdir '+q(directory)+' '+q(code)+' '+q(stage)+'\n'+
   files.map(n=>copy(payload+'/'+n,code+'/'+n,manifest[n],'400')).join('')+copy(tokenFile,stage+'/token',tokenSha256,'600')+'sync\n'+native.guard+
-  'systemd-run --quiet --unit='+q(unit)+' '+['User=0','Group=0','SmackProcessLabel=System','PrivateMounts=yes','BindReadOnlyPaths='+code,'TimeoutStopSec=5s','RemainAfterExit=yes','KillMode=control-group','StandardOutput=null','StandardError=null'].map(p=>'--property='+q(p)).join(' ')+' '+['/usr/bin/dotnet',code+'/SamsungTvRootAgent.dll','127.0.0.1',String(port),stage+'/token',stage].map(q).join(' ')+'\nprintf "MANAGED-SUBMITTED\\n"\n';
+  'systemd-run --quiet --unit='+q(unit)+' '+['User=0','Group=0','SmackProcessLabel=System','PrivateMounts=yes','BindReadOnlyPaths='+code,'TimeoutStopSec=5s','RemainAfterExit=yes','KillMode=control-group','StandardOutput=null','StandardError=null'].map(p=>'--property='+q(p)).join(' ')+' '+['/usr/bin/dotnet',code+'/SamsungTvRootAgent.dll','127.0.0.1',String(port),invocationStage+'/token',invocationStage].map(q).join(' ')+'\nprintf "MANAGED-SUBMITTED\\n"\n';
  check(Buffer.byteLength(command)<=65536);
  return {command,record:{schema:1,id:transitionId,phase:'submitting',implementation:'managed',manifest_sha256:managedSha256,runtime_sha256:runtimeSha256,state_receipt_sha256:receiptSha256,origin_id:inputs.record.id,source:inputs.record.worker_identity,boot_id:inputs.record.boot_id,unit,directory,stage,files:files.reduce((out,n)=>{out[n]=manifest[n];return out;},{}),port,token_file:tokenFile,token_sha256:tokenSha256}};
 }

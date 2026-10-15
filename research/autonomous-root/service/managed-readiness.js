@@ -40,8 +40,9 @@ function managedRuntimeCommand(record,identity,inputs,launcherSha256){
  const dir=p=>'test -d '+p+'; test ! -L '+p+'; test "$(stat -c "%u:%a" '+p+')" = 0:700\n';
  const file=(p,mode,h)=>'test -f '+p+'; test ! -L '+p+'; test "$(stat -c "%u:%h:%a" '+p+')" = 0:1:'+mode+'\ntest "$(sha256sum '+p+' | cut -d " " -f1)" = '+h+'\n';
  const live='line=$(cat /proc/'+pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" = '+identity.processes.worker.start_ticks+'\n';
- const argv=['/usr/bin/dotnet',code+'/SamsungTvRootAgent.dll','127.0.0.1',String(record.port),record.stage+'/token',record.stage].join('\0')+'\0';
- const command=restore.verify+live+'test "$(readlink /proc/'+pid+'/exe)" = /usr/bin/dotnet\n'+
+ const invocationStage='/home/owner/share/tmp/sdk_tools/managed-'+record.id;
+ const argv=['/usr/bin/dotnet',code+'/SamsungTvRootAgent.dll','127.0.0.1',String(record.port),invocationStage+'/token',invocationStage].join('\0')+'\0';
+ const command=restore.verify+"test '/home' -ef '/opt/usr/home'\n"+live+'test "$(readlink /proc/'+pid+'/exe)" = /usr/bin/dotnet\n'+
   'test "$(sha256sum /proc/'+pid+'/exe | cut -d " " -f1)" = '+record.runtime_sha256+'\n'+
   'test "$(sha256sum /proc/'+pid+'/cmdline | cut -d " " -f1)" = '+hash(argv)+'\n'+
   'test "$(readlink /proc/'+pid+'/ns/mnt)" != "$(readlink /proc/1/ns/mnt)"\n'+

@@ -1538,3 +1538,26 @@ launch implementation and passes with the correction. All 67 focused retained
 state/readiness tests and all three isolated real-process rehearsals pass.
 This correction is local, not yet deployed. Automatic recovery from this earlier
 return failure and full both-TV rehearsal acceptance remain open.
+
+### Managed entry-point argument contract retained
+
+QN90A's 0.7.18 installation completed with managed readiness and unchanged boot,
+but no rehearsal was submitted. Before handoff, inspection found a second path
+constraint: the unchanged managed worker's `ValidateStagingDirectory` accepts
+only the `/home/owner/share/tmp/sdk_tools/` prefix. The canonical-only argument
+introduced by the previous correction would fail that startup check. S90D was
+left on 0.7.17; its 0.7.18 package was not deployed.
+
+Launch and readiness now keep canonical staging for filesystem checks and bind
+the supported runtime alias to it using same-directory identity. The managed
+worker receives its existing `/home/...` token and staging arguments. Unexpected
+symlinks within the canonical chain and a `/home` alias to another directory are
+still rejected. No managed production source or staging allowlist was changed.
+
+A harness-only entry exposes the actual production staging validator. Generated
+launch arguments now pass that validator; canonical-only and escaped paths fail.
+The new regression fails against the 0.7.18 launch implementation (validator exit
+64 instead of zero). All 69 focused tests pass without skips, as do all three
+isolated real-process rehearsals. This closes a harness coverage gap; the latter
+still substitute TV-specific process launch and are not hardware acceptance.
+The argument correction is local pending packaging and both-TV deployment.

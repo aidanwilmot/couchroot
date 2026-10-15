@@ -131,3 +131,9 @@ The harness-only `--parity-wire` entry bypasses TV launcher preparation and uses
 fixture launcher digest. It is not the TV executable's complete startup/teardown
 path. These tests do not qualify Smack, TV `/proc` visibility, retained-state
 installation or native selection in the production service.
+
+The harness-only `--validate-staging PATH` entry invokes the unchanged production
+staging-directory validator without starting a worker. The generated managed
+fallback launch tests use this entry to check actual runtime arguments separately
+from canonical filesystem staging. Set `MANAGED_PARITY` to the rebuilt harness
+when running `tests/native-retained-state.test.cjs` to include this contract check.
