@@ -895,3 +895,27 @@ systemd invocation on-device. Read-only inspection confirmed /usr/bin/dotnet is 
 regular root-owned mode-755 file on both TVs. Neither worker nor TV was restarted;
 both deployed .NET fallbacks remain unchanged. Managed session/readiness, cleanup,
 controller integration and full native migration qualification remain open.
+
+### Managed rollback readiness evidence — local follow-up
+
+Managed readiness now binds the authenticated root/System peer to a distinct
+worker identity, stable systemd unit, pinned runtime and exact command line. An
+independent executor checks the live process start ticks, private mount namespace,
+read-only code and launcher mounts, staged assembly/config/dependency hashes,
+consumed token and launcher bytes. Restored state is reaccepted before inspection;
+retained job results must match the saved records with no output available, and
+resource inventory must be empty. Identity, unit and files are checked again
+before publishing a durable ready receipt.
+
+Readiness keeps selection pending and leaves both launch/restore ownership markers
+in place. Publication uncertainty retains the readiness intent and prevents an
+implicit second attempt. Managed-unit inspection has its own restricted namespace.
+
+The combined Linux suite passes 186 tests without skips. Tests execute runtime
+checks against disposable files/proc/mount fixtures, cover full retention and wire
+bounds, and reject identity/resource/job/runtime/launcher/mount/command-line drift,
+unit changes, local ownership changes, disconnection and lost publication replies.
+These are host checks, not a live TV managed restart: the new readiness tests use
+fixture peers and unit/proc/mount evidence. Session ownership, controller adoption,
+provider retirement, selection commit and interrupted-readiness recovery remain
+open. Both TVs and their deployed .NET fallbacks are unchanged; no reboot occurred.

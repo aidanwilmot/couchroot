@@ -211,3 +211,53 @@ test('managed launch plan handles full retention and rejects malformed callback 
  const o={...r.launchOptions,inputs},plan=r.api.managedLaunchPlan(o);assert(Buffer.byteLength(plan.command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:plan.command}).status,0);
  for(const patch of [{port:0},{tokenFile:'/tmp/token'},{tokenFile:o.tokenFile.replace('ABC123','ABC123\n')},{managedSha256:'f'.repeat(64)},{runtimeSha256:'invalid'},{transitionId:o.transitionId+'\n'},{payload:'/tmp/payload'}])assert.throws(()=>r.api.managedLaunchPlan({...o,...patch}));
 },64));
+
+const {readyManaged,managedRuntimeCommand}=require('../research/autonomous-root/service/managed-readiness');
+async function managedReadyFixture(f){
+ const r=await managedLaunchFixture(f),record=await r.api.submitManaged(r.launchOptions),worker='9'.repeat(32),launcherBytes=Buffer.from('fixture launcher'),providerIdentity={boot_id:boot,worker_id:'8'.repeat(32),processes:{worker:{pid:77,start_ticks:'700'},guardian:{pid:76,start_ticks:'699'}}};
+ const info={implementation:'managed',boot_id:boot,worker_id:worker,uptime_seconds:1,processes:{worker:{pid:73,start_ticks:'500'},guardian:null},capabilities:['worker-process-identity-v1','resource-inventory-v1','file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1'],app_launcher:{implementation:'native',sha256:hash(launcherBytes)},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]}};
+ const launcher=r.parent+'/launchers/'+worker;fs.mkdirSync(launcher,{recursive:true,mode:0o700});fs.writeFileSync(launcher+'/app-launcher',launcherBytes,{mode:0o500});
+ const proc=f.root+'/proc/73';fs.mkdirSync(proc+'/ns',{recursive:true});fs.mkdirSync(f.root+'/proc/1/ns',{recursive:true});fs.symlinkSync('mnt:[2]',proc+'/ns/mnt');fs.symlinkSync('mnt:[1]',f.root+'/proc/1/ns/mnt');fs.symlinkSync(r.runtime,proc+'/exe');fs.writeFileSync(proc+'/stat','73 (dotnet) S '+Array(18).fill('0').join(' ')+' 500 0\n');
+ fs.writeFileSync(proc+'/cmdline',['/usr/bin/dotnet',record.directory+'/code/SamsungTvRootAgent.dll','127.0.0.1',String(record.port),record.stage+'/token',record.stage].join('\0')+'\0');
+ fs.writeFileSync(proc+'/mountinfo','1 0 0:1 / '+f.root+'/launch-'+record.id+'/code ro - tmpfs tmpfs rw\n2 0 0:2 / '+launcher+' ro - tmpfs tmpfs rw\n');
+ fs.unlinkSync(f.root+'/owner/share/tmp/sdk_tools/managed-'+record.id+'/token');
+ const channel={_conn:{identity:{pid:73,uid:0,euid:0,gid:0,egid:0,smack:'System'}},operation:async request=>{if(request.op==='status')return JSON.parse(JSON.stringify(info));const item=r.snapshot.records.find(e=>e.name===request.id+'.json'),saved=JSON.parse(Buffer.from(item.base64,'base64').toString().replace(/^\uFEFF/,''));return {id:saved.id,boot_id:saved.boot_id,state:saved.state,record:saved,output_available:false};}};
+ const execute=async c=>{if(c.includes('--property=Id,'))return {exit_code:0,stdout:'Id='+record.unit+'\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=73\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n',stderr:''};return r.execute(c.replaceAll(' /home/owner',' '+f.root+'/owner').replaceAll('/proc/73/',proc+'/').replaceAll('/proc/1/ns/mnt',f.root+'/proc/1/ns/mnt'));};
+ return {...r,record,info,proc,channel,execute,readyOptions:{record,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,channel,execute,providerIdentity},intent:r.launchFile+'.readiness.pending'};
+}
+test('managed readiness verifies runtime, mounts, retained jobs and receipt without committing selection',linux,()=>fixture(async f=>{
+ const r=await managedReadyFixture(f),before=selectionStatus(r.options.selectionFile),result=await readyManaged(r.readyOptions).catch(e=>{throw e.cause||e;});
+ assert.equal(result.record.phase,'ready');assert.equal(result.record.worker_identity.processes.worker.pid,73);assert.equal(result.readiness_sha256,hash(JSON.stringify(result.record)));assert.deepEqual(selectionStatus(r.options.selectionFile),before);assert(!fs.existsSync(r.intent));assert(fs.existsSync(r.marker));
+ await assert.rejects(readyManaged(r.readyOptions));
+}));
+test('managed readiness rejects identity, inventory, retained results and remote runtime drift',linux,async()=>{
+ for(const mode of ['identity','resources','job','ticks','mount','argv','runtime','launcher','unit','disconnect'])await fixture(async f=>{
+  const r=await managedReadyFixture(f),op=r.channel.operation;
+  if(mode==='identity')r.channel._conn.identity.smack='User';if(mode==='resources')r.info.resources.helpers=['a'.repeat(32)];
+  if(mode==='job')r.channel.operation=async q=>{const v=await op(q);if(q.op==='job.status')v.record.exit_code=99;return v;};
+  if(mode==='ticks')fs.writeFileSync(r.proc+'/stat','73 (dotnet) S '+Array(18).fill('0').join(' ')+' 501 0\n');
+  if(mode==='mount')fs.writeFileSync(r.proc+'/mountinfo','');if(mode==='argv')fs.writeFileSync(r.proc+'/cmdline','wrong command');
+  if(mode==='runtime')fs.writeFileSync(r.runtime,'changed');if(mode==='launcher')fs.chmodSync(r.parent+'/launchers/'+r.info.worker_id+'/app-launcher',0o700);
+  if(mode==='unit')r.readyOptions.execute=async c=>{const v=await r.execute(c);if(c.includes('--property=Id,'))v.stdout=v.stdout.replace('MainPID=73','MainPID=74');return v;};
+  if(mode==='disconnect'){let calls=0;r.channel.operation=async q=>{const v=await op(q);if(++calls>1)r.channel._conn=null;return v;};}
+  await assert.rejects(readyManaged(r.readyOptions),e=>e.outcome==='unknown');assert(fs.existsSync(r.intent));assert.equal(JSON.parse(fs.readFileSync(r.launchFile)).phase,'submitted');assert.equal(selectionStatus(r.options.selectionFile).pending.phase,'rollback-state-ready');
+ });
+});
+test('managed readiness keeps uncertain published receipt and refuses another readiness attempt',linux,()=>fixture(async f=>{
+ const r=await managedReadyFixture(f),file=path.resolve(__dirname,'../research/autonomous-root/service/managed-readiness.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./policy'?{...real(n),atomic:(p,v)=>{real(n).atomic(p,v);throw Error('lost publication reply');}}:real(n)});
+ await assert.rejects(module.exports.readyManaged(r.readyOptions),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(r.launchFile)).phase,'ready');assert(fs.existsSync(r.intent));await assert.rejects(readyManaged(r.readyOptions));
+}));
+test('managed readiness handles full retention within wire bounds',linux,()=>fixture(async f=>{
+ const r=await managedReadyFixture(f),identity={boot_id:r.info.boot_id,worker_id:r.info.worker_id,processes:r.info.processes},inputs={record:f.options.record,installation:f.options.installation,baseline:r.baseline,snapshot:r.snapshot};
+ const command=managedRuntimeCommand(r.record,identity,inputs,r.info.app_launcher.sha256);assert(Buffer.byteLength(command)<=65536);assert.equal(spawnSync('/bin/sh',['-n'],{input:command}).status,0);
+ const result=await readyManaged(r.readyOptions);assert.equal(result.record.phase,'ready');
+},64));
+test('managed readiness rejects unit changes and local ownership changes across awaits',linux,async()=>{
+ for(const mode of ['unit','marker'])await fixture(async f=>{
+  const r=await managedReadyFixture(f);let count=0;
+  r.readyOptions.execute=async c=>{const result=await r.execute(c);if(c.includes('--property=Id,')){count++;if(mode==='unit'&&count>1)result.stdout=result.stdout.replace('Monotonic=123','Monotonic=124');if(mode==='marker')fs.writeFileSync(r.options.journalDirectory+'/managed-launch.pending','foreign');}return result;};
+  await assert.rejects(readyManaged(r.readyOptions),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(r.launchFile)).phase,'submitted');assert(fs.existsSync(r.intent));
+ });
+ let calls=0;await assert.rejects(require('../research/autonomous-root/service/observer-unit').inspectManagedUnit({unit:'couchroot-worker-'+'a'.repeat(32)+'.service',bootId:boot,execute:()=>{calls++;}}));assert.equal(calls,0);
+});
