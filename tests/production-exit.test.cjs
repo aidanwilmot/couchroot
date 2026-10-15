@@ -75,3 +75,28 @@ test('unexpected unit exit details are retained without treating failure as succ
  const f=fixture(),observer=await prepareProductionExit({record:f.r,execute:f.execute});f.setUnit('failed');
  await assert.rejects(observer.waitForExit(),/unexpected unit active\/failed pid=0 code=1 status=0/);
 });
+
+test('explicit observation recovery retains the original binding and cannot replay completed observation',async()=>{
+ const f=fixture();let fail=false;
+ const observer=await prepareProductionExit({record:f.r,execute:async c=>{if(fail)throw Error('read transport unavailable');return f.execute(c);}});
+ await assert.rejects(observer.resumeExitObservation());
+ fail=true;await assert.rejects(observer.waitForExit(),/read transport unavailable/);
+ await assert.rejects(observer.waitForExit());
+ fail=false;f.exit();const result=await observer.resumeExitObservation();
+ assert.deepEqual(result.identity,f.r.worker_identity);
+ const count=f.calls.length;await assert.rejects(observer.resumeExitObservation());await assert.rejects(observer.waitForExit());assert.equal(f.calls.length,count);
+ assert(f.calls.every(c=>!c.includes(' kill ')&&!c.includes('systemctl stop')));
+});
+
+test('resumed observation refuses changed unit identity and overlapping retries',async()=>{
+ const f=fixture();let fail=false,release=null,block=false;
+ const observer=await prepareProductionExit({record:f.r,execute:async c=>{
+  if(fail)throw Error('interrupted');if(block){block=false;await new Promise(resolve=>{release=resolve;});}return f.execute(c);
+ }});
+ fail=true;await assert.rejects(observer.waitForExit());fail=false;f.exit();f.setStart('999');
+ await assert.rejects(observer.resumeExitObservation(),/unit start identity changed/);
+ f.setStart('123');block=true;const pending=observer.resumeExitObservation();
+ assert.equal(typeof release,'function');const count=f.calls.length;
+ await assert.rejects(observer.resumeExitObservation());await assert.rejects(observer.waitForExit());assert.equal(f.calls.length,count);
+ release();assert.equal((await pending).record_id,id);
+});

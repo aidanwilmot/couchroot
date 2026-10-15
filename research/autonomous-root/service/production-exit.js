@@ -27,9 +27,14 @@ async function prepareProductionExit({record,execute}){
  async function unit(){const u=await inspectProductionUnit({unit:record.unit,bootId:record.boot_id,execute});check(u.started_monotonic===unit_started_monotonic,'unit start identity changed');return u;}
  const initial=await observe();check(Object.values(initial.processes).every(p=>p.observation==='present'),'original process absent before shutdown');
  const before=await unit();check(before.active_state==='active'&&before.sub_state==='running'&&before.main_pid===identity.processes.guardian.pid&&before.exec_code===0&&before.exec_status===0,'initial unit '+unitSummary(before));
- let entered=false;
- return Object.freeze({identity:Object.freeze(JSON.parse(JSON.stringify(identity))),waitForExit:async()=>{
-  check(!entered);entered=true;const start=process.hrtime();
+ let state='bound';
+ async function wait(resume){
+  check(state===(resume?'interrupted':'bound'),'exit observation is not available');state='observing';
+  try{const result=await poll();state='completed';return result;}
+  catch(error){state='interrupted';throw error;}
+ }
+ async function poll(){
+  const start=process.hrtime();
   for(;;){
    const observed=await observe(),u=await unit();
    const running=u.active_state==='active'&&u.sub_state==='running'&&u.main_pid===identity.processes.guardian.pid&&u.exec_code===0&&u.exec_status===0;
@@ -38,6 +43,10 @@ async function prepareProductionExit({record,execute}){
    if(exited&&Object.values(observed.processes).every(p=>p.observation!=='present'))return {record_id:record.id,identity,observation:observed,unit:u};
    await new Promise(resolve=>setTimeout(resolve,100));
   }
- }});
+ }
+ // Retrying only reads the identities pinned before shutdown. It never binds
+ // to replacement processes or repeats the command that initiated shutdown.
+ return Object.freeze({identity:Object.freeze(JSON.parse(JSON.stringify(identity))),
+  waitForExit:()=>wait(false),resumeExitObservation:()=>wait(true)});
 }
 module.exports={prepareProductionExit};

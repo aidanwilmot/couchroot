@@ -33,6 +33,18 @@ The no-reboot constraint and deployed managed fallback remain in force. Earlier
 failed journals and staging are preserved separately, not marked successful by
 these later rehearsals.
 
+## Local interrupted-exit recovery work
+
+The production exit observer now supports an explicit read-only retry after an
+interrupted observation. It retains the original boot, process and unit-start
+binding, rejects overlapping calls and cannot replay a completed observation.
+The original wait remains single-use. Linux validation passed all 22 production
+exit and observer-retirement tests, including the process-disappearance race.
+
+This primitive is not yet wired through the retirement provider, admission hold
+or managed-return controller. The installed packages remain unchanged; recovery
+through the public endpoint and both-TV failure injection are still open.
+
 ## Decision and scope
 
 Continue from the existing native worker and launcher. Keep the JavaScript HTTPS
