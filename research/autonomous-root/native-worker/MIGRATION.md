@@ -1,22 +1,42 @@
 # Native agent parity and .NET retirement plan
 
-Status: migration in progress, 2026-10-15. The original review below used baseline
+Status: migration in progress, 2026-10-16. The original review below used baseline
 `f3f911e`, including runtime changes `43ec7bc` and `f9e6d0c`. Historical progress
 entries retain their original qualification limits; use the current snapshot
 below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
+Both TVs remain managed-ready on signed 0.7.46. The latest diagnostic qualifies
+continuous read-only kernel capture across two warmup and four measured
+managed/native pairs on each TV. QN90A covered 102.799 seconds / 567 records;
+S90D covered 88.663 seconds / 656 records, without sequence gaps, overruns,
+read errors or capacity exhaustion. Each final round preserved its boot, managed
+worker, history, retained jobs, enrollment and protected files; owned scopes and
+helpers are removed, SDK is on loopback, and the independent .NET rescue is
+inactive without firing. See [kernel capture evidence](kernel-capture-results.json).
+This is benchmark-window coverage, not full acquisition/HTTPS or endurance.
+
+Unexpected boot changes were observed between preceding qualification windows;
+no power action was issued. In the first QN90A capture attempt, the benchmark
+completed and saved a complete capture, but the boot changed before cleanup.
+The original terminal job and files were reconciled without replay, its evidence
+was retained, and only verified owned files were removed. That attempt is not
+same-boot acceptance and its prior-boot rescue outcome remains unproven. A fresh
+QN90A attempt with distinct intents passed all final checks. S90D's transient
+unreachability cleared before its fresh preflight. These observations do not
+qualify controlled reboot or standby behavior.
+
 Both TVs are on signed 0.7.46 with native service acquisition enabled and
-managed selected and ready. Successful native job admission now exclusively
+managed selected and ready. Successful native job admission exclusively
 publishes one complete running record while the contained child remains gated;
 file and directory sync still precede command execution. Both TVs passed public
 root/app jobs, retained-job return to managed, bounded address-space refusal and
 restart without replay, and a fresh ordinary-worker performance comparison.
 Disposable pressure/benchmark scopes and helpers are retired; only fixture jobs
 were forgotten. SDK is on loopback, and all four independent .NET rescue timers
-per TV are inactive without firing. Original
-retained records, enrollment and boots are preserved. The bounded history still
+per TV were inactive without firing. At that milestone, original
+retained records, enrollment and boots were preserved. The bounded history still
 contains 32 entries per TV: QN90A 26 committed / 6 rolled back; S90D 25 / 7.
 Managed entry and worker DLLs are byte-identical to 0.7.45. See
 [single-publication qualification](single-publication-results.json).
@@ -3500,3 +3520,61 @@ Native-only capability entry remains separate unfinished work; preserve the
 managed bridge, fallback and independent rescue throughout. Power transitions
 remain outside the current authorization, and native-default observation and
 .NET retirement are not complete.
+
+## Sync tails and continuous kernel capture — 2026-10-16
+
+The eight-pair S90D sync diagnostic used unchanged ordinary 0.7.46 worker bytes
+and the previously qualified interposer. Every measured native job made five
+successful sync calls: initial file/directory, terminal file/directory and forget
+directory. Admissions ranged from 22.362 to 53.400 ms, so the original one-second
+admission outliers were not reproduced. A terminal-directory sync took 132.423 ms
+and a forget-directory sync took 381.886 ms. Two warm launches took 1401.740 and
+1435.698 ms; their six guardian publications spent 96.4% and 96.9% of those
+intervals in sync calls. Elapsed syscall time includes scheduling and does not
+prove a flash or writeback cause. This diagnostic used kernel tails, not the new
+collector. See [sync attribution](tail-sync-results.json).
+
+The benchmark now optionally captures whole `/dev/kmsg` records continuously in
+a prefaulted 2 MiB memory buffer. Persistence happens after measurements. It
+reports gaps, overruns, malformed/reordered input, read errors, capacity limits
+and suspend-clock divergence; incomplete coverage fails the run. Launch-to-exit
+and per-job monotonic boundaries permit independent coverage checks. Output and
+forget durations are explicit, while admission and observed completion retain
+their existing definitions. This is diagnostic tooling only: neither production
+worker bytes, service code nor installed packages changed.
+
+Nine synthetic capture tests and six benchmark protocol/resource tests passed
+from a fresh source-bound Linux snapshot. npm passed 414 with 157 skips. Two ARM
+builds produced identical benchmark bytes with a GLIBC 2.28 ceiling. The raw
+captures independently match their metadata sizes and contiguous sequence ranges;
+their clock windows bracket all twelve launches through retirement per TV. The
+specified OOM, panic/oops/warning, I/O-error and hung-task signature scans had no
+matches. Those scans are not a comprehensive error detector or proof of a latency
+cause. Raw logs, identities and operation receipts remain private.
+
+Fresh same-boot hardware rounds passed on both TVs with ordinary signed worker
+bytes and no timing interposer. Median measured milliseconds were:
+
+| Device/profile | Managed completion / through forget | Native completion / through forget |
+| --- | ---: | ---: |
+| QN90A root | 97.313 / 132.136 | 63.840 / 75.373 |
+| QN90A app | 37.143 / 58.504 | 53.144 / 64.531 |
+| S90D root | 114.019 / 157.599 | 84.483 / 100.741 |
+| S90D app | 48.441 / 82.824 | 73.053 / 91.642 |
+
+The four-pair samples are too small to settle tails. Native app completion remains
+slower in these samples, and earlier outliers remain unexplained. The observer's
+CPU and memory are excluded from worker accounting but may perturb scheduling
+and pressure. Keep all earlier results; this does not close the no-regression,
+integrated acquisition/HTTPS, continuous resource or endurance gates.
+
+Both fresh rounds ended managed-ready on their preflight boots with original
+worker identity, history and retained bytes. Enrollment/protected files are
+unchanged, native helper runtimes/freezers and disposable files are absent,
+SDK is on loopback and each independent 300-second .NET rescue is inactive without
+firing. The preceding QN90A boot-change attempt is separately recorded as
+incomplete acceptance, despite a completed benchmark and later verified cleanup.
+No deployment, deliberate power transition, global policy or persistent
+capability/SMACK change occurred. Next: measure the integrated acquisition/public
+path and continuous resources, retaining this capture coverage and all fallback
+paths; native-only entry and long-duration qualification remain open.

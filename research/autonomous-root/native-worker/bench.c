@@ -2,6 +2,8 @@
 #include "common.h"
 #include "controller.h"
 #include "bench-resources.h"
+#include "bench-kernel.h"
+extern char **environ;
 static double worker_cpu(pid_t pid) {
   char path[64], buf[4096];
   snprintf(path, sizeof path, "/proc/%d/stat", pid);
@@ -152,7 +154,9 @@ static J *job_timing(const char *profile) {
   str(j, "id", id);
   num(j, "stdout_cursor", 0);
   num(j, "stderr_cursor", 0);
+  double output_start = stamp();
   r = call(j);
+  double output_end = stamp();
   const char *encoded = textval(get(get(r, "result"), "stdout"), "data");
   size_t length = 0;
   unsigned char *bytes = encoded ? decode(encoded, &length) : NULL;
@@ -162,12 +166,23 @@ static J *job_timing(const char *profile) {
   json_object_put(r);
   j = req("job.forget");
   str(j, "id", id);
+  double forget_start = stamp();
   r = call(j);
+  double forgotten = stamp();
   json_object_put(r);
   J *out = obj();
   str(out, "profile", profile);
+  str(out, "job_id", id);
+  json_object_object_add(out, "start_monotonic_ms", json_object_new_double(start));
+  json_object_object_add(out, "admitted_monotonic_ms", json_object_new_double(admitted));
+  json_object_object_add(out, "completion_monotonic_ms", json_object_new_double(completed));
+  json_object_object_add(out, "forget_start_monotonic_ms", json_object_new_double(forget_start));
+  json_object_object_add(out, "forgotten_monotonic_ms", json_object_new_double(forgotten));
   json_object_object_add(out, "admission_ms", json_object_new_double(admitted - start));
   json_object_object_add(out, "observed_completion_ms", json_object_new_double(completed - start));
+  json_object_object_add(out, "output_ms", json_object_new_double(output_end - output_start));
+  json_object_object_add(out, "forget_ms", json_object_new_double(forgotten - forget_start));
+  json_object_object_add(out, "through_forget_ms", json_object_new_double(forgotten - start));
   num(out, "status_polls", polls);
   num(out, "poll_interval_ms", 10);
   return out;
@@ -258,12 +273,18 @@ static void sample(const char *dll, const char *binary, const char *app,
     fatal("fork worker");
   if (!child) {
     alarm(90);
-    if (native)
-      execl(binary, binary, "127.0.0.1", port, token, filescope, app, appsha,
-            "--production", (char *)NULL);
-    else
-      execl("/usr/bin/dotnet", "dotnet", dll, "127.0.0.1", port, token, scope,
-            (char *)NULL);
+    /* The optional kernel reader is a parent thread. Keep this path limited
+     * to signal-safe calls and pre-existing argument/environment bytes. */
+    if (native) {
+      char *const args[] = {(char *)binary, "127.0.0.1", port, token,
+                            (char *)filescope, (char *)app, (char *)appsha,
+                            "--production", NULL};
+      execve(binary, args, environ);
+    } else {
+      char *const args[] = {"dotnet", (char *)dll, "127.0.0.1", port,
+                            token, (char *)scope, NULL};
+      execve("/usr/bin/dotnet", args, environ);
+    }
     _exit(127);
   }
   struct pollfd ready = {listener, POLLIN, 0};
@@ -306,6 +327,8 @@ static void sample(const char *dll, const char *binary, const char *app,
   boolean(report, "native_production_mode", native);
   num(report, "round", round);
   json_object_object_add(report, "startup_ms", json_object_new_double(startup));
+  json_object_object_add(report, "launch_start_monotonic_ms", json_object_new_double(start));
+  json_object_object_add(report, "ready_monotonic_ms", json_object_new_double(start + startup));
   json_object_object_add(report, "startup_cpu_ms",
                          json_object_new_double(startcpu));
   json_object_object_add(report, "ready_memory", memory(worker_pid));
@@ -356,6 +379,7 @@ static void sample(const char *dll, const char *binary, const char *app,
         json_object_object_add(report, "guardian_warm_memory", memory(child));
     }
   }
+  double shutdown_start = stamp();
   char *bye = format("SHUTDOWN\t%d", ++sequence);
   sendframe(&w, bye);
   free(bye);
@@ -373,6 +397,8 @@ static void sample(const char *dll, const char *binary, const char *app,
   child = 0;
   if (!WIFEXITED(status) || WEXITSTATUS(status))
     fatal("worker exit");
+  json_object_object_add(report, "shutdown_start_monotonic_ms", json_object_new_double(shutdown_start));
+  json_object_object_add(report, "retired_monotonic_ms", json_object_new_double(stamp()));
   num(report, "wait4_peak_rss_kib", usage.ru_maxrss);
   str(report, "wait4_peak_scope", "waited child and reaped descendants kernel high-water; not additive tree RSS");
   puts(json(report));
@@ -400,10 +426,18 @@ int main(int argc, char **argv) {
   int64_t rounds;
   if (!decimal(argv[6], &rounds) || rounds < 1 || rounds > 20)
     return 64;
+  const char *capture = getenv("COUCHROOT_BENCH_KERNEL_CAPTURE");
+  if (capture && strcmp(capture, "1"))
+    return 64;
+  BenchKernel kernel;
+  if (capture)
+    kernel_begin(&kernel, scope);
   for (int i = -2; i < rounds; i++) {
     int first = (i % 2) == 0;
     sample(argv[1], argv[2], argv[4], argv[5], first, i);
     sample(argv[1], argv[2], argv[4], argv[5], !first, i);
   }
+  if (capture && !kernel_end(&kernel))
+    fatal("kernel capture incomplete; inspect private coverage metadata");
   return 0;
 }

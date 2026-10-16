@@ -1032,3 +1032,46 @@ Worker loss before any publication cannot execute the command; the guardian
 retires its child. An explicit later request may use that unrecorded ID after
 reconciliation. See [qualification results](single-publication-results.json) and
 the dated migration entry for device evidence and performance limits.
+
+## Continuous kernel observation and complete job timings
+
+The standalone benchmark accepts `COUCHROOT_BENCH_KERNEL_CAPTURE=1` to observe
+`/dev/kmsg` continuously from before its first warmup launch through the final
+worker exit. It opens a read-only, independent cursor at the current end, with
+no kernel writes or logging-configuration changes. The implementation follows
+the [Linux dev-kmsg ABI](https://www.kernel.org/doc/Documentation/ABI/testing/dev-kmsg).
+This code is included only in the diagnostic benchmark, never in a worker or
+installed payload.
+
+The reader prefaults a bounded 2 MiB buffer before measurements and preserves
+whole raw records, including extensions and context lines. It writes and syncs
+`kernel.raw` and `kernel.json` only after observation ends. Both files require
+exclusive creation in the root-owned private trial directory. Existing files or
+symlinks are refused. Transfer readback must resolve the SDK directory's symlinked
+ancestors to a canonical path and verify the original and resolved files are the
+same inode; do not weaken the public file API's symlink checks.
+
+Metadata reports sequence gaps, overruns, malformed/reordered records, read errors,
+capacity exhaustion, and a boottime-versus-monotonic suspend check. Any of those
+conditions makes coverage incomplete and fails the benchmark after preserving
+available evidence. First/last sequence numbers retain all 64 bits as decimal
+strings. A gap count is an observed forward discontinuity, not a reliable total
+loss count after malformed/reordered input or an overrun before the first record.
+An empty healthy observation window is distinct from a read failure. Stop/drain
+is bounded; the suspend check's 100 ms threshold is a diagnostic guard, not
+standby/resume qualification.
+
+Each sample now records monotonic launch, readiness, shutdown and retirement
+boundaries. Each job records admission/completion and output/forget timings;
+`through_forget_ms` includes cleanup while the existing completion metric keeps
+its original meaning. Raw job identifiers and kernel logs belong in private
+evidence, not committed results. The capture thread's CPU and memory are outside
+worker/guardian accounting, but observation can still perturb scheduling and
+memory pressure. This is bounded benchmark coverage, not continuous lifetime
+resource monitoring, acquisition/HTTPS measurement or endurance qualification.
+
+Synthetic record-socket tests cover preserved records, future fields, empty
+windows, sequence loss/reordering, malformed and overflowing numbers, full-width
+sequence values, bounded storage, overruns/EOF, simulated suspension and exclusive
+output creation. Protocol tests verify that delayed output and forget calls are
+measured separately and never duplicate job submission or forgetting.

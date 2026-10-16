@@ -8,6 +8,7 @@ from pathlib import Path
 import socket
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -90,7 +91,7 @@ int main(int argc, char **argv) {
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(result.stdout, b'')
 
-    def job_case(self, terminal=None, output='YmVuY2g='):
+    def job_case(self, terminal=None, output='YmVuY2g=', delays=None):
         terminal = terminal if terminal is not None else dict(state='completed', exit_code=7)
         left, right = socket.socketpair()
         left.settimeout(5)
@@ -121,6 +122,7 @@ int main(int argc, char **argv) {
                         result = dict(stdout=dict(data=output), stderr=dict(data=''))
                     else:
                         result = {}
+                    time.sleep((delays or {}).get(name, 0))
                     response = b'OPRESULT\t' + sequence + b'\t' + base64.b64encode(
                         json.dumps(dict(ok=True, result=result)).encode())
                     left.sendall(response + b'\t' + mac(response) + b'\n')
@@ -141,6 +143,21 @@ int main(int argc, char **argv) {
         report = json.loads(stdout)
         self.assertEqual(report['status_polls'], 2)
         self.assertGreaterEqual(report['observed_completion_ms'], report['admission_ms'])
+        self.assertEqual(report['job_id'], ops[0]['id'])
+
+    def test_output_and_forget_latency_are_measured_without_extending_completion(self):
+        code, stdout, stderr, ops = self.job_case(delays={'job.output': .06, 'job.forget': .08})
+        self.assertEqual(code, 0, stderr)
+        report = json.loads(stdout)
+        self.assertGreaterEqual(report['output_ms'], 60)
+        self.assertGreaterEqual(report['forget_ms'], 80)
+        self.assertGreaterEqual(report['through_forget_ms'],
+                                report['observed_completion_ms'] + report['output_ms'] + report['forget_ms'])
+        self.assertAlmostEqual(report['forgotten_monotonic_ms'] - report['forget_start_monotonic_ms'],
+                               report['forget_ms'], places=5)
+        self.assertAlmostEqual(report['completion_monotonic_ms'] - report['start_monotonic_ms'],
+                               report['observed_completion_ms'], places=5)
+        self.assertEqual(sum(op['op'] == 'job.forget' for op in ops), 1)
 
     def test_unverified_job_outcomes_never_forget_or_report_a_timing(self):
         cases = [dict(terminal=dict(state='completed', exit_code=None)),
