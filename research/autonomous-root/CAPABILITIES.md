@@ -1331,3 +1331,19 @@ contain public jobs. Completed record bytes remain exact; no command is replayed
 Nine modeled reboot integration cases cover these boundaries with real fixture
 workers. The code is not installed or qualified on either TV. Their independent
 0.7.48 endurance runs and all .NET fallback/recovery paths remain unchanged.
+
+
+## S90D signed 0.7.49 same-boot qualification
+
+After its old-observer endurance run failed a startup interval and was fully
+reconciled, S90D received signed 0.7.49. The bounded round passed native migration,
+public commands/jobs, selected-native disable/enable reacquisition and normal
+managed return. Committed production/activation receipts and completed native-job
+bytes survived reacquisition unchanged. Original jobs, enrollment and protected
+files were preserved; owned scopes were removed and rescues retired unfired.
+
+QN90A still runs 0.7.48 in its independent corrected-observer endurance trial.
+Neither TV has completed endurance or hardware cross-boot qualification. The .NET
+entry bridge, managed fallback and independent rescue remain unchanged. See
+[S90D installed qualification](native-worker/cross-boot-s90d-install-results.json)
+and [failed capture reconciliation](native-worker/observer-s90d-readiness-gap-results.json).

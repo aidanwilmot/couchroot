@@ -7,10 +7,25 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-S90D's supervised native endurance trial is still running. QN90A has started a
-fresh trial with the corrected observer after a successful short probe and
-guarded service restart. Neither trial has completed the 24-hour gate. QN90A's
-fourth attempt stopped after about 39 minutes when collector 13 exited with status 1:
+S90D's endurance trial stopped after 96.444 minutes and 34 verified windows:
+collector 34's first sample arrived 1.105 seconds late, leaving one skipped
+interval. Its complete kernel capture and all five files were preserved and
+hash-verified. Collector 35 completed, and the stopped trial was reconciled to
+managed with retained jobs, enrollment and protected files preserved, owned scopes
+removed, SDK on loopback and rescues retired unfired. The failed interval remains
+rejected. See [S90D startup-gap evidence](observer-s90d-readiness-gap-results.json).
+QN90A's corrected-observer trial remains active. Neither TV has passed 24 hours.
+
+S90D now runs signed 0.7.49 and has passed a same-boot native migration, public
+execution/jobs, selected-native disable/enable recovery and managed return.
+Production/activation receipts and the native job remained byte-identical across
+restart; original retained jobs, enrollment and protected files survived the round.
+The deployment and trial rescues were retired unfired, owned scopes were removed
+and SDK is on loopback. QN90A remains on 0.7.48 while its trial runs. See
+[S90D installation and smoke evidence](cross-boot-s90d-install-results.json).
+Cross-boot recovery is not yet hardware-qualified on either TV.
+
+QN90A's fourth attempt stopped after about 39 minutes when collector 13 exited with status 1:
 its first sample arrived 1.143 seconds after the declared start, leaving one
 skipped interval. The failed capture was preserved, the following collector
 finished successfully, and the trial was reconciled back to managed with original
@@ -24,27 +39,28 @@ loopback restoration. Couchroot readiness, original selection, retained jobs,
 enrollment and protected hashes were verified before its fresh trial. Its owned
 recovery diagnostics were reconciled. QN90A has not been rebooted. See
 [transfer and recovery evidence](observer-transfer-recovery-results.json).
-The installed selected-native startup path remains bound to the original boot;
-S90D's recovery does not qualify native cross-boot startup.
+That recovery used the prior boot-bound selected-native startup implementation;
+it does not qualify the subsequently installed cross-boot startup code.
 
 Local source now integrates cross-boot guardian reconciliation with selected-native
 startup, separate runtime receipts, startup fences, retained-state verification and
-return to managed. Modeled reboot integration passes locally; this source is not
-installed or device-qualified. The .NET entry, fallback and rescue remain in place.
+return to managed. Modeled reboot integration passes locally. S90D has this source
+installed, but cross-boot behavior remains unqualified. The .NET entry, fallback
+and rescue remain in place.
 Local source now also reconciles interrupted bootstraps and pending returns
 across boots, with fresh executor, unit-absence and retained-state checks.
 Pending returns use bounded native offline reconciliation before restoring
-managed state. Full power-lifecycle qualification is still open. None of these
-cross-boot changes is installed yet.
+managed state. Full power-lifecycle qualification is still open. QN90A has not
+yet received these cross-boot changes.
 
 Ordinary signed 0.7.49 candidates are now prepared from `4f39d1d` for both
 profiles. Signatures and forward inventories passed verification; each native
 build reproduced twice. Managed worker, acquisition bridge and all other
-non-manifest payload members are unchanged from 0.7.48. The candidates remain
-uninstalled while the endurance runs continue. See
+non-manifest payload members are unchanged from 0.7.48. S90D has received its
+candidate; QN90A deployment waits for its endurance run to finish or be reconciled. See
 [candidate evidence and hardware prerequisites](cross-boot-candidate-results.json).
 
-Both TVs run signed 0.7.48; the preceding integrated qualification ended
+The preceding signed 0.7.48 integrated qualification on both TVs ended
 managed-ready. The authenticated timing header now separates file-sync and
 directory-sync elapsed time and counts inside each journal phase. All 19 payload
 members, including manifests, native/managed workers and acquisition bridge, are
