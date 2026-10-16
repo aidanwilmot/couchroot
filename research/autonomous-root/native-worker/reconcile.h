@@ -1,9 +1,22 @@
-/* Reconcile a bound, same-boot guardian journal under the scope
+/* Reconcile a bound guardian journal under the scope
  * lock. No saved process ID is ever a signal target. SPDX-License-Identifier:
  * 0BSD */
 static int reconcile_refuse(const char *reason) {
   fprintf(stderr, "prototype: reconciliation refused: %s\n", reason);
   return 0;
+}
+static int reconcile_boot_valid(const char *boot) {
+  if (!boot || strlen(boot) != 36)
+    return 0;
+  for (int i = 0; i < 36; i++) {
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (boot[i] != '-')
+        return 0;
+    } else if (!((boot[i] >= '0' && boot[i] <= '9') ||
+                 (boot[i] >= 'a' && boot[i] <= 'f')))
+      return 0;
+  }
+  return 1;
 }
 static int reconcile_bound(J *j, const char *prefix, const struct stat *st) {
   char key[64];
@@ -42,7 +55,10 @@ static int reconcile_mount_namespace_refs(long pid, int64_t ino) {
     int anonymous_nsfs = strstr(line, " - nsfs ") &&
                          (sscanf(line, "%*s %*s %*s %127s", mount_root) != 1 ||
                           !strstr(mount_root, ":["));
-    if (strstr(line, expected) || anonymous_nsfs || !strchr(line, '\n')) {
+    /* A different boot gives no authority over any current namespace inode.
+     * Without a process whose mount table can be checked, retain all pins. */
+    if (strstr(line, expected) || anonymous_nsfs ||
+        (ino < 0 && strstr(line, " - nsfs ")) || !strchr(line, '\n')) {
       good = 0;
       break;
     }
@@ -80,6 +96,7 @@ static int reconcile_namespace_without_views(long pid) {
 }
 static int reconcile_namespace_unused(J *journal) {
 #ifndef NATIVE_WORKER_TEST
+  int rebooted = strcmp(textval(journal, "boot_id"), current_boot) != 0;
   int64_t dev, ino;
   if (!integer(journal, "namespace_dev", &dev) || dev < 0 ||
       !integer(journal, "namespace_ino", &ino) || ino <= 0)
@@ -103,8 +120,8 @@ static int reconcile_namespace_unused(J *journal) {
     struct stat st;
     snprintf(path, sizeof path, "/proc/%ld/ns/mnt", pid);
     if (!stat(path, &st)) {
-      if ((uint64_t)st.st_dev == (uint64_t)dev &&
-          (uint64_t)st.st_ino == (uint64_t)ino &&
+      if ((rebooted || ((uint64_t)st.st_dev == (uint64_t)dev &&
+                       (uint64_t)st.st_ino == (uint64_t)ino)) &&
           !reconcile_namespace_without_views(pid)) {
         good = 0;
         break;
@@ -115,7 +132,7 @@ static int reconcile_namespace_unused(J *journal) {
           break;
       if (index == seen_count) {
         if (seen_count == sizeof seen / sizeof *seen ||
-            !reconcile_mount_namespace_refs(pid, ino)) {
+            !reconcile_mount_namespace_refs(pid, rebooted ? -1 : ino)) {
           good = 0;
           break;
         }
@@ -147,7 +164,8 @@ static int reconcile_namespace_unused(J *journal) {
       } else {
         target[n] = 0;
         snprintf(expected, sizeof expected, "mnt:[%" PRId64 "]", ino);
-        if (!strcmp(target, expected))
+        if (!strcmp(target, expected) ||
+            (rebooted && !strncmp(target, "mnt:[", 5)))
           good = 0;
       }
     }
@@ -215,6 +233,10 @@ static int reconcile_freezer(J *j) {
   freezer_dir = reconcile_dir(freezer_root, freezer_name);
   if (freezer_dir < 0)
     return errno == ENOENT; /* A previous reconciliation may have removed it. */
+  /* Freezer cgroups cannot survive a reboot. Even the same name and inode now
+   * identify a current-boot object; never thaw or remove it using old evidence. */
+  if (strcmp(textval(j, "boot_id"), current_boot))
+    return 0;
   struct stat st;
   int reserved =
       !get(j, "freezer_ino") && reconcile_reservation(j, "freezer-reserved");
@@ -275,17 +297,24 @@ static int reconcile_resources(J *j) {
             (schema == 4 && (!strcmp(phase, "runtime-reserved") ||
                              !strcmp(phase, "freezer-reserved")))) &&
            !json_object_get_boolean(prepared))))) ||
-      !hexvalid(id, 32) || !boot || strcmp(boot, current_boot) || !start ||
+      !hexvalid(id, 32) || !reconcile_boot_valid(boot) ||
+      !reconcile_boot_valid(current_boot) || !start ||
       !*start || !integer(j, "pid", &pid) || pid < 1 || pid > INT_MAX ||
       fstat(directory, &st) || !reconcile_bound(j, "scope", &st))
     return 0;
+  int rebooted = strcmp(boot, current_boot) != 0;
+  /* Cross-boot recovery requires the current journal format and its launch
+   * binding. Legacy journals retain their original same-boot recovery path. */
+  if (rebooted &&
+      (schema != 4 || !hexvalid(textval(j, "startup_token_sha256"), 64)))
+    return 0;
   char actual[32];
   errno = 0;
-  if (job_identity((pid_t)pid, actual)) {
+  if (!rebooted && job_identity((pid_t)pid, actual)) {
     if (!strcmp(actual, start))
       return 0; /* Still live (or unreaped): no takeover, even without its lock.
                  */
-  } else if (errno != ENOENT && errno != ESRCH)
+  } else if (!rebooted && errno != ENOENT && errno != ESRCH)
     return 0;
   strcpy(worker_id, id);
 #ifdef NATIVE_WORKER_TEST

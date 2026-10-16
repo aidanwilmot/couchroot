@@ -7,24 +7,25 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-QN90A has a fresh 24-hour attempt running with serialized storage checks and
-retained collector exit receipts. Two earlier attempts stopped: an administrative
-request conflict after about 35 minutes, then a premature collection check after
-about 15 minutes. Both were reconciled without replay, with owned quiet jobs
-cancelled, saved results verified across managed return, and original retained
-jobs/enrollment preserved. A short diagnostic then exposed that discarded
-transient units can report default zero exit status. The replacement waits for a
-loaded, retained unit to report actual exit and binds that receipt to the observer.
-It passed a five-second QN90A probe. Earlier capture files remain descriptive
-evidence; their unretained unit polls do not independently prove successful exit.
-The 24-hour gate remains open. See [collector exit evidence](observer-exit-retention-results.json).
-S90D's run has not started: its graceful service termination closed the connection
-before the launch request returned, and neither Couchroot nor usable external SDK
-access returned. The TV API remains reachable. Non-power recovery attempts were
-recorded without replay; user direction for a physical restart is pending because
-power transitions were explicitly prohibited. Owned restart diagnostics on S90D
-still require reconciliation. See [resource analysis and reconciliation evidence](observer-resource-analysis-results.json).
-The completed qualification below predates that current recovery state.
+Both TVs have fresh supervised native endurance trials running with separate
+checksum downloads, serialized storage checks and retained collector exit
+receipts. Neither has completed the 24-hour gate. The three previous QN90A
+attempts stopped at approximately 35, 15 and 61 minutes; each was reconciled
+without replay and with original retained jobs and enrollment preserved. Earlier
+unretained collector unit polls do not prove successful exit.
+
+S90D recovered after an authorized, verified full reboot and host-assisted SDK
+loopback restoration. Couchroot readiness, original selection, retained jobs,
+enrollment and protected hashes were verified before its fresh trial. Its owned
+recovery diagnostics were reconciled. QN90A has not been rebooted. See
+[transfer and recovery evidence](observer-transfer-recovery-results.json).
+The installed selected-native startup path remains bound to the original boot;
+S90D's recovery does not qualify native cross-boot startup.
+
+Local source now adds cross-boot guardian-journal reconciliation as a prerequisite
+for that startup path. This is not installed or device-qualified. Service receipt,
+startup fence, retained-state and managed-return integration still need explicit
+boot-transition handling; the .NET entry, fallback and rescue remain in place.
 
 Both TVs run signed 0.7.48; the preceding integrated qualification ended
 managed-ready. The authenticated timing header now separates file-sync and
@@ -4278,3 +4279,37 @@ permission blocker; it does not make those receipts valid across boots. Native
 cross-boot reconciliation needs implementation and tests before qualification.
 Native-only entry, remaining power transitions, native-default observation and
 .NET retirement remain open; both .NET fallbacks remain deployed.
+
+## Boot-aware guardian reconciliation prerequisite — 2026-10-16
+
+Local native source now accepts a previous-boot schema-4 journal only with a
+valid launch-token binding and the original persistent scope/runtime ownership.
+Both boot IDs must be canonical. Old PID/start pairs are not inspected as current
+processes. A present freezer with the old name is a current-boot object and blocks
+recovery before any thaw or cleanup, even if its inode matches the journal.
+Missing freezers are accepted; symlinks and inaccessible resources remain refused.
+
+Across boots, every visible mount namespace is checked for owned runtime views,
+including moved bind roots and namespaces whose inode differs from the old one.
+Namespace descriptor pins and nsfs bind pins conservatively block cleanup rather
+than deriving authority from an old kernel inode. The existing isolated recovery
+child, deadline, scope lock, persistent inode checks and successor checks remain.
+Completed records stay byte-identical; interrupted jobs keep their IDs and are
+never replayed. Legacy journals still require the original boot.
+
+Local validation passed seven focused reboot fixtures, five startup-token binding
+fixtures, 49 native regression cases (one storage case skipped), all 24 restart
+integration cases including startup faults, and all six managed/native/managed
+rehearsals. Native fixtures were rebuilt with ASAN/UBSAN; managed fixtures were
+freshly built, and the two integration suites ran in separate disposable containers.
+The focused kernel-resource fixture compiles production checks without host-mode
+substitutions and redirects only filesystem inputs. npm passed 423 tests with
+157 environment-gated skips; the production ARM worker/launcher build succeeded.
+These are synthetic boot and resource tests, not on-TV reboot qualification.
+
+No TV package or active endurance source snapshot changed. Both installed trials
+remain on 0.7.48 with .NET entry, managed fallback and independent rescue. The
+service still rejects cross-boot selected-native startup: runtime/activation
+receipt handling, startup fences, retained-state snapshots and managed return
+must be integrated before fresh both-TV qualification. The 24-hour endurance,
+performance, native-only entry and .NET retirement gates remain open.

@@ -7,6 +7,17 @@ current integration and device qualification. Historical experiments below retai
 their original limits. Standalone comparisons keep the installed managed worker
 active and use separate owned scopes.
 
+Local source also supports a previous-boot schema-4 guardian journal with its
+launch-token binding. Recovery keeps persistent scope/runtime inode checks but
+does not compare old PIDs to current processes. A current freezer with the old
+name is refused without thawing. All visible current mount namespaces must lack
+owned runtime views; namespace descriptor and bind pins remain conservative
+blockers. Legacy journals remain limited to same-boot recovery. Seven focused
+Linux fixtures cover these rules, including production kernel-resource checks
+with redirected filesystem inputs. This source change is not installed or
+qualified on either TV. The service still refuses cross-boot selected-native
+startup until its receipt, fence, retained-state and return paths are integrated.
+
 The prototype uses the existing HMAC protocol with strict sequence ordering,
 bounded binary chunks and structured failure responses. It implements status,
 root commands, bounded output and process-group timeouts, app commands through an
