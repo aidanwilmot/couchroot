@@ -52,9 +52,9 @@ def review_update(device,artifact,previous,site):
     return dict(device=device,previous_version=old_version,version=new_version,inventory=inventory_review(before,after),phase='review-only-no-device-access')
 
 class PilotTransport(Transport):
-    def __init__(self,profile,evidence,files):
+    def __init__(self,profile,evidence,files,*,native_bundle=None):
         self.pilot_files=files
-        super().__init__(profile,evidence)
+        super().__init__(profile,evidence,native_bundle=native_bundle)
     def snapshot(self,privileged=False):
         state=super().snapshot(privileged=False)
         # The SDK diagnostic path can elide the middle of long command output.
@@ -108,7 +108,7 @@ class PilotDriver(Driver):
         if before['developer_host']!=after['developer_host']:raise Refused('Developer host changed during disabled install')
 
 
-def install(device,artifact,site):
+def install(device,artifact,site,*,native_bundle=None):
     artifact=artifact.resolve();manifest=read_json(artifact/'manifest.json');profile=configured_profile(device,site)
     if manifest.get('device')!=device or manifest.get('target_binding')!=binding(site,device):raise Refused('Artifact target binding differs')
     pkg=Path(manifest['package'])
@@ -123,7 +123,7 @@ def install(device,artifact,site):
         if pending(STATE,device):raise Refused('Resolve pending device operation first')
         identity=run_id();folder=STATE/'runs'/identity
         files=list(expected)+[DATA+'/'+n for n in PROVISION]
-        tv=PilotTransport(profile,folder/'transport',files);state=tv.snapshot()
+        tv=PilotTransport(profile,folder/'transport',files,native_bundle=native_bundle);state=tv.snapshot()
         if any(r[0]==PACKAGE for r in state['packages']) or any(state['files'].get(p) is not None for p in files):raise Refused('Pilot already exists; inspect and recover rather than overwrite')
         plan=Plan(device);plan.actions=[Action('001-root-package','autonomous-root','package',None,expected,dict(package=PACKAGE,artifact='autonomous-root',previous_version=None,source=str(pkg)))]
         for i,n in enumerate(PROVISION,2):
@@ -132,13 +132,13 @@ def install(device,artifact,site):
         driver=PilotDriver(tv,profile,choices,folder)
         engine=Engine(driver,folder,device,choices,target_binding=binding(site,device),scope=SCOPE)
         engine.prepare(plan,state)
-        engine.doc['pilot']=dict(artifact=str(artifact),files=files,developer_host=state['developer_host'],status='disabled-install')
+        engine.doc['pilot']=dict(artifact=str(artifact),files=files,developer_host=state['developer_host'],status='disabled-install',root_acquisition=tv.root_acquisition)
         engine.save();engine.apply()
         # Do not finalize normal setup choices or mark pilot acceptance complete.
         return dict(run=identity,phase=engine.doc['phase'],device=device)
 
 
-def update(device,artifact,previous,site,credentials=None,reviewed_inventory_sha256=None):
+def update(device,artifact,previous,site,credentials=None,reviewed_inventory_sha256=None,*,native_bundle=None):
     artifact=artifact.resolve();previous=previous.resolve();profile=configured_profile(device,site)
     new=read_json(artifact/'manifest.json');old=read_json(previous/'manifest.json')
     credentials=(credentials or previous).resolve();credential_manifest=read_json(credentials/'manifest.json')
@@ -153,7 +153,7 @@ def update(device,artifact,previous,site,credentials=None,reviewed_inventory_sha
         if pending(STATE,device):raise Refused('Resolve pending run first')
         identity=run_id();folder=STATE/'runs'/identity
         files=list(after)+[DATA+'/'+n for n in PROVISION]
-        tv=PilotTransport(profile,folder/'transport',files);state=tv.snapshot()
+        tv=PilotTransport(profile,folder/'transport',files,native_bundle=native_bundle);state=tv.snapshot()
         if {p:state['files'][p] for p in before}!=before:raise Refused('Installed package differs from previous signed artifact')
         for n in PROVISION:
             if state['files'][DATA+'/'+n]!=credential_manifest['provisioning'][n]:raise Refused('Provisioning must be restored to disabled baseline before update')
@@ -164,7 +164,7 @@ def update(device,artifact,previous,site,credentials=None,reviewed_inventory_sha
         plan=Plan(device,actions=[a]);engine.prepare(plan,state)
         recovery=folder/'previous-signed.wgt';shutil.copyfile(old['package'],recovery)
         engine.doc['actions'][0]['info'].update(recovery_package=str(recovery),recovery_sha256=sha(recovery.read_bytes()))
-        engine.doc['pilot']=dict(artifact=str(artifact),credentials_artifact=str(credentials),files=files,developer_host=state['developer_host'],status='disabled-update',inventory_review=review)
+        engine.doc['pilot']=dict(artifact=str(artifact),credentials_artifact=str(credentials),files=files,developer_host=state['developer_host'],status='disabled-update',inventory_review=review,root_acquisition=tv.root_acquisition)
         engine.save();engine.apply()
         return dict(run=identity,phase=engine.doc['phase'],device=device)
 
@@ -173,13 +173,14 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--device',choices=['qn90a','s90d'],required=True);parser.add_argument('--artifact',type=Path,required=True);parser.add_argument('--credentials',type=Path);parser.add_argument('--previous',type=Path);parser.add_argument('--site',type=Path);parser.add_argument('--yes',action='store_true')
     parser.add_argument('--review-inventory',action='store_true',help='Verify signed packages and report inventory digest without device access')
     parser.add_argument('--reviewed-inventory-sha256',help='Exact digest from a reviewed inventory report')
+    parser.add_argument('--native-bundle',type=Path,help='Use a prebuilt native setup acquisition bundle; retains the .NET entry bridge')
     args=parser.parse_args()
     if args.review_inventory and not args.previous:parser.error('Inventory review requires --previous')
     if args.reviewed_inventory_sha256 and not args.previous:parser.error('Inventory review digest requires --previous')
     if not args.review_inventory and not args.yes:parser.error('Installation requires --yes')
     try:
         if args.review_inventory:result=review_update(args.device,args.artifact,args.previous,load_site(args.site))
-        else:result=update(args.device,args.artifact,args.previous,load_site(args.site),args.credentials,args.reviewed_inventory_sha256) if args.previous else install(args.device,args.artifact,load_site(args.site))
+        else:result=update(args.device,args.artifact,args.previous,load_site(args.site),args.credentials,args.reviewed_inventory_sha256,native_bundle=args.native_bundle) if args.previous else install(args.device,args.artifact,load_site(args.site),native_bundle=args.native_bundle)
         print(json.dumps(result))
     except Refused as e:print(str(e),file=sys.stderr);return 1
     return 0

@@ -37,6 +37,15 @@ orchestration for later adoption; no private historical kit or TV was changed.
 See [native recovery caller contract](../recovery/native/README.md) and
 [local build and test evidence](native-only-local-results.json).
 
+Agent installation and updates now accept `--native-bundle` for their setup
+transport. The existing engine uses a validated private snapshot for every root
+request, avoiding per-request managed probe compilation while retaining the small
+entry bridge. Managed selection remains the default and explicit fallback; an
+uncertain native request is never replayed through it. This caller integration
+passed 343 local Python tests (221 platform/integration skips), including nine new
+selection, dispatch, snapshot and failure tests. Neither TV was contacted.
+See [usage](../../native-root-acquisition/README.md#build-and-use).
+
 Native-only capability entry remains the implementation blocker. The existing
 captured-artifact evidence does not establish an isolated executable mapping with
 the required effective capabilities before vendor app preparation drops them.

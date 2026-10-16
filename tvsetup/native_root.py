@@ -93,12 +93,9 @@ def build(profile, destination, command, *, service=False):
     return manifest
 
 
-def prepare(profile, bundle, folder, script, cleanup_index=None):
+def validated_bundle(profile, bundle):
+    """Read and validate once; callers publish these exact bytes."""
     probe_name(profile)
-    if '\0' in script or len(script.encode()) >= 65536:
-        raise Refused('Native acquisition script must be NUL-free and below 64 KiB')
-    if cleanup_index is not None:
-        raise Refused('Allowlisted app cleanup remains on the managed transport')
     bundle = Path(bundle)
     manifest = json.loads((bundle/'manifest.json').read_text())
     if (manifest.get('schema') != 1 or manifest.get('kind') != 'native-acquisition-managed-entry' or
@@ -107,7 +104,7 @@ def prepare(profile, bundle, folder, script, cleanup_index=None):
             set(manifest.get('artifacts', {})) != set(FILES) or
             manifest.get('source') != {name:sha((SOURCE/name).read_bytes()) for name in ('acquire.c','build.sh','NativeEntry.cs')}):
         raise Refused('Native acquisition bundle/source/profile mismatch')
-    outputs = {}
+    artifacts = {}
     for name in FILES:
         path = bundle/'artifacts'/name
         if path.is_symlink() or not path.is_file():
@@ -115,6 +112,32 @@ def prepare(profile, bundle, folder, script, cleanup_index=None):
         data = path.read_bytes(); expected = manifest['artifacts'][name]
         if expected['sha256'] != sha(data) or expected['size'] != len(data):
             raise Refused('Native acquisition artifact drift')
+        artifacts[name] = data
+    return manifest, artifacts
+
+
+def snapshot(profile, bundle, destination):
+    manifest, artifacts = validated_bundle(profile, bundle)
+    folder = Path(destination).absolute()
+    if folder.exists() or folder.is_symlink():
+        raise Refused('Native acquisition snapshot must be new')
+    folder.mkdir(parents=True, mode=0o700)
+    (folder/'artifacts').mkdir(mode=0o700)
+    for name, data in artifacts.items():
+        path = folder/'artifacts'/name
+        path.write_bytes(data); path.chmod(0o600)
+    atomic_json(folder/'manifest.json', manifest)
+    return folder
+
+
+def prepare(profile, bundle, folder, script, cleanup_index=None):
+    if '\0' in script or len(script.encode()) >= 65536:
+        raise Refused('Native acquisition script must be NUL-free and below 64 KiB')
+    if cleanup_index is not None:
+        raise Refused('Allowlisted app cleanup remains on the managed transport')
+    _, artifacts = validated_bundle(profile, bundle)
+    outputs = {}
+    for name, data in artifacts.items():
         # Snapshot bytes after validation; later bundle edits cannot alter staging.
         copy = folder/name; copy.write_bytes(data)
         outputs[copy] = 'code/'+name if name.endswith('.so') else name

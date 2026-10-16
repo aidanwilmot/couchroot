@@ -120,3 +120,34 @@ class PilotReadbackTests(unittest.TestCase):
         tv.root=root
         with patch('tvsetup.transport.Transport.snapshot',return_value={'files':{}}):
             with self.assertRaisesRegex(Refused,'inspection incomplete'):tv.snapshot()
+
+
+class NativeInstallerSelectionTests(unittest.TestCase):
+    def test_cli_forwards_explicit_bundle_to_install_and_update_only(self):
+        from tvsetup import autonomous_root_trial as trial
+        base=['trial','--device','qn90a','--artifact','/tmp/new',
+              '--native-bundle','/tmp/native','--yes']
+        for previous in (False,True):
+            args=base+(['--previous','/tmp/old'] if previous else [])
+            with self.subTest(previous=previous),patch('sys.argv',args), \
+                 patch.object(trial,'load_site',return_value={}), \
+                 patch.object(trial,'install',return_value={}) as install, \
+                 patch.object(trial,'update',return_value={}) as update, \
+                 patch('builtins.print'):
+                self.assertEqual(trial.main(),0)
+                selected=update if previous else install
+                other=install if previous else update
+                self.assertEqual(selected.call_args.kwargs['native_bundle'],Path('/tmp/native'))
+                other.assert_not_called()
+        with patch('sys.argv',base+['--previous','/tmp/old','--review-inventory']), \
+             patch.object(trial,'load_site',return_value={}), \
+             patch.object(trial,'review_update',return_value={}) as review, \
+             patch.object(trial,'PilotTransport',side_effect=AssertionError('device contacted')), \
+             patch('builtins.print'):
+            self.assertEqual(trial.main(),0)
+            review.assert_called_once()
+
+    def test_pilot_transport_propagates_selection(self):
+        with patch('tvsetup.transport.Transport.__init__',return_value=None) as init:
+            PilotTransport({},Path('/tmp/evidence'),[],native_bundle=Path('/tmp/native'))
+        init.assert_called_once_with({},Path('/tmp/evidence'),native_bundle=Path('/tmp/native'))

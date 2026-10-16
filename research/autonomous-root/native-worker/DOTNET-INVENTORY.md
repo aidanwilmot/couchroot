@@ -39,7 +39,7 @@ the managed acquisition adapter remains an explicit fallback. See the
 
 | Entry point | Required managed path today | Why native selection does not remove it |
 | --- | --- | --- |
-| Fresh install, SDK maintenance, setup rollback | `Transport.root` → `tvsetup.worker` → `root.execute` → `NamespaceRootProbe.dll` → `RootIdentity.dll` | Setup must acquire root even when no enrolled worker is available. |
+| Fresh install, SDK maintenance, setup rollback | Default: `Transport.root` → `tvsetup.worker` → `NamespaceRootProbe.dll` → `RootIdentity.dll`; explicit `--native-bundle`: prebuilt `NativeEntry.dll` → `libacquire.so` | Setup must acquire root even when no enrolled worker is available. |
 | Service start and worker loss (native acquisition opt-in) | `agent.js` SDK launch → `NativeEntry.dll` → `libacquire.so` → managed worker or bounded native held bootstrap | Trusted managed capability entry remains; selected-native startup verifies selection, process absence and retained state through native bootstrap. The original `SamsungTvArchiveRoot.dll` path remains explicitly selectable. |
 | Normal return to managed | `managed-launch.js` → pinned `/usr/bin/dotnet` → `SamsungTvRootAgent.dll` | This is the deliberately retained fallback. |
 | Interrupted active return | `agent.js` acquisition → managed bootstrap → `restart-return.js` | Recovery adopts the fresh managed executor under the original return transaction. |
@@ -196,14 +196,19 @@ update and provisioning paths do not build or invoke `Control.dll`. Replacing
 that utility would expand this migration into unrelated Hub behavior and would
 not remove a dependency from the agent's current install path.
 
-The remaining installer dependency is instead `PilotTransport`'s privileged
-snapshots and inherited `Driver` file/package operations through `Transport.root`
-and its managed default acquisition. SDK transport admission also checks the
-pinned runtime directory and host. The opt-in native acquisition still enters
-through the trusted managed bridge, so merely changing the default argument or
-dropping those guards would not establish a .NET-free installer. That capability
-entry and its independently qualified replacement remain the blocking dependency
-for removing the host SDK and managed acquisition payloads from agent builds.
+The installer and updater now expose `--native-bundle` to select the C acquisition
+path for all privileged snapshots and file/package operations. The shared
+transport validates and snapshots the prebuilt setup bundle before device access;
+the journal records its selection and manifest digest. This avoids compiling
+`NamespaceRootProbe` and `RootIdentity` for each call. Omission retains the managed
+path, and failures never retry through it automatically. Local tests cover both
+model bundles, subprocess dispatch, snapshot drift, uncertain replies and CLI
+selection; hardware adoption remains paused.
+
+The selected path still requires `NativeEntry.dll` and Samsung's trusted runtime.
+SDK admission retains its runtime/host guards. Building this bundle requires the
+host SDK, but running the prebuilt bundle does not. Removing the entry bridge
+still needs a native capability entry on each firmware.
 
 ### Capability-entry evidence boundary
 

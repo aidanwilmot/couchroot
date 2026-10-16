@@ -66,6 +66,29 @@ from tvsetup.root import execute
 execute(profile, bounded_script, native_bundle=private_bundle_directory)
 ```
 
+The journaled agent installer/updater also accepts `--native-bundle PATH`:
+
+```sh
+python3 -m tvsetup.autonomous_root_trial --device qn90a --artifact PREPARED_ARTIFACT --native-bundle SETUP_BUNDLE --yes
+```
+
+Use a setup bundle from `tvsetup.native_root.build`, not a service bundle or the
+.NET-free component bundle. Add the existing `--previous` and credential/inventory
+options for an update. This remains an explicit deployment command; hardware
+qualification is currently paused.
+
+`Transport(..., native_bundle=PATH)` validates and snapshots the prebuilt bundle
+in the run's private evidence directory before contacting the TV. All root calls
+in that transport use the snapshot through the bounded subprocess, avoiding
+per-operation builds of `NamespaceRootProbe` and `RootIdentity`. The installer
+journal records the selection and snapshot manifest digest. Later edits to the
+original bundle cannot change the run; saved artifacts are revalidated before
+staging. Omit the option to select the existing managed transport. Native errors
+never select it automatically, and native-selected app cleanup is refused.
+The small entry DLL still requires the TV's .NET runtime. Building the bundle
+requires the host SDK once; executing a prebuilt bundle does not compile managed
+code. This wiring has local tests only; it has not been deployed to either TV.
+
 The caller owns the device lock, pending-run admission, durable intent, boot
 binding, rescue timer and result reconciliation. Bundle/source/profile hashes
 are validated and copied before target contact. The shared executor preserves

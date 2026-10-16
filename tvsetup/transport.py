@@ -79,9 +79,17 @@ def paths(device):
 
 
 class Transport:
-    def __init__(self, profile, evidence):
+    def __init__(self, profile, evidence, *, native_bundle=None):
         self.profile, self.evidence = profile, evidence
         self.evidence.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.native_bundle = None
+        self.root_acquisition = dict(kind='managed')
+        if native_bundle is not None:
+            from .native_root import snapshot
+            self.native_bundle = snapshot(profile, native_bundle, self.evidence/'native-acquisition')
+            self.root_acquisition = dict(kind='native-acquisition-managed-entry',
+                bundle=str(self.native_bundle),
+                manifest_sha256=sha((self.native_bundle/'manifest.json').read_bytes()))
         from .toolkit import load
         toolkit=load();device,SdbClient=toolkit.device,toolkit.SdbClient
         self.cfg = dict(tv_host=profile['host'],expected_model=profile['model'],expected_platform=profile['platform'],expected_device_id=profile['device_id'])
@@ -100,6 +108,8 @@ class Transport:
         return result.output[:match.start()]
 
     def root(self, script, namespace=False, cleanup_index=None):
+        if self.native_bundle is not None and cleanup_index is not None:
+            raise Refused('Allowlisted app cleanup requires an explicit managed transport')
         if namespace:
             if self.profile['id'] != 's90d': raise Refused('Writable-cache/mount-namespace operation is S90D-only')
             script = 'nsenter -t 1 -m -- sh -c '+Q('set -eu\n'+script)
@@ -110,6 +120,8 @@ class Transport:
         configuration=path.with_suffix('.json');atomic_json(configuration,self.profile)
         argv = [sys.executable, '-m', 'tvsetup.worker', str(configuration), str(path)]
         if cleanup_index is not None:argv.append(str(cleanup_index))
+        if self.native_bundle is not None:
+            argv.extend(['--native-bundle', str(self.native_bundle)])
         try: output = run(argv, timeout=360, cwd=REPO)
         except Refused as error:
             path.with_suffix('.log').write_text(getattr(error,'output','Interrupted; completion unknown'))
