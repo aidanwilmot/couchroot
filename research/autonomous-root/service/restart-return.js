@@ -9,11 +9,11 @@ const {readRuntime}=require('./native-runtime');
 const {providerId}=require('./restart-inventory');
 const {observeCommand,parseObservation}=require('./restart-rollback');
 const {cleanupPlan}=require('./restart-cleanup');
-const {snapshotNativeJobs}=require('./native-retained-state');
+const {recoverReturnNative,recoverReturnProvider}=require('./native-return-recovery');
 const {restoreManagedJobs,acceptManagedRestore}=require('./managed-restore');
 const {planManagedRestore}=require('./managed-restore-plan');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
-const {processIdentities}=require('./worker-processes');
+const {processIdentities,bootGuard}=require('./worker-processes');
 const {validateManagedLaunch}=require('./managed-readiness');
 function check(v){if(!v)throw Error('Restart managed return evidence unavailable');}
 function exists(p){try{fs.lstatSync(p);return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}}
@@ -33,21 +33,24 @@ async function reconcileRestartReturn({selectionFile,managedSha256,executor}){
  const rid=providerId(id),providerFile=path.join(directory,rid+'.retirement.json'),provider=exists(providerFile)?json(providerFile):null,oldManagedFile=path.join(directory,id+'.managed-launch.json'),oldManaged=exists(oldManagedFile)?json(oldManagedFile):null;
  if(provider)check(provider.id===rid&&provider.boot_id===record.boot_id&&provider.unit==='couchroot-retirement-'+rid+'.service'&&JSON.stringify(provider.source)===JSON.stringify(record.worker_identity)&&provider.manifest_sha256===record.manifest_sha256);
  if(oldManaged){const {worker_identity,unit_started_monotonic,launcher_sha256,...launch}=oldManaged;validateManagedLaunch({...launch,phase:'submitted'});check(oldManaged.id===id&&oldManaged.origin_id===origin_id&&oldManaged.manifest_sha256===managedSha256&&JSON.stringify(oldManaged.source)===JSON.stringify(record.worker_identity));}
- const known=Object.entries(record.worker_identity.processes);for(const r of [provider&&provider.provider_identity,oldManaged&&oldManaged.worker_identity])if(r)for(const [k,p] of Object.entries(r.processes))if(p)known.push([k,p]);
+ const known=Object.entries(record.worker_identity.processes);for(const r of [provider&&provider.provider_identity,oldManaged&&oldManaged.worker_identity])if(r){check(r.boot_id===record.boot_id);for(const [k,p] of Object.entries(r.processes))if(p)known.push([k,p]);}
  const units=[record.unit,'couchroot-retirement-'+rid+'.service',...(oldManaged?[oldManaged.unit]:[])],e={boot_id:record.boot_id,source:record.source,known,units};
- const confirm=async()=>{const info=await executor.status();validateReadiness(info,{implementation:'managed',bootId:record.boot_id});const r=validateResourceInventory(info),own=processIdentities(info,executor.pid);check(!r.jobs.length&&!r.transfers.length&&!r.helpers.length&&!known.some(([,p])=>p.pid===executor.pid));return own;};
- const own=await confirm(),run=async(command,timeout)=>{check(JSON.stringify(await confirm())===JSON.stringify(own));const result=await executor.execute(command,timeout);check(JSON.stringify(await confirm())===JSON.stringify(own));return result;};
+ let bootId=null;
+ const confirm=async()=>{const info=await executor.status(),observed=bootId===null?info.boot_id:bootId;bootGuard(observed);validateReadiness(info,{implementation:'managed',bootId:observed});const r=validateResourceInventory(info),own=processIdentities(info,executor.pid);check(!r.jobs.length&&!r.transfers.length&&!r.helpers.length&&(own.boot_id!==record.boot_id||!known.some(([,p])=>p.pid===executor.pid)));return own;};
+ const own=await confirm();bootId=own.boot_id;const crossed=bootId!==record.boot_id,observation={bootId,knownBootId:record.boot_id};
+ const run=async(command,timeout)=>{check(JSON.stringify(await confirm())===JSON.stringify(own));const result=await executor.execute(command,timeout);check(JSON.stringify(await confirm())===JSON.stringify(own));return result;};
  const verify=async(command,expected)=>{const r=await run(command,25000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout===expected);};
- const observe=async()=>{const r=await run(observeCommand(e),10000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr);parseObservation(r.stdout,units);};await observe();
+ const observe=async()=>{const r=await run(observeCommand(e,observation),10000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr);const observed=parseObservation(r.stdout,units);if(crossed)check(Object.values(observed).every(v=>v==='not-found'));};await observe();
  if(!provider)await verify('set -eu\ntest ! -e /opt/couchroot-retirement-'+rid+'; test ! -L /opt/couchroot-retirement-'+rid+'\n','');
  const inputFile=path.join(directory,id+'.managed-restore-input.json'),receiptFile=path.join(directory,id+'.restart-return.json');
+ if(provider)await recoverReturnProvider({directory,id,provider,execute:run,bootId});
  let inputs;
  if(exists(inputFile)){inputs=json(inputFile);check(JSON.stringify(inputs.record)===JSON.stringify(record)&&JSON.stringify(inputs.installation)===JSON.stringify(installation)&&JSON.stringify(inputs.baseline)===JSON.stringify(baseline));}
- else inputs={record,installation,baseline,snapshot:await snapshotNativeJobs({record,installation,execute:run})};
- const plan=planManagedRestore(inputs);let state=journal.read();
+ else inputs={record,installation,baseline,snapshot:await recoverReturnNative({directory,id,record,installation,execute:run,bootId})};
+ const plan=planManagedRestore(inputs,{bootId});let state=journal.read();
  if(state.pending&&state.pending.phase==='prepared'){
-  const restored=await restoreManagedJobs({...inputs,journalDirectory:directory,selectionFile,execute:run,resume:exists(inputFile)});
-  await acceptManagedRestore({transitionId:id,receiptSha256:restored.receipt_sha256,journalDirectory:directory,selectionFile,execute:run});state=journal.read();
+  const restored=await restoreManagedJobs({...inputs,journalDirectory:directory,selectionFile,execute:run,bootId,resume:exists(inputFile)});
+  await acceptManagedRestore({transitionId:id,receiptSha256:restored.receipt_sha256,journalDirectory:directory,selectionFile,execute:run,bootId});state=journal.read();
  }
  await verify(plan.verify,'RESTORE-READY\n');
  // The acquired managed worker has no live jobs. Saved job.status reads the
@@ -64,7 +67,7 @@ async function reconcileRestartReturn({selectionFile,managedSha256,executor}){
  // recorded hashes, and unknown entries prevent removal.
  const p=provider||{directory:'/opt/couchroot-retirement-'+rid,scope:'/opt/couchroot-retirement-'+rid+'/state',worker_sha256:record.worker_sha256,launcher_sha256:record.launcher_sha256,token_sha256:record.token_sha256};
  await observe();await verify(plan.verify,'RESTORE-READY\n');
- await verify(cleanupPlan({...e,id:origin_id,provider_id:rid,provider:p,production:record,installation,snapshot:inputs.snapshot}),'RESTART-CLEANED\n');
+ await verify(cleanupPlan({...e,id:origin_id,provider_id:rid,provider:p,production:record,installation,snapshot:inputs.snapshot},{...observation,requireAbsentUnits:crossed}),'RESTART-CLEANED\n');
  // Original launch receipts remain audit evidence. Token directories and
  // markers are removed only when their owner and contents match.
  for(const r of [provider,oldManaged].filter(Boolean)){

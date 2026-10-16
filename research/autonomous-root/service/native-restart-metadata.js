@@ -2,6 +2,7 @@
 // Admit only the persistence debris understood by the native guardian. The
 // coordinator inventories and pins it; native alone reconciles it under lock.
 const {hash}=require('./policy');
+const {bootGuard}=require('./worker-processes');
 const ID='[a-zA-Z0-9-]{16,64}',SHA=/^[a-f0-9]{64}$/;
 const terminal=new Set(['completed','cancelled','timed_out','interrupted']);
 function check(v){if(!v)throw Error('Native restart persistence evidence unavailable');}
@@ -48,7 +49,8 @@ function validateMetadata(entries,snapshot){
 }
 // Read back every retained result before admission. Unchanged records must
 // retain their exact bytes. Only this guardian's nonterminal records may change.
-async function verifyRestartRecords({retained,record,channel,execute,bootId=record.boot_id}){
+async function verifyRestartRecords({retained,record,channel,execute,bootId=record.boot_id,recoveryBootIds=[bootId]}){
+ check(Array.isArray(recoveryBootIds)&&recoveryBootIds.length>0&&recoveryBootIds.length<=8);for(const boot of recoveryBootIds)bootGuard(boot);
  const snapshot=retained.snapshot,owner=Object.prototype.hasOwnProperty.call(retained,'reconciliation_worker_id')?retained.reconciliation_worker_id:snapshot.source.worker_id,expected=new Map();
  for(const entry of snapshot.records){const value=decoded(entry);expected.set(value.id,{entry,value,mutable:!!retained.guardian_sha256&&value.worker_id===owner&&!terminal.has(value.state)});}
  for(const e of retained.metadata||[])if(e.kind==='intent'&&!expected.has(e.id))expected.set(e.id,{orphan:true});
@@ -56,7 +58,7 @@ async function verifyRestartRecords({retained,record,channel,execute,bootId=reco
   const status=await channel.operation({op:'job.status',id}),value=status&&status.record;
   check(value&&value.id===id&&status.output_available===false);
   if(item.orphan){
-   check(value.worker_id===owner&&value.boot_id===bootId&&value.state==='interrupted'&&value.recovery==='initial-intent-not-published'&&value.launch_started===false&&value.exit_code===null);
+   check(value.worker_id===owner&&recoveryBootIds.includes(value.boot_id)&&value.state==='interrupted'&&value.recovery==='initial-intent-not-published'&&value.launch_started===false&&value.exit_code===null);
   }else if(item.mutable){
    check(value.worker_id===owner&&value.boot_id===item.value.boot_id&&value.state==='interrupted'&&value.exit_code===null&&value.recovery==='stale-guardian-reconciled');
    for(const k of ['id','pid','process_start','started_at'])check(value[k]===item.value[k]);

@@ -20,6 +20,27 @@ retained-state verification and managed return while keeping the original
 activation immutable. A schema-2 runtime receipt binds replacement processes to
 the new boot. Installed 0.7.48 still has its original same-boot restriction.
 
+Local source also reconciles pending native-to-managed returns across boots.
+The original request, transaction and restore inputs remain authoritative; fresh
+executor/boot checks replace observations of historical PIDs. A unit with an old
+name must be absent on the new boot. Completed records remain byte-identical.
+Unclean native state is reconciled before restoration through the root-only mode:
+
+```text
+worker --reconcile-state PRIVATE_SCOPE CURRENT_BOOT_ID OLD_WORKER_ID JOURNAL_SHA256
+```
+
+It opens an existing private scope and job lock, pins the journal digest/owner,
+and reuses guardian reconciliation without a new worker, launcher, token or
+network channel. It has a 20-second outer deadline and retains the recovery
+child's 15-second limit. Inspection failures have no generic exit cleanup.
+`absent` may replace the digest only after independently observing no journal;
+it verifies absence without repairing records. The coordinator still verifies
+the exact resulting record inventory, permitted interrupted outcomes and owned
+cleanup before admission. It executes the pinned binary in a private read-only
+code view. This maintenance mode is not a public protocol operation. These changes
+are locally tested and remain uninstalled while endurance trials continue.
+
 The prototype uses the existing HMAC protocol with strict sequence ordering,
 bounded binary chunks and structured failure responses. It implements status,
 root commands, bounded output and process-group timeouts, app commands through an

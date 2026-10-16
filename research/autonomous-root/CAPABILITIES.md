@@ -1308,7 +1308,26 @@ also restarts the service again on the new boot and returns to managed while
 preserving retained records. These use synthetic historical receipts and real
 native/managed fixture workers; they do not prove TV reboot behavior. The code is
 not installed on either TV, and both 0.7.48 endurance runs remain undisturbed.
-Interrupted-bootstrap recovery across boots is now implemented locally as
-described above. Pending-return recovery after reboot, hardware qualification
-of the cross-boot paths and broader power lifecycle acceptance remain open.
-Neither .NET fallback is removed.
+Interrupted-bootstrap recovery across boots is implemented locally as described
+above; pending-return recovery is described below. Hardware qualification of the
+cross-boot paths and broader power lifecycle acceptance remain open. Neither
+.NET fallback is removed.
+
+## Local pending-return recovery across boots
+
+Pending native-to-managed returns can now finish on a fresh authenticated boot
+under their original request and transaction IDs. Historical PID/start pairs
+cannot identify current processes, and a reused transient-unit name blocks
+recovery. Original activation and restore receipts remain unchanged while their
+execution guards use the observed boot.
+
+A bounded root-only native offline mode reconciles an unclean guardian journal
+without launching jobs or opening a worker channel. The coordinator persists
+and verifies the original retained snapshot, accepts only owned interrupted
+outcomes, and resumes after lost cleanup replies or partial restore cutover.
+Provider journals additionally bind to their original launch token and may not
+contain public jobs. Completed record bytes remain exact; no command is replayed.
+
+Nine modeled reboot integration cases cover these boundaries with real fixture
+workers. The code is not installed or qualified on either TV. Their independent
+0.7.48 endurance runs and all .NET fallback/recovery paths remain unchanged.

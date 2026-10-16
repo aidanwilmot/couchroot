@@ -40,7 +40,7 @@ async function snapshotWithPlan({record,execute},plan){
  const value={schema:1,implementation:'native-prototype',source:JSON.parse(JSON.stringify(record.worker_identity)),origin:{transaction_id:record.id,manifest_sha256:record.manifest_sha256,installation_sha256:record.state_receipt_sha256},records};
  return {...value,sha256:hash(JSON.stringify(value))};
 }
-async function snapshotNativeJobs(options){return snapshotWithPlan(options,planNativeSnapshot(options.record,options.installation));}
+async function snapshotNativeJobs(options){return snapshotWithPlan(options,planNativeSnapshot(options.record,options.installation,null,[],null,options.bootId===undefined?options.record.boot_id:options.bootId));}
 // Selected-native restart is different from export to managed: the ordinary
 // native binary owns reconciliation of an unclean guardian journal. Admit only
 // a complete journal bound to this last accepted runtime; never remove it here.

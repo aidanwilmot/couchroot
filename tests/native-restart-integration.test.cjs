@@ -9,14 +9,15 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','native-reboot','native-reboot-bootstrap','native-reboot-startup','native-reboot-receipt','native-startup-journal','native-startup-partial','native-startup-initial','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','native-reboot','native-reboot-bootstrap','native-reboot-startup','native-reboot-receipt','native-startup-journal','native-startup-partial','native-startup-initial','return-prepared','return-stopped','return-state-ready','return-trial-ready','return-reboot-prepared','return-reboot-provider','return-reboot-stopped','return-reboot-state-ready','return-reboot-trial-ready','return-reboot-recovery-ack','return-reboot-provider-ack','return-reboot-cutover','return-reboot-unit-reuse','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY||((mode.startsWith('native-startup-')||mode==='native-reboot-startup')&&process.env.COUCHROOT_STARTUP_FAULT!=='1'),timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-restart-')),state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',selectionFile=state+'/selection.json';fs.mkdirSync(state,{recursive:true,mode:0o700});
  const managed='a'.repeat(64),native='b'.repeat(64),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),launcherSha=sha(fs.readFileSync('/bin/true')),workerSha=sha(fs.readFileSync(process.env.NATIVE_WORKER)),runtimeSha=sha(fs.readFileSync('/opt/dotnet/bin/dotnet'));
  const live=mode.startsWith('live-'),observerLoss=mode.startsWith('live-observer-');let faulted=false,cleanupFaulted=false,startupFaulted=false,receiptFaulted=false;
- const reboot=mode.startsWith('native-reboot');
+ const reboot=mode.startsWith('native-reboot'),returnReboot=mode.startsWith('return-reboot-'),returnMode=({'return-reboot-recovery-ack':'return-prepared','return-reboot-provider-ack':'return-provider','return-reboot-cutover':'return-state-ready','return-reboot-unit-reuse':'return-prepared'})[mode]||(returnReboot?mode.replace('return-reboot-','return-'):mode);
+ let recoveryAcknowledgementLost=false,recoveryExecutions=0;
  const startupStage={'native-reboot-startup':'journal-runtime','native-startup-journal':'journal-runtime','native-startup-partial':'partial-runtime','native-startup-initial':'initial-created'}[mode];
  const children=[],servers=[],roots=['/opt/couchroot-agent'],units=new Map(),commands=new Map();let first,second;
  const unitRoot=root+'/units';fs.mkdirSync(unitRoot);
@@ -66,6 +67,7 @@ done
     const inputs=JSON.parse(fs.readFileSync(state+'/'+r.id+'.managed-restore-input.json'));command=require('../research/autonomous-root/service/managed-restore-plan').planManagedRestore(inputs).verify+'printf "MANAGED-VERIFIED\\n"\n';
    }
    const result=await super.execute(command.replaceAll('systemctl ',systemctl+' '),timeout);
+   if(command.includes('--reconcile-state')){recoveryExecutions++;if(['return-reboot-recovery-ack','return-reboot-provider-ack'].includes(mode)&&!recoveryAcknowledgementLost){assert.equal(result.exit_code,0,result.stderr);recoveryAcknowledgementLost=true;throw Error('offline recovery acknowledgement lost');}}
    if(mode==='live-observer-ack-lost'&&!cleanupFaulted&&command.includes('OBSERVER-RECOVERY-RETIRED')){assert.equal(result.exit_code,0);cleanupFaulted=true;throw Error('observer cleanup acknowledgement lost');}return result;
   }
  }
@@ -100,8 +102,8 @@ done
  try{
   first=createAgent(loader(new Map(),(name,module)=>{
    if(name==='policy'&&mode==='native-reboot-receipt'){const atomic=module.exports.atomic;module.exports.atomic=(file,value)=>{const result=atomic(file,value);if(!receiptFaulted&&file.endsWith('.runtime.json')){receiptFaulted=true;throw injected;}return result;};}
-   if(name==='managed-return'&&['return-prepared','return-stopped'].includes(mode)){const create=module.exports.createManagedReturn;module.exports.createManagedReturn=o=>{if(mode==='return-prepared')o.openRetirement=async()=>{throw injected;};else{const stop=o.hold.shutdownNative;o.hold.shutdownNative=async(...a)=>{await stop(...a);throw injected;};}return create(o);};}
-   if(name==='managed-session'&&mode.startsWith('return-')&&mode.endsWith('ready')){const open=module.exports.openManagedSession;module.exports.openManagedSession=async o=>{if(mode==='return-state-ready')throw injected;await open(o);throw injected;};}
+   if(name==='managed-return'&&['return-prepared','return-provider','return-stopped'].includes(returnMode)){const create=module.exports.createManagedReturn;module.exports.createManagedReturn=o=>{if(returnMode==='return-prepared')o.openRetirement=async()=>{throw injected;};else if(returnMode==='return-provider'){const open=o.openRetirement;o.openRetirement=async(...args)=>{await open(...args);throw injected;};}else{const stop=o.hold.shutdownNative;o.hold.shutdownNative=async(...a)=>{await stop(...a);throw injected;};}return create(o);};}
+   if(name==='managed-session'&&returnMode.startsWith('return-')&&returnMode.endsWith('ready')){const open=module.exports.openManagedSession;module.exports.openManagedSession=async o=>{if(returnMode==='return-state-ready')throw injected;await open(o);throw injected;};}
    if(name==='production-readiness'&&mode==='live-production-loss'){
     const ready=module.exports.readyProduction;
     module.exports.readyProduction=async o=>{
@@ -154,7 +156,12 @@ done
     await assert.rejects(first.returnManaged(runtimeSha,'original-return-request-0001'));returnId=first.status().worker_selection.pending.id;
    }
    const old=children.slice();
-   if(guardianLoss){
+   if(returnReboot){
+    // Model kernel loss: kill owned fixture processes before transport teardown
+    // so native journals and provider runtime evidence remain for recovery.
+    for(const v of old)if(v.child.exitCode===null&&v.child.signalCode===null){v.child.kill('SIGKILL');await v.ended;}
+    first.stop();for(const server of servers.slice())server.close();
+   }else if(guardianLoss){
     const current=await first.operation({op:'status'}),guardian=units.get(production.unit);assert(guardian);
     assert.equal(current.processes.guardian.pid,guardian.child.pid);
     // The real owned guardian dies without cleanup; EXITKILL must terminate
@@ -182,7 +189,13 @@ done
    if(reboot){const helper=require('./native-reboot-state.cjs'),historical=helper.historicalBoot(state,id);production=historical.record;committed=historical.committed;activation=historical.activation;history=historical.history;
     if(mode==='native-reboot-bootstrap'){bootstrapReceipt=helper.historicalBootstrap(state,production);roots.push(bootstrapReceipt.directory,bootstrapReceipt.fence);}
    }
+   if(returnReboot){const historical=require('./native-reboot-state.cjs').historicalReturn(state,id,returnId,{cutover:mode==='return-reboot-cutover'});production=historical.record;committed=historical.committed;activation=historical.activation;history=historical.history;units.clear();for(const name of fs.readdirSync(unitRoot))fs.rmSync(unitRoot+'/'+name,{recursive:true});
+    if(mode==='return-reboot-unit-reuse'){const dir=unitRoot+'/'+production.unit;fs.mkdirSync(dir);for(const [key,value] of Object.entries({LoadState:'loaded',ActiveState:'inactive',SubState:'dead',MainPID:'0',ControlGroup:''}))fs.writeFileSync(dir+'/'+key,value);}
+   }
    second=mode==='native-committed'||mode.startsWith('return-')?createAgent(loader(new Map())):first;await acquire(second);
+   if(mode==='return-reboot-unit-reuse'){
+    await until(()=>second.restartInventory().restart_return.phase==='failed');assert.equal(second.status().worker_ready,false);await assert.rejects(second.execute('touch '+root+'/forbidden',1000));assert(!fs.existsSync(root+'/forbidden'));assert(!fs.existsSync(state+'/'+returnId+'.return-native-recovery.json'));assert(fs.existsSync(production.scope+'/.jobs/guardian'));assert(!fs.existsSync(unitRoot+'/'+production.unit+'/stopped'));fs.rmSync(unitRoot+'/'+production.unit,{recursive:true});
+   }
    let interruptedAttempt;
    if(startupStage||mode==='native-reboot-receipt'){
     await until(()=>second.restartInventory().native_startup&&second.restartInventory().native_startup.phase==='failed',40000);
@@ -206,7 +219,7 @@ done
    }
    if(mode.startsWith('return-')){
     const after=second.status();assert.equal(after.selected_implementation,'managed');assert.equal(after.worker_selection.history.slice(-1)[0].id,returnId);assert.equal(after.worker_selection.history.length,2);
-    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(second.restartInventory().boundary,'settled');assert.equal(second.restartInventory().restart_return.phase,'complete');assert.equal(second.canResumeManaged('wrong-return-request-0001'),false);assert.equal(second.canResumeManaged('original-return-request-0001'),true);const resumed=await second.resumeManagedActivation('original-return-request-0001');assert.equal(resumed.transaction_id,returnId);assert.equal(resumed.native_origin_id,id);return;
+    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(second.restartInventory().boundary,'settled');assert.equal(second.restartInventory().restart_return.phase,'complete');if(returnReboot){if(mode.endsWith('-ack')){assert(recoveryAcknowledgementLost);assert.equal(recoveryExecutions,mode==='return-reboot-provider-ack'?2:1);}assert.deepEqual(fs.readFileSync(state+'/'+id+'.production.json'),committed);assert.deepEqual(fs.readFileSync(state+'/'+id+'.activation.json'),activation);assert.equal(after.boot_id,boot);assert.equal(after.worker_selection.history.slice(-1)[0].id,returnId);assert(!fs.existsSync(production.scope+'/.jobs/guardian'));}assert.equal(second.canResumeManaged('wrong-return-request-0001'),false);assert.equal(second.canResumeManaged('original-return-request-0001'),true);const resumed=await second.resumeManagedActivation('original-return-request-0001');assert.equal(resumed.transaction_id,returnId);assert.equal(resumed.native_origin_id,id);return;
    }
    if(startupStage||mode==='native-reboot-receipt'){
     assert.equal(fs.readFileSync(interruptedAttempt.fence+'/sealed','utf8'),interruptedAttempt.id+'\n');

@@ -25,7 +25,7 @@ async function restoreManagedJobs(options){
  check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
  const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const {record,installation,baseline,snapshot}=JSON.parse(JSON.stringify(options));
- const plan=planManagedRestore({record,installation,baseline,snapshot}),id=record.id;
+ const plan=planManagedRestore({record,installation,baseline,snapshot},{bootId:options.bootId}),id=record.id;
  const initial=selectionStatus(selectionFile),p=initial.pending;
  check(initial.phase==='reconciliation-required'&&p);
  restoreTransition(initial,record,false,journalDirectory);
@@ -48,7 +48,7 @@ async function restoreManagedJobs(options){
  const started=process.hrtime();
  const checkedExecute=async(command,timeout)=>{owned();const r=await execute(command,timeout),t=process.hrtime(started);owned();check(t[0]*1000+t[1]/1000000<120000);return r;};
  const run=async c=>{const r=await checkedExecute(c,25000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&typeof r.stdout==='string'&&r.stdout.length<128);return r.stdout;};
- const recheck=async()=>{const current=await snapshotNativeJobs({record,installation,execute:checkedExecute});check(current.sha256===snapshot.sha256);};
+ const recheck=async()=>{const current=await snapshotNativeJobs({record,installation,execute:checkedExecute,bootId:options.bootId});check(current.sha256===snapshot.sha256);};
  try{
   await recheck();let phase=await run(plan.inspect);
   if(localText===JSON.stringify(receipt))check(phase==='RESTORE-READY\n');
@@ -63,12 +63,12 @@ async function restoreManagedJobs(options){
  }catch(cause){throw Object.assign(Error('Managed state restoration requires reconciliation'),{outcome:'unknown',cause});}
 }
 // Acceptance advances only the retained-state gate, never worker selection.
-async function acceptManagedRestore({transitionId,receiptSha256,journalDirectory,selectionFile,execute}){
+async function acceptManagedRestore({transitionId,receiptSha256,journalDirectory,selectionFile,execute,bootId}){
  check(typeof transitionId==='string'&&transitionId.length===32&&/^[a-f0-9]+$/.test(transitionId)&&typeof receiptSha256==='string'&&receiptSha256.length===64&&/^[a-f0-9]+$/.test(receiptSha256));
  check(typeof execute==='function'&&typeof journalDirectory==='string'&&path.isAbsolute(journalDirectory)&&path.dirname(selectionFile)===journalDirectory);
  const st=fs.lstatSync(journalDirectory);check(privateDirectory(st));
  const file=path.join(journalDirectory,transitionId+'.managed-restore.json'),saved=path.join(journalDirectory,transitionId+'.managed-restore-input.json'),marker=path.join(journalDirectory,'managed-restore.pending');
- const inputText=privateRead(saved,524288),inputs=JSON.parse(inputText),plan=planManagedRestore(inputs),{record,installation,baseline,snapshot}=inputs;
+ const inputText=privateRead(saved,524288),inputs=JSON.parse(inputText),plan=planManagedRestore(inputs,{bootId}),{record,installation,baseline,snapshot}=inputs;
  check(Object.keys(inputs).sort().join('|')==='baseline|installation|record|snapshot');
  const initial=selectionStatus(selectionFile),target=restoreTransition(initial,record,true,journalDirectory),p=initial.pending;
  check(p.id===transitionId);if(p.phase===target)check(p.state_sha256===receiptSha256);
@@ -78,7 +78,7 @@ async function acceptManagedRestore({transitionId,receiptSha256,journalDirectory
  const owned=()=>{check(JSON.stringify(selectionStatus(selectionFile))===JSON.stringify(initial)&&privateRead(marker,64)===transitionId+'\n'&&privateRead(file,16384)===text&&privateRead(saved,524288)===inputText);for(const [name,value] of refs)check(runtimeRead(path.join(journalDirectory,name),262144)===JSON.stringify(value));};
  const started=process.hrtime();
  const checkedExecute=async(command,timeout)=>{owned();const r=await execute(command,timeout),t=process.hrtime(started);owned();check(t[0]*1000+t[1]/1000000<120000);return r;};
- const verifySource=async()=>{const current=await snapshotNativeJobs({record,installation,execute:checkedExecute});check(current.sha256===snapshot.sha256);};
+ const verifySource=async()=>{const current=await snapshotNativeJobs({record,installation,execute:checkedExecute,bootId});check(current.sha256===snapshot.sha256);};
  owned();await verifySource();
  const result=await checkedExecute(plan.verify,25000);check(result&&result.exit_code===0&&!result.timed_out&&!result.stderr&&result.stdout==='RESTORE-READY\n');
  await verifySource();owned();

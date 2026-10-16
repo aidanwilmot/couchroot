@@ -715,7 +715,10 @@ static J *operation(J *request, Wire *w, const char *seq) {
   }
   return failure("Unsupported file operation in native prototype");
 }
+#include "offline-reconcile.h"
 int main(int argc, char **argv) {
+  if (argc >= 2 && !strcmp(argv[1], "--reconcile-state"))
+    return offline_reconcile(argc, argv);
 #ifdef NATIVE_WORKER_FAULT_TEST
   if (argc == 2 && !strcmp(argv[1], "--test-child-fault"))
     fault_test_memory(NULL);

@@ -31,10 +31,11 @@ Local source now integrates cross-boot guardian reconciliation with selected-nat
 startup, separate runtime receipts, startup fences, retained-state verification and
 return to managed. Modeled reboot integration passes locally; this source is not
 installed or device-qualified. The .NET entry, fallback and rescue remain in place.
-Local source now also reconciles an interrupted bootstrap across boots, with
-fresh executor and unit-absence checks. Pending return transitions interrupted
-by reboot remain a separate recovery boundary; full power-lifecycle qualification
-is still open. None of these cross-boot changes is installed yet.
+Local source now also reconciles interrupted bootstraps and pending returns
+across boots, with fresh executor, unit-absence and retained-state checks.
+Pending returns use bounded native offline reconciliation before restoring
+managed state. Full power-lifecycle qualification is still open. None of these
+cross-boot changes is installed yet.
 
 Both TVs run signed 0.7.48; the preceding integrated qualification ended
 managed-ready. The authenticated timing header now separates file-sync and
@@ -4467,3 +4468,56 @@ No installed worker, service, trial snapshot or .NET fallback changed. Hardware
 qualification of the new cross-boot paths is pending. A reboot during a pending
 native-to-managed return is the next local recovery boundary; that path must also
 handle any unclean native journal before restoring managed state.
+
+## Pending managed returns across boots — 2026-10-16
+
+A fresh held managed executor can now finish a native-to-managed return after
+reboot under the original request and transaction ID. All execution binds to its
+authenticated current boot; old PID/start pairs are not treated as current
+processes. Every old transient unit must be absent after a boot change. A reused
+unit name holds admission even with PID zero, and recovery never stops that unit.
+The original native activation, source identities and durable restore inputs
+remain unchanged. Restore plans use an explicit observed boot for their guards
+without changing their original state receipts or byte hashes.
+
+The native worker adds a root-only `--reconcile-state` mode. It opens existing
+private state and an exclusive job lock, pins current boot, old owner and journal
+digest, then reuses the existing guardian recovery checks. It opens no command
+channel and creates no successor guardian, launcher, token or scope. Recovery
+retains its 15-second child deadline within a 20-second outer limit; core dumps
+are disabled and no generic exit cleanup is registered. Live scope ownership,
+changed identity/digest, pending startup journals and unsafe files refuse before
+recovery. Its successful exit is followed by independent record verification.
+
+Before native cleanup, the coordinator persists the original snapshot and
+understood persistence debris. It accepts changes only to that guardian's
+interrupted records or unpublished intents; completed bytes remain exact and
+no job is replayed. A lost reply resumes from that same snapshot. Recovery boots
+are recorded before invocation so orphan records created before another restart
+can be attributed to an admitted attempt. Providers have no public jobs: their
+remaining journal must bind to the original startup token, boot and optional
+readiness identity, with no extra job entries. The executable digest and owned
+code layout are checked before execution in a private read-only mount view.
+
+Nine modeled reboot cases cover return preparation, live provider loss, stopped
+native, restored state, managed readiness, lost native/provider recovery replies,
+partial restore cutover and a conflicting current unit name. They retain the
+original request ID and completed record bytes, preserve immutable activation
+receipts, and finish with managed admission. Historical boot receipts and systemd
+state are fixtures; real native/managed processes and the offline recovery binary
+perform the state transitions. These are not on-TV reboot observations.
+
+Validation passed all 37 distinct restart integration cases: the full run passed
+28 and exposed a misplaced test-only lost-reply hook in nine other cases. After
+repair, a fresh targeted run passed all 24 affected/return cases; the remaining
+13 passed in the full run. All six managed/native/managed rehearsals also passed.
+Native ASAN/UBSAN and managed fixtures were freshly built. Native regression
+passed 50 cases with 11 gated skips, including all four offline recovery tests
+and seven reboot journal/kernel checks; focused Linux service tests passed 78
+with one gated skip. npm passed 431 with 174 environment-gated skips, and the
+production ARM worker/launcher build succeeded. No client or tvsetup code changed.
+
+Both signed 0.7.48 endurance runs remain unchanged and active. Deployment and
+both-TV qualification of the cross-boot changes, the full 24-hour resource review,
+performance gate and native-only entry remain open. The .NET entry bridge,
+managed fallback and independent SDK rescue remain available.

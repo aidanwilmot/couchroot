@@ -34,3 +34,11 @@ test('metadata parser requires bounded exact owner names and paired repair inten
  assert.equal(parseMetadata(line+'METADATA-END\n',owner)[0].size,0);
  for(const value of [line+line+'METADATA-END\n',line.replace(' 0 1 ',' 2048 1 ')+'METADATA-END\n',line.replace(owner,'c'.repeat(32))+'METADATA-END\n',line.replace('.intent-','.repair-')+'METADATA-END\n',line+'junk'])assert.throws(()=>parseMetadata(value,owner));
 });
+
+test('orphan readback after another reboot requires a durably admitted recovery boot',async()=>{
+ const f=fixture(),current='00000000-0000-0000-0000-000000000002';
+ await assert.rejects(verifyRestartRecords({...f.options,bootId:current}));
+ await verifyRestartRecords({...f.options,bootId:current,recoveryBootIds:[boot,current]});
+ for(const ids of [[],['bad'],[boot+'\n'],Array(9).fill(boot)])await assert.rejects(verifyRestartRecords({...f.options,bootId:current,recoveryBootIds:ids}));
+ f.values.get('native-orphan-01').boot_id='00000000-0000-0000-0000-000000000003';await assert.rejects(verifyRestartRecords({...f.options,bootId:current,recoveryBootIds:[boot,current]}));
+});

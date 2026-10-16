@@ -17,8 +17,8 @@ function historicalBoot(state,id){
  record.worker_identity.processes.guardian={pid:process.pid,start_ticks:ticks};write(id+'.production.json',record);
  const activation=read(id+'.activation.json');activation.boot_id=boot;activation.worker_identity=record.worker_identity;activation.readiness_sha256=hash(JSON.stringify(record));write(id+'.activation.json',activation);
  const selection=read('selection.json'),entry=selection.history.find(e=>e.id===id);entry.readiness_sha256=activation.readiness_sha256;entry.state_sha256=record.state_receipt_sha256;write('selection.json',selection);
- const journal=JSON.parse(fs.readFileSync(record.scope+'/.jobs/guardian'));journal.boot_id=boot;journal.pid=process.pid;journal.process_start=ticks;fs.writeFileSync(record.scope+'/.jobs/guardian',JSON.stringify(journal));
- const live=record.scope+'/.jobs/native-live-00001.json',job=JSON.parse(fs.readFileSync(live));job.boot_id=boot;fs.writeFileSync(live,JSON.stringify(job));
+ const journalFile=record.scope+'/.jobs/guardian';if(fs.existsSync(journalFile)){const journal=JSON.parse(fs.readFileSync(journalFile));journal.boot_id=boot;journal.pid=process.pid;journal.process_start=ticks;fs.writeFileSync(journalFile,JSON.stringify(journal));}
+ const live=record.scope+'/.jobs/native-live-00001.json';if(fs.existsSync(live)){const job=JSON.parse(fs.readFileSync(live));job.boot_id=boot;fs.writeFileSync(live,JSON.stringify(job));}
  return {record,committed:fs.readFileSync(state+'/'+id+'.production.json'),activation:fs.readFileSync(state+'/'+id+'.activation.json'),history:JSON.stringify(selection.history)};
 }
 // Model a fenced bootstrap whose authenticated readiness was persisted on the
@@ -34,4 +34,29 @@ function historicalBootstrap(state,record){
  const result={schema:2,id,phase:'ready',boot_id:record.boot_id,directory,scope,unit:'couchroot-bootstrap-'+id+'.service',fence,file:state+'/'+id+'.bootstrap.json',selection_sha256:hash(fs.readFileSync(state+'/selection.json')),worker_sha256:record.worker_sha256,launcher_sha256:record.launcher_sha256,token_sha256:hash(fs.readFileSync(scope+'/token')),worker_identity:{...record.worker_identity,worker_id:crypto.randomBytes(16).toString('hex')},unit_started_monotonic:'123'};
  fs.writeFileSync(result.file,JSON.stringify(result),{mode:0o600});fs.symlinkSync(id+'.bootstrap.json',state+'/bootstrap-launch.pending');return result;
 }
-module.exports={historicalBoot,historicalBootstrap};
+
+function historicalReturn(state,id,returnId,{cutover=false}={}){
+ const historical=historicalBoot(state,id),record=historical.record,boot=record.boot_id;
+ const read=name=>JSON.parse(fs.readFileSync(state+'/'+name)),write=(name,value)=>fs.writeFileSync(state+'/'+name,JSON.stringify(value),{mode:0o600});
+ const rid=require('../research/autonomous-root/service/restart-inventory').providerId(returnId),providerFile=rid+'.retirement.json';
+ if(fs.existsSync(state+'/'+providerFile)){
+  const p=read(providerFile);p.boot_id=boot;p.source=record.worker_identity;
+  if(p.provider_identity)p.provider_identity.boot_id=boot;write(providerFile,p);
+  const file=p.scope+'/.jobs/guardian';if(fs.existsSync(file)){const j=JSON.parse(fs.readFileSync(file));j.boot_id=boot;fs.writeFileSync(file,JSON.stringify(j));}
+ }
+ const inputFile=returnId+'.managed-restore-input.json',selection=read('selection.json');
+ if(cutover){fs.renameSync('/opt/couchroot-agent/jobs','/opt/couchroot-agent/rollback-'+id+'/next');selection.pending.phase='prepared';selection.pending.state_sha256=null;selection.pending.readiness_sha256=null;}
+ if(fs.existsSync(state+'/'+inputFile)){
+  const inputs=read(inputFile);inputs.record=record;inputs.installation=read(id+'.state-install.json');inputs.baseline=read(id+'.retained-snapshot.json');
+  inputs.snapshot.source=record.worker_identity;inputs.snapshot.origin.installation_sha256=record.state_receipt_sha256;delete inputs.snapshot.sha256;inputs.snapshot.sha256=hash(JSON.stringify(inputs.snapshot));write(inputFile,inputs);
+  const receipt=read(returnId+'.managed-restore.json'),plan=require('../research/autonomous-root/service/managed-restore-plan').planManagedRestore(inputs);
+  Object.assign(receipt,plan.receipt,{phase:cutover?'pending':receipt.phase,input_sha256:hash(JSON.stringify(inputs))});write(returnId+'.managed-restore.json',receipt);if(selection.pending.phase!=='prepared')selection.pending.state_sha256=hash(JSON.stringify(receipt));
+  fs.writeFileSync(plan.receipt.directory+'/manifest',JSON.stringify(plan.receipt));
+  const launchFile=returnId+'.managed-launch.json';if(fs.existsSync(state+'/'+launchFile)){
+   const r=read(launchFile);r.boot_id=boot;r.source=record.worker_identity;r.state_receipt_sha256=selection.pending.state_sha256;
+   if(r.worker_identity)r.worker_identity.boot_id=boot;write(launchFile,r);if(selection.pending.phase==='trial-ready')selection.pending.readiness_sha256=hash(JSON.stringify(r));
+  }
+ }
+ write('selection.json',selection);return historical;
+}
+module.exports={historicalBoot,historicalBootstrap,historicalReturn};

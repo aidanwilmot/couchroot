@@ -24,7 +24,7 @@ function tree(root,entries){
   (files.length?'for file in '+files.map(e=>e[0]).join(' ')+'; do if test -e "$file"; then rm "$file"; fi; done\n':'')+
   'for directory in '+dirs.slice().sort((a,b)=>b.length-a.length).join(' ')+'; do if test -d "$directory"; then rmdir "$directory"; fi; done\nfi\ntest ! -e '+root+'; test ! -L '+root+'\n';
 }
-function cleanupPlan(e){
+function cleanupPlan(e,{bootId=e.boot_id,knownBootId=e.boot_id,requireAbsentUnits=false}={}){
  const {id,provider_id:obs,provider:p,production:n,installation:i,snapshot}=e;
  const pd='/opt/couchroot-retirement-'+obs,ps=pd+'/state',nd='/opt/couchroot-worker-'+id,ns=nd+'/state',nj=ns+'/.jobs';
  check(p.directory===pd&&p.scope===ps&&[p.worker_sha256,p.launcher_sha256,p.token_sha256].every(v=>HEX.test(v)),'provider staging record incomplete');
@@ -36,13 +36,13 @@ function cleanupPlan(e){
   if(n){check(n.directory===nd&&n.scope===ns&&[n.worker_sha256,n.launcher_sha256,n.token_sha256].every(v=>HEX.test(v)),'production staging record incomplete');native=native.concat([[nd+'/code','dir'],[nd+'/code/worker','file','500',n.worker_sha256],[ns+'/launcher','file','400',n.launcher_sha256],[ns+'/token','file','600',n.token_sha256]]);}
  }
  // Units are stopped only when idle with an empty cgroup; stopping such a unit signals nothing.
- const units=e.units.map(u=>'state=$(systemctl show -p LoadState -p ActiveState -p SubState -p MainPID -p ControlGroup '+u+')\n'+
+ const units=e.units.map(u=>requireAbsentUnits?'test \"$(systemctl show -p LoadState '+u+')\" = LoadState=not-found\n':'state=$(systemctl show -p LoadState -p ActiveState -p SubState -p MainPID -p ControlGroup '+u+')\n'+
   'printf "%s\\n" "$state" | grep -qx MainPID=0\ncg=$(printf "%s\\n" "$state" | sed -n "s/^ControlGroup=//p")\n'+
   'case "$cg" in "") ;; /system.slice/couchroot-*.service) if test -e "/sys/fs/cgroup/systemd$cg/cgroup.procs"; then test "$(wc -l < "/sys/fs/cgroup/systemd$cg/cgroup.procs")" -eq 0; fi;; *) exit 1;; esac\n'+
   'if printf "%s\\n" "$state" | grep -qx ActiveState=active; then printf "%s\\n" "$state" | grep -qx SubState=exited; systemctl stop --no-block '+u+'\n'+
   'stopped=0; for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do if systemctl show -p ActiveState '+u+' | grep -qx ActiveState=inactive; then stopped=1; break; fi; sleep 0.1; done; test "$stopped" = 1\n'+
   'elif printf "%s\\n" "$state" | grep -qx ActiveState=failed; then systemctl reset-failed '+u+'\nelse printf "%s\\n" "$state" | grep -qx ActiveState=inactive; fi\n').join('');
- const observe=observeCommand(e),prefix=observe.slice(0,observe.indexOf('for unit in '));
+ const observe=observeCommand(e,{bootId,knownBootId}),prefix=observe.slice(0,observe.indexOf('for unit in '));
  const command=prefix+units+'test ! -e /opt/couchroot-observer-'+obs+'; test ! -L /opt/couchroot-observer-'+obs+'\n'+tree(pd,provider)+tree(nd,native)+'sync\n'+prefix.slice(prefix.indexOf('test "$(cat /proc/sys/kernel/random/boot_id)"'))+'printf "RESTART-CLEANED\\n"\n';
  check(Buffer.byteLength(command)<=65536,'cleanup command too large');
  return command;

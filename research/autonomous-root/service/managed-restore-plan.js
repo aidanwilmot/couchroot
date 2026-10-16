@@ -6,8 +6,8 @@ const {validateSnapshot}=require('./retained-install');
 const {validateRecord}=require('./retained-state');
 const {planNativeSnapshot}=require('./native-retained-state');
 function check(ok){if(!ok)throw Error('Managed restore evidence unavailable');}
-function planManagedRestore({record,installation,snapshot,baseline}){
- const native=planNativeSnapshot(record,installation);validateSnapshot(baseline);
+function planManagedRestore({record,installation,snapshot,baseline},{bootId=record.boot_id}={}){
+ const native=planNativeSnapshot(record,installation,null,[],null,bootId);validateSnapshot(baseline);
  check(JSON.stringify(baseline.source)===JSON.stringify(record.source)&&baseline.sha256===installation.snapshot_sha256);
  check(snapshot&&snapshot.schema===1&&snapshot.implementation==='native-prototype'&&JSON.stringify(snapshot.source)===JSON.stringify(record.worker_identity));
  check(JSON.stringify(snapshot.origin)===JSON.stringify({transaction_id:record.id,manifest_sha256:record.manifest_sha256,installation_sha256:record.state_receipt_sha256}));
