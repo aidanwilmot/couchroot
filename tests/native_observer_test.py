@@ -71,6 +71,9 @@ int main(int argc,char **argv) {
 ''')
         cls.selector = cls.root/'selector'
         subprocess.run(flags+[str(selector), '-ldl', '-pthread', '-o', str(cls.selector)], check=True)
+        cls.io_fault = cls.root/'observer-io.so'
+        subprocess.run(['cc', '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror', '-shared', '-fPIC',
+                        str(Path(__file__).with_name('native_observer_io.c')), '-ldl', '-o', str(cls.io_fault)], check=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -225,7 +228,7 @@ int main(int argc,char **argv) {
             self.assertEqual([row['pid'] for row in rows], [123])
             self.assertTrue(rows[0]['identity_valid'])
 
-    def run_observer(self, *, stop=False, lose_coordinator=False):
+    def run_observer(self, *, stop=False, lose_coordinator=False, io_fault=None):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
             coordinator = subprocess.Popen(['sleep', '10'])
@@ -234,7 +237,8 @@ int main(int argc,char **argv) {
             try:
                 start = Path('/proc/'+str(coordinator.pid)+'/stat').read_text().rsplit(') ', 1)[1].split()[19]
                 process = subprocess.Popen([self.observer, tmp, '2', '250', str(coordinator.pid), start, '0'*64],
-                    env={**os.environ, 'COUCHROOT_TEST_KERNEL_FD': str(right.fileno())},
+                    env={**os.environ, 'COUCHROOT_TEST_KERNEL_FD': str(right.fileno()),
+                         **({'LD_PRELOAD': str(self.io_fault), 'COUCHROOT_OBSERVER_IO_FAULT': io_fault} if io_fault else {})},
                     pass_fds=(right.fileno(),), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 right.close()
                 deadline = time.monotonic()+4
@@ -284,6 +288,44 @@ int main(int argc,char **argv) {
                     self.assertIsNone(process['pss_kib'])
                 else:
                     self.assertIsNotNone(process['pss_kib'])
+
+    def test_slow_readiness_admission_precedes_the_declared_sample_window(self):
+        began = time.monotonic()
+        code, report, rows, stderr = self.run_observer(io_fault='startup-delay')
+        self.assertEqual(code, 0, stderr)
+        self.assertGreater(time.monotonic()-began, 3)
+        self.assertTrue(report['interval_complete'])
+        self.assertEqual(report['skipped_intervals'], 0)
+        self.assertEqual(len(rows), 8)
+        self.assertLess(rows[0]['started_monotonic_ms']-report['monotonic_start_ms'], 250)
+
+    def test_delay_after_capture_start_still_invalidates_the_interval(self):
+        code, report, rows, _ = self.run_observer(io_fault='capture-delay')
+        self.assertEqual(code, 1)
+        self.assertFalse(report['interval_complete'])
+        self.assertGreaterEqual(report['skipped_intervals'], 1)
+        self.assertGreater(rows[0]['started_monotonic_ms']-report['monotonic_start_ms'], 250)
+
+    def test_final_readiness_persistence_failure_prevents_successful_exit(self):
+        code, report, rows, stderr = self.run_observer(io_fault='final-fail')
+        self.assertNotEqual(code, 0)
+        self.assertIn(b'observer persistence', stderr)
+        self.assertEqual(len(rows), 8)
+        # Complete in-memory samples do not replace the required successful
+        # unit-exit receipt after all evidence has been persisted.
+        self.assertTrue(report['interval_complete'])
+
+    def test_readiness_admission_failure_does_not_declare_a_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run([self.observer, tmp, '2', '250', '1', '1', '0'*64],
+                env={**os.environ, 'LD_PRELOAD': str(self.io_fault),
+                     'COUCHROOT_OBSERVER_IO_FAULT': 'admission-fail'},
+                capture_output=True, timeout=3)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b'observer readiness admission', result.stderr)
+            self.assertEqual((Path(tmp)/'observer.ready').stat().st_size, 0)
+            self.assertEqual((Path(tmp)/'resources.ndjson').stat().st_size, 0)
+            self.assertFalse((Path(tmp)/'kernel.json').exists())
 
     def test_signal_stops_observation_without_discarding_evidence(self):
         code, report, rows, stderr = self.run_observer(stop=True)

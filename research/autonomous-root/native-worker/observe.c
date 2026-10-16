@@ -162,6 +162,11 @@ int main(int argc, char **argv) {
   memset(&action, 0, sizeof action); action.sa_handler = observe_signal; sigemptyset(&action.sa_mask);
   if (sigaction(SIGTERM, &action, NULL) || sigaction(SIGINT, &action, NULL)) fatal("observer stop handler");
   alarm((unsigned)seconds + 15);
+  /* Publish the empty output entries before declaring the capture interval.
+   * Slow startup persistence must not consume its first sampling slots. The
+   * readiness payload is live evidence only; its final fsync and successful
+   * collector exit are required before any capture can be accepted. */
+  if (fsync(ready) || fsync(directory)) fatal("observer readiness admission");
   BenchKernel kernel;
 #ifdef NATIVE_OBSERVER_TEST
   const char *test_fd = getenv("COUCHROOT_TEST_KERNEL_FD");
@@ -179,8 +184,7 @@ int main(int argc, char **argv) {
   str(receipt, "boot_id", kernel.boot);
   json_object_object_add(receipt, "monotonic_start_ms", json_object_new_double(began));
   const char *receipt_bytes = json(receipt); writeall(ready, receipt_bytes, strlen(receipt_bytes));
-  if (fsync(ready) || fsync(directory)) fatal("observer readiness persistence");
-  close(ready); json_object_put(receipt);
+  json_object_put(receipt);
   size_t used = 0; unsigned samples = 0, skipped = 0; double max_sample = 0, max_gap = 0, previous = 0;
   while (!observe_stop && kernel_clock(CLOCK_MONOTONIC) < deadline) {
     double at = kernel_clock(CLOCK_MONOTONIC);
@@ -217,7 +221,7 @@ int main(int argc, char **argv) {
   json_object_object_add(report, "max_sample_gap_ms", json_object_new_double(max_gap));
   str(report, "limits", "Periodic process snapshots, not exact lifetime peaks; short-lived descendants may be missed. Managed names are candidates requiring public-status identity binding. Per-field errors and invalid identity rows remain explicit. CPU excludes already exited descendants; idle wakeups are unknown. Observer overhead is sampled separately. Private raw evidence only.");
   writeall(output, buffer, used); const char *bytes = json(report); writeall(metadata, bytes, strlen(bytes));
-  if (fsync(output) || fsync(metadata) || fsync(directory)) fatal("observer persistence");
-  close(output); close(metadata); close(directory); free(buffer); json_object_put(report);
+  if (fsync(output) || fsync(metadata) || fsync(ready) || fsync(directory)) fatal("observer persistence");
+  close(output); close(metadata); close(ready); close(directory); free(buffer); json_object_put(report);
   return observe_failed || !kernel_complete || !samples || skipped ? 1 : 0;
 }

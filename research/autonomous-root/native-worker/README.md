@@ -1104,8 +1104,13 @@ directory. It exclusively creates `observer.ready`, `resources.ndjson`,
 The ready receipt supplies observer identity and clock/boot bindings. Resource
 snapshots reserve an 8 MiB buffer and populate pages progressively, alongside the
 kernel collector's 2 MiB prefaulted buffer. Unused resource pages are not dirtied
-up front. Only readiness is synced before measurement; sample and kernel data are
-persisted when observation stops. The bounded deadline has an outer alarm.
+up front. Empty readiness and output directory entries are synced before the
+capture clock starts. The readiness payload then supplies live identity and
+timing evidence; it is synced with the completed capture when observation stops.
+Successful retained unit exit is required before accepting any capture, even
+when its report says the sampling interval completed. A persistence failure
+prevents successful exit. Delays after the declared start still count toward
+skipped intervals and coverage limits. The bounded deadline has an outer alarm.
 
 For a handoff trial, launch this helper in a separate owned transient unit with
 an unshared mount namespace, private propagation and a read-only bind of its

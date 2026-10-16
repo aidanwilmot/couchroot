@@ -7,8 +7,10 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-S90D's supervised native endurance trial is still running. QN90A's fourth
-attempt stopped after about 39 minutes when collector 13 exited with status 1:
+S90D's supervised native endurance trial is still running. QN90A has started a
+fresh trial with the corrected observer after a successful short probe and
+guarded service restart. Neither trial has completed the 24-hour gate. QN90A's
+fourth attempt stopped after about 39 minutes when collector 13 exited with status 1:
 its first sample arrived 1.143 seconds after the declared start, leaving one
 skipped interval. The failed capture was preserved, the following collector
 finished successfully, and the trial was reconciled back to managed with original
@@ -4390,7 +4392,37 @@ boot and coordinator remained unchanged. Native processes exited; replacement
 rescue was retired unfired and SDK stayed on loopback. S90D's independent trial
 continues with its original immutable source snapshot.
 
-Next work is an observer startup-persistence correction and focused delayed-I/O
-tests, followed by fresh qualification and a separately declared QN90A attempt.
+The observer startup-persistence correction and focused delayed-I/O tests are
+described below, followed by fresh qualification and a separate QN90A attempt.
 No failed window will be accepted, patched or merged into a shortened interval.
 See [sanitized evidence](observer-readiness-gap-results.json).
+
+## Observer persistence before capture admission — 2026-10-16
+
+The observer now syncs the empty readiness file and output directory entries
+before starting the capture clock. Its readiness payload supplies live timing
+and identity evidence, then receives its final sync before successful exit.
+Acceptance still requires the retained successful unit-exit receipt as well as
+complete capture files. A delayed write inside the declared interval still
+invalidates coverage; a failed final sync still prevents successful exit.
+
+All 78 observer tests pass, including a 1.2-second admission-sync delay, a delayed
+write after capture start, admission failure and final persistence failure. npm
+passes 427 tests with 162 environment-gated skips. Two production ARM observer
+builds are byte-identical. The failure injection fixture is test-only.
+
+QN90A passed a five-second managed-worker probe with five samples, zero skipped
+intervals and its first sample 0.329 ms after the declared start. The retained
+unit proved successful exit, the owned scope was removed, the same managed worker
+and boot remained, and its independent rescue was retired unfired. This short
+probe does not qualify the 24-hour gate. The first endurance launch refused before
+mutation because a completed return operation remained in coordinator memory;
+its refused intent is preserved separately from the fresh run. A guarded service
+restart then cleared that state with jobs, enrollment and boot preserved and its
+rescue retired unfired. The new supervised trial uses a fresh immutable source
+snapshot and the corrected observer; it has not completed endurance acceptance.
+
+S90D continues its original endurance trial with the original observer and source
+snapshot. The corrected observer has not yet been qualified there. Both signed
+packages remain 0.7.48; the installed workers and .NET entry, fallback and rescue
+are unchanged. See [observer admission evidence](observer-admission-results.json).
