@@ -7,6 +7,17 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
+The supervised 24-hour trial has started on QN90A, with native selected, a
+24-hour quiet-job timeout, rolling captures, periodic mixed work/transfers and
+independent rescue renewal. This is in progress, not accepted endurance evidence.
+S90D's run has not started: its graceful service termination closed the connection
+before the launch request returned, and neither Couchroot nor usable external SDK
+access returned. The TV API remains reachable. Non-power recovery attempts were
+recorded without replay; user direction for a physical restart is pending because
+power transitions were explicitly prohibited. Owned restart diagnostics on S90D
+still require reconciliation. See [initial evidence](endurance-start-results.json).
+The completed qualification below predates that current recovery state.
+
 Both TVs now run signed 0.7.48 and are managed-ready after fresh integrated
 qualification. The authenticated timing header now separates file-sync and
 directory-sync elapsed time and counts inside each journal phase. All 19 payload
@@ -4044,3 +4055,51 @@ The next step is a supervised 24-hour invocation with free-space monitoring and 
 full-duration job plus mixed work/idle workload. This short qualification closes
 neither endurance, full resource/performance comparison, native-only entry, power
 lifecycle nor native-default/sunset gates. Both .NET fallbacks remain required.
+
+## Full-duration endurance preparation and start — 2026-10-16
+
+The scheduler accepts up to 25 hours of requested coverage so a 24-hour job can
+start under observation and reach a terminal result before capture ends. The
+full-day fake-clock test completes all 540 windows of a 24-hour-plus-one-minute
+plan with bounded collector ownership and only the last rescue armed. New storage
+checks budget maximum capture sizes plus 1 GiB of receipts per concurrent run and
+a shared 2 GiB floor. Twelve controller/storage tests and 17 continuity tests
+passed; 13 Linux-only observer tests were skipped. npm passed 423 with 157 skips.
+No client, installed service, native binary or signed package changed.
+
+The private supervising harness pins its source snapshot and the installed
+manifest, keeps the Mac awake only for its bound run, records process/terminal
+state, and never restarts a failed child. It bounds adapter callbacks to 45
+seconds, maintains source-bound native identity checks, verifies each adjacent
+capture pair while collecting, and requires full-series verification at the end.
+The quiet job receives the full 86,400,000 ms timeout and deliberately outlasts it;
+acceptance requires the expected timed-out result, preserved record bytes after
+managed return and no execution beyond the timeout. Small root/app jobs run every
+five minutes and a 1 MiB checksum round-trip runs hourly. Host-space checks and a
+separate read-only TV-space monitor protect bounded storage. A low TV-space result
+can stop only the identity-bound host controller, leaving recovery for inspection.
+
+QN90A completed its captured launcher reset, entered native, started the full-day
+job, passed its first checksum transfer and began verified 220-second windows.
+Its original boot and selected native identities remain bound to the trial.
+This initial observation is not endurance acceptance or a leak-free result.
+
+S90D's captured force-kill/start returned successful launcher codes but did not
+reset the worker/task. The completed attempt, timer states and owned log were
+reconciled without resubmitting its mutations. A fresh graceful termination then
+closed the service connection before the launch request returned. Read-only
+checks found the TV API reachable but Couchroot absent; the scheduled .NET rescue
+did not restore usable SDK access. Its unit result is currently unobservable, so
+no cause or successful rescue is claimed. The owned administration UI was launched
+once through the model/device-bound HTTP app API and closed afterward; it did not
+restore the service. The service-only app returned HTTP 404. That API method is
+also described by the [upstream REST implementation](https://github.com/xchwarze/samsung-tv-ws-api/blob/master/samsungtvws/rest.py);
+no third-party code was copied into this repository.
+
+S90D has no submitted endurance job. Its restart units/log and request outcome
+remain for reconciliation when access returns. User direction for a physical
+restart is pending under the original prohibition on reboot/standby. No power
+command, package update, persistent capability or platform-policy change was
+performed. QN90A's independent trial continues. Native-only entry, resource and
+performance conclusions, both-TV endurance, power lifecycle, native-default
+observation and .NET retirement remain open.

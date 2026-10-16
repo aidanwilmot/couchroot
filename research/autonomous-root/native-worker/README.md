@@ -1176,8 +1176,8 @@ it is not a sustained native run, a leak-free result or the 24-hour endurance ga
 
 `observer-series-controller.py` supplies a synchronous `run(adapter, Plan(...))`
 scheduler for an explicitly authorized host-side trial. The default windows last
-220 seconds and start 160 seconds apart. It accepts at most 24 hours of requested
-coverage, keeps at most two collectors owned at once, and waits for completion
+220 seconds and start 160 seconds apart. It accepts at most 25 hours of requested
+coverage (including startup/drain margin around a 24-hour job), keeps at most two collectors owned at once, and waits for completion
 before download and cleanup. Its adapter must bind the device, installed artifact,
 selection, coordinator and native process identities; journal unique intents;
 confirm readiness and successful exit; verify downloaded hashes; and clean only
@@ -1202,3 +1202,13 @@ or count unavailable time as active qualification. A multi-hour controller still
 needs private disk-space monitoring, process supervision, and a long-job/workload
 plan appropriate to the endurance gate. The three-minute trial is a controller
 qualification, not the 24-hour gate.
+
+`require_storage` checks a caller-provided free-space snapshot. Initial admission
+allows maximum-sized captures, 1 GiB of private receipts per concurrent run, and
+a shared 2 GiB floor; ongoing checks preserve that floor. This is a conservative
+allowance, not a filesystem reservation. Concurrent writers or I/O errors can
+still invalidate the run. A 24-hour-plus-one-minute plan uses 540 windows at the
+default cadence. The full-day fake-clock test exercises all of them and verifies
+that only the final rescue remains armed. Host sleep suppression and bounded
+adapter calls belong to the supervising harness; they do not change TV power
+settings or authorize reboot/standby.

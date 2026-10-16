@@ -27,11 +27,30 @@ class Plan:
                   self.renew_seconds, self.health_seconds)
         if any(type(v) is not int for v in values):
             raise ValueError('plan values must be integers')
-        if not (2 <= self.seconds <= 86400 and 40 <= self.window_seconds <= 240
+        if not (2 <= self.seconds <= 90000 and 40 <= self.window_seconds <= 240
                 and self.window_seconds / 2 < self.stride_seconds <= self.window_seconds - 20
                 and 10 <= self.renew_seconds <= 120 and 1 <= self.health_seconds <= 10):
             raise ValueError('invalid duration, overlap or recovery budget')
         return 1 + max(0, math.ceil((self.seconds - self.window_seconds) / self.stride_seconds))
+
+
+def require_storage(free_bytes, plan, concurrent_runs=1, initial=False):
+    """Check a caller-read free-space snapshot; this does not reserve disk blocks.
+
+    Initial allowance covers maximum capture sizes plus 1 GiB of private receipts
+    per concurrent run and a shared 2 GiB floor. Ongoing checks retain the floor.
+    Other writers can still consume space after the check; I/O errors must abort.
+    """
+    if type(free_bytes) is not int or free_bytes < 0 or type(concurrent_runs) is not int or not 1 <= concurrent_runs <= 2:
+        raise ValueError('invalid free-space snapshot or concurrent run count')
+    count = plan.validate()
+    capture_bytes = 10 * 1024**2 + 2 * 65536 + 4096
+    required = 2 * 1024**3
+    if initial:
+        required += concurrent_runs * (count * capture_bytes + 1024**3)
+    if free_bytes < required:
+        raise ObservationStopped('host storage budget exhausted; preserve evidence and recovery')
+    return required
 
 
 def run(adapter, plan, clock=time.monotonic, sleep=time.sleep):

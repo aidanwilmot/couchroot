@@ -81,9 +81,31 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaisesRegex(m.ObservationStopped,'renewal margin'):f.run()
         self.assertEqual(sum(name=='launch' for _,name in f.events),1)
     def test_plan_refuses_unbounded_and_unsafe_intervals(self):
-        for p in [m.Plan(True),m.Plan(86401),m.Plan(180,80,40),m.Plan(180,80,70),m.Plan(180,80,50,250)]:
+        for p in [m.Plan(True),m.Plan(90001),m.Plan(180,80,40),m.Plan(180,80,70),m.Plan(180,80,50,250)]:
             with self.assertRaises(ValueError):p.validate()
-        self.assertLessEqual(m.Plan(86400).validate(),1024)
+        self.assertLessEqual(m.Plan(90000).validate(),1024)
+
+    def test_full_day_plan_has_margin_for_job_start_and_terminal_observation(self):
+        plan=m.Plan(86460)
+        self.assertEqual(plan.validate(),540)
+        self.assertGreaterEqual((plan.validate()-1)*plan.stride_seconds+plan.window_seconds,86460)
+        f=Fake();result=f.run(plan)
+        self.assertEqual(len(result['captures']),540)
+        self.assertFalse(f.collectors)
+        self.assertEqual(sum(end>f.now for end in f.timers.values()),1)
+
+    def test_storage_checks_initial_allowance_and_ongoing_floor(self):
+        plan=m.Plan(86460)
+        required=m.require_storage(100*1024**3,plan,concurrent_runs=2,initial=True)
+        self.assertGreater(required,12*1024**3)
+        self.assertEqual(m.require_storage(required,plan,2,True),required)
+        with self.assertRaises(m.ObservationStopped):m.require_storage(required-1,plan,2,True)
+        self.assertEqual(m.require_storage(2*1024**3,plan),2*1024**3)
+        with self.assertRaises(m.ObservationStopped):m.require_storage(2*1024**3-1,plan)
+
+    def test_storage_refuses_unknown_or_invalid_capacity(self):
+        for free,runs in [(None,1),(True,1),(-1,1),(2**40,0),(2**40,3)]:
+            with self.assertRaises(ValueError):m.require_storage(free,m.Plan(180),runs,True)
 
 
 if __name__=='__main__':unittest.main()
