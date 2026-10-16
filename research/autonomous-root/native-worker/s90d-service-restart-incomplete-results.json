@@ -20,7 +20,7 @@
     "service_restart_accepted": false,
     "rescue_fired_or_retired_confirmed": false
   },
-  "recovery_status": "Owner-authorized host-assisted recovery; waiting for Developer Mode Host PC IP to be reapplied before guarded SDK inspection.",
+  "recovery_status": "Subsequently recovered on the same boot after the owner reapplied Developer Mode Host PC IP; see s90d-service-recovery-results.json. The original final request remains submitted and unreplayed.",
   "qualification_limits": [
     "The previous 0.7.49 native migration/disable-enable/managed-return acceptance is separate and remains recorded.",
     "The last script stopped before its acceptance receipt. Passing an earlier readiness check is not final service-restart qualification.",

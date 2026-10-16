@@ -7,14 +7,23 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-The most recent S90D service-restart check is incomplete. It reached its
-post-readiness checks and confirmed unchanged retained jobs, but the connection
-closed during final preservation/rescue retirement. Subsequent Couchroot requests
-were refused, and SDK access was unavailable after the rescue deadline. The
-original request remains uncertain and has not been replayed. Host-assisted
-recovery is authorized; independent access must be restored before inspection or
-the reboot trial. QN90A's endurance process remains live. See
-[incomplete restart evidence](s90d-service-restart-incomplete-results.json).
+S90D recovered from its incomplete service restart after the owner reapplied the
+Developer Mode Host PC setting without restarting. SDK inspection preserved the
+original submitted request without replay, and a fresh guarded launch restored
+managed readiness on the same boot with enrollment, jobs and protected hashes
+unchanged. Its new rescue was retired unfired and owned staging was removed. See
+[service recovery evidence](s90d-service-recovery-results.json).
+
+A subsequent authorized native-selected reboot exposed an absent-unit startup
+failure in signed 0.7.49. The bootstrap acquired root, but the launch script's
+unconditional `systemctl stop` failed because the old transient unit was absent.
+Public native admission stayed closed. The postboot rescue fired successfully
+and restored host SDK access. The owner then restarted S90D again; identity and
+firmware were reverified and the original receipt/job hashes still matched.
+The interrupted state is archived privately. The absent-unit fix is local and
+has not yet been deployed; no successful native reboot acceptance is claimed.
+QN90A's endurance remains active and unchanged. See
+[absent-unit failure and fix evidence](native-startup-absent-unit-results.json).
 
 Before that restart, S90D passed the corrected observer's five-second probe with
 five samples, no skipped intervals, complete kernel capture, successful retained
@@ -4559,3 +4568,29 @@ Both signed 0.7.48 endurance runs remain unchanged and active. Deployment and
 both-TV qualification of the cross-boot changes, the full 24-hour resource review,
 performance gate and native-only entry remain open. The .NET entry bridge,
 managed fallback and independent SDK rescue remain available.
+
+## Absent transient units during selected-native startup — 2026-10-16
+
+The S90D reboot trial reached a held root bootstrap, then refused public admission
+when its native launch command tried to stop a transient unit that no longer
+existed. Independent SDK inspection found the old production unit absent and no
+new scope token, with the original receipt and job hashes intact. A separate
+unique absent-unit diagnostic returned systemd exit code 5. The original startup
+intent remains submitted; it has not been replayed. Its rescue restored SDK
+access. A later owner-initiated restart is recorded separately from the trial.
+
+Launch now accepts an absent unit without stop/reset. On a different boot it
+requires absence again immediately before token publication, refusing a reused
+unit without stopping it. On the same boot, a verified empty loaded unit still
+uses the existing stop/reset path. The full generated shell is exercised against
+systemd stubs that reproduce absent-unit failure, current-boot name reuse and
+same-boot loaded/collected units. Three new cases failed before the correction;
+all four pass afterward. Token, ownership, boot, fence and scope guards remain.
+
+Fresh native and managed fixtures passed all six rehearsals and all 37 distinct
+restart cases across the full and focused runs. The initial restart run passed
+31, failed two orphan-reaping cases and skipped four fault cases; a fresh
+container with init and a separately rebuilt fault-enabled worker passed all six
+remaining cases. Four real shell cases and four fence cases also pass. npm passed
+431 with 178 environment-gated skips. Deployment and interrupted-state recovery
+are pending; this local result does not accept the failed TV reboot trial.

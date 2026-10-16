@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "date": "2026-10-16",
+  "scope": "S90D cross-boot startup refusal and guarded absent-unit launch correction",
+  "installed_version_at_failure": "0.7.49",
+  "hardware_observations": {
+    "owner_authorized_host_assisted_reboot_submitted_once": true,
+    "new_boot_api_observed": true,
+    "selected_native_preserved": true,
+    "original_production_activation_and_job_hashes_preserved": true,
+    "held_bootstrap_acquired_root": true,
+    "startup_attempt_state": "submitted",
+    "public_admission_held": true,
+    "old_production_unit_load_state": "not-found",
+    "new_scope_token_absent": true,
+    "independent_rescue_fired_successfully": true,
+    "host_sdk_restored": true,
+    "owner_reported_additional_restart": true,
+    "physical_identity_and_firmware_reverified_after_owner_restart": true,
+    "original_receipt_and_job_hashes_preserved_after_owner_restart": true,
+    "private_worker_state_archive_saved": true,
+    "unique_absent_unit_stop_exit_code": 5
+  },
+  "fix": {
+    "skip_stop_and_reset_for_absent_unit": true,
+    "require_unit_absence_again_at_cross_boot_launch": true,
+    "refuse_reused_cross_boot_unit_without_mutation": true,
+    "preserve_same_boot_empty_loaded_unit_retirement": true,
+    "no_original_attempt_replay": true
+  },
+  "validation": {
+    "new_real_shell_cases": 4,
+    "new_cases_before_fix": {
+      "passed": 1,
+      "failed": 3
+    },
+    "new_cases_after_fix_passed": 4,
+    "rehearsal_cases_passed": 6,
+    "fence_cases_passed": 4,
+    "npm": {
+      "tests": 609,
+      "passed": 431,
+      "skipped": 178,
+      "failed": 0
+    },
+    "fresh_native_and_managed_fixtures": true,
+    "restart_integration": {
+      "distinct_cases_passed": 37,
+      "initial_run": {
+        "passed": 31,
+        "failed": 2,
+        "skipped": 4
+      },
+      "corrected_fixture_rerun": {
+        "passed": 6,
+        "failed": 0,
+        "skipped": 31
+      },
+      "fixture_correction": "Use container init to reap orphaned EXITKILL victims; rebuilt fault-enabled worker for the four gated fault cases.",
+      "single_full_green_run": false
+    }
+  },
+  "qualification_limits": [
+    "The corrected service has not yet been deployed.",
+    "The failed original reboot trial remains rejected; later recovery will be recorded separately.",
+    "QN90A remains on 0.7.48 during its untouched endurance invocation.",
+    ".NET entry, managed fallback, independent SDK rescue and all identity/ownership guards remain required."
+  ]
+}

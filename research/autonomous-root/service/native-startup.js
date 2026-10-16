@@ -45,7 +45,12 @@ function launchCommand(record,attempt){
   'test -f '+q(attempt.token_file)+'; test ! -L '+q(attempt.token_file)+'\ntest "$(stat -c "%u:%h:%a:%s" '+q(attempt.token_file)+')" = 5001:1:600:44\n'+digest(attempt.token_file,attempt.token_sha256)+
   'test ! -e '+s+'/token; test ! -L '+s+'/token\n'+
   'test "$(systemctl show -p MainPID '+record.unit+')" = MainPID=0\ncg=$(systemctl show -p ControlGroup '+record.unit+' | sed -n "s/^ControlGroup=//p")\ncase "$cg" in "") ;; /system.slice/'+record.unit+') if test -e "/sys/fs/cgroup/systemd$cg/cgroup.procs"; then test "$(wc -l < "/sys/fs/cgroup/systemd$cg/cgroup.procs")" -eq 0; fi;; *) exit 1;; esac\n'+
-  'systemctl stop '+record.unit+'\nsystemctl reset-failed '+record.unit+' 2>/dev/null || true\n'+
+  // A transient unit disappears at reboot (or after collection). Stopping an
+  // absent unit fails under set -e. Across boots, require absence again here so
+  // a reused name is never stopped, even after the earlier observation.
+  (bootId!==record.boot_id?
+   'test "$(systemctl show -p LoadState '+record.unit+')" = LoadState=not-found\n':
+   'case "$(systemctl show -p LoadState '+record.unit+')" in LoadState=not-found) ;; LoadState=loaded) systemctl stop '+record.unit+'; systemctl reset-failed '+record.unit+' 2>/dev/null || true;; *) exit 1;; esac\n')+
   '(set -C; cat '+q(attempt.token_file)+' > '+s+'/token)\nchmod 600 '+s+'/token\n'+digest(s+'/token',attempt.token_sha256)+
   'systemd-run --quiet --unit='+record.unit+' '+['User=0','Group=0','SmackProcessLabel=System','PrivateMounts=yes','BindReadOnlyPaths='+d+'/code','TimeoutStopSec=5s','RemainAfterExit=yes','KillMode=control-group','NoNewPrivileges=yes','AmbientCapabilities=','StandardOutput=null','StandardError=null'].map(p=>'--property='+q(p)).join(' ')+' '+[d+'/code/worker','127.0.0.1',String(attempt.port),s+'/token',s,s+'/launcher',record.launcher_sha256,'--production'].map(q).join(' ')+'\nprintf "NATIVE-RESTART-SUBMITTED\\n"\n';
  return [2,3].includes(attempt.schema)?fenceCommand(attempt,command,{kind:'startup'}):command;
