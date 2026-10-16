@@ -21,4 +21,17 @@ function historicalBoot(state,id){
  const live=record.scope+'/.jobs/native-live-00001.json',job=JSON.parse(fs.readFileSync(live));job.boot_id=boot;fs.writeFileSync(live,JSON.stringify(job));
  return {record,committed:fs.readFileSync(state+'/'+id+'.production.json'),activation:fs.readFileSync(state+'/'+id+'.activation.json'),history:JSON.stringify(selection.history)};
 }
-module.exports={historicalBoot};
+// Model a fenced bootstrap whose authenticated readiness was persisted on the
+// previous boot. Real filesystem cleanup runs during the coordinator recovery;
+// this fixture does not claim a kernel reboot or a live previous-boot process.
+function historicalBootstrap(state,record){
+ const id=crypto.randomBytes(8).toString('hex').repeat(2),directory='/opt/couchroot-bootstrap-'+id,scope=directory+'/state',fence='/opt/couchroot-bootstrap-fence-'+id;
+ for(const p of [directory,directory+'/code',scope,scope+'/.jobs',fence])fs.mkdirSync(p,{mode:0o700});
+ const copy=(from,to,mode)=>{fs.copyFileSync(from,to);fs.chmodSync(to,mode);};
+ copy(record.directory+'/code/worker',directory+'/code/worker',0o500);copy(record.scope+'/launcher',scope+'/launcher',0o400);
+ fs.writeFileSync(scope+'/.jobs/lock','',{mode:0o600});fs.writeFileSync(scope+'/token','historical bootstrap token\n',{mode:0o600});
+ fs.writeFileSync(fence+'/lock','',{mode:0o600});fs.writeFileSync(fence+'/started',id+'\n',{mode:0o600});
+ const result={schema:2,id,phase:'ready',boot_id:record.boot_id,directory,scope,unit:'couchroot-bootstrap-'+id+'.service',fence,file:state+'/'+id+'.bootstrap.json',selection_sha256:hash(fs.readFileSync(state+'/selection.json')),worker_sha256:record.worker_sha256,launcher_sha256:record.launcher_sha256,token_sha256:hash(fs.readFileSync(scope+'/token')),worker_identity:{...record.worker_identity,worker_id:crypto.randomBytes(16).toString('hex')},unit_started_monotonic:'123'};
+ fs.writeFileSync(result.file,JSON.stringify(result),{mode:0o600});fs.symlinkSync(id+'.bootstrap.json',state+'/bootstrap-launch.pending');return result;
+}
+module.exports={historicalBoot,historicalBootstrap};

@@ -9,9 +9,10 @@ function fixture(run){const directory=fs.mkdtempSync(path.join(os.tmpdir(),'boot
  const save=()=>fs.writeFileSync(file,JSON.stringify(record),{mode:0o600});save();fs.symlinkSync(id+'.bootstrap.json',marker);
  return Promise.resolve().then(()=>run({directory,file,selection,marker,record,save})).finally(()=>fs.rmSync(directory,{recursive:true,force:true}));}
 function info(){return {implementation:'managed',boot_id:boot,uptime_seconds:1,worker_id:'c'.repeat(32),processes:{worker:{pid:21,start_ticks:'10'},guardian:null},app_launcher:{sha256:sha,implementation:'native'},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]},capabilities:['file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1','resource-inventory-v1','worker-process-identity-v1']};}
-test('recovery binds atomic marker, same boot, selection bytes and exact scope',()=>fixture(f=>{
+test('recovery binds atomic marker, explicit observed boot, selection bytes and exact scope',()=>fixture(f=>{
  assert.equal(markerId(f.marker),id);assert.deepEqual(recoveryCandidate(f.selection,boot),f.record);
- assert.throws(()=>recoveryCandidate(f.selection,'00000000-0000-0000-0000-000000000002'));
+ assert.deepEqual(recoveryCandidate(f.selection,'00000000-0000-0000-0000-000000000002'),f.record);
+ for(const bad of [null,'bad',boot+'\n'])assert.throws(()=>recoveryCandidate(f.selection,bad));
  for(const change of [r=>r.schema=1,r=>r.id='d'.repeat(32),r=>r.directory='/opt/foreign',r=>r.fence='/opt/foreign',r=>r.file='/tmp/foreign',r=>r.worker_sha256='bad',r=>r.phase='ready']){const r=structuredClone(f.record);change(r);assert.throws(()=>validateRecord(r,f.directory));}
  fs.writeFileSync(f.selection,'changed');assert.throws(()=>recoveryCandidate(f.selection,boot));
  fs.unlinkSync(f.marker);fs.symlinkSync('../outside',f.marker);assert.throws(()=>markerId(f.marker));
@@ -48,4 +49,19 @@ test('preparation publishes a complete durable receipt before its exclusive mark
  // A second creator cannot replace the ownership pointer, even after it has
  // staged its own known bytes. The original intent remains authoritative.
  staged.clear();assert.throws(()=>module.exports.prepareBootstrap({payload:'/signed',device:'qn90a',stage,port:12345,bootId:boot,journalDirectory:f.directory,selectionFile:f.selection}),/EEXIST/);assert.equal(markerId(f.marker),id);
+}));
+
+test('cross-boot recovery pins the fresh executor and preserves the original receipt boot',()=>fixture(async f=>{
+ const current='00000000-0000-0000-0000-000000000002';let calls=0;
+ const executor={pid:21,status:async()=>({...info(),boot_id:current}),execute:async command=>{
+  calls++;assert.match(command,new RegExp(current));assert.doesNotMatch(command,/systemctl (stop|reset-failed)|systemd-run/);
+  if(calls===1)throw Error('lost cleanup response');return {exit_code:0,timed_out:false,stderr:'',stdout:'BOOTSTRAP-RECONCILED\n'};
+ }};
+ await assert.rejects(reconcileBootstrap({selectionFile:f.selection,bootId:current,executor}));assert.equal(markerId(f.marker),id);assert.deepEqual(JSON.parse(fs.readFileSync(f.file)),f.record);
+ const result=await reconcileBootstrap({selectionFile:f.selection,bootId:current,executor});assert.equal(result.launch_replayed,false);assert.equal(calls,2);
+ const retired=JSON.parse(fs.readFileSync(f.file));assert.equal(retired.boot_id,boot);assert.equal(retired.reconciled_boot_id,current);assert.equal(retired.phase,'retired');assert(!fs.existsSync(f.marker));
+}));
+test('wrong executor boot refuses before cross-boot cleanup and leaves the pending marker',()=>fixture(async f=>{
+ let calls=0;await assert.rejects(reconcileBootstrap({selectionFile:f.selection,bootId:'00000000-0000-0000-0000-000000000002',executor:{pid:21,status:async()=>info(),execute:async()=>{calls++;}}}));
+ assert.equal(calls,0);assert.equal(markerId(f.marker),id);assert.deepEqual(JSON.parse(fs.readFileSync(f.file)),f.record);
 }));

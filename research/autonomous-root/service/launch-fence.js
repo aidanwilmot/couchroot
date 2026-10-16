@@ -4,9 +4,10 @@ const ID=/^[a-f0-9]{32}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const check=v=>{if(!v)throw Error('Launch fence evidence unavailable');};
 // The lock and seal survive scope removal until explicit verified retirement.
 // A delayed original SDK command will acquire this same lock and refuse the seal.
+// A new boot may seal an old attempt; it can never use that attempt to launch.
 function fenceCommand(r,body,{seal=false,kind='bootstrap',bootId=r.boot_id}={}){
  check(['bootstrap','startup'].includes(kind)&&ID.test(r.id)&&r.fence==='/opt/couchroot-'+kind+'-fence-'+r.id&&BOOT.test(r.boot_id));
- check(typeof bootId==='string'&&bootId.length===36&&BOOT.test(bootId)&&(bootId===r.boot_id||seal&&kind==='startup'));
+ check(typeof bootId==='string'&&bootId.length===36&&BOOT.test(bootId)&&(bootId===r.boot_id||seal));
  const f=r.fence;
  const fixed=n=>'test -f '+f+'/'+n+'; test ! -L '+f+'/'+n+'; test "$(stat -c "%u:%h:%a:%s" '+f+'/'+n+')" = 0:1:600:33; test "$(cat '+f+'/'+n+')" = '+r.id+'\n';
  const inner='set -eu\ntest /proc/self/fd/9 -ef '+f+'/lock\n'+

@@ -4,7 +4,7 @@
 const fs=require('fs'),path=require('path');
 const {privateRead,privateDirectory}=require('./private-state');
 const {hash,atomic}=require('./policy');
-const {processIdentities}=require('./worker-processes');
+const {processIdentities,bootGuard,processAbsenceGuard}=require('./worker-processes');
 const {fenceCommand}=require('./launch-fence');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const ID=/^[a-f0-9]{32}$/,SHA=/^[a-f0-9]{64}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
@@ -31,17 +31,22 @@ function recoveryCandidate(selectionFile,bootId){
  const directory=path.dirname(selectionFile),marker=path.join(directory,'bootstrap-launch.pending');
  if(!present(marker))return null;
  if(typeof bootId==='function')bootId=bootId();
+ bootGuard(bootId);
  check(privateDirectory(fs.lstatSync(directory)));const id=markerId(marker),file=path.join(directory,id+'.bootstrap.json');
  const record=validateRecord(JSON.parse(privateRead(file,16384)),directory);
- check(record.id===id&&record.boot_id===bootId&&hash(privateRead(selectionFile,65536))===record.selection_sha256);
+ check(record.id===id&&hash(privateRead(selectionFile,65536))===record.selection_sha256);
  return record;
 }
-function recoveryCommand(r){
+function recoveryCommand(r,{bootId=r.boot_id}={}){
+ bootGuard(r.boot_id);bootGuard(bootId);
  const d=r.directory,s=r.scope,u=r.unit;
- let body='test "$(systemctl show -p MainPID '+u+')" = MainPID=0\n'+
+ const crossed=bootId!==r.boot_id,absent='test "$(systemctl show -p LoadState '+u+')" = LoadState=not-found\n';
+ // Transient units do not survive reboot. A current unit with the same name
+ // has no ownership proof from the old receipt, even if its PID is zero.
+ let body=(crossed?absent:'')+'test "$(systemctl show -p MainPID '+u+')" = MainPID=0\n'+
   'cg=$(systemctl show -p ControlGroup '+u+' | sed -n "s/^ControlGroup=//p")\ncase "$cg" in "") ;; /system.slice/'+u+') if test -e "/sys/fs/cgroup/systemd$cg/cgroup.procs"; then test "$(wc -l < "/sys/fs/cgroup/systemd$cg/cgroup.procs")" -eq 0; fi;; *) exit 1;; esac\n';
- if(r.worker_identity)for(const p of Object.values(r.worker_identity.processes))body+='if test -e /proc/'+p.pid+'/stat; then line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" != '+p.start_ticks+'; fi\n';
- if(r.unit_started_monotonic)body+='if test \"$(systemctl show -p LoadState '+u+')\" != LoadState=not-found; then test \"$(systemctl show -p ExecMainStartTimestampMonotonic '+u+')\" = ExecMainStartTimestampMonotonic='+r.unit_started_monotonic+'; fi\n';
+ if(r.worker_identity)for(const p of Object.values(r.worker_identity.processes))body+=processAbsenceGuard(p,r.boot_id,bootId);
+ if(!crossed&&r.unit_started_monotonic)body+='if test \"$(systemctl show -p LoadState '+u+')\" != LoadState=not-found; then test \"$(systemctl show -p ExecMainStartTimestampMonotonic '+u+')\" = ExecMainStartTimestampMonotonic='+r.unit_started_monotonic+'; fi\n';
  // Check the complete remaining inventory before deleting anything. Repeating
  // cleanup after a lost reply only accepts an absent file or its exact bytes.
  const dirs=[d,d+'/code',s,s+'/.jobs'];
@@ -51,13 +56,15 @@ function recoveryCommand(r){
  for(const [file,mode,sha] of files)body+='if test -e '+file+' || test -L '+file+'; then test -f '+file+'; test ! -L '+file+'; test "$(stat -c "%u:%h:%a" '+file+')" = 0:1:'+mode+'; test "$(sha256sum '+file+' | cut -d " " -f1)" = '+sha+'; fi\n';
  // No stop is submitted while a unit owns processes. The fence prevents the
  // original command from starting it after this inspection.
- body+='if test "$(systemctl show -p LoadState '+u+')" != LoadState=not-found; then systemctl stop --no-block '+u+'; fi\n'+
+ if(!crossed)body+='if test "$(systemctl show -p LoadState '+u+')" != LoadState=not-found; then systemctl stop --no-block '+u+'; fi\n'+
   'if test \"$(systemctl show -p ActiveState '+u+')\" = ActiveState=failed; then systemctl reset-failed '+u+'; fi\n'+
   'for attempt in 1 2 3 4 5 6 7 8 9 10; do test "$(systemctl show -p ActiveState '+u+')" = ActiveState=inactive && break; sleep 0.1; done\n'+
   'test "$(systemctl show -p ActiveState '+u+')" = ActiveState=inactive\ntest "$(systemctl show -p MainPID '+u+')" = MainPID=0\n';
+ if(crossed)body+=absent;
+ body+=bootGuard(bootId);
  for(const [file] of files)body+='if test -e '+file+'; then rm '+file+'; fi\n';
  for(const dir of dirs.reverse())body+='if test -d '+dir+'; then rmdir '+dir+'; fi\n';
- body+='printf "BOOTSTRAP-RECONCILED\\n"\n';return fenceCommand(r,body,{seal:true});
+ body+='printf "BOOTSTRAP-RECONCILED\\n"\n';return fenceCommand(r,body,{seal:true,bootId});
 }
 function clearMarker(record){
  const directory=path.dirname(record.file),marker=path.join(directory,'bootstrap-launch.pending');check(markerId(marker)===record.id);fs.unlinkSync(marker);
@@ -68,9 +75,9 @@ async function reconcileBootstrap({selectionFile,bootId,executor}){
  const bound=()=>check(JSON.stringify(recoveryCandidate(selectionFile,bootId))===JSON.stringify(record));
  const confirm=async()=>{bound();const info=await executor.status();validateReadiness(info,{implementation:'managed',bootId});const own=processIdentities(info,executor.pid),resources=validateResourceInventory(info);check(!resources.jobs.length&&!resources.helpers.length&&!resources.transfers.length);return own;};
  const own=await confirm();check(!record.worker_identity||record.worker_identity.worker_id!==own.worker_id);
- const result=await executor.execute(recoveryCommand(record),10000);check(JSON.stringify(await confirm())===JSON.stringify(own));
+ const result=await executor.execute(recoveryCommand(record,{bootId}),10000);check(JSON.stringify(await confirm())===JSON.stringify(own));
  check(result&&result.exit_code===0&&!result.timed_out&&!result.stderr&&result.stdout==='BOOTSTRAP-RECONCILED\n');
- atomic(record.file,{...record,phase:'retired',reconciled:true});clearMarker(record);
+ atomic(record.file,{...record,phase:'retired',reconciled:true,reconciled_boot_id:bootId});clearMarker(record);
  return {id:record.id,phase:'complete',launch_replayed:false};
 }
 module.exports={markerId,validateRecord,recoveryCandidate,fenceCommand,recoveryCommand,clearMarker,reconcileBootstrap};

@@ -55,3 +55,27 @@ test('failed unit with no processes is reset before retirement; live ownership s
  x.stage();const env={TEST_FAILED:x.tmp};let r=x.run(recoveryCommand(x.record),{...env,TEST_PID:'12345'});assert.notEqual(r.status,0);assert(!fs.existsSync(x.tmp+'/reset'));assert(fs.existsSync(x.d+'/code/worker'));
  r=x.run(recoveryCommand(x.record),env);assert.equal(r.status,0,r.stderr);assert(fs.existsSync(x.tmp+'/reset'));assert(!fs.existsSync(x.d));
 }finally{x.clean();}});
+
+const historicalBoot='00000000-0000-0000-0000-000000000001';
+test('cross-boot cleanup ignores recycled PIDs, seals the old launch, and converges after a lost reply',{skip:!enabled},()=>{const x=fixture();try{
+ x.stage();const current=x.record.boot_id;assert.notEqual(current,historicalBoot);
+ const stat=fs.readFileSync('/proc/self/stat','utf8'),ticks=stat.slice(stat.lastIndexOf(')')+2).trim().split(/\s+/)[19];
+ x.record.worker_identity={processes:{worker:{pid:process.pid,start_ticks:ticks}}};
+ // On the same boot this exact live identity must refuse before any deletion.
+ assert.notEqual(x.run(recoveryCommand(x.record)).status,0);assert(fs.existsSync(x.d+'/code/worker'));
+ x.record.boot_id=historicalBoot;x.record.unit_started_monotonic='123';
+ const command=recoveryCommand(x.record,{bootId:current});assert.doesNotMatch(command,/systemctl (stop|reset-failed)|systemd-run/);
+ let result=x.run(command);assert.equal(result.status,0,result.stderr);assert.equal(result.stdout,'BOOTSTRAP-RECONCILED\n');assert(!fs.existsSync(x.d));
+ result=x.run(command);assert.equal(result.status,0,result.stderr);assert.equal(fs.readFileSync(x.f+'/sealed','utf8'),x.record.id+'\n');
+ assert.notEqual(x.run(fenceCommand(x.record,'touch '+x.tmp+'/replayed\n')).status,0);assert(!fs.existsSync(x.tmp+'/replayed'));
+ assert.throws(()=>fenceCommand(x.record,'true',{bootId:current}));
+}finally{x.clean();}});
+test('new-boot unit name reuse and changed staging refuse without stopping or deleting',{skip:!enabled},()=>{
+ for(const mode of ['unit','drift','foreign']){const x=fixture();try{
+  x.stage();const current=x.record.boot_id;x.record.boot_id=historicalBoot;
+  if(mode==='drift')fs.writeFileSync(x.d+'/code/worker','changed');
+  if(mode==='foreign')fs.writeFileSync(x.d+'/foreign','preserve');
+  const bytes=fs.readFileSync(x.d+'/code/worker'),result=x.run(recoveryCommand(x.record,{bootId:current}),mode==='unit'?{TEST_FAILED:x.tmp}:{});
+  assert.notEqual(result.status,0,mode);assert.deepEqual(fs.readFileSync(x.d+'/code/worker'),bytes);assert(fs.existsSync(x.d+'/state/launcher'));assert(!fs.existsSync(x.tmp+'/reset'));
+ }finally{x.clean();}}
+});

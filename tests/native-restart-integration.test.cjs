@@ -9,7 +9,7 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','native-reboot','native-reboot-startup','native-reboot-receipt','native-startup-journal','native-startup-partial','native-startup-initial','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','native-reboot','native-reboot-bootstrap','native-reboot-startup','native-reboot-receipt','native-startup-journal','native-startup-partial','native-startup-initial','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY||((mode.startsWith('native-startup-')||mode==='native-reboot-startup')&&process.env.COUCHROOT_STARTUP_FAULT!=='1'),timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
@@ -178,7 +178,10 @@ done
     }
    }else if(mode==='native-lost')servers[servers.length-1]._conn._socket.destroy();else{first.stop();for(const s of servers.slice())s.close();}
    await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
-   if(reboot){const historical=require('./native-reboot-state.cjs').historicalBoot(state,id);production=historical.record;committed=historical.committed;activation=historical.activation;history=historical.history;}
+   let bootstrapReceipt;
+   if(reboot){const helper=require('./native-reboot-state.cjs'),historical=helper.historicalBoot(state,id);production=historical.record;committed=historical.committed;activation=historical.activation;history=historical.history;
+    if(mode==='native-reboot-bootstrap'){bootstrapReceipt=helper.historicalBootstrap(state,production);roots.push(bootstrapReceipt.directory,bootstrapReceipt.fence);}
+   }
    second=mode==='native-committed'||mode.startsWith('return-')?createAgent(loader(new Map())):first;await acquire(second);
    let interruptedAttempt;
    if(startupStage||mode==='native-reboot-receipt'){
@@ -197,6 +200,10 @@ done
    }
 
    await until(()=>second.status().worker_ready,15000);
+   if(bootstrapReceipt){
+    const retired=JSON.parse(fs.readFileSync(bootstrapReceipt.file));assert.equal(retired.boot_id,bootstrapReceipt.boot_id);assert.equal(retired.reconciled_boot_id,boot);assert.equal(retired.phase,'retired');
+    assert.equal(second.restartInventory().bootstrap_recovery.phase,'complete');assert(!fs.existsSync(state+'/bootstrap-launch.pending'));assert(!fs.existsSync(bootstrapReceipt.directory));assert.equal(fs.readFileSync(bootstrapReceipt.fence+'/sealed','utf8'),bootstrapReceipt.id+'\n');
+   }
    if(mode.startsWith('return-')){
     const after=second.status();assert.equal(after.selected_implementation,'managed');assert.equal(after.worker_selection.history.slice(-1)[0].id,returnId);assert.equal(after.worker_selection.history.length,2);
     assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(second.restartInventory().boundary,'settled');assert.equal(second.restartInventory().restart_return.phase,'complete');assert.equal(second.canResumeManaged('wrong-return-request-0001'),false);assert.equal(second.canResumeManaged('original-return-request-0001'),true);const resumed=await second.resumeManagedActivation('original-return-request-0001');assert.equal(resumed.transaction_id,returnId);assert.equal(resumed.native_origin_id,id);return;

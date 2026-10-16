@@ -38,6 +38,6 @@ test('an old-boot fence may be sealed on the current boot but cannot authorize a
   assert.equal(run(fenceCommand(old,'printf SEALED',{kind:'startup',seal:true,bootId:f.r.boot_id})).stdout,'SEALED');
   assert.equal(fs.readFileSync(f.r.fence+'/sealed','utf8'),f.r.id+'\n');assert(!fs.existsSync(f.tmp+'/late'));
   assert.throws(()=>fenceCommand(old,'true',{kind:'startup',bootId:f.r.boot_id}));
-  assert.throws(()=>fenceCommand({...old,fence:old.fence.replace('startup','bootstrap')},'true',{kind:'bootstrap',seal:true,bootId:f.r.boot_id}));
+  assert.throws(()=>fenceCommand({...old,fence:old.fence.replace('startup','bootstrap')},'true',{kind:'bootstrap',bootId:f.r.boot_id}));
  }finally{f.clean();}
 });

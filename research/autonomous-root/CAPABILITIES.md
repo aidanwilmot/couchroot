@@ -1079,8 +1079,16 @@ under the unchanged selection. `durable.bootstrap_recovery` reports this progres
 
 The seal and lock remain as small root-owned tombstones after scope retirement;
 they are not silently removed while a delayed SDK command could still exist.
-Changed boot or selection, legacy schema 1 launches, unbound or malformed receipts,
-unknown bytes and live processes remain blocked. Interrupted returns and forward
+Local source also permits an authenticated new-boot executor to seal an old
+schema-2 bootstrap attempt. Historical PID/start pairs are not current process
+identities. The old transient unit must be absent; a reused name refuses cleanup
+even when its current PID is zero. New-boot cleanup never stops or resets a unit.
+Exact staging checks still apply, and the retired receipt retains its original
+boot alongside `reconciled_boot_id`. This path is locally tested, not deployed or
+qualified on either TV.
+
+Changed selection, legacy schema 1 launches, unbound or malformed receipts,
+unknown bytes and live current-boot processes remain blocked. Interrupted returns and forward
 rollback retain the managed held executor and original transaction receipts.
 There is no new public operation or production fault hook.
 
@@ -1300,5 +1308,7 @@ also restarts the service again on the new boot and returns to managed while
 preserving retained records. These use synthetic historical receipts and real
 native/managed fixture workers; they do not prove TV reboot behavior. The code is
 not installed on either TV, and both 0.7.48 endurance runs remain undisturbed.
-Pending-bootstrap/return transitions interrupted by another reboot and broader
-power lifecycle acceptance remain open. Neither .NET fallback is removed.
+Interrupted-bootstrap recovery across boots is now implemented locally as
+described above. Pending-return recovery after reboot, hardware qualification
+of the cross-boot paths and broader power lifecycle acceptance remain open.
+Neither .NET fallback is removed.

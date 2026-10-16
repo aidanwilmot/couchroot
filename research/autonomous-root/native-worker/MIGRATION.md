@@ -31,8 +31,10 @@ Local source now integrates cross-boot guardian reconciliation with selected-nat
 startup, separate runtime receipts, startup fences, retained-state verification and
 return to managed. Modeled reboot integration passes locally; this source is not
 installed or device-qualified. The .NET entry, fallback and rescue remain in place.
-Reboots during an already pending bootstrap or return transition remain separate
-recovery boundaries; full power-lifecycle qualification is still open.
+Local source now also reconciles an interrupted bootstrap across boots, with
+fresh executor and unit-absence checks. Pending return transitions interrupted
+by reboot remain a separate recovery boundary; full power-lifecycle qualification
+is still open. None of these cross-boot changes is installed yet.
 
 Both TVs run signed 0.7.48; the preceding integrated qualification ended
 managed-ready. The authenticated timing header now separates file-sync and
@@ -4426,3 +4428,42 @@ S90D continues its original endurance trial with the original observer and sourc
 snapshot. The corrected observer has not yet been qualified there. Both signed
 packages remain 0.7.48; the installed workers and .NET entry, fallback and rescue
 are unchanged. See [observer admission evidence](observer-admission-results.json).
+
+
+## Interrupted bootstrap recovery across boots — 2026-10-16
+
+A schema-2 bootstrap intent can now be reconciled by a fresh authenticated managed
+executor on a different boot. The marker, selection digest, artifact hashes,
+owned paths and receipt still have to match. Recovery seals the original launch
+fence under the current boot; boot overrides can seal an attempt but cannot
+launch it. Recorded PID/start pairs are observed only on their own boot, so an
+unrelated process with a recycled PID cannot stand in for the old bootstrap.
+
+After a boot change, the old transient unit must be absent. A newly loaded unit
+with the same name refuses cleanup even if it is inactive with PID zero. This
+path does not stop or reset any current unit. Same-boot recovery retains its
+existing live-process, unit-start and empty-cgroup checks. Both paths inspect
+all remaining scope entries before removing only absent-or-exact files, and
+preserve unknown bytes. Lost cleanup replies converge under the original intent;
+launch is never replayed. The retired receipt keeps its original boot and records
+`reconciled_boot_id` before the pending marker is removed.
+
+Focused tests cover authenticated boot mismatch, malformed boot IDs, lost replies,
+real shell/flock sealing, historical PID collision, current-boot PID refusal,
+new-boot unit-name reuse and changed staging. A new coordinator integration case
+models a persisted old-boot bootstrap receipt, performs real owned staging cleanup,
+starts native, restarts again, and returns to managed. Original activation and
+completed job bytes remain unchanged; the interrupted native job is not replayed.
+The historical receipt and systemd/SDK behavior are fixtures, not a kernel reboot.
+
+Validation passed 15 focused Node cases, 12 Linux shell/fence cases, all 28
+coordinator restart integration cases and six managed/native/managed rehearsals.
+Native fixtures were freshly built with ASAN/UBSAN and the managed harness was
+rebuilt; the integration suites ran in separate disposable containers. npm passed
+429 tests with 165 environment-gated skips. The privacy audit found no findings.
+
+Both TVs remain on signed 0.7.48 with their independent endurance trials running.
+No installed worker, service, trial snapshot or .NET fallback changed. Hardware
+qualification of the new cross-boot paths is pending. A reboot during a pending
+native-to-managed return is the next local recovery boundary; that path must also
+handle any unclean native journal before restoring managed state.
