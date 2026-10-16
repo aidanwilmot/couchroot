@@ -26,12 +26,16 @@ and descheduling; they identify the blocking API calls, not an underlying flash
 or kernel cause. The performance gate remains open, but these particular tails
 must not be treated as evidence of native-worker execution cost alone.
 
-The current observer supports bounded windows up to 240 seconds; it does not yet
-supply 24-hour coverage. Next: prepare sustained integrated observation with
-bounded storage and verified continuity across capture windows, preserving the
-independent rescue, original intents and both fallbacks. Continue native-entry
-investigation from the existing mapping/capability boundary; no new usable entry
-route was established by the latest source/evidence review.
+The bounded observer now has an offline continuity verifier and an adapter-driven
+rolling controller. Both TVs passed a three-minute selected-native trial with
+three overlapping windows, 240 identity-bound resource samples, mixed root/app
+jobs and repeated independent rescue renewal. They ended managed-ready; this is
+controller qualification, not the 24-hour gate. See
+[controller evidence](observer-controller-results.json). Next: supervise a full
+endurance invocation with free-space monitoring and the long-job/workload plan,
+retaining original intents and both fallbacks. Continue native-entry investigation
+from the existing mapping/capability boundary; no new usable entry route was
+established by the latest source/evidence review.
 
 The preceding signed 0.7.47 round introduced authenticated request phase timing
 and ended managed-ready. All 17 non-manifest payload members are unchanged from 0.7.46,
@@ -3987,3 +3991,56 @@ and stop on uncertainty without replay. Native-only entry, performance and full
 resource/endurance gates, separately authorized power lifecycle, native-default
 observation and eventual .NET retirement remain open. No power transition was
 performed; the .NET acquisition bridge, worker fallback and rescue remain intact.
+
+## Rolling native observation controller — 2026-10-16
+
+The adapter-driven host scheduler keeps at most two owned collectors, waits for
+successful completion before download/cleanup, checks health throughout, and
+renews the independent 300-second SDK rescue. A replacement timer must be active
+before its predecessor is retired; retirement verifies the predecessor never
+fired. Normal renewal is every 120 seconds with a conservative 30-second margin.
+Exceptions stop scheduling without replay and leave recovery/receipts available.
+The successful result keeps the final rescue armed for managed return. Device
+identity, firmware/signing checks, durable intents and owned cleanup belong to
+the adapter; TV-clock/kernel continuity still requires the offline verifier.
+
+Nine scheduler tests passed, including uncertain arm/retirement, selection drift,
+failed collection, lost overlap and recovery-budget exhaustion. The 17 continuity
+tests also passed; 13 Linux-only observer tests were skipped in this host run.
+The npm suite passed 423 tests with 157 skips. No signed package, native binary,
+service behavior or durability barrier changed; both TVs remain on 0.7.48.
+
+Both TVs then ran three 80-second observers with a requested 50-second stride,
+45-second rescue renewal and 180 seconds of predeclared native coverage. Each
+collected 240 resource rows; both production-receipt native process identities
+were present and valid in every row. Each performed eight small root/app jobs and
+a 150-second quiet job, whose completed exit status survived managed return.
+Each used six rescue timers, including bootstrap and rolling renewals; all were
+retired without firing. QN90A verified 924 unique kernel records and 257 matching
+duplicates, with a 1001.496 ms maximum merged sample gap. S90D verified 1,014 unique
+records and 261 matching duplicates, with a 1001.362 ms maximum gap. See
+[sanitized evidence](observer-controller-results.json).
+
+QN90A's first final acceptance incorrectly requested volatile job output after
+worker retirement. Capture and managed return had already completed; saved status
+still showed the expected exit code. The journal and completed return receipt were
+inspected, and only remaining fixture cleanup/preservation checks continued. No
+launch or handoff was replayed. The S90D harness checked output before retirement
+and saved status afterward, matching the documented worker-lifetime contract.
+
+S90D's initial supported service relaunch ended without resetting its worker/task.
+The unchanged ready state was inspected and rescue disarmed. A proposed direct
+TERM was refused before submission because registered app and listener PIDs did
+not match. A fresh supported relaunch captured successful launcher exit codes and
+reset the worker/task while retaining the shared WRT host. Its owned diagnostic
+log was verified and removed. The initial elapsed launcher timer was explicitly
+stopped during final reconciliation; all owned launcher units are now inactive.
+
+Both trials ended managed-ready on their original boots/coordinators, with
+original retained jobs, enrollment and protected files preserved. Owned collectors,
+mounts, fixture jobs and native scopes were cleaned, trial/rescue units are inactive,
+and SDK remains on loopback. No reboot, standby or shared-runtime signal occurred.
+The next step is a supervised 24-hour invocation with free-space monitoring and a
+full-duration job plus mixed work/idle workload. This short qualification closes
+neither endurance, full resource/performance comparison, native-only entry, power
+lifecycle nor native-default/sunset gates. Both .NET fallbacks remain required.

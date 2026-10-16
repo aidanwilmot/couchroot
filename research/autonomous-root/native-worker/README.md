@@ -1171,3 +1171,34 @@ A sustained controller still needs bounded rolling downloads/cleanup, safe renew
 of the independent SDK rescue, and explicit selected-worker checks throughout.
 The short two-window hardware qualification establishes capture continuity only;
 it is not a sustained native run, a leak-free result or the 24-hour endurance gate.
+
+### Rolling controller
+
+`observer-series-controller.py` supplies a synchronous `run(adapter, Plan(...))`
+scheduler for an explicitly authorized host-side trial. The default windows last
+220 seconds and start 160 seconds apart. It accepts at most 24 hours of requested
+coverage, keeps at most two collectors owned at once, and waits for completion
+before download and cleanup. Its adapter must bind the device, installed artifact,
+selection, coordinator and native process identities; journal unique intents;
+confirm readiness and successful exit; verify downloaded hashes; and clean only
+owned artifacts. The scheduler does not provide those device-specific operations.
+
+The independent rescue always uses a 300-second delay. Renewal normally occurs
+every 120 seconds, after a health check. The replacement must be confirmed active
+before retiring the previous timer. Each retirement must check that rescue never
+fired before stopping the timer and must then confirm inactivity. A conservative
+host deadline reserves 30 seconds; elapsed-time overruns, unhealthy selection,
+uncertain calls, excess owned collectors or a lost overlap stop scheduling.
+No failed operation is retried, and exceptions leave recovery and durable receipts
+for inspection. Completed runs return the last rescue still armed so managed
+return and preservation checks remain protected. All adapter calls need bounded
+timeouts; host timing checks cannot interrupt an adapter that hangs indefinitely.
+
+The caller must run the offline series verifier against the predeclared TV-clock
+interval and separately verify native activation identities in the samples.
+Scheduling success alone is not proof of capture continuity. Host sleep, network
+loss or a TV suspend may invalidate a run; never fill a gap with a later capture
+or count unavailable time as active qualification. A multi-hour controller still
+needs private disk-space monitoring, process supervision, and a long-job/workload
+plan appropriate to the endurance gate. The three-minute trial is a controller
+qualification, not the 24-hour gate.

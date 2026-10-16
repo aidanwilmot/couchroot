@@ -4,11 +4,14 @@ These changes require rebuilding the service and worker together. Existing insta
 0.1.x workers do not expose the new operations. Source validation is separate from
 TV installation and firmware-specific acceptance; no deployment is implicit.
 
-Current qualification: signed 0.7.45 has passed bounded native public-operation,
+Current installed version: signed 0.7.48. Both TVs have passed bounded native public-operation,
 same-boot startup/return, committed guardian-loss recovery and modeled launch-bound
 pre-readiness recovery on both TVs. Managed is selected and ready
-after acceptance. Historical versioned observations below retain their original
-limits; see the current native recovery and parity sections for newer evidence.
+after completed acceptance. Version 0.7.48 adds file/directory journal-sync timing
+without changing the payloads or durability barriers. Historical versioned
+observations below retain their original limits; see the
+[current migration snapshot](native-worker/MIGRATION.md#current-qualification-snapshot)
+for diagnostics, hardware evidence and the remaining endurance/retirement gates.
 
 Signed 0.7.38 adds bounded ordinary-production resource qualification on both TVs.
 A zero descriptor limit no longer closes an otherwise usable idle session; the
