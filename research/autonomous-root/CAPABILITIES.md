@@ -7,9 +7,11 @@ TV installation and firmware-specific acceptance; no deployment is implicit.
 Current installed version: signed 0.7.48. Both TVs have passed bounded native public-operation,
 same-boot startup/return, committed guardian-loss recovery and modeled launch-bound
 pre-readiness recovery on both TVs. Those completed rounds ended managed-ready.
-Both TVs now have fresh native endurance trials using serialized storage checks,
-separate checksum downloads and retained collector exit receipts. S90D recovered
-after a verified full reboot and host-assisted SDK restoration.
+S90D has a native endurance trial running with serialized storage checks, separate
+checksum downloads and retained collector exit receipts. QN90A's latest attempt
+stopped at a collector startup gap and was reconciled to managed; see
+[readiness-gap evidence](native-worker/observer-readiness-gap-results.json). S90D
+recovered after a verified full reboot and host-assisted SDK restoration.
 Neither TV has passed the 24-hour gate. Version 0.7.48 adds file/directory journal-sync timing
 without changing the payloads or durability barriers. Historical versioned
 observations below retain their original limits; see the

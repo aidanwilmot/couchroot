@@ -7,12 +7,15 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs have fresh supervised native endurance trials running with separate
-checksum downloads, serialized storage checks and retained collector exit
-receipts. Neither has completed the 24-hour gate. The three previous QN90A
-attempts stopped at approximately 35, 15 and 61 minutes; each was reconciled
-without replay and with original retained jobs and enrollment preserved. Earlier
-unretained collector unit polls do not prove successful exit.
+S90D's supervised native endurance trial is still running. QN90A's fourth
+attempt stopped after about 39 minutes when collector 13 exited with status 1:
+its first sample arrived 1.143 seconds after the declared start, leaving one
+skipped interval. The failed capture was preserved, the following collector
+finished successfully, and the trial was reconciled back to managed with original
+jobs, enrollment and protected files intact. All owned rescues were retired
+unfired and SDK is on loopback. No endurance acceptance is claimed. The three
+previous QN90A attempts stopped at approximately 35, 15 and 61 minutes and were
+also reconciled without replay. See [readiness-gap evidence](observer-readiness-gap-results.json).
 
 S90D recovered after an authorized, verified full reboot and host-assisted SDK
 loopback restoration. Couchroot readiness, original selection, retained jobs,
@@ -4363,3 +4366,31 @@ and packages were not changed. Both-TV deployment/reboot qualification remains
 pending until the active trials finish. Reboot during an already pending bootstrap
 or return transition, wider power lifecycle, 24-hour endurance, performance,
 native-only entry and .NET retirement remain open. No .NET fallback was removed.
+
+
+## QN90A observer startup gap — 2026-10-16
+
+The fourth QN90A trial stopped after about 39 minutes with 13 verified windows.
+Collector 13 exited normally with status 1 because it reported 219 samples and
+one skipped interval. Its first resource snapshot began 1142.935 ms after the
+reported interval start. Subsequent maximum sample spacing was 1000.924 ms;
+maximum sample duration was 73.482 ms. Kernel capture completed with 1071 records,
+no overruns, no sequence gaps and no detected suspend. The source starts the
+sampling clock before writing and synchronously publishing readiness. These
+observations identify a startup gap; they do not time each startup syscall.
+The acceptance rule correctly rejected this capture and remains unchanged.
+
+A fresh independent rescue was armed before retiring the old timer unfired.
+Every failed-capture file was downloaded and independently hash-verified, and
+only its verified owned scope was removed after confirming unit exit and mount
+absence. Collector 14 completed successfully and was collected/cleaned normally.
+The owned quiet job was cancelled, its saved bytes verified across return to
+managed, then forgotten. Original retained jobs, enrollment, protected hashes,
+boot and coordinator remained unchanged. Native processes exited; replacement
+rescue was retired unfired and SDK stayed on loopback. S90D's independent trial
+continues with its original immutable source snapshot.
+
+Next work is an observer startup-persistence correction and focused delayed-I/O
+tests, followed by fresh qualification and a separately declared QN90A attempt.
+No failed window will be accepted, patched or merged into a shortened interval.
+See [sanitized evidence](observer-readiness-gap-results.json).
