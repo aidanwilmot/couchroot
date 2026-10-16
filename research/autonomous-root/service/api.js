@@ -15,6 +15,12 @@ function createApi(options){
   const beginPhase=name=>{const start=process.hrtime();return ()=>{if(timing)timing[name]=(timing[name]||0)+elapsed(start);};};
   const timed=(name,run)=>{const end=beginPhase(name);try{return run();}finally{end();}};
   const timedAsync=async(name,run)=>{const end=beginPhase(name);try{return await run();}finally{end();}};
+  const timedJournal=(name,run)=>{
+   const syncs={};
+   try{return timed(name,()=>run(syncs));}finally{
+    if(timing)for(const kind of ['file_sync','directory_sync'])if(syncs[kind])timing[name+'_'+kind]=syncs[kind];
+   }
+  };
   // Reset on every request so keep-alive cannot inherit a longer prior budget.
   req.setTimeout(35000);
   const count=(requestsPerSocket.get(req.socket)||0)+1;requestsPerSocket.set(req.socket,count);
@@ -22,7 +28,7 @@ function createApi(options){
   const responseHeaders=(status,type,length)=>({
    'Content-Type':type,'Content-Length':length,'Cache-Control':'no-store',
    'Connection':status===200&&reuse?'keep-alive':'close',
-   ...(timing?{'Server-Timing':Object.keys(timing).map(k=>k+';dur='+timing[k].toFixed(3)).concat('handler;dur='+elapsed(requestStarted).toFixed(3)).join(', ')}:{}),
+   ...(timing?{'Server-Timing':Object.keys(timing).map(k=>k+';dur='+(typeof timing[k]==='number'?timing[k]:timing[k].ms).toFixed(3)+(typeof timing[k]==='number'?'':';desc="'+timing[k].calls+' calls"')).concat('handler;dur='+elapsed(requestStarted).toFixed(3)).join(', ')}:{}),
    ...(status===200&&reuse?{'Keep-Alive':'timeout=5, max='+(128-count)}:{})
   });
   const cert=req.socket.getPeerCertificate();
@@ -66,11 +72,11 @@ function createApi(options){
     if(!agent.status().connected||agent.status().worker_ready===false){reply(503,{outcome:'rejected',error:'Root agent unavailable'});return;}
     timing={};
     const readOnly=['file.read','file.status','job.status','job.output'].includes(operation.op);
-    if(!readOnly){timed('journal_begin',()=>journal.begin({id:value.id,command:'operation:'+hash(JSON.stringify(operation)),timeout_ms:25000}));operationId=value.id;}
+    if(!readOnly){timedJournal('journal_begin',syncs=>journal.begin({id:value.id,command:'operation:'+hash(JSON.stringify(operation)),timeout_ms:25000},syncs));operationId=value.id;}
     req.setTimeout(operationDeadline(operation.op)+HTTP_MARGIN_MS);
     submitted=true;
     const result=await timedAsync('worker',()=>agent.operation(operation,operation.op==='file.write'?raw:undefined));
-    if(operationId)timed('journal_finish',()=>journal.finish(operationId,{exit_code:Number.isInteger(result.exit_code)?result.exit_code:0,timed_out:!!result.timed_out}));
+    if(operationId)timedJournal('journal_finish',syncs=>journal.finish(operationId,{exit_code:Number.isInteger(result.exit_code)?result.exit_code:0,timed_out:!!result.timed_out},syncs));
     if(operation.op==='file.read'){
      const data=Buffer.isBuffer(result.data)?result.data:Buffer.from(result.data,'base64');
      if(data.length>1048576||hash(data)!==result.sha256)throw Error('Invalid worker chunk digest');
@@ -89,13 +95,13 @@ function createApi(options){
    validateRequest(value);
    if(!agent.status().connected||agent.status().worker_ready===false){reply(503,{error:'Root agent unavailable'});return;}
    timing={};
-   timed('journal_begin',()=>journal.begin(value));
+   timedJournal('journal_begin',syncs=>journal.begin(value,syncs));
    submitted=true;
    const result=await timedAsync('worker',()=>agent.execute(value.command,value.timeout_ms));
-   timed('journal_finish',()=>journal.finish(value.id,result));reply(200,Object.assign({id:value.id},result));
+   timedJournal('journal_finish',syncs=>journal.finish(value.id,result,syncs));reply(200,Object.assign({id:value.id},result));
   }catch(e){
    let outcome=submitted?(e.outcome||'unknown'):'rejected';
-   if(operationId && ['failed','rejected'].includes(e.outcome)){try{timed('journal_finish',()=>journal.finish(operationId,{exit_code:1,timed_out:false}));}catch(_){outcome='unknown';}}
+   if(operationId && ['failed','rejected'].includes(e.outcome)){try{timedJournal('journal_finish',syncs=>journal.finish(operationId,{exit_code:1,timed_out:false},syncs));}catch(_){outcome='unknown';}}
    reply(409,{outcome,error:outcome==='unknown'?'Command outcome unknown; inspect request journal':'Operation '+outcome,detail:String(e.message).slice(0,200)});
   }
   finally{busy=false;}

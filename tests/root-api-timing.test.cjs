@@ -11,7 +11,7 @@ async function fixture(run){
  const calls=[],raw=Buffer.from('synthetic enrolled peer'),socket={authorized:true,getPeerCertificate:()=>({raw})};
  const journal=new Journal(path.join(dir,'requests.json'));
  const begin=journal.begin.bind(journal),finish=journal.finish.bind(journal);
- journal.begin=value=>{calls.push('begin');now+=11;if(mode==='begin-fails')throw Error('storage failed');begin(value);};
+ journal.begin=(value,syncs)=>{calls.push('begin');now+=11;if(mode==='begin-sync-fails'){syncs.file_sync={ms:7,calls:1};throw Error('storage failed');}if(mode==='begin-fails')throw Error('storage failed');begin(value);};
  journal.finish=(id,result)=>{calls.push('finish');now+=17;if(mode==='finish-fails')throw Error('storage failed');finish(id,result);};
  const worker=async(op)=>{
   calls.push('worker');now+=23;
@@ -34,7 +34,8 @@ async function fixture(run){
   const req={method:'POST',url:route,socket:extra.socket||socket,headers:{connection:'keep-alive',...extra.headers},setTimeout:()=>{},async *[Symbol.asyncIterator](){now+=5;yield Buffer.from(JSON.stringify(value));}};
   const response={id};
   await handler(req,{writeHead:(status,headers)=>{response.status=status;response.headers=headers;},end:bytes=>{response.body=bytes;}});
-  response.metrics=Object.fromEntries((response.headers['Server-Timing']||'').split(', ').filter(Boolean).map(part=>{const [key,value]=part.split(';dur=');assert.match(value,/^\d+\.\d{3}$/);return [key,Number(value)];}));
+  response.syncCalls={};
+  response.metrics=Object.fromEntries((response.headers['Server-Timing']||'').split(', ').filter(Boolean).map(part=>{const [key,parameters]=part.split(';dur='),[value,desc]=parameters.split(';desc=');assert.match(value,/^\d+\.\d{3}$/);if(desc){assert.match(desc,/^"[1-9]\d* calls"$/);response.syncCalls[key]=Number(desc.match(/\d+/)[0]);}return [key,Number(value)];}));
   return response;
  }
  try{await run({request,journal,calls,mode:value=>{mode=value;},enabled:value=>{enabled=value;},socket});}
@@ -79,4 +80,11 @@ test('unenrolled, browser, invalid and unavailable requests disclose no phase ti
  const invalid=await f.request('/v1/op',{op:'unknown'});assert.deepEqual(invalid.metrics,{});
  f.enabled(false);const unavailable=await f.request();assert.equal(unavailable.status,503);assert.deepEqual(unavailable.metrics,{});
  assert.deepEqual(f.calls,[]);
+}));
+
+test('failed journal sync reaches the authenticated timing header without worker dispatch',()=>fixture(async f=>{
+ f.mode('begin-sync-fails');const r=await f.request();assert.equal(r.status,409);
+ assert.equal(JSON.parse(r.body).outcome,'rejected');
+ assert.deepEqual(r.metrics,{journal_begin:11,journal_begin_file_sync:7,handler:16});
+ assert.deepEqual(r.syncCalls,{journal_begin_file_sync:1});assert.deepEqual(f.calls,['begin']);
 }));

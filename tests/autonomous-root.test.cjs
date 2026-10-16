@@ -115,7 +115,7 @@ with api.Session(c) as session:
   const failed=await request('/v1/op',{id:operationId,operation:{op:'file.commit',transfer_id:'example'}});
   assert.equal(failed.body.outcome,'failed');assert.equal(journal.rows.find(r=>r.id===operationId).state,'completed');
   const binary=await request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:crypto.randomUUID(),operation:{op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')}})});
-  assert.equal(binary.status,200);assert.equal(binary.body.offset,5);assert.match(binary.headers['server-timing'],/^journal_begin;dur=\d+\.\d{3}, worker;dur=\d+\.\d{3}, journal_finish;dur=\d+\.\d{3}, handler;dur=\d+\.\d{3}$/);
+  assert.equal(binary.status,200);assert.equal(binary.body.offset,5);assert.match(binary.headers['server-timing'],/^journal_begin;dur=\d+\.\d{3}, journal_begin_file_sync;dur=\d+\.\d{3};desc="1 calls", journal_begin_directory_sync;dur=\d+\.\d{3};desc="1 calls", worker;dur=\d+\.\d{3}, journal_finish;dur=\d+\.\d{3}, journal_finish_file_sync;dur=\d+\.\d{3};desc="1 calls", journal_finish_directory_sync;dur=\d+\.\d{3};desc="1 calls", handler;dur=\d+\.\d{3}$/);
   const uploadId=crypto.randomUUID(),uploadOp={op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')};
   const upload=op=>request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:uploadId,operation:op})});
   assert.equal((await upload({...uploadOp,sha256:hash('other')})).body.outcome,'rejected');

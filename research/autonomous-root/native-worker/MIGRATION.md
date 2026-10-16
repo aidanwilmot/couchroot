@@ -7,8 +7,34 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs now run signed 0.7.47 with authenticated request phase timing and remain
-managed-ready. All 17 non-manifest payload members are unchanged from 0.7.46,
+Both TVs now run signed 0.7.48 and are managed-ready after fresh integrated
+qualification. The authenticated timing header now separates file-sync and
+directory-sync elapsed time and counts inside each journal phase. All 19 payload
+members, including manifests, native/managed workers and acquisition bridge, are
+byte-identical to 0.7.47. The JSON journal, archives and every durability barrier
+are unchanged. Both TVs verified 147 timed requests, complete kernel capture and
+identity-bound native resource samples; trial boots, retained jobs and enrollment
+were preserved, all owned trial scopes were removed, SDK is on loopback and
+independent deployment/trial rescue start counters were zero. See
+[journal sync evidence](journal-sync-phase-results.json).
+
+Both sync types contribute to the observed tails. QN90A's maximum single file
+sync was 1048.478 ms and directory sync 863.684 ms; S90D's were 1050.400 and
+1307.263 ms. S90D's slow native forget spent 1307.263 ms in one directory sync
+within a 1488.142 ms HTTPS request. These measurements include runtime overhead
+and descheduling; they identify the blocking API calls, not an underlying flash
+or kernel cause. The performance gate remains open, but these particular tails
+must not be treated as evidence of native-worker execution cost alone.
+
+The current observer supports bounded windows up to 240 seconds; it does not yet
+supply 24-hour coverage. Next: prepare sustained integrated observation with
+bounded storage and verified continuity across capture windows, preserving the
+independent rescue, original intents and both fallbacks. Continue native-entry
+investigation from the existing mapping/capability boundary; no new usable entry
+route was established by the latest source/evidence review.
+
+The preceding signed 0.7.47 round introduced authenticated request phase timing
+and ended managed-ready. All 17 non-manifest payload members are unchanged from 0.7.46,
 including the native worker, managed bridge and fallback. Fresh integrated
 acquisition/HTTPS/native-return rounds validated 147 timed requests per TV,
 identity-bound native resource samples and complete kernel windows. Both preserved
@@ -3860,3 +3886,74 @@ service publication costs and address the reproduced tails while preserving
 intent/result durability. Native-only capability entry, full lifecycle/resource
 and 24-hour mixed endurance evidence, native-default observation and eventual
 .NET retirement remain unfinished.
+
+## Journal sync attribution without a format change — 2026-10-16
+
+Optional request-local counters now bracket the existing synchronous file and
+directory sync calls in journal publication. The API reports their aggregate
+elapsed milliseconds and attempt counts as nested `Server-Timing` metrics.
+Automatic archive work includes the archive file, archive-parent and active-file
+barriers. Failed sync attempts are measured once and retain the original failure
+and uncertainty behavior. Main journal durations contain these measurements;
+adding both levels would double-count time. No barrier, rename, JSON field,
+archive format, replay check, response body or operation deadline changed.
+
+Four new journal tests verify exact barrier order/counts, automatic archival,
+failed admission and failed completion. An API test verifies attempted-sync
+metrics on failure without worker dispatch. Real mutual-TLS tests verify nested
+upload metrics and unchanged read-only download metrics. The focused run passed
+44 tests with one opt-in long-deadline case skipped; npm passed 423 with 157 skips.
+Fresh rebuilt managed/native fixtures passed six rehearsal and 21 restart cases,
+with three fault-binary cases skipped. Separately, the actual 0.7.47 policy reader
+accepted the current writer's journal and archives, rejected replay of all 106
+fixture IDs, and wrote a completion accepted by the current reader. That is local
+format compatibility evidence, not a signed rollback trial.
+
+Both signed 0.7.48 updates passed installed-content, model/firmware/signing and
+enrollment/protected-file verification. API/policy code and version/signature
+metadata changed; all 19 payload members and their manifests are unchanged.
+Each TV completed managed/native commands, root/app jobs and 8,677,890-byte
+checksum transfers, service disable/enable acquisition, committed native
+migration and normal managed return. Each validated 147 timed requests, with
+198 file-sync and 198 directory-sync calls. Every measured phase aggregate had
+one call in these runs, so these tails were not repeated automatic-archive syncs.
+
+| TV | Longest single file sync | Longest single directory sync | Resource samples / kernel records |
+| --- | ---: | ---: | ---: |
+| QN90A | 1048.478 ms | 863.684 ms | 40 / 329 |
+| S90D | 1050.400 ms | 1307.263 ms | 51 / 448 |
+
+QN90A's slow native upload request spent 1048.478 ms in its intent file sync and
+192.594 ms in the following directory sync, within 1467.207 ms over HTTPS. A later
+observer-data `file.open` result publication spent 308.133 ms in file sync
+and 863.684 ms in directory sync. S90D's managed job admission spent 697.116 ms
+in its result directory sync, while a managed forget spent 704.676 ms in its
+intent file sync. A native forget spent 1307.263 ms in its result directory sync
+versus 23.040 ms in the worker phase, within 1488.142 ms over HTTPS. Another native
+upload spent 1050.400 ms in its intent file sync. Keep the full sanitized intervals
+in [the evidence record](journal-sync-phase-results.json).
+
+The four fixed mixed root/app admission samples per implementation had HTTPS
+median/maximum values of 122.520/133.563 ms managed and 116.729/143.755 ms native
+on QN90A; S90D measured 147.269/840.698 ms managed and 140.940/161.377 ms native.
+These are descriptive samples, not stable tail distributions. Both implementations
+encounter service publication delays. Sync elapsed time includes runtime binding
+overhead and descheduling; it does not prove the underlying storage or kernel
+mechanism. Do not weaken durability or attribute every historical outlier from
+these observations. Earlier direct-worker timing remains separate evidence.
+
+Continuous kernel captures were complete; no whole resource interval was skipped.
+Every native worker/guardian had at least thirteen identity-bound observations
+and four mapping-detail samples. Both rounds ended managed-ready on their original
+trial boots/coordinators with retained jobs and enrollment unchanged. Trial scopes,
+observer mounts and disposable helpers are absent; deployment and trial units are
+inactive, SDK is on loopback, and rescue start counters were checked as zero.
+No reboot, standby, global policy, persistent capability or SMACK change occurred.
+Private journals, raw captures, identities and signing data remain outside Git.
+
+Next: prepare sustained integrated observation with bounded capture storage and
+verified continuity, then gather the remaining mixed endurance/resource evidence.
+The existing 240-second observer cannot stand in for that qualification. Native-only
+entry, the broader performance gate, separately authorized power lifecycle,
+native-default observation and .NET retirement remain unfinished. The managed
+bridge, worker fallback and independent SDK rescue remain required.

@@ -135,6 +135,17 @@ milliseconds from the service's monotonic clock:
 - `handler`: request-handler entry through header preparation. It includes body
   receipt, validation and response preparation, and contains the phase intervals.
 
+Journal phases also contain `journal_begin_file_sync`,
+`journal_begin_directory_sync`, `journal_finish_file_sync` and
+`journal_finish_directory_sync` metrics when those barriers were attempted.
+Their `dur` is the aggregate elapsed time in the corresponding synchronous sync
+calls; `desc` gives the call count. Automatic archive work aggregates its file,
+archive-parent and active-journal syncs into the begin phase. A failed sync counts
+as an attempted call. These are nested measurements: do not add them to their
+containing journal phase when calculating a total. They include descheduling and
+runtime overhead, so they are not CPU time or proof of flash latency. The journal
+JSON and archive formats remain unchanged for existing recovery packages.
+
 Only attempted phases appear. Read-only operations omit journal metrics, and
 pre-dispatch journal failure omits worker/result metrics. Values reset for each
 keep-alive request. Headers contain no commands, paths or request identities.
