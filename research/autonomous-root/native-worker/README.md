@@ -1089,8 +1089,9 @@ SIGTERM/SIGINT for an earlier orderly finish. Use a fresh root-owned 0700 output
 directory. It exclusively creates `observer.ready`, `resources.ndjson`,
 `observer.json`, `kernel.raw` and `kernel.json`; existing outputs are refused.
 The ready receipt supplies observer identity and clock/boot bindings. Resource
-snapshots use an 8 MiB prefaulted buffer alongside the kernel collector's 2 MiB
-buffer. Only readiness is synced before measurement; sample and kernel data are
+snapshots reserve an 8 MiB buffer and populate pages progressively, alongside the
+kernel collector's 2 MiB prefaulted buffer. Unused resource pages are not dirtied
+up front. Only readiness is synced before measurement; sample and kernel data are
 persisted when observation stops. The bounded deadline has an outer alarm.
 
 For a handoff trial, launch this helper in a separate owned transient unit with
@@ -1109,17 +1110,27 @@ accepting that discovery hint does not bypass the digest check. Bind candidate
 samples to independently read public worker identities and activation receipts
 before attributing resource usage. Discovery alone is not provenance.
 
-Every reported process is bracketed by start-time and executable/argument checks.
+Every reported process is bracketed by start-time and executable/argument checks,
+including executable device/inode identity even when its pathname stays the same.
 PID reuse, exec changes, unreadable fields and partial samples remain explicit.
 CPU counters and process start times retain full-width decimal strings. The
-sampler reports RSS/PSS/private/swap sums, lifetime peak RSS, descriptors, threads
-and mount counts. Missing optional kernel fields stay null. It records actual
+sampler keeps CPU, resident pages, lifetime peak RSS, descriptors, threads and
+mount counts at every tick. Expensive mapping RSS/PSS/private/swap sums are read
+on first observation of each PID/start/executable identity and every fifth sample.
+`memory_detail_sampled` distinguishes those rows; other rows leave the mapping
+fields null, never stale or fabricated zeroes. At a one-second interval, mapping
+details are therefore approximately five seconds apart; use the actual sample
+timestamps. Missing optional kernel fields also stay null. Discovery applies its
+existing executable filter before stat/cmdline reads of unrelated processes.
+Metadata schema 2 records the detail cadence and reserved capacity, plus actual
 sample windows, maximum gaps/durations and skipped intervals; a failed scan,
 missing coordinator, capacity/cache limit, skipped interval or kernel gap fails
 interval coverage while preserving available evidence.
 
-This is periodic coverage, not exact process-tree peaks or complete observation
-of short-lived acquisition/command descendants. CPU excludes already exited
+Progressive buffer population can fault pages during sampling; this remains part
+of the separately measured observer cost. The reduced mapping cadence can miss
+short peaks between detail samples. This is periodic coverage, not exact
+process-tree peaks or complete observation of short-lived acquisition/command descendants. CPU excludes already exited
 children; idle wakeups remain unknown. Per-field failures and candidate identities
 still require review even when interval coverage passes. Do not infer leak-free
 endurance from a short trace. Raw paths, PID/start identities and kernel records

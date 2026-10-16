@@ -90,11 +90,12 @@ static FILE *observe_stream(int directory, const char *name) {
 /* An exited, reused or unreadable identity is explicit and never a zero sample.
  * Fields can disappear while a process exits; callers retain partial observations
  * with errors, and cannot use identity_valid=false rows in resource summaries. */
-static J *observe_process(int directory, pid_t pid, uint64_t expected) {
+static J *observe_process(int directory, pid_t pid, uint64_t expected, int memory_detail) {
   J *out = obj(), *errors = obj();
   num(out, "pid", pid);
   json_object_object_add(out, "errors", errors);
   boolean(out, "identity_valid", 0);
+  boolean(out, "memory_detail_sampled", memory_detail);
   ObserveStat before, after;
   if (!observe_stat(directory, "stat", &before)) { observe_error(errors, "stat_before"); return out; }
   observe_u64(out, "start_ticks", before.start);
@@ -122,10 +123,10 @@ static J *observe_process(int directory, pid_t pid, uint64_t expected) {
   else num(out, "mounts", mounts);
 
   /* Sum all mappings; do not depend on newer smaps_rollup support. */
-  stream = observe_stream(directory, "smaps");
+  stream = memory_detail ? observe_stream(directory, "smaps") : NULL;
   const char *keys[] = {"Rss:", "Pss:", "Private_Clean:", "Private_Dirty:", "Swap:", "SwapPss:"};
   const char *names[] = {"rss_kib", "pss_kib", "private_clean_kib", "private_dirty_kib", "swap_kib", "swap_pss_kib"};
-  int64_t sums[6] = {0}; unsigned seen = 0; int failed = !stream;
+  int64_t sums[6] = {0}; unsigned seen = 0; int failed = memory_detail && !stream;
   if (stream) {
     char line[4096];
     while (fgets(line, sizeof line, stream)) {

@@ -7,7 +7,22 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-The latest installed-path round now spans managed HTTPS commands/jobs/transfers,
+The independent observer now skips unrelated process reads, samples mapping
+memory on first identity observation and every fifth tick, and populates its
+bounded resource buffer progressively. In one counterbalanced 20-second idle
+pair per TV, observer CPU fell 67.0% on QN90A and 65.0% on S90D. Maximum sampled
+PSS plus Swap fell from approximately 10.3 MiB to 2.3 MiB; this is an accounting
+proxy with sparser detail samples, not an exact physical-memory peak. Both fresh
+integrated acquisition/HTTPS/managed-return rounds passed on unchanged signed
+0.7.46, with complete kernel windows and identity-bound native resource samples.
+Both ended managed-ready on their trial boots, with retained bytes/enrollment
+preserved, owned scopes/helpers removed, SDK on loopback and rescues unfired.
+See [observer overhead evidence](observer-overhead-results.json). The fresh rounds
+did not reproduce the prior one-second admissions; the performance gate remains
+open. Next: separate service journal begin, worker execution and journal finish
+with authenticated phase timings while retaining all persistence barriers.
+
+The preceding installed-path round spans managed HTTPS commands/jobs/transfers,
 native service acquisition, committed native HTTPS operations and normal managed
 return, with an independent resource/kernel observer. Both TVs passed on unchanged
 signed 0.7.46. Native worker and guardian resource samples bind to their activation
@@ -3680,3 +3695,68 @@ persistent capability or SMACK change occurred. Next: reduce/quantify observatio
 overhead and investigate the remaining latency tails before final mixed endurance;
 native-only entry, broader lifecycle/24-hour evidence and native-default observation
 remain unfinished.
+
+## Reduced observer overhead and fresh integrated qualification — 2026-10-16
+
+The standalone observer retains its 8 MiB resource capacity without prefaulting
+unused pages. The continuous kernel collector retains its 2 MiB prefaulted
+buffer. Every tick still measures identity, CPU, resident pages, lifetime peak
+RSS, descriptors, threads and mounts. Mapping details are read on first sight of
+a PID/start/executable identity and every fifth tick; fast rows explicitly leave
+those fields null. Metadata schema 2 records this cadence. Executable device and
+inode checks detect replacements at the same pathname. Applying the unchanged
+executable discovery filter before unrelated stat/cmdline reads reduces scan cost.
+No ordinary worker, service or signed package bytes changed.
+
+Thirteen observer and nine kernel tests passed from a source-bound Linux snapshot.
+New fixtures prove that fast sampling never opens smaps, unrelated processes do
+not trigger stat/cmdline reads, new identities force detail, and same-path inode
+replacement invalidates a sample. npm passed 414 with 157 skips. Two ARM builds
+were byte-identical. The ordinary worker remains the qualified 0.7.46 binary.
+
+Each TV ran one 20-second baseline/reduced idle pair, with reversed order between
+TVs and the same boot, coordinator, worker and history within each pair:
+
+| TV | Baseline / reduced CPU, percent of one core | CPU reduction | Maximum sampled PSS + Swap, KiB |
+| --- | ---: | ---: | ---: |
+| QN90A | 8.616 / 2.843 | 66.998% | 10526 / 2354 |
+| S90D | 13.106 / 4.593 | 64.953% | 10545 / 2369 |
+
+CPU covers the first-to-last sample interval, excluding launch and persistence.
+PSS plus Swap is an accounting proxy; baseline has twenty mapping observations
+and reduced has four. Sparse details can miss peaks. Progressive buffer growth
+can fault pages during sampling. This bounded comparison is not a statistical
+cost distribution or proof of negligible scheduling/pressure effects.
+
+Fresh integrated rounds repeated managed/native commands, root/app jobs,
+8,677,890-byte checksum transfers, service disable/enable acquisition, native
+migration and normal managed return. QN90A collected 40 resource samples and 332
+contiguous kernel records; S90D collected 52 and 402. No whole sample interval
+was skipped, and accepted process rows had no identity or field-read errors.
+Native worker and guardian each have at least eleven identity-bound observations
+and three detailed mapping samples. Observer CPU was 3.098% and 4.543% of one core;
+maximum sampled PSS plus Swap was 2467 and 2503 KiB respectively.
+
+QN90A enable-to-ready/migrate/return measured 1455.643 / 5599.823 / 14597.185 ms;
+S90D measured 2586.942 / 8215.247 / 21085.309 ms. These are single host-observed
+trials. Native public job admissions ranged 117.199–150.450 ms on QN90A and
+151.757–166.797 ms on S90D. Prior outliers remain unresolved. The earlier S90D
+root outlier spent 1138.673 ms inside HTTPS versus 1141.376 ms in the outer
+harness; local intent/result writes explain only about 2.703 ms. The earlier
+managed forget RPC took 1547.874 ms. Successful journaled operations have two
+service publications, each with file and directory sync, in addition to worker
+persistence. Existing measurements cannot partition these costs from worker,
+TLS/network and scheduling time. No persistence barrier was removed.
+
+Both final rounds preserved their trial boots/coordinators, retained jobs,
+enrollment and protected files, and ended managed-ready. Native and observer
+scopes/mounts/helpers are absent, owned units are inactive, SDK is on loopback,
+and independent 300-second .NET rescues did not fire. No deployment, power
+transition, global policy, persistent capability or SMACK change occurred.
+Raw device data and journals remain private; see
+[sanitized qualification](observer-overhead-results.json).
+
+Next: add authenticated service phase timing and investigate the remaining tails.
+Native-only capability entry, complete lifecycle/resource and 24-hour mixed
+endurance evidence, native-default observation and .NET retirement remain open.
+The managed bridge, worker fallback and independent rescue remain required.

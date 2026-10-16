@@ -11,6 +11,19 @@ typedef struct { pid_t pid; uint64_t start; dev_t dev; ino_t inode; int native; 
 static ObserveCache observe_cache[OBSERVE_CACHE];
 static size_t observe_cached;
 static int observe_failed;
+typedef struct { pid_t pid; uint64_t start; dev_t dev; ino_t inode; } ObserveSeen;
+static ObserveSeen observe_seen[OBSERVE_CACHE];
+static size_t observe_seen_count;
+
+static int observe_first_seen(pid_t pid, uint64_t start, const struct stat *exe) {
+  for (size_t i = 0; i < observe_seen_count; i++) {
+    ObserveSeen *s = &observe_seen[i];
+    if (s->pid == pid && s->start == start && s->dev == exe->st_dev && s->inode == exe->st_ino) return 0;
+  }
+  if (observe_seen_count == OBSERVE_CACHE) { observe_failed = 1; return 1; }
+  observe_seen[observe_seen_count++] = (ObserveSeen){pid, start, exe->st_dev, exe->st_ino};
+  return 1;
+}
 
 static int observe_native_path(const char *exe) {
   /* A private bind's root can appear as /worker through proc, even when its
@@ -52,7 +65,7 @@ static const char *observe_managed(const char *bytes, size_t size) {
   return NULL;
 }
 
-static J *observe_snapshot(const char *proc, pid_t coordinator, uint64_t coordinator_start, const char *sha) {
+static J *observe_snapshot(const char *proc, pid_t coordinator, uint64_t coordinator_start, const char *sha, unsigned sample_index) {
   J *sample = obj(), *processes = json_object_new_array();
   json_object_object_add(sample, "started_monotonic_ms", json_object_new_double(kernel_clock(CLOCK_MONOTONIC)));
   json_object_object_add(sample, "processes", processes);
@@ -70,12 +83,16 @@ static J *observe_snapshot(const char *proc, pid_t coordinator, uint64_t coordin
     pid_t pid = (pid_t)id;
     int directory = openat(root, entry->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (directory < 0) { vanished++; continue; }
-    ObserveStat before;
-    if (!observe_stat(directory, "stat", &before)) { vanished++; close(directory); continue; }
     char exe[PATH_MAX], command[4096];
     ssize_t n = readlinkat(directory, "exe", exe, sizeof exe - 1);
     if (n < 0 || (size_t)n >= sizeof exe - 1) { close(directory); continue; }
     exe[n] = 0;
+    /* Most proc entries are unrelated daemons or kernel threads. Apply the same
+     * executable discovery filter before reading their stat/cmdline files. */
+    if (pid != coordinator && pid != getpid() && strcmp(exe, "/usr/bin/dotnet") &&
+        !observe_native_path(exe)) { close(directory); continue; }
+    ObserveStat before;
+    if (!observe_stat(directory, "stat", &before)) { vanished++; close(directory); continue; }
     int command_size = observe_read(directory, "cmdline", command, sizeof command);
     const char *role = NULL;
     if (pid == coordinator) {
@@ -86,14 +103,22 @@ static J *observe_snapshot(const char *proc, pid_t coordinator, uint64_t coordin
     else if (observe_native_path(exe) && observe_native(directory, pid, before.start, sha)) role = "native-worker-or-guardian";
     if (role) {
       if (++matched > 32) { observe_failed = 1; close(directory); break; }
-      J *process = observe_process(directory, pid, before.start);
+      struct stat executable_before, executable_after;
+      /* Follow only this proc executable link, and bind exec changes even if
+       * the process reuses the same pathname and command-line arguments. */
+      int have_executable = !fstatat(directory, "exe", &executable_before, 0);
+      int detail = sample_index % 5 == 0;
+      if (have_executable && observe_first_seen(pid, before.start, &executable_before)) detail = 1;
+      J *process = observe_process(directory, pid, before.start, detail);
       str(process, "role", role);
       str(process, "executable", exe);
       /* Exec can change code without changing PID/start ticks. Bracket that too. */
       char after[PATH_MAX], command_after[4096];
       ssize_t after_n = readlinkat(directory, "exe", after, sizeof after - 1);
       int after_size = observe_read(directory, "cmdline", command_after, sizeof command_after);
-      if (after_n != n || after_n < 0 || memcmp(exe, after, (size_t)n) || command_size < 0 || after_size != command_size || memcmp(command, command_after, (size_t)command_size)) {
+      if (!have_executable || fstatat(directory, "exe", &executable_after, 0) ||
+          executable_before.st_dev != executable_after.st_dev || executable_before.st_ino != executable_after.st_ino ||
+          after_n != n || after_n < 0 || memcmp(exe, after, (size_t)n) || command_size < 0 || after_size != command_size || memcmp(command, command_after, (size_t)command_size)) {
         boolean(process, "identity_valid", 0); num(get(process, "errors"), "exec_changed_or_unreadable", ESTALE);
       }
       json_object_array_add(processes, process);
@@ -131,8 +156,8 @@ int main(int argc, char **argv) {
   unsigned char *buffer = allocate(OBSERVE_BYTES);
   long page = sysconf(_SC_PAGESIZE);
   if (page <= 0) fatal("observer page size");
-  volatile unsigned char *touch = buffer;
-  for (size_t i = 0; i < OBSERVE_BYTES; i += (size_t)page) touch[i] = 0;
+  /* Reserve the same bounded capacity without dirtying unused pages. Resource
+   * records populate it progressively; page-fault cost remains observer cost. */
   struct sigaction action;
   memset(&action, 0, sizeof action); action.sa_handler = observe_signal; sigemptyset(&action.sa_mask);
   if (sigaction(SIGTERM, &action, NULL) || sigaction(SIGINT, &action, NULL)) fatal("observer stop handler");
@@ -161,7 +186,7 @@ int main(int argc, char **argv) {
     double at = kernel_clock(CLOCK_MONOTONIC);
     if (previous && at - previous > max_gap) max_gap = at - previous;
     previous = at;
-    J *sample = observe_snapshot("/proc", (pid_t)pid, start, argv[6]);
+    J *sample = observe_snapshot("/proc", (pid_t)pid, start, argv[6], samples);
     const char *bytes = json(sample); size_t length = strlen(bytes);
     if (length + 1 > OBSERVE_BYTES - used) { json_object_put(sample); observe_failed = 1; break; }
     memcpy(buffer + used, bytes, length); used += length; buffer[used++] = '\n'; samples++;
@@ -178,7 +203,10 @@ int main(int argc, char **argv) {
   }
   double ended = kernel_clock(CLOCK_MONOTONIC);
   int kernel_complete = kernel_end(&kernel);
-  J *report = obj(); num(report, "schema", 1); num(report, "samples", samples); num(report, "bytes", used);
+  J *report = obj(); num(report, "schema", 2); num(report, "samples", samples); num(report, "bytes", used);
+  num(report, "memory_detail_every_samples", 5);
+  num(report, "resource_capacity_bytes", OBSERVE_BYTES);
+  str(report, "resource_storage", "bounded reserved buffer populated progressively; unused pages are not prefaulted");
   num(report, "interval_ms", interval); num(report, "skipped_intervals", skipped);
   num(report, "clock_ticks_per_second", sysconf(_SC_CLK_TCK)); num(report, "page_bytes", page);
   boolean(report, "sampling_failed", observe_failed); boolean(report, "kernel_complete", kernel_complete);

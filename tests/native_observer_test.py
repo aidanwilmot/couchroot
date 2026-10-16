@@ -31,10 +31,10 @@ static int fixture_openat(int directory,const char *name,int flags,...) {
 #include "observe-process.h"
 #undef openat
 int main(int argc,char **argv) {
-  if(argc!=3)return 64;
+  if(argc!=4)return 64;
   libraries();
   int directory=open(argv[1],O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
-  J *sample=observe_process(directory,123,(uint64_t)strtoull(argv[2],NULL,10));
+  J *sample=observe_process(directory,123,(uint64_t)strtoull(argv[2],NULL,10),atoi(argv[3]));
   puts(json(sample));json_object_put(sample);close(directory);return 0;
 }
 ''')
@@ -49,6 +49,18 @@ int main(int argc,char **argv) {
 #include "observe.c"
 #undef main
 int main(int argc,char **argv) {
+  if(argc==3 && !strcmp(argv[1],"snapshot")) {
+    libraries();J *s=observe_snapshot(argv[2],123,999,"",0);
+    puts(json(s));json_object_put(s);return 0;
+  }
+  if(argc==2 && !strcmp(argv[1],"seen")) {
+    struct stat a={0},b={0};a.st_dev=b.st_dev=1;a.st_ino=2;b.st_ino=3;
+    int first=observe_first_seen(123,999,&a);
+    int repeated=observe_first_seen(123,999,&a);
+    int reused=observe_first_seen(123,1000,&a);
+    int replaced=observe_first_seen(123,1000,&b);
+    printf("%d %d %d %d\n",first,repeated,reused,replaced);return 0;
+  }
   if(argc!=4)return 64;
   libraries();
   int directory=open(argv[1],O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
@@ -72,7 +84,7 @@ int main(int argc,char **argv) {
             fields[index] = str(value)
         return '123 (name with ) spaces) '+' '.join(fields)+'\n'
 
-    def sample(self, *, change=False, missing=False, malformed=False, expected=999):
+    def sample(self, *, change=False, missing=False, malformed=False, expected=999, detail=True):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
             (p/'stat').write_text('malformed\n' if malformed else self.stat())
@@ -82,11 +94,16 @@ int main(int argc,char **argv) {
                 (p/'task').mkdir(); (p/'task/123').mkdir()
                 (p/'mountinfo').write_text('one\ntwo\n')
                 (p/'status').write_text('VmHWM: 100 kB\n')
-                (p/'smaps').write_text('Rss: 20 kB\nPss: 8 kB\nPrivate_Clean: 2 kB\nPrivate_Dirty: 3 kB\nSwap: 1 kB\nRss: 30 kB\nPss: 4 kB\n')
+                if detail:
+                    (p/'smaps').write_text('Rss: 20 kB\nPss: 8 kB\nPrivate_Clean: 2 kB\nPrivate_Dirty: 3 kB\nSwap: 1 kB\nRss: 30 kB\nPss: 4 kB\n')
+                else:
+                    # Opening this FIFO would block: fast sampling must not
+                    # touch smaps, rather than opening it and discarding data.
+                    os.mkfifo(p/'smaps')
             env = dict(os.environ)
             if change:
                 env['CHANGE_IDENTITY'] = '1'
-            result = subprocess.run([self.fixture, tmp, str(expected)], env=env, check=True, capture_output=True)
+            result = subprocess.run([self.fixture, tmp, str(expected), str(int(detail))], env=env, check=True, capture_output=True, timeout=5)
             return json.loads(result.stdout)
 
     def test_identity_bracketed_counters_and_mapping_sums(self):
@@ -99,6 +116,16 @@ int main(int argc,char **argv) {
         self.assertEqual((s['private_clean_kib'], s['private_dirty_kib']), (2, 3))
         self.assertIsNone(s['swap_pss_kib'])
         self.assertIsNone(s['idle_wakeups'])
+        self.assertEqual(s['errors'], {})
+
+    def test_fast_sample_keeps_identity_cpu_rss_pages_and_counts_without_opening_smaps(self):
+        s = self.sample(detail=False)
+        self.assertTrue(s['identity_valid'])
+        self.assertFalse(s['memory_detail_sampled'])
+        self.assertEqual((s['resident_pages'], s['peak_rss_kib']), (5, 100))
+        self.assertEqual((s['user_ticks'], s['system_ticks'], s['descriptors']), ('12', '8', 2))
+        for field in ('rss_kib', 'pss_kib', 'private_clean_kib', 'private_dirty_kib', 'swap_kib', 'swap_pss_kib'):
+            self.assertIsNone(s[field])
         self.assertEqual(s['errors'], {})
 
     def test_missing_fields_are_unknown_with_errors_not_zero(self):
@@ -133,6 +160,70 @@ int main(int argc,char **argv) {
                 with self.subTest(hint=hint, digest=expected):
                     result = subprocess.run([self.selector, tmp, hint, expected], check=True, capture_output=True)
                     self.assertEqual(result.stdout, output)
+
+    def test_new_pid_or_executable_identity_requires_an_immediate_detail_sample(self):
+        result = subprocess.run([self.selector, 'seen'], check=True, capture_output=True)
+        self.assertEqual(result.stdout, b'1 0 1 1\n')
+
+    def test_same_path_exec_replacement_invalidates_the_sample(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proc = root/'123'; proc.mkdir()
+            (proc/'stat').write_text(self.stat())
+            (proc/'cmdline').write_bytes(b'binary\0')
+            (proc/'fd').mkdir(); (proc/'task').mkdir()
+            (proc/'mountinfo').write_text('mount\n')
+            (proc/'status').write_text('VmHWM: 1 kB\n')
+            binary = root/'binary'; binary.write_bytes(b'original executable identity')
+            (proc/'exe').symlink_to(binary)
+            os.mkfifo(proc/'smaps')
+            process = subprocess.Popen([self.selector, 'snapshot', tmp], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            writer = None
+            try:
+                deadline = time.monotonic()+3
+                while writer is None:
+                    try:
+                        writer = os.open(proc/'smaps', os.O_WRONLY | os.O_NONBLOCK)
+                    except OSError:
+                        if process.poll() is not None or time.monotonic()>deadline:
+                            self.fail('sampler did not enter the controlled mapping read')
+                        time.sleep(.01)
+                replacement = root/'replacement'; replacement.write_bytes(b'new executable identity')
+                replacement.replace(binary)  # Same symlink text, different mapped inode.
+                os.write(writer, b'Rss: 1 kB\nPss: 1 kB\n'); os.close(writer); writer = None
+                stdout, stderr = process.communicate(timeout=3)
+                self.assertEqual(process.returncode, 0, stderr)
+                row = json.loads(stdout)['processes'][0]
+                self.assertFalse(row['identity_valid'])
+                self.assertIn('exec_changed_or_unreadable', row['errors'])
+            finally:
+                if writer is not None:
+                    os.close(writer)
+                if process.poll() is None:
+                    process.kill(); process.communicate()
+
+    def test_unrelated_and_kernel_processes_do_not_trigger_stat_or_command_reads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for pid in ('123', '456', '457'):
+                (root/pid).mkdir()
+            selected = root/'123'
+            (selected/'stat').write_text(self.stat())
+            (selected/'exe').symlink_to('/bin/sleep')
+            (selected/'cmdline').write_bytes(b'sleep\0')
+            (selected/'fd').mkdir(); (selected/'task').mkdir()
+            (selected/'mountinfo').write_text('mount\n')
+            (selected/'status').write_text('VmHWM: 1 kB\n')
+            (selected/'smaps').write_text('Rss: 1 kB\nPss: 1 kB\n')
+            # No executable for a kernel-thread fixture; an unrelated executable
+            # for the second fixture. Neither FIFO may be opened by discovery.
+            (root/'457/exe').symlink_to('/bin/sh')
+            for pid in ('456', '457'):
+                os.mkfifo(root/pid/'stat'); os.mkfifo(root/pid/'cmdline')
+            result = subprocess.run([self.selector, 'snapshot', tmp], check=True, capture_output=True, timeout=3)
+            rows = json.loads(result.stdout)['processes']
+            self.assertEqual([row['pid'] for row in rows], [123])
+            self.assertTrue(rows[0]['identity_valid'])
 
     def run_observer(self, *, stop=False, lose_coordinator=False):
         with tempfile.TemporaryDirectory() as tmp:
@@ -177,14 +268,22 @@ int main(int argc,char **argv) {
         code, report, rows, stderr = self.run_observer()
         self.assertEqual(code, 0, stderr)
         self.assertTrue(report['interval_complete'])
+        self.assertEqual(report['schema'], 2)
+        self.assertEqual(report['memory_detail_every_samples'], 5)
         self.assertFalse(report['stopped_by_signal'])
         self.assertGreaterEqual(len(rows), 4)
         self.assertTrue(all(row['coordinator_present'] for row in rows))
-        for row in rows:
+        for index, row in enumerate(rows):
             self.assertLessEqual(row['started_monotonic_ms'], row['finished_monotonic_ms'])
             self.assertLessEqual(row['finished_monotonic_ms'], report['monotonic_end_ms'])
             self.assertEqual({p['role'] for p in row['processes']}, {'coordinator', 'observer'})
             self.assertTrue(all(p['identity_valid'] for p in row['processes']))
+            for process in row['processes']:
+                self.assertEqual(process['memory_detail_sampled'], index % 5 == 0)
+                if index % 5:
+                    self.assertIsNone(process['pss_kib'])
+                else:
+                    self.assertIsNotNone(process['pss_kib'])
 
     def test_signal_stops_observation_without_discarding_evidence(self):
         code, report, rows, stderr = self.run_observer(stop=True)
