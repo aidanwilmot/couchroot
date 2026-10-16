@@ -77,3 +77,36 @@ does not supply the missing capability promotion. The next entry investigation
 must establish a native vendor path that prepares a usable code view before
 loading the receipt. Package signing and a writable tmpfs copy alone do not
 establish that path. See [mapping evidence](mapping-results.json).
+
+### Vendor mount and credential boundary
+
+Read-only captures and static analysis of both targets narrow the next entry
+investigation. S90D's Launchpad preparation pipeline has a read-only overlay helper
+for app libraries. It runs in the later launch-request pipeline, followed by
+`security_manager_prepare_app2`, before the app callback. The exact security
+library applies an empty capability set during thread synchronization. A usable
+read-only code view at that later point therefore does not by itself preserve the
+authority required by native acquisition.
+
+QN90A's older receiver similarly calls `security_manager_prepare_app` before
+the app callback. Its security preparation reaches a helper that applies an empty
+capability set. Two missing Thumb callbacks were recovered in separate Ghidra
+analysis projects using the low-bit function pointers from their callers. This
+analyst-assisted reconstruction has unresolved indirect calls; it is not a runtime
+trace or an exhaustive account of every vendor path. An equivalent QN90A overlay
+path was not established.
+
+The file-capability inventory also identified `launchpad-starter`. Both exact
+binaries execute the fixed `launchpad-process-pool`; their startup paths touch
+shared Launchpad files or sockets. They are not isolated caller-code hosts and
+were not invoked. The inventory does not rule out every other capable executable.
+
+These findings rule out treating the later ordinary app path or the starter as a
+qualified replacement for the managed entry bridge. Another SDK preload trial
+needs evidence of code mapping **before** capability loss, with isolated ownership
+and bounded cleanup. Do not repeat the earlier preload or invoke shared daemons
+based only on their file capabilities. No new runtime entry trial, package update,
+registration, mount or policy change was performed for this investigation.
+Sanitized provenance and limitations are in
+[vendor preparation findings](vendor-preparation-results.json); raw binaries,
+decompiler output and analysis projects remain private.

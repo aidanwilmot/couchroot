@@ -3274,3 +3274,24 @@ Fully native capability entry, remaining lifecycle coverage, production
 performance/endurance and native-default observation remain open. The .NET
 bridge, worker fallback and independent rescue remain deployed; no reboot,
 standby or global policy change occurred.
+
+### Vendor native-entry preparation boundary — 2026-10-16
+
+Static review of exact read-only firmware captures found a concrete S90D
+read-only overlay helper in the later Launchpad execution pipeline. That pipeline
+then prepares app security before invoking app code. Both targets' exact security
+libraries apply an empty capability set on the traced preparation path. QN90A's
+receiver and security callback required analyst-assisted Thumb reconstruction;
+unresolved indirect calls and runtime behavior remain explicit limitations.
+Thus the later code-mapping helper alone does not supply native acquisition's
+required capabilities. QN90A's corresponding overlay path remains unestablished.
+
+Both `launchpad-starter` binaries were also inspected without invocation. Their
+shared-state initialization and fixed process-pool execution make them unsuitable
+as isolated caller-code hosts. No new entry was qualified, and the original
+preload trial was not repeated. See the [entry findings and provenance](../../native-root-acquisition/entry/vendor-preparation-results.json).
+
+Keep the managed entry, worker fallback and independent rescue. Further native
+entry work needs an earlier isolated mapping mechanism. Production performance
+and endurance qualification can proceed independently on the current ordinary
+signed worker; power transitions and native-default rollout retain their gates.
