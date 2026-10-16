@@ -107,5 +107,33 @@ class ControllerTests(unittest.TestCase):
         for free,runs in [(None,1),(True,1),(-1,1),(2**40,0),(2**40,3)]:
             with self.assertRaises(ValueError):m.require_storage(free,m.Plan(180),runs,True)
 
+    def test_device_space_uses_the_smaller_of_both_filesystems(self):
+        output='Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/a 1000000 100000 800000 10% /opt\n/dev/b 1000000 100000 262144 10% /opt/usr\n'
+        self.assertEqual(m.require_device_storage(output),256*1024**2)
+        with self.assertRaisesRegex(m.ObservationStopped,'floor exhausted'):
+            m.require_device_storage(output.replace('262144','262143'))
+
+    def test_device_space_refuses_partial_or_malformed_snapshots(self):
+        header='Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+        row='/dev/a 1000000 100000 800000 10% /opt\n'
+        for output in (None,header+row,header+row*3,header+row+row.replace('800000','-1'),
+                       header+row+row.replace('800000','1000001'),
+                       header+row+row.replace('800000','999999'),
+                       header+row+row.replace('800000','NaN')):
+            with self.assertRaises(m.ObservationStopped):m.require_device_storage(output)
+
+    def test_in_band_device_space_failure_stops_without_new_work(self):
+        f=Fake();original=f.health
+        def health():
+            original()
+            free=300000 if f.now<20 else 100000
+            m.require_device_storage('Filesystem 1024-blocks Used Available Capacity Mounted on\n'+
+                                     (f'/dev/a 1000000 100000 {free} 10% /opt\n')*2)
+        f.health=health
+        with self.assertRaisesRegex(m.ObservationStopped,'floor exhausted'):f.run()
+        self.assertEqual(sum(name=='launch' for _,name in f.events),1)
+        self.assertNotIn('retire',[name for _,name in f.events])
+        self.assertTrue(any(end>f.now for end in f.timers.values()))
+
 
 if __name__=='__main__':unittest.main()

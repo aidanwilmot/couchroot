@@ -7,19 +7,25 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-The supervised 24-hour trial has started on QN90A, with native selected, a
-24-hour quiet-job timeout, rolling captures, periodic mixed work/transfers and
-independent rescue renewal. This is in progress, not accepted endurance evidence.
+QN90A's first 24-hour attempt stopped after about 35 minutes when its independent
+storage monitor's administrative request conflicted with a job-status read. It
+was reconciled without replay: the remaining collector was downloaded/cleaned,
+the owned quiet job was cancelled and its saved record verified across managed
+return, and retained jobs/enrollment were preserved. The independent .NET rescue
+executed with exit zero and the expected SDK-host setting was observed; SDK was
+then restored to loopback. A fresh supervised trial now performs device-space
+checks synchronously inside health checks, with native selected, a new 24-hour
+quiet job and independent rescue renewal. This is not accepted endurance evidence.
 S90D's run has not started: its graceful service termination closed the connection
 before the launch request returned, and neither Couchroot nor usable external SDK
 access returned. The TV API remains reachable. Non-power recovery attempts were
 recorded without replay; user direction for a physical restart is pending because
 power transitions were explicitly prohibited. Owned restart diagnostics on S90D
-still require reconciliation. See [initial evidence](endurance-start-results.json).
+still require reconciliation. See [resource analysis and reconciliation evidence](observer-resource-analysis-results.json).
 The completed qualification below predates that current recovery state.
 
-Both TVs now run signed 0.7.48 and are managed-ready after fresh integrated
-qualification. The authenticated timing header now separates file-sync and
+Both TVs run signed 0.7.48; the preceding integrated qualification ended
+managed-ready. The authenticated timing header now separates file-sync and
 directory-sync elapsed time and counts inside each journal phase. All 19 payload
 members, including manifests, native/managed workers and acquisition bridge, are
 byte-identical to 0.7.47. The JSON journal, archives and every durability barrier
@@ -4103,3 +4109,58 @@ command, package update, persistent capability or platform-policy change was
 performed. QN90A's independent trial continues. Native-only entry, resource and
 performance conclusions, both-TV endurance, power lifecycle, native-default
 observation and .NET retirement remain open.
+
+## Resource analysis and serialized storage checks — 2026-10-16
+
+The offline analyzer first verifies capture continuity, then binds native worker
+and guardian samples to the production receipt, boot and executable digest. It
+uses recorded clock-tick/page-size units, subtracts full-width CPU counters before
+conversion, and assigns overlapping samples to one collector at a time. It
+reports per-process and same-scan native totals, fixed-time bins, sampled extrema,
+endpoint differences, and known/unknown memory counts. Sparse mapping details
+remain unknown; lifetime RSS high-water marks and summed namespace mount counts
+are excluded. Each observer's own measurements remain separate from application
+measurements and from other concurrent observers.
+
+Thirteen analyzer tests cover overlap weighting, growth, full-width CPU counters,
+sparse/missing detail, production identity/source changes, counter regression,
+invalid units, partial intervals and integrity/CLI failures. It successfully
+analyzed the previous 180-second selected-native captures from both TVs. Each
+retained 182 samples after interval clipping and overlap removal; combined native
+CPU was 0.387% of one core on QN90A and 0.602% on S90D. These short workload samples
+are descriptive, not a comparative performance gate.
+
+A distinct completed-prefix manifest also verified 33.510 minutes from the first
+12 completed windows of QN90A's stopped attempt. The original 24-hour intent was
+not changed. Its 2,017 retained samples showed worker descriptors between 12 and
+16, three worker threads, and a worker PSS-plus-Swap proxy between 348 and 415 KiB.
+Guardian descriptors/threads remained 11/1 in those samples. Combined native CPU
+was 0.269% of one core. The record is too short for an endurance or leak-free claim;
+the analysis explicitly excludes unobserved processes and between-sample peaks.
+
+The failure was a host-harness scheduling conflict. The controller and separate
+space monitor both used the service API; a `job.status` received an administrative
+busy rejection and the controller correctly stopped. Its sole unretired rescue
+later executed with exit zero, and the expected non-loopback SDK setting was read
+back through the still-working Couchroot service. External SDK usability was not
+tested during that interval. A new bounded rescue protected reconciliation; the
+final collector completed successfully, the owned quiet job was cancelled, its
+record bytes survived managed return and were then forgotten, and original
+retained jobs/enrollment/protected hashes were preserved. SDK returned to loopback,
+the old timer was stopped, and the reconciliation rescue was retired unfired.
+There was no power transition or replay of the rejected request.
+
+Device-space checks now run serially inside the bounded health callback, using a
+strict two-filesystem POSIX `df` parser and the existing 256 MiB floor. Three new
+tests cover minimum capacity, malformed/partial data and low-space stop behavior
+with recovery left armed. The controller has 15 passing tests, continuity has 17,
+and resource analysis has 13; 13 Linux-only observer tests were skipped. npm passed
+423 tests with 157 skips. No installed service, worker, bridge or package changed.
+
+After reconciliation, a fresh captured QN90A service relaunch reset the task and
+preserved its boot, enrollment, history and retained jobs. A new 24-hour invocation
+has started with serialized device-space checks, mixed jobs, checksum transfers,
+and the original rescue/coverage requirements. Source snapshots and operation
+intents remain private and immutable. See [sanitized evidence](observer-resource-analysis-results.json).
+S90D recovery remains pending; this work closes neither both-TV endurance nor
+performance, native-only entry, power lifecycle, native-default or .NET retirement.

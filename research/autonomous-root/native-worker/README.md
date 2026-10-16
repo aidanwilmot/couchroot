@@ -1172,6 +1172,41 @@ of the independent SDK rescue, and explicit selected-worker checks throughout.
 The short two-window hardware qualification establishes capture continuity only;
 it is not a sustained native run, a leak-free result or the 24-hour endurance gate.
 
+### Offline resource analysis
+
+`python3 analyze-observer-resources.py PRIVATE_SERIES_JSON PRIVATE_PRODUCTION_JSON`
+first runs the continuity verifier, then binds both native identities to the
+ready production receipt's boot and worker digest. Every row must contain exactly
+those worker/guardian identities, plus the bound coordinator and collector.
+Duplicate identities, CPU regressions (including discarded overlap samples),
+changed units, invalid counters and changed artifact hashes refuse analysis.
+Clock ticks and page size come from the verified observer metadata. The caller
+still authenticates live receipts, executable provenance and device identity.
+
+Each collector owns samples until the next collector's first sample. This removes
+overlap weighting; the report gives the resulting sample gaps and actual CPU
+sample span. Full-width tick counters are subtracted before conversion to a
+percentage of one core. `--bin-ms` defaults to 600000; bins report sampled extrema,
+medians and known/unknown counts, including partial edge bins. Missing mapping
+detail remains null. First/last bin medians and endpoint differences are
+descriptive, with no automatic growth threshold or leak-free conclusion.
+
+Worker and guardian totals use readings from the same scan, which is not an
+atomic process-tree snapshot. Shared RSS can be counted twice. Mount counts are
+per namespace and are not summed. PSS plus Swap is an accounting proxy; lifetime
+VmHWM is excluded from interval peaks. Coordinator measurements may include other
+services in its shared host. Collector measurements remain separate per window:
+they do not claim total overhead when two collectors overlap. Short-lived
+descendants and between-sample peaks remain outside the measurement boundary.
+
+Use immutable completed files. A progress analysis must use a separate, explicitly
+labelled completed-prefix manifest retaining the original intended endpoint and
+source-manifest digest. Never overwrite or shorten the endurance coverage intent,
+or present acceptance of the shorter interval as acceptance of the planned run.
+The CLI's success means the descriptive analysis completed, not that performance,
+resource stability or endurance qualification passed. Reports remain private;
+commit only sanitized summaries. See [resource evidence](observer-resource-analysis-results.json).
+
 ### Rolling controller
 
 `observer-series-controller.py` supplies a synchronous `run(adapter, Plan(...))`
@@ -1212,3 +1247,11 @@ default cadence. The full-day fake-clock test exercises all of them and verifies
 that only the final rescue remains armed. Host sleep suppression and bounded
 adapter calls belong to the supervising harness; they do not change TV power
 settings or authorize reboot/standby.
+
+Device-space probes must execute synchronously inside the adapter's bounded
+`health()` callback. A separate `/v1/exec` monitor can hold the administrative
+mutex while `job.status` runs and invalidate the trial. `require_device_storage`
+validates `LC_ALL=C df -Pk` output for the two adapter-guarded storage paths and
+requires at least 256 MiB available on each. Missing/malformed counters or a
+low-space result stop scheduling and leave recovery armed. This checks a snapshot;
+it neither reserves space nor authorizes retries of failed administrative calls.

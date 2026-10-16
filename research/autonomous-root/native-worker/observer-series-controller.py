@@ -53,6 +53,33 @@ def require_storage(free_bytes, plan, concurrent_runs=1, initial=False):
     return required
 
 
+def require_device_storage(output, minimum_free_bytes=256 * 1024**2):
+    """Validate `LC_ALL=C df -Pk` for the two adapter-guarded device paths.
+
+    Call synchronously from health(), never from a competing API client. The
+    adapter binds the command/device; this parser cannot authenticate its output.
+    """
+    if type(minimum_free_bytes) is not int or minimum_free_bytes < 0:
+        raise ValueError('invalid device storage floor')
+    if not isinstance(output, str) or len(output) > 16384:
+        raise ObservationStopped('invalid device storage response')
+    lines = output.splitlines()
+    if len(lines) != 3 or lines[0].split() != ['Filesystem', '1024-blocks', 'Used', 'Available', 'Capacity', 'Mounted', 'on']:
+        raise ObservationStopped('incomplete device storage response')
+    available = []
+    for line in lines[1:]:
+        fields = line.split()
+        if len(fields) != 6 or not all(value.isascii() and value.isdecimal() for value in fields[1:4]):
+            raise ObservationStopped('invalid device storage counters')
+        total, used, free = map(int, fields[1:4])
+        if total <= 0 or used > total or free > total or used + free > total:
+            raise ObservationStopped('inconsistent device storage counters')
+        available.append(free * 1024)
+    if min(available) < minimum_free_bytes:
+        raise ObservationStopped('device storage floor exhausted; preserve evidence and recovery')
+    return min(available)
+
+
 def run(adapter, plan, clock=time.monotonic, sleep=time.sleep):
     """Return captures and the still-armed rescue after all windows are collected.
 
@@ -62,6 +89,7 @@ def run(adapter, plan, clock=time.monotonic, sleep=time.sleep):
     stopping it and then confirms inactivity. collect requires successful exit,
     hash-verified durable download, native identity coverage and owned cleanup.
     Every method must have bounded calls; an exception stops the run without replay.
+    Device-space checks belong inside health(), serialized with all other calls.
     Host deadlines are conservative scheduling guards, not capture evidence.
     Offline verification of TV clocks/records remains mandatory after this returns.
     """
