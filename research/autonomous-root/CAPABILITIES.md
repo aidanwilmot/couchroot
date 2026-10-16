@@ -1264,3 +1264,18 @@ publication interruption and injected launch/storage failures. This does not
 qualify power loss or sustained pressure. Performance and endurance gates remain
 open, and the .NET entry bridge, worker fallback and independent rescue remain.
 See [single-publication results](native-worker/single-publication-results.json).
+
+
+## Endurance transfer recovery and reboot scope
+
+The host endurance harness now preserves a separate checksum download for every
+transfer index and refuses any replay with an existing intent. Two consecutive
+native 1 MiB transfers passed on QN90A. Both TVs have fresh supervised endurance
+runs using the corrected helper; neither has completed the 24-hour gate.
+
+S90D recovered after an explicitly authorized software reboot and host-assisted
+SDK loopback restoration, with original selection, jobs and enrollment preserved.
+Its managed readiness is verified on the new boot. The installed selected-native
+restart receipts remain bound to their original boot; this recovery does not
+qualify native cross-boot startup. The .NET entry, managed worker and independent
+300-second rescue remain available. See [transfer and recovery evidence](native-worker/observer-transfer-recovery-results.json).

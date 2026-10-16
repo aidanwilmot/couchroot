@@ -1284,3 +1284,12 @@ validates `LC_ALL=C df -Pk` output for the two adapter-guarded storage paths and
 requires at least 256 MiB available on each. Missing/malformed counters or a
 low-space result stop scheduling and leave recovery armed. This checks a snapshot;
 it neither reserves space nor authorizes retries of failed administrative calls.
+
+Hourly checksum work uses `observer-transfer.py`. Each transfer index has its
+own download, durable exclusive intent and completion receipt. The helper refuses
+existing evidence before upload, verifies both the download receipt and the saved
+bytes, then calls the adapter's hash-guarded cleanup. Earlier downloads remain
+available for inspection. An uncertain upload, download or cleanup stops the run;
+reusing that index is refused even when the remote mutation may have completed.
+The adapter still owns authentication, bounded calls, request journaling and
+serialization with health, collector and rescue operations.

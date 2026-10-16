@@ -4219,3 +4219,62 @@ and independent 300-second rescue renewal. Its first 220-sample window passed re
 This is initial progress, not endurance acceptance. See [sanitized exit evidence](observer-exit-retention-results.json).
 S90D recovery, both-TV endurance, performance, native-only entry, power lifecycle,
 native-default observation and eventual .NET retirement remain open.
+
+
+## Consecutive transfers and S90D recovery — 2026-10-16
+
+The retained-exit QN90A trial stopped after 60.909 minutes, with 22 completed
+windows, when its second hourly transfer tried to reuse the first local download.
+The client's exclusive destination check correctly refused it. The remaining
+collector was verified using its retained exit receipt and cleaned. The owned
+remote transfer was hash-checked and removed; the quiet job was cancelled, its
+record bytes preserved across managed return, and then forgotten. Original jobs,
+enrollment and protected hashes were preserved and SDK returned to loopback.
+This stopped run does not satisfy the 24-hour gate.
+
+`observer-transfer.py` now gives every index separate download, intent and
+completion files. It durably records an exclusive intent before upload, verifies
+saved bytes independently of the download receipt, and invokes guarded cleanup
+only after checksum and size match. Any existing evidence refuses replay before
+upload. Six focused tests cover consecutive transfers, retained earlier bytes,
+uncertain upload/download/cleanup, corrupt content, existing paths and invalid
+inputs. QN90A passed two consecutive native 1 MiB transfers using this helper,
+then returned to managed with original jobs/enrollment preserved and its rescue
+retired unfired. The affected observer suites pass 61 tests with 13 Linux-only
+skips; npm passes 423 with 157 skips. The installed package remains signed 0.7.48.
+
+The owner restored S90D's Developer Mode Host PC IP and authorized rebooting both
+TVs. SDK access then proved S90D was still on its original boot. Read-only root
+reconciliation recovered the earlier graceful restart log: termination and launch
+reported success and reached the final marker, despite the missing service.
+That log does not establish a healthy coordinator. A preservation guard initially
+refused the recovery helper's intentionally private passwd view before submitting
+any reboot. Outside that view, original enrollment and protected files verified.
+The maintenance helper used an isolated archive-directory bind in its private
+mount namespace, preserving unrelated service staging files.
+
+A fresh, journaled software reboot produced a new S90D boot and restored the
+Couchroot API. Its stale host SDK connection was detached and re-admitted. Under
+an independent 300-second .NET rescue, host-assisted loopback restoration brought
+managed acquisition back to readiness. Original selection, retained jobs,
+enrollment and protected hashes verified; inventory settled and the rescue was
+retired unfired. The earlier owned log scope and failed helper stage were removed.
+This is recovery on a new boot, not native cross-boot or unassisted SDK recovery
+qualification. QN90A was not rebooted; its interrupted SDK-setting change was
+reconciled, its acquisition retry budget reset through authenticated disable/enable,
+and its managed readiness and preservation checks passed before the new trial.
+
+S90D also passed the five-second retained collector probe: active zero status was
+not accepted as completion, and loaded/active/exited success was bound to the
+observer PID before cleanup. Fresh supervised trials are now running on both TVs,
+using the unique-download helper, original full coverage intent, mixed work,
+24-hour quiet job and independent rescue renewal. Their source snapshots remain
+immutable. Initial progress does not close endurance or resource/performance gates.
+See [sanitized evidence](observer-transfer-recovery-results.json).
+
+The installed selected-native restart path still binds readiness and runtime
+receipts to the original boot. Reboot authorization removes the operational
+permission blocker; it does not make those receipts valid across boots. Native
+cross-boot reconciliation needs implementation and tests before qualification.
+Native-only entry, remaining power transitions, native-default observation and
+.NET retirement remain open; both .NET fallbacks remain deployed.
