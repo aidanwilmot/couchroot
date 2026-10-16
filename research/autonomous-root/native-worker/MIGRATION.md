@@ -7,6 +7,13 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
+The unchanged signed 0.7.45 worker and managed DLL have also completed a bounded
+alternating warm-loopback comparison on both TVs. Memory was lower for native,
+but job latency regressed on QN90A and an S90D app-job sample exceeded one second.
+The performance no-regression gate remains unresolved. These four measured pairs
+per TV do not establish full acquisition, HTTPS or endurance behavior. See
+[production performance observations](production-performance-results.json).
+
 Both TVs are on signed 0.7.45 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 32 settled history entries (26 committed,
 6 rolled back); S90D has 32 (25 committed, 7 rolled back).
@@ -3295,3 +3302,58 @@ Keep the managed entry, worker fallback and independent rescue. Further native
 entry work needs an earlier isolated mapping mechanism. Production performance
 and endurance qualification can proceed independently on the current ordinary
 signed worker; power transitions and native-default rollout retain their gates.
+
+### Ordinary-worker performance observations — 2026-10-16
+
+The benchmark now requires native production lifetime and verifies its guardian.
+It measures root/app job admission and observed completion, checks exit/output,
+and forgets only verified jobs. Per-process phase snapshots include descriptors,
+threads, mounts, RSS high-water and per-thread context switches. Missing optional
+fields remain unknown; context switches are not reported as wakeups. The `wait4`
+high-water value is explicitly not an additive process-tree RSS total.
+
+Both TVs ran exact ordinary worker bytes from signed 0.7.45, with the matching
+installed managed DLL, on private loopback connections. Two warmup pairs preceded
+four measured pairs; execution order alternated. Each measured worker verified
+four upload/download cycles and root/app jobs. Five focused Linux benchmark tests
+passed, the diagnostic binary reproduced across two builds, and npm passed 414
+tests with 157 optional skips. No service, worker or setup production code changed;
+no new signed package was installed.
+
+| Median observation | QN90A managed | QN90A native | S90D managed | S90D native |
+| --- | ---: | ---: | ---: | ---: |
+| Warm launch to authenticated status (ms) | 511 | 544 | 800 | 193 |
+| Settled worker + guardian PSS (KiB) | 5,822 | 549 | 5,914 | 451 |
+| First upload (MiB/s) | 13.26 | 13.62 | 19.65 | 20.35 |
+| First download (MiB/s) | 87.47 | 86.14 | 65.70 | 76.59 |
+| Root-job observed completion (ms) | 145 | 264 | 104 | 99 |
+| App-job observed completion (ms) | 73 | 242 | 60 | 90 |
+
+QN90A native root-job completion reached 518 ms; S90D native app-job admission
+reached 1,016 ms and observed completion 1,062 ms. Do not discard these samples or
+declare the performance no-regression gate passed. Investigate launch persistence,
+supervision and scheduling costs before the final endurance run. The measurements
+do not yet establish the cause; repeating passing samples would not resolve it.
+
+Warm launch excludes acquisition, service scheduling, HTTPS and boot readiness.
+Job completion includes ten-millisecond polling. The installed fallback and
+controller remained alive, which affects shared-mapping PSS attribution. Four
+pairs cannot establish stable tails; nearest-rank p95 is the maximum at this
+sample count. Phase snapshots are not continuous peaks, and captured kernel tails
+are not full-run observation. Raw logs and identity bindings remain private;
+[sanitized results](production-performance-results.json) retain sample counts,
+warmups, ranges, medians, order and these limits.
+
+Both TVs ended with their original managed worker ready, unchanged retained jobs,
+history, enrollment and boot identity, SDK loopback, no native helper/freezer
+remnants, and independent rescue inactive without firing. All trial helpers,
+uploads, jobs and private scopes were retired. The QN90A harness initially stopped
+before launch at an obsolete managed-code path assertion; exact staged hashes and
+the current signed DLL were reconciled without repeating uploads. An additional
+read-only inventory found old empty service directories outside this experiment;
+they were preserved and excluded from claims about owned benchmark cleanup.
+
+Next: diagnose the measured job-latency cost, then complete full acquisition/public
+path timing, continuous resource/lifecycle observation and 24-hour qualification.
+Native-only entry, authorized power transitions and native-default observation
+remain separate open gates. Keep all .NET fallback and recovery paths.

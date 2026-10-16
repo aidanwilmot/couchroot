@@ -1,6 +1,7 @@
 /* TV-local side-by-side worker measurement. SPDX-License-Identifier: 0BSD */
 #include "common.h"
 #include "controller.h"
+#include "bench-resources.h"
 static double worker_cpu(pid_t pid) {
   char path[64], buf[4096];
   snprintf(path, sizeof path, "/proc/%d/stat", pid);
@@ -101,11 +102,74 @@ static J *workload(void) {
   free(path);
   free(data);
   J *out = obj();
+  num(out, "bytes", size);
   json_object_object_add(out, "upload_ms", json_object_new_double(up));
   json_object_object_add(out, "upload_cpu_ms", json_object_new_double(upcpu));
   json_object_object_add(out, "download_ms", json_object_new_double(down));
   json_object_object_add(out, "download_cpu_ms",
                          json_object_new_double(downcpu));
+  return out;
+}
+static J *job_timing(const char *profile) {
+  unsigned char random[16];
+  char id[33];
+  random_bytes(random, sizeof random);
+  hex(random, sizeof random, id);
+  J *j = req("job.start");
+  str(j, "id", id);
+  str(j, "profile", profile);
+  str(j, "command", "printf bench; exit 7");
+  num(j, "timeout_ms", 5000);
+  double start = stamp();
+  J *r = call(j);
+  double admitted = stamp();
+  json_object_put(r);
+  int polls = 0;
+  for (;;) {
+    j = req("job.status");
+    str(j, "id", id);
+    r = call(j);
+    polls++;
+    J *result = get(r, "result");
+    const char *state = textval(result, "state");
+    if (!state)
+      fatal("job timing state missing");
+    if (strcmp(state, "running")) {
+      if (strcmp(state, "completed") || !get(result, "exit_code") ||
+          number(result, "exit_code") != 7 ||
+          json_object_get_boolean(get(result, "persistence_failed")))
+        fatal("job timing result");
+      json_object_put(r);
+      break;
+    }
+    json_object_put(r);
+    if (stamp() - start > 10000)
+      fatal("job timing deadline");
+    usleep(10000);
+  }
+  double completed = stamp();
+  j = req("job.output");
+  str(j, "id", id);
+  num(j, "stdout_cursor", 0);
+  num(j, "stderr_cursor", 0);
+  r = call(j);
+  const char *encoded = textval(get(get(r, "result"), "stdout"), "data");
+  size_t length = 0;
+  unsigned char *bytes = encoded ? decode(encoded, &length) : NULL;
+  if (!bytes || length != 5 || memcmp(bytes, "bench", 5))
+    fatal("job timing output");
+  free(bytes);
+  json_object_put(r);
+  j = req("job.forget");
+  str(j, "id", id);
+  r = call(j);
+  json_object_put(r);
+  J *out = obj();
+  str(out, "profile", profile);
+  json_object_object_add(out, "admission_ms", json_object_new_double(admitted - start));
+  json_object_object_add(out, "observed_completion_ms", json_object_new_double(completed - start));
+  num(out, "status_polls", polls);
+  num(out, "poll_interval_ms", 10);
   return out;
 }
 static J *parity(int native) {
@@ -196,7 +260,7 @@ static void sample(const char *dll, const char *binary, const char *app,
     alarm(90);
     if (native)
       execl(binary, binary, "127.0.0.1", port, token, filescope, app, appsha,
-            (char *)NULL);
+            "--production", (char *)NULL);
     else
       execl("/usr/bin/dotnet", "dotnet", dll, "127.0.0.1", port, token, scope,
             (char *)NULL);
@@ -229,10 +293,17 @@ static void sample(const char *dll, const char *binary, const char *app,
   worker_pid = atoi(fields_a[1]);
   free(auth);
   J *r = call(req("status"));
+  if (native && (number(get(r, "result"), "guardian_pid") != child ||
+                 !textval(get(r, "result"), "lifetime_mode") ||
+                 strcmp(textval(get(r, "result"), "lifetime_mode"), "production") ||
+                 number(get(r, "result"), "lifetime_seconds") != 0))
+    fatal("benchmark requires ordinary production lifetime and owned guardian");
   json_object_put(r);
   double startup = stamp() - start, startcpu = live_cpu();
   J *report = obj();
   str(report, "kind", native ? "native" : "dotnet");
+  str(report, "startup_scope", "warm root-executor launch through authenticated status; excludes acquisition");
+  boolean(report, "native_production_mode", native);
   num(report, "round", round);
   json_object_object_add(report, "startup_ms", json_object_new_double(startup));
   json_object_object_add(report, "startup_cpu_ms",
@@ -241,13 +312,19 @@ static void sample(const char *dll, const char *binary, const char *app,
   if (native)
     json_object_object_add(report, "guardian_ready_memory", memory(child));
   str(report, "resource_accounting",
-      "CPU includes guardian; memory reports worker and guardian separately");
+      "CPU includes guardian, excludes exited command descendants; memory and resources report worker and guardian separately; descriptors sampled at phase boundaries, not a continuous peak; scheduling counters are not wakeups");
+  json_object_object_add(report, "ready_resources", bench_tree_resources());
   if (round >= 0) {
     json_object_object_add(report, "parity", parity(native));
     json_object_object_add(report, "transfer", workload());
+    J *jobs = json_object_new_array();
+    json_object_array_add(jobs, job_timing("root"));
+    json_object_array_add(jobs, job_timing("app"));
+    json_object_object_add(report, "jobs", jobs);
     json_object_object_add(report, "loaded_memory", memory(worker_pid));
     if (native)
       json_object_object_add(report, "guardian_loaded_memory", memory(child));
+    json_object_object_add(report, "loaded_resources", bench_tree_resources());
     int64_t seconds = 1;
     const char *setting = getenv("COUCHROOT_BENCH_IDLE_SECONDS");
     if (setting && (!decimal(setting, &seconds) || seconds < 1 || seconds > 30))
@@ -266,6 +343,7 @@ static void sample(const char *dll, const char *binary, const char *app,
                            json_object_new_double(stamp() - idle));
     json_object_object_add(report, "idle_cpu_series_ms", series);
     json_object_object_add(report, "settled_memory", memory(worker_pid));
+    json_object_object_add(report, "settled_resources", bench_tree_resources());
     if (native)
       json_object_object_add(report, "guardian_settled_memory", memory(child));
     if (seconds > 1) {
@@ -295,7 +373,8 @@ static void sample(const char *dll, const char *binary, const char *app,
   child = 0;
   if (!WIFEXITED(status) || WEXITSTATUS(status))
     fatal("worker exit");
-  num(report, "peak_rss_kib", usage.ru_maxrss);
+  num(report, "wait4_peak_rss_kib", usage.ru_maxrss);
+  str(report, "wait4_peak_scope", "waited child and reaped descendants kernel high-water; not additive tree RSS");
   puts(json(report));
   fflush(stdout);
   json_object_put(report);

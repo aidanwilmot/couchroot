@@ -199,6 +199,23 @@ kernel clock-tick resolution. Warm-cache worker startup is not boot readiness. T
 guardian CPU and reports its memory separately; old measurements below predate
 the guardian and must not be attributed to the current implementation.
 
+The current benchmark requires native `--production` lifetime and verifies the
+owned guardian through authenticated status. It times root/app job admission and
+observed completion, verifies the nonzero exit and output, then forgets each job.
+Completion includes status polling with a ten-millisecond interval; this is not
+an exact kernel exit timestamp. A failed outcome or persistence check retains the
+job for inspection and emits no successful sample.
+
+Ready, loaded and settled snapshots include each worker/guardian's descriptor,
+thread and mount counts, process RSS high-water mark and per-thread scheduling
+counters. Missing optional kernel fields or retired threads are unknown. Context
+switches are not wakeup counts, and phase snapshots are not continuous descriptor
+peaks. `wait4_peak_rss_kib` is labeled separately: it is the kernel high-water
+statistic for the waited child/reaped descendants, not an additive tree total.
+Use the separate worker/guardian `smaps` observations for contemporaneous totals.
+Full acquisition, HTTPS latency, exact idle wakeups, continuous lifecycle capture
+and endurance still require their own integrated measurements.
+
 Build outside the source checkout with the project's cached ARMv7 soft-float
 Bullseye toolchain:
 
