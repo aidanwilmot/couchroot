@@ -182,6 +182,13 @@ done
     assert.equal(interrupted.record.state,'interrupted');assert.equal(interrupted.record.exit_code,null);
     assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
    }
+   if(guardianLoss){
+    assert.equal((await second.operation({op:'job.forget',id:'native-live-00001'})).forgotten,true);
+    assert(!fs.existsSync('/opt/couchroot-agent/jobs/native-live-00001.json'));
+    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);
+    assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
+    assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
+   }
    assert.equal(second.restartInventory().boundary,'settled');return;
   }
   await assert.rejects(first.rehearseNative(native,runtimeSha),e=>{if(mode==='live-provider-loss'||mode==='live-production-loss'||observerLoss)return e.outcome==='unknown'&&/^[a-f0-9]{32}$/.test(e.recovery_transaction_id);for(let c=e;c;c=c.cause)if(c===injected)return true;return false;});

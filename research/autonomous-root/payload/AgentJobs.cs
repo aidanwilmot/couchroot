@@ -138,7 +138,9 @@ internal static partial class SamsungTvRootAgent
                     if(kill(-pid,SignalKill)!=0)throw new IOException("Cannot cancel process group");
                     return new {id,state="cancel_requested"};
                 }
-                if(op=="job.forget" && (rebooted || state=="completed" || state=="timed_out" || state=="cancelled")){File.Delete(file);return new {forgotten=true};}
+                // Reconciled native interruptions are terminal even on this boot.
+                // Forget only their saved metadata; uncertain/live records stay refused.
+                if(op=="job.forget" && (rebooted || state=="completed" || state=="timed_out" || state=="cancelled" || state=="interrupted")){File.Delete(file);return new {forgotten=true};}
             }
         }
         throw new ArgumentException("Operation unavailable; inspect job status");

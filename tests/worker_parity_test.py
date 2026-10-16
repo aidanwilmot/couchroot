@@ -101,6 +101,9 @@ class WorkerParityTests(unittest.TestCase):
         self.compare('job.start',self.paired(id=id,command='sleep 30',timeout_ms=60000,profile='root'),drop=('state','exit_code'))
         for w in self.workers:
             self.assertEqual(self.resources(w)['jobs'],[dict(id=id,state='running',monitor_finished=False)])
+        self.assertFalse(self.compare('job.forget',self.paired(id=id))[0]['ok'])
+        for w in self.workers:
+            self.assertEqual(self.resources(w)['jobs'],[dict(id=id,state='running',monitor_finished=False)])
         self.compare('job.cancel',self.paired(id=id),drop=('state',))
         for w in self.workers:
             self.wait(w,id)
@@ -190,7 +193,7 @@ class WorkerParityTests(unittest.TestCase):
     def test_saved_managed_record_schema_and_no_replay(self):
         boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         managed=Path('/opt/couchroot-agent/jobs');managed.mkdir(parents=True,exist_ok=True);managed.chmod(0o700)
-        for index,(state,old) in enumerate((('completed',False),('unknown',False),('running',False),('running',True),('cancelled',False))):
+        for index,(state,old) in enumerate((('completed',False),('unknown',False),('running',False),('running',True),('cancelled',False),('timed_out',False),('interrupted',False),('starting',False),('cancelling',False))):
             id=f'parity-saved-record-{index:03}'
             record=dict(id=id,boot_id='00000000-0000-0000-0000-000000000001' if old else boot,state=state,pid=0,process_start=None,exit_code=7 if state=='completed' else None)
             paths=[managed/(id+'.json'),self.workers[1].root/'.jobs'/(id+'.json')]
@@ -201,7 +204,7 @@ class WorkerParityTests(unittest.TestCase):
                 results=self.compare('job.status',self.paired(id=id))
                 self.assertEqual(results[0]['result']['record'],results[1]['result']['record'])
                 self.assertFalse(self.compare('job.start',self.paired(id=id,command=':',timeout_ms=1000,profile='root'))[0]['ok'])
-                r=self.compare('job.forget',self.paired(id=id));self.assertEqual(r[0]['ok'],old or state in ('completed','cancelled'))
+                r=self.compare('job.forget',self.paired(id=id));self.assertEqual(r[0]['ok'],old or state in ('completed','cancelled','timed_out','interrupted'))
             finally:
                 for p in paths:p.unlink(missing_ok=True)
 

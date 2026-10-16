@@ -4,7 +4,7 @@ These changes require rebuilding the service and worker together. Existing insta
 0.1.x workers do not expose the new operations. Source validation is separate from
 TV installation and firmware-specific acceptance; no deployment is implicit.
 
-Current qualification: signed 0.7.42 has passed bounded native public-operation,
+Current qualification: signed 0.7.43 has passed bounded native public-operation,
 same-boot startup/return and committed guardian-loss recovery on both TVs. Managed is selected and ready
 after acceptance. Historical versioned observations below retain their original
 limits; see the current native recovery and parity sections for newer evidence.
@@ -51,6 +51,17 @@ unchanged managed API cannot forget a same-boot interrupted saved job; the owned
 test record required hash-bound maintenance cleanup after process-exit checks.
 Partial journals and other unresolved metadata remain held. See
 [committed guardian evidence](native-worker/active-guardian-results.json).
+
+Signed 0.7.43 closes the saved interrupted-job retirement difference: both workers
+permit `job.forget` for a reconciled terminal interrupted record on the same boot.
+Worker-owned live jobs and saved same-boot uncertain states remain refused. Both
+TVs passed guardian-loss recovery, return and public managed forgetting without
+raw job-record maintenance. The changed managed DLL also required an explicitly
+verified managed package transition: independent signed-worker readiness and SDK
+retirement checks preceded selection commit, with the original history archived.
+Automatic digest replacement remains prohibited by the existing startup guard.
+See [interrupted-job evidence](native-worker/interrupted-forget-results.json) and
+[managed-upgrade maintenance](maintenance/README.md).
 
 All examples use the existing enrolled, certificate-pinned client:
 
@@ -967,7 +978,6 @@ The intentional differences are:
 | Area | Native contract |
 | --- | --- |
 | Saved-job cancellation | Only currently owned jobs can be signalled. Saved PIDs are never authority to cancel a process. Same-boot uncertain records remain unknown and cannot be forgotten. |
-| Interrupted records | Native permits forgetting a reconciled terminal interrupted record on the same boot; managed accepts fewer terminal states. Neither reruns the saved command. |
 | Commands and cancellation | Native retains its reported strict fault/signal policy and owned-descendant supervision. Full arbitrary signal-handler compatibility remains a rollout gate. Neither public foreground route has a cancel endpoint; use jobs for explicit cancellation. |
 | File ownership | Native `.jobs` and `.views` metadata are inaccessible through transfers. Native rejects a non-regular destination at begin and a moved/replaced parent at commit. |
 | Concurrent file changes | Native hashing is bounded by the initial size and rejects size changes. Same-size external changes and publication races still require writer quiescence; no filesystem snapshot or general compare-and-swap is promised. |

@@ -7,20 +7,23 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.42 packages with native service acquisition enabled,
+Both TVs are on signed 0.7.43 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 32 settled history entries (26 committed,
-six rolled back); S90D has 31 (24 committed, seven rolled back).
-Both passed committed guardian SIGKILL with live work: the unchanged coordinator
-reacquired native through the held bootstrap, preserved committed receipts and
-terminal records, and reconciled the live job as interrupted with unknown exit
-status without replay. Normal return preserved the interrupted record in managed.
-All owned units are inactive and old/replacement native runtime and freezer scopes
-are absent. The service now permits a bound complete stale guardian journal to
-reach native reconciliation; managed-return snapshots remain strict. See
-[committed guardian evidence](active-guardian-results.json).
-The unchanged managed API refuses same-boot interrupted `job.forget`; only owned
-test records were retired through hash-bound maintenance after process-exit
-verification. Closing that managed fallback limitation remains a follow-up.
+6 rolled back); S90D has 32 (25 committed, 7 rolled back).
+Both passed committed guardian loss, automatic native reacquisition through the
+same coordinator, normal managed return, and public managed `job.forget` for the
+returned interrupted record. Its unknown exit code and single execution witness
+were preserved; no maintenance deletion of job records was needed. All owned
+units are inactive, old/replacement native scopes are absent, and SDK is on loopback.
+The managed worker DLL changes; the native worker and both entry/archive DLLs
+remain unchanged. Both signed upgrades also preserved the selection digest guard:
+an independently verified managed probe and SDK-confirmed retirement supplied
+receipts for an explicit managed-to-managed transition. The complete original
+history is archived. This is host maintenance, not automatic upgrade admission.
+See [interrupted-job and managed-upgrade evidence](interrupted-forget-results.json).
+The service still admits only a bound complete stale guardian journal to native
+reconciliation; managed-return snapshots remain strict, and partial metadata
+remains held. See [committed guardian evidence](active-guardian-results.json).
 Both also passed a bounded per-worker address-space pressure round on unchanged
 0.7.41 bytes: new allocation refusal preserved a live job and saved result,
 restored limits admitted fresh app work, and restart reconciled the refused
@@ -3061,3 +3064,75 @@ The ordinary native binary and all three managed DLLs are unchanged from
 and independent 300-second rescue remain deployed. No reboot, standby or global
 policy change occurred. Native-only entry, broader interruptions and pressure,
 performance/endurance and native-default rollout remain open.
+
+### Managed retirement of interrupted native jobs — 2026-10-15
+
+Signed 0.7.43 permits `job.forget` for a saved `interrupted` record on the
+current boot. The preceding guardian-loss round exposed that managed rejected
+this terminal state after native recovery and return, despite preserving the
+record correctly. Native already permitted forgetting it. The managed change
+only deletes saved metadata; it does not signal processes or assign an exit code.
+Worker-owned live jobs and same-boot saved starting/running/cancelling/unknown
+records remain refused. Old-boot behavior is unchanged.
+
+The differential test reproduced the preceding managed refusal and now passes
+nine saved-record scenarios with identical managed/native results. It also
+checks that a rejected live-job forget leaves supervision intact. The actual
+committed-guardian-loss restart case now forgets the returned interrupted record
+through managed and verifies that the other retained records and single witness
+remain unchanged. Fresh rebuilt fixtures passed seven differential tests,
+20 restart cases and six rehearsals. npm test passed 410 with 147 platform/fixture
+skips. No client or setup implementation changed.
+
+Both TVs passed the updated committed-guardian-loss round on their installed
+ordinary native worker. Each retained completed managed and native results,
+started one live job with a single execution witness, and lost its freshly bound
+guardian to one SIGKILL. The original coordinator automatically reacquired native,
+reported the live record as `interrupted` with a null exit code and
+`stale-guardian-reconciled`, and preserved committed receipts without replay.
+Normal return preserved all tested records. Public managed `job.forget` then
+removed the interrupted record, and the completed fixtures were retired through
+the same API. No raw job-record deletion was used. Both devices remain on their
+original boots, managed-ready and settled with unchanged enrollment and protected
+hashes. All 17 QN90A and 11 S90D tracked milestone units are inactive, probe staging
+is gone, native runtime/freezer scopes are absent, and SDK is on loopback. See
+[qualification evidence](interrupted-forget-results.json).
+
+Changing the managed DLL exposed an upgrade boundary: selection correctly pinned
+the preceding managed digest and refused startup. The new
+[maintenance primitives](../maintenance/README.md) verify exact signed installed
+bytes, runtime/command-line hashes, root identity, private read-only mounts, unit
+identity and retained-state readback through an independent authenticated worker.
+Six focused tests cover refusal boundaries, nonempty retained records and held
+selection evidence. An exclusive remote writer held admission while quiescence,
+state and readiness receipts were archived. Each probe shut down; the independent
+SDK route then verified process/launcher/runtime disappearance and successful
+unit exit before the original managed-to-managed transaction committed. Both full
+pre-upgrade selection histories remain archived, including entries rotated out of
+the bounded history ring. The original mismatch guard is unchanged. Publication
+and interruption recovery remain explicit maintenance orchestration; no automatic
+upgrade API was added.
+
+Both upgrade baselines contained zero saved jobs. Nonempty retained upgrade
+snapshots and inconsistent managed readback are locally tested; the following
+hardware guardian rounds exercise nonempty state across recovery and return.
+QN90A's first two independent probe callbacks failed before authentication. A
+local reproduction found LAN-bound Node sockets resetting while loopback Node and
+LAN Python sockets worked. A temporary byte relay retained end-to-end worker
+protocol authentication; no network policy changed. Both failed units were
+confirmed terminal and their owned resources retired. During QN90A metadata
+publication, inherited directory setgid and an unavailable comparison command
+stopped the private harness with admission held. Actual writer/file/unit state was
+inspected and the same transaction continued with exact hash checks. Failed
+attempts and receipts were preserved; neither installation nor selection history
+was reset or blindly replayed. S90D passed the corrected maintenance sequence.
+
+
+The signed native binary, NativeEntry DLL and archive-acquisition DLL are
+unchanged; only the managed worker DLL changes. Both managed fallback and the
+independent 300-second .NET rescue remain deployed. The intentional interrupted
+forget difference has been removed from the parity contract. This is metadata
+retirement after verified reconciliation, not a new descendant-cleanup guarantee.
+Native-only entry, service recovery with partial journals, broader pressure,
+performance/endurance and native-default rollout remain open. No reboot, standby
+or global-policy change occurred.
