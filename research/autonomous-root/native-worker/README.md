@@ -216,6 +216,15 @@ Use the separate worker/guardian `smaps` observations for contemporaneous totals
 Full acquisition, HTTPS latency, exact idle wakeups, continuous lifecycle capture
 and endurance still require their own integrated measurements.
 
+`tests/native-io/timing.c` is a private diagnostic interposer for attributing job
+sync costs. It calls the original `fsync` once, preserves its result/errno, and
+emits elapsed time only for the disposable `.jobs` scope. It is not part of the
+worker build or signed package. Use only a separately staged, verified read-only
+library in the owned diagnostic process tree; do not inject it into the installed
+service. Raw paths/PIDs and logs stay private. Its own overhead means the results
+are attribution evidence, not replacement ordinary-build performance numbers.
+Both-TV observations are recorded in [sync timing results](job-sync-timing-results.json).
+
 Build outside the source checkout with the project's cached ARMv7 soft-float
 Bullseye toolchain:
 

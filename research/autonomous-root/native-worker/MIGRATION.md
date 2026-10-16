@@ -3357,3 +3357,63 @@ Next: diagnose the measured job-latency cost, then complete full acquisition/pub
 path timing, continuous resource/lifecycle observation and 24-hour qualification.
 Native-only entry, authorized power transitions and native-default observation
 remain separate open gates. Keep all .NET fallback and recovery paths.
+
+### Job persistence timing attribution — 2026-10-16
+
+A separately staged timing interposer measured the original `fsync` calls in
+disposable comparison processes on both TVs. It did not modify the ordinary
+signed 0.7.45 worker, change sync results, remove a sync, or enter the installed
+service. A Linux fixture verifies the private-scope filter, unchanged file bytes
+and preserved invalid-descriptor error. Two builds reproduced; npm passed 414
+tests with 157 optional skips. The existing benchmark again completed two warmup
+pairs and four measured pairs per TV.
+
+Each of the eight measured native jobs per TV had the expected seven-call order:
+initial intent file + directory, running record file + directory, terminal record
+file + directory, then forget directory. All 56 calls per TV succeeded. The trace
+collector binds the first six calls to the corresponding benchmark job and checks
+that their summed durations fit inside admission/completion intervals.
+
+On QN90A, sync calls account for a median 97.0% of admission time and 91.7% of
+observed completion time. Individual calls commonly take 35–40 ms. On S90D the
+corresponding fractions are 86.2% and 71.0%. The largest job sync was 67.180 ms on
+QN90A and 39.418 ms on S90D. The earlier ordinary S90D one-second sample did not
+recur; these later samples do not explain or invalidate it. The observations
+identify synchronous persistence as the dominant typical cost, not the underlying
+storage/kernel cause of either that cost or the earlier tail.
+
+The managed reference saves JSON without the native path's explicit file and
+directory sync barriers. Do not remove those barriers to match its timings.
+See [sanitized attribution](job-sync-timing-results.json); raw process identities,
+paths and timing lines remain private. Logging/preload perturb scheduling, and
+the performance no-regression gate remains unresolved.
+
+Both TVs retained their original managed worker, selection history, retained
+records, enrollment and boot identity. All diagnostic helpers/uploads/jobs/scopes
+were removed; native helper runtimes/freezers are absent, SDK is on loopback, and
+the independent 300-second rescue is inactive without firing.
+
+The next implementation candidate is one exclusive publication of the complete
+running record after creating a contained child held behind its existing gate.
+It would eliminate the successful path's separate PID-zero intent publication,
+while retaining file sync and directory sync before releasing the command. This
+is a proposed change, not an implemented or qualified optimization. Its acceptance
+requirements are:
+
+- Existing IDs and foreign metadata remain refused without command execution;
+  publication must never replace an existing record.
+- Allocation, pipe, fork and identity failures retain the applicable rejected-ID
+  evidence; no child can outlive failed preparation or bypass its gate.
+- Crashes at temporary creation, partial write, sync, publication and gate release
+  preserve ownership/reconciliation and never replay a command. Include faults
+  with a real gated child, not only an empty fixture directory.
+- A complete record with the original child identity and both persistence barriers
+  precedes command execution. Failed sync keeps the child gated. The execution
+  deadline still starts only after successful preparation.
+- Terminal persistence, saved-record compatibility, unknown exit handling,
+  retention, cancellation and managed return keep their existing guarantees.
+- Focused failure/storage tests, fresh restart/rehearsal fixtures and both-TV
+  qualification of the ordinary signed candidate must precede performance claims.
+
+Implement and qualify that design before the final endurance run; retain the
+earlier performance samples and all .NET fallback/recovery paths.
