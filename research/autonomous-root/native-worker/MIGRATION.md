@@ -3957,3 +3957,33 @@ The existing 240-second observer cannot stand in for that qualification. Native-
 entry, the broader performance gate, separately authorized power lifecycle,
 native-default observation and .NET retirement remain unfinished. The managed
 bridge, worker fallback and independent SDK rescue remain required.
+
+## Overlapping capture continuity — 2026-10-16
+
+The offline `verify-observer-series.py` checks caller-bound private capture
+series: bounded regular files and hashes, successful exits, boot/coordinator
+identity, advancing overlapping clocks, suspend offsets, complete resource rows,
+actual sample spacing, kernel sequence continuity and byte-identical duplicate
+records. It refuses gaps and inconsistent evidence rather than summing window
+durations. Seventeen focused tests passed, including sequence holes across an
+empty middle window, changed overlap bytes, partial identities, invalid clocks,
+symlink refusal and missing requested boundaries. The npm suite passed 423 tests
+with 157 skips. No deployed service or native binary changed.
+
+Both TVs completed two independent 40-second collectors approximately 20 seconds
+apart while keeping managed selected. Each verified its predeclared 55-second
+interval with 80 resource samples. QN90A had 285 unique kernel records and 100
+matching duplicates, with a maximum merged sample gap of 1000.980 ms. S90D had
+317 unique records and 101 matching duplicates, with a maximum gap of 1001.778 ms.
+Both preserved the original boot, coordinator, worker, retained jobs, enrollment
+and protected files. Owned capture scopes were removed, observer/rescue units
+were inactive, rescue start counters were zero before disarming, and SDK remained
+on loopback. See [sanitized evidence](observer-continuity-results.json).
+
+This qualifies the short overlap method, not sustained native operation or
+24-hour endurance. The next controller must roll bounded captures and downloads,
+verify native activation identities, renew independent recovery without a gap,
+and stop on uncertainty without replay. Native-only entry, performance and full
+resource/endurance gates, separately authorized power lifecycle, native-default
+observation and eventual .NET retirement remain open. No power transition was
+performed; the .NET acquisition bridge, worker fallback and rescue remain intact.

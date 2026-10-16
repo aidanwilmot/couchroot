@@ -1135,3 +1135,39 @@ children; idle wakeups remain unknown. Per-field failures and candidate identiti
 still require review even when interval coverage passes. Do not infer leak-free
 endurance from a short trace. Raw paths, PID/start identities and kernel records
 remain private; commit only sanitized, source-bound results.
+
+### Offline continuity verification
+
+`python3 verify-observer-series.py PRIVATE_SERIES_JSON` verifies an ordered series
+of overlapping bounded captures without contacting a TV. It requires successful
+observer exits, hashes for all five artifacts, consistent boot/coordinator/source
+bindings, advancing and overlapping resource/kernel clock intervals, no reported
+capture failures, and matching bytes for duplicate kernel sequence numbers.
+Sequence holes across windows, changed boottime/monotonic offsets, partial process
+rows and excessive gaps between actual resource samples reject the series. Empty
+kernel windows do not erase the preceding sequence history. Duration is the
+requested covered interval, never the sum of overlapping windows.
+
+The private manifest has `schema: 1`, `boot_id`, a `coordinator` object with integer
+`pid` and decimal-string `start_ticks`, `observer_sha256`, `native_worker_sha256`,
+`required_start_ms`, `required_end_ms`, `maximum_sample_gap_ms`, and ordered
+`windows`. Each window supplies a contained relative `directory`, `exit_code: 0`,
+the same coordinator and executable bindings, and `sha256` mapping the five
+artifact names to their digests. Declare the intended coverage before collecting;
+do not shrink it after discovering missing data. The manifest and capture files
+remain private. The CLI emits a summary and exits zero only on acceptance.
+
+At most 1,024 windows are accepted. Each resource artifact is bounded to 8 MiB,
+each kernel artifact to 2 MiB, and each window to 1,000 samples. Symlinked capture
+files/directories are refused; inputs must remain unchanged during verification.
+This is an offline integrity check of caller-supplied evidence. It cannot
+independently authenticate the manifest, binary execution, firmware or process
+provenance. The live controller must verify those separately and retain durable
+launch/exit receipts, recovery and owned-cleanup checks. It also does not establish
+native-worker coverage merely because a worker digest is supplied: activation
+receipts must bind actual observed native process identities.
+
+A sustained controller still needs bounded rolling downloads/cleanup, safe renewal
+of the independent SDK rescue, and explicit selected-worker checks throughout.
+The short two-window hardware qualification establishes capture continuity only;
+it is not a sustained native run, a leak-free result or the 24-hour endurance gate.
