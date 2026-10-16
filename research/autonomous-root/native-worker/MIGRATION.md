@@ -7,23 +7,27 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.43 packages with native service acquisition enabled,
+Both TVs are on signed 0.7.44 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 32 settled history entries (26 committed,
 6 rolled back); S90D has 32 (25 committed, 7 rolled back).
-Both passed committed guardian loss, automatic native reacquisition through the
-same coordinator, normal managed return, and public managed `job.forget` for the
-returned interrupted record. Its unknown exit code and single execution witness
-were preserved; no maintenance deletion of job records was needed. All owned
+Both passed committed guardian loss with owned incomplete job-persistence files,
+automatic native reacquisition through the same coordinator, normal managed
+return, and public managed `job.forget` for every recovered fixture. The live
+job retained its unknown exit code and single execution witness; no maintenance deletion of job records was needed. All owned
 units are inactive, old/replacement native scopes are absent, and SDK is on loopback.
-The managed worker DLL changes; the native worker and both entry/archive DLLs
-remain unchanged. Both signed upgrades also preserved the selection digest guard:
+All 19 payload members remain byte-identical to 0.7.43; this milestone changes
+only service code. The preceding 0.7.43 managed worker upgrades preserved the
+selection digest guard:
 an independently verified managed probe and SDK-confirmed retirement supplied
 receipts for an explicit managed-to-managed transition. The complete original
 history is archived. This is host maintenance, not automatic upgrade admission.
 See [interrupted-job and managed-upgrade evidence](interrupted-forget-results.json).
-The service still admits only a bound complete stale guardian journal to native
-reconciliation; managed-return snapshots remain strict, and partial metadata
-remains held. See [committed guardian evidence](active-guardian-results.json).
+The service admits bounded intent/repair files and record-save temporaries only
+with a complete stale guardian journal bound to the last accepted runtime. Native
+alone reconciles them; record readback and metadata absence gate admission.
+Managed-return snapshots remain strict. Incomplete guardian startup journals
+remain held. See [persistence recovery evidence](persistence-recovery-results.json)
+and [committed guardian evidence](active-guardian-results.json).
 Both also passed a bounded per-worker address-space pressure round on unchanged
 0.7.41 bytes: new allocation refusal preserved a live job and saved result,
 restored limits admitted fresh app work, and restart reconciled the refused
@@ -3136,3 +3140,60 @@ retirement after verified reconciliation, not a new descendant-cleanup guarantee
 Native-only entry, service recovery with partial journals, broader pressure,
 performance/endurance and native-default rollout remain open. No reboot, standby
 or global-policy change occurred.
+
+
+### Guardian-owned persistence recovery — 2026-10-15
+
+Signed 0.7.44 extends selected-native restart beyond a clean job directory or a
+lone stale guardian journal. A complete ready guardian journal must still match
+the last accepted boot, worker ID, guardian PID and process start. With the old
+processes absent and unit idle, the service inventories bounded initial intents,
+repair temporaries and atomic record-save temporaries. Names, ownership, mode,
+size, link count and hashes are pinned throughout the snapshot. Publication hard
+links are admitted only when they are the exact corresponding final inode and
+bytes. Repair files require their initial intent; record-save temporaries require
+an existing record owned by this guardian. Foreign metadata, unknown entries,
+unsafe links, changed bytes and a resulting retention count above 64 remain held.
+
+The coordinator never deletes or repairs these files. The ordinary native worker
+reconciles them under its exclusive scope lock. Before admission, the service
+requires its stale-guardian reconciliation report, reads every retained result,
+checks interrupted records and unpublished intent outcomes, verifies unchanged
+record bytes, and checks the exact final inventory and absence of every admitted
+temporary. The managed-return snapshot contract is unchanged.
+
+Focused snapshot cases cover empty and partial intents, interrupted repairs,
+initial/repair publication links, record-save temporaries and refusal boundaries.
+Readback tests reject missing or changed records, wrong owners, invented exits,
+replay indicators and unexpected final inventories. Fresh native and managed
+fixtures passed all 21 restart cases and six rehearsals; the full repository run
+passed 413 tests with 150 optional platform/fixture skips. The retained-state
+suite passed 46 cases with one optional managed-fixture skip. No client or setup
+production code changed.
+
+Both installed TVs passed one guarded round on their ordinary binaries. After a
+real committed guardian SIGKILL and scope-lock acquisition, a private bounded
+fault script created six persistence boundary forms: an empty initial intent,
+a partial intent with a partial repair, an initial publication hard link, a repair
+publication hard link, a live-record save temporary, and a terminal-record save
+temporary. The same coordinator automatically reacquired native. The unpublished
+IDs became interrupted without launch, the live command retained an unknown exit
+and a single execution witness, and terminal records and commitment receipts
+remained byte-identical. Normal managed return preserved all results; public
+managed job forgetting removed only the fixtures. Original retained jobs,
+enrollment and protected hashes survived. Both ended managed-ready and settled,
+with SDK on loopback, original boots unchanged, all 14 owned units inactive, and
+old/replacement native processes, helper scopes and freezer groups absent.
+See [sanitized evidence](persistence-recovery-results.json).
+
+These trials model persistence boundaries with owned files after guardian loss;
+they do not establish power-loss or crash-during-fsync behavior. All 19 payload
+members, including the native worker and three managed DLLs, are unchanged from
+0.7.43. The .NET fallback and independent 300-second rescue remain available;
+neither rescue fired. No reboot, standby or global policy change occurred.
+
+The next recovery step is a durable binding from pre-readiness guardian startup
+journals to their original launch attempt. Incomplete or differently owned
+guardian journals remain held rather than adopted. Fully native capability entry,
+broader lifecycle coverage, performance/endurance and native-default rollout are
+still open.

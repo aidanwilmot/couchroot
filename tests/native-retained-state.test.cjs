@@ -67,6 +67,38 @@ test('native restart refuses a guardian journal changed during the snapshot',lin
  await assert.rejects(snapshotNativeRestartJobs({...f.options,execute:async c=>{const r=await f.execute(c);if(!changed&&c.includes('base64 '+f.options.record.scope+'/.jobs/guardian')){changed=true;fs.appendFileSync(f.jobs+'/guardian',' ');}return r;}}));assert(changed);
 }));
 
+test('restart admits only pinned guardian-owned persistence debris, including publication links',linux,async()=>{
+ for(const kind of ['empty','partial','repair','linked-intent','linked-repair','next'])await fixture(async f=>{
+  const j=staleGuardian(f),id='native-debris-0001',intent=f.jobs+'/.intent-'+j.worker_id+'-'+id,repair=f.jobs+'/.repair-'+j.worker_id+'-'+id,final=f.jobs+'/'+id+'.json';
+  const bytes=JSON.stringify({id,worker_id:j.worker_id,boot_id:boot,state:'starting',exit_code:null});
+  if(kind==='next'){
+   fs.writeFileSync(final,bytes,{mode:0o600});fs.writeFileSync(final+'.next','{',{mode:0o600});
+  }else{
+   fs.writeFileSync(intent,kind==='empty'?'':'{',{mode:0o600});
+   if(kind==='repair')fs.writeFileSync(repair,'{',{mode:0o600});
+   if(kind.startsWith('linked-')){fs.writeFileSync(final,bytes,{mode:0o600});if(kind==='linked-intent')fs.unlinkSync(intent);fs.linkSync(final,kind==='linked-intent'?intent:repair);}
+  }
+  const before=new Map(fs.readdirSync(f.jobs).map(n=>[n,fs.readFileSync(f.jobs+'/'+n)])),result=await snapshotNativeRestartJobs(f.options);
+  assert.equal(result.metadata.length,['repair','linked-repair'].includes(kind)?2:1);
+  for(const [n,b] of before)assert.deepEqual(fs.readFileSync(f.jobs+'/'+n),b);
+  await assert.rejects(snapshotNativeJobs(f.options));
+ });
+});
+test('restart refuses unbound debris, unsafe links and changed persistence bytes without mutation',linux,async()=>{
+ for(const mode of ['foreign','repair-alone','next-alone','next-foreign','external-link','symlink','mode','large','changed','overflow'])await fixture(async f=>{
+  const j=staleGuardian(f),id='native-debris-0001',name='.intent-'+(mode==='foreign'?'e'.repeat(32):j.worker_id)+'-'+id,file=f.jobs+'/'+name;
+  fs.writeFileSync(file,'{',{mode:0o600});
+  if(mode==='repair-alone'){fs.unlinkSync(file);fs.writeFileSync(f.jobs+'/.repair-'+j.worker_id+'-'+id,'',{mode:0o600});}
+  if(mode.startsWith('next-')){fs.unlinkSync(file);fs.writeFileSync(f.jobs+'/'+id+'.json.next','',{mode:0o600});if(mode==='next-foreign')fs.writeFileSync(f.jobs+'/'+id+'.json',JSON.stringify({id,boot_id:boot,worker_id:'e'.repeat(32),state:'completed'}),{mode:0o600});}
+  if(mode==='external-link')fs.linkSync(file,f.root+'/link');
+  if(mode==='symlink'){fs.unlinkSync(file);fs.symlinkSync('/dev/null',file);}
+  if(mode==='mode')fs.chmodSync(file,0o644);
+  if(mode==='large')fs.writeFileSync(file,'x'.repeat(2048));
+  let changed=false;const execute=async c=>{const r=await f.execute(c);if(mode==='changed'&&!changed&&c.includes('METADATA-END')){changed=true;fs.writeFileSync(file,'changed');}return r;};
+  const before=fs.readdirSync(f.jobs).sort();await assert.rejects(snapshotNativeRestartJobs({...f.options,execute}));assert.deepEqual(fs.readdirSync(f.jobs).sort(),before);
+ },mode==='overflow'?64:2);
+});
+
 const {planManagedRestore}=require('../research/autonomous-root/service/managed-restore-plan');
 async function restoreFixture(f){
  const baselineBody={schema:1,implementation:'managed',source:f.options.record.source,records:f.records.map(r=>({name:r.name,size:r.bytes.length,sha256:hash(r.bytes),base64:r.bytes.toString('base64')}))};

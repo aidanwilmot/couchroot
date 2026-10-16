@@ -13,6 +13,7 @@ const {processIdentities}=require('./worker-processes');
 const {observeCommand,parseObservation}=require('./restart-rollback');
 const {inspectProductionUnit}=require('./observer-unit');
 const {snapshotNativeRestartJobs}=require('./native-retained-state');
+const {verifyRestartRecords}=require('./native-restart-metadata');
 function check(v){if(!v)throw Error('Selected native startup evidence unavailable');}
 function exists(p){try{fs.lstatSync(p);return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}}
 function sync(p){const fd=fs.openSync(p,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}}
@@ -81,6 +82,7 @@ async function startSelectedNative({selectionFile,executor}){
   const verify='set -eu\n'+Object.values(identity.processes).map(p=>'line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" = '+p.start_ticks+'\ntest /proc/'+p.pid+'/exe -ef '+record.directory+'/code/worker\n').join('')+'test ! -e '+record.scope+'/token\nprintf "NATIVE-RESTART-VERIFIED\\n"\n';
   const verified=await run(verify,5000);check(verified.exit_code===0&&!verified.timed_out&&!verified.stderr&&verified.stdout==='NATIVE-RESTART-VERIFIED\n');
   check(!closed&&channel._conn===peer&&JSON.stringify(processIdentities(await channel.operation({op:'status'}),peer.identity.pid))===JSON.stringify(identity));bound();
+  await verifyRestartRecords({retained,record,channel,execute:run});
   const next={...record,worker_identity:identity,unit_started_monotonic:unit.started_monotonic};
   atomic(path.join(directory,record.id+'.runtime.json'),{schema:1,id:record.id,phase:'ready',readiness_sha256:candidate.readiness_sha256,activation_sha256:activation.receipt_sha256,record:next});
   atomic(intent,{...attempt,phase:'ready'});fs.unlinkSync(tokenFile);fs.rmdirSync(tokenDirectory);sync(directory);

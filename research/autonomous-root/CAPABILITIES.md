@@ -1187,3 +1187,23 @@ journal rows remain submitted, and both TVs returned to settled managed readines
 on SDK loopback. This qualifies that pre-commit boundary; wider interruption and
 power-lifecycle cases remain open. See
 [production recovery results](native-worker/production-recovery-results.json).
+
+
+## Guardian-owned persistence recovery — 0.7.44
+
+Selected-native startup can reconcile bounded initial-intent, repair and
+record-save temporaries when a complete stale guardian journal matches the last
+accepted native runtime. The service pins file identities and bytes, and the
+native worker performs recovery under its scope lock. Public admission requires
+retained-record readback, unchanged terminal bytes, the exact final inventory,
+and removal of the admitted temporaries. Foreign or incomplete guardian journals
+remain held; managed-return snapshots retain their stricter contract.
+
+Both TVs passed real guardian loss followed by owned crash-state file injection,
+automatic native reacquisition on the same coordinator, managed return and public
+fixture retirement. Unpublished intents did not launch, the live witness remained
+singular, and existing records, enrollment and protected files were preserved.
+All 19 payload members are unchanged; .NET acquisition and fallback remain
+available with the independent rescue. This qualifies the modeled persistence
+boundaries, not power loss or pre-readiness guardian ownership. See
+[persistence recovery results](native-worker/persistence-recovery-results.json).

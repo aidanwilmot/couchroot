@@ -9,7 +9,7 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
@@ -137,7 +137,7 @@ done
   if(mode.startsWith('native-')||mode.startsWith('return-')){
    await first.migrateNative(native,runtimeSha);const before=first.status(),id=before.native_runtime.transaction_id,history=JSON.stringify(before.worker_selection.history),committed=fs.readFileSync(state+'/'+id+'.production.json'),activation=fs.readFileSync(state+'/'+id+'.activation.json');
    await first.operation({op:'job.start',id:'native-keep-00001',profile:'root',timeout_ms:1000,command:'exit 9'});await until(async()=>(await first.operation({op:'status'})).resources.jobs.every(j=>j.monitor_finished));
-   const guardianLoss=mode==='native-guardian-lost',production=JSON.parse(committed),nativeSaved=fs.readFileSync(production.scope+'/.jobs/native-keep-00001.json');
+   const persistenceLoss=mode==='native-persistence-lost',guardianLoss=mode==='native-guardian-lost'||persistenceLoss,production=JSON.parse(committed),nativeSaved=fs.readFileSync(production.scope+'/.jobs/native-keep-00001.json');
    if(guardianLoss){
     await first.operation({op:'job.start',id:'native-live-00001',profile:'root',timeout_ms:60000,command:'printf x >> '+root+'/effect; sleep 50'});
     await until(()=>fs.existsSync(root+'/effect'));assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
@@ -157,6 +157,20 @@ done
     const journal=fs.readFileSync(production.scope+'/.jobs/guardian');
     guardian.child.kill('SIGKILL');await guardian.ended;
     assert.deepEqual(fs.readFileSync(production.scope+'/.jobs/guardian'),journal);
+    if(persistenceLoss){
+     // Real native reconciliation consumes bounded on-disk crash states; the
+     // service must neither delete these files nor replay their commands.
+     const jobs=production.scope+'/.jobs',owner=JSON.parse(journal).worker_id;
+     const put=(name,bytes)=>fs.writeFileSync(jobs+'/'+name,bytes,{mode:0o600});
+     put('.intent-'+owner+'-native-empty-0001','');
+     put('.intent-'+owner+'-native-repair-001','{');put('.repair-'+owner+'-native-repair-001','{');
+     for(const kind of ['intent','repair']){
+      const jid='native-linked-'+kind,bytes=JSON.stringify({id:jid,worker_id:owner,boot_id:boot,state:kind==='intent'?'starting':'interrupted',exit_code:null,launch_started:false});
+      put(jid+'.json',bytes);fs.linkSync(jobs+'/'+jid+'.json',jobs+'/.'+kind+'-'+owner+'-'+jid);
+      if(kind==='repair')put('.intent-'+owner+'-'+jid,'{');
+     }
+     put('native-live-00001.json.next','{');put('native-keep-00001.json.next','{');
+    }
    }else if(mode==='native-lost')servers[servers.length-1]._conn._socket.destroy();else{first.stop();for(const s of servers.slice())s.close();}
    await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
    second=mode==='native-committed'||mode.startsWith('return-')?createAgent(loader(new Map())):first;await acquire(second);
@@ -174,6 +188,14 @@ done
     assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
     assert.deepEqual(fs.readFileSync(production.scope+'/.jobs/native-keep-00001.json'),nativeSaved);
     await assert.rejects(second.operation({op:'job.start',id:'native-live-00001',profile:'root',timeout_ms:1000,command:'printf replay >> '+root+'/effect'}));
+   }
+   if(persistenceLoss){
+    for(const jid of ['native-empty-0001','native-repair-001','native-linked-intent','native-linked-repair']){
+     const recovered=await second.operation({op:'job.status',id:jid});assert.equal(recovered.record.state,'interrupted');assert.equal(recovered.record.exit_code,null);
+     if(jid==='native-empty-0001'||jid==='native-repair-001'){assert.equal(recovered.record.launch_started,false);assert.equal(recovered.record.recovery,'initial-intent-not-published');}
+     await assert.rejects(second.operation({op:'job.start',id:jid,profile:'root',timeout_ms:1000,command:'printf replay >> '+root+'/effect'}));
+    }
+    assert(!fs.readdirSync(production.scope+'/.jobs').some(n=>n.startsWith('.intent-')||n.startsWith('.repair-')||n.endsWith('.next')));
    }
    await second.returnManaged(runtimeSha).catch(e=>{for(let c=e;c;c=c.cause)console.error(c.stack);throw e;});assert.equal(second.status().worker_ready,true);assert.equal(second.status().selected_implementation,'managed');
    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
