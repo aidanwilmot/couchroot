@@ -75,7 +75,7 @@ with api.Session(c) as session:
    prior=r.socket;
   }
   const rejected=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive',Origin:'https://example.invalid'},true);
-  assert.equal(rejected.status,403);assert.equal(rejected.socket,prior);assert.equal(rejected.headers.connection,'close');
+  assert.equal(rejected.status,403);assert.equal(rejected.headers['server-timing'],undefined);assert.equal(rejected.socket,prior);assert.equal(rejected.headers.connection,'close');
   const next=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive'},true);assert.notEqual(next.socket,prior);
   assert.equal(server.keepAliveTimeout,5000);
   await assert.rejects(request('/v1/status',undefined,{}));await assert.rejects(request('/v1/status',undefined,foreign));
@@ -115,7 +115,7 @@ with api.Session(c) as session:
   const failed=await request('/v1/op',{id:operationId,operation:{op:'file.commit',transfer_id:'example'}});
   assert.equal(failed.body.outcome,'failed');assert.equal(journal.rows.find(r=>r.id===operationId).state,'completed');
   const binary=await request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:crypto.randomUUID(),operation:{op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')}})});
-  assert.equal(binary.status,200);assert.equal(binary.body.offset,5);
+  assert.equal(binary.status,200);assert.equal(binary.body.offset,5);assert.match(binary.headers['server-timing'],/^journal_begin;dur=\d+\.\d{3}, worker;dur=\d+\.\d{3}, journal_finish;dur=\d+\.\d{3}, handler;dur=\d+\.\d{3}$/);
   const uploadId=crypto.randomUUID(),uploadOp={op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')};
   const upload=op=>request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:uploadId,operation:op})});
   assert.equal((await upload({...uploadOp,sha256:hash('other')})).body.outcome,'rejected');
@@ -127,7 +127,7 @@ with api.Session(c) as session:
 
   assert.equal((await request('/v1/op',{id:crypto.randomUUID(),operation:{op:'file.write'}})).body.outcome,'rejected');
   const read=()=>request('/v1/files/read',{id:crypto.randomUUID(),operation:{op:'file.read',transfer_id:'example',offset:7,length:5}});
-  const downloaded=await read();assert.equal(downloaded.status,200);assert.deepEqual(downloaded.body,downloadBytes);assert.equal(downloaded.headers['x-sha256'],hash(downloadBytes));assert.equal(downloaded.headers['x-offset'],'7');
+  const downloaded=await read();assert.equal(downloaded.status,200);assert.deepEqual(downloaded.body,downloadBytes);assert.equal(downloaded.headers['x-sha256'],hash(downloadBytes));assert.equal(downloaded.headers['x-offset'],'7');assert.match(downloaded.headers['server-timing'],/^worker;dur=\d+\.\d{3}, handler;dur=\d+\.\d{3}$/);
   badChunk=true;assert.equal((await read()).status,409);
   operationUncertain=true;const beforeUnknown=operationCalls,unknownId=crypto.randomUUID();
   const unknownOperation={id:unknownId,operation:{op:'file.open',path:'/fixture'}};

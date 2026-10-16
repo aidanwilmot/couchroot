@@ -119,6 +119,36 @@ The request journal admits at most 1,000 unique operations before maintenance is
 required. It stores pending intents across restarts, not command output. An
 uncertain operation requires inspection; a new request ID is not a safe retry.
 
+## Request phase timing
+
+Authenticated, validated worker requests (`/v1/exec`, `/v1/op` and the binary
+file endpoints) return a `Server-Timing` header. Fixed metric names report
+milliseconds from the service's monotonic clock:
+
+- `journal_begin`: durable intent publication, including automatic archive work
+  if needed. A thrown publication is timed too.
+- `worker`: dispatch through the resolved/rejected worker response, including
+  worker persistence, transport and scheduling delays.
+- `journal_finish`: attempted durable result publication, including confirmed
+  worker refusal handling. Uncertain operations do not acquire a completion just
+  to supply this metric.
+- `handler`: request-handler entry through header preparation. It includes body
+  receipt, validation and response preparation, and contains the phase intervals.
+
+Only attempted phases appear. Read-only operations omit journal metrics, and
+pre-dispatch journal failure omits worker/result metrics. Values reset for each
+keep-alive request. Headers contain no commands, paths or request identities.
+Enrollment and browser restrictions apply before timing is enabled. Status and
+asynchronous native-administration routes do not report these worker phases.
+The [Server Timing format](https://www.w3.org/TR/server-timing/) carries durations;
+clients must not treat them as outcomes, clock synchronization or safe-retry
+receipts. Journal semantics and sync barriers are unchanged.
+
+`handler` excludes TLS setup before handler entry and response transmission after
+header preparation. Its difference from client-observed request time is not a
+pure network measurement. These intervals can locate a delay but cannot by
+themselves distinguish storage latency from descheduling or prove causality.
+
 ## Required device acceptance, in order
 
 1. Use the shared deployment engine/device lock and an immutable source checkout

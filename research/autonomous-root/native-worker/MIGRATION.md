@@ -7,7 +7,25 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-The independent observer now skips unrelated process reads, samples mapping
+Both TVs now run signed 0.7.47 with authenticated request phase timing and remain
+managed-ready. All 17 non-manifest payload members are unchanged from 0.7.46,
+including the native worker, managed bridge and fallback. Fresh integrated
+acquisition/HTTPS/native-return rounds validated 147 timed requests per TV,
+identity-bound native resource samples and complete kernel windows. Both preserved
+their trial boots, retained jobs and enrollment, removed trial scopes/helpers,
+and verified SDK loopback and zero starts of their independent trial rescues.
+See [phase timing evidence](api-phase-timing-results.json).
+
+The new timings reproduce and locate slow public requests in service journal
+publication: S90D's additional native root admission took 1263.781 ms over HTTPS,
+including 1129.298 ms in journal completion and 24.283 ms in the worker phase.
+A managed forget took 1338.224 ms, including 1061.122 ms in journal completion.
+Two QN90A maintenance commands likewise spent over one second there. This does
+not prove an individual syscall/storage cause or retroactively attribute earlier
+outliers. Next: partition service publication work and investigate these delays
+without weakening durability; the no-regression and endurance gates remain open.
+
+The preceding observer revision skips unrelated process reads, samples mapping
 memory on first identity observation and every fifth tick, and populates its
 bounded resource buffer progressively. In one counterbalanced 20-second idle
 pair per TV, observer CPU fell 67.0% on QN90A and 65.0% on S90D. Maximum sampled
@@ -19,8 +37,8 @@ Both ended managed-ready on their trial boots, with retained bytes/enrollment
 preserved, owned scopes/helpers removed, SDK on loopback and rescues unfired.
 See [observer overhead evidence](observer-overhead-results.json). The fresh rounds
 did not reproduce the prior one-second admissions; the performance gate remains
-open. Next: separate service journal begin, worker execution and journal finish
-with authenticated phase timings while retaining all persistence barriers.
+open. This motivated the authenticated phase timings now qualified above; all
+persistence barriers remain intact.
 
 The preceding installed-path round spans managed HTTPS commands/jobs/transfers,
 native service acquisition, committed native HTTPS operations and normal managed
@@ -3760,3 +3778,85 @@ Next: add authenticated service phase timing and investigate the remaining tails
 Native-only capability entry, complete lifecycle/resource and 24-hour mixed
 endurance evidence, native-default observation and .NET retirement remain open.
 The managed bridge, worker fallback and independent rescue remain required.
+
+## Authenticated request phase timing — 2026-10-16
+
+The worker API now returns `Server-Timing` durations for attempted journal begin,
+worker execution and journal finish phases, plus a containing handler duration.
+The per-request monotonic measurements cover exec, operation and binary transfer
+routes. Read-only operations omit journal phases; rejected/unknown operations
+retain their existing outcomes and replay protection. Failed phases are measured
+without inventing success or retrying. Enrollment/browser checks precede timing
+enablement. Status and asynchronous native administration do not report worker
+phases. Response bodies, deadlines and file/directory sync barriers are unchanged.
+See [timing semantics](../README.md#request-phase-timing).
+
+Four deterministic tests cover ordering, failures, unknown results/replay,
+keep-alive reset, binary responses and restricted access. Real mutual-TLS tests
+also verify headers for upload/download and their absence on browser rejection.
+The focused run passed 32 tests with one opt-in long-deadline test skipped; npm
+passed 418 with 157 skips. Fresh rebuilt managed/native fixtures passed all six
+rehearsal cases and 21 restart cases, with three fault-binary cases skipped.
+No client or tvsetup production source changed.
+
+Both signed 0.7.47 installations passed physical/model/firmware/signing admission,
+installed-content readback and enrollment/protected-file checks. Only API code,
+version/signatures and manifest metadata changed. Native manifest source entries
+now include the previously committed diagnostic headers/build script; artifact
+entries and all 17 non-manifest payload members are unchanged. The managed entry,
+managed worker and independent .NET rescue remain available.
+
+Each TV completed the same bounded integrated sequence: managed commands/jobs and
+8,677,890-byte checksum transfer, native service disable/enable acquisition,
+committed native commands/jobs/transfer, normal managed return, retained fixture
+verification and public API cleanup. All 147 successful worker requests per TV
+reported the expected phases; handler durations contained their phase intervals.
+QN90A recorded 41 resource samples and 336 contiguous kernel records; S90D recorded
+51 and 396. No whole interval was skipped. Each native worker/guardian had at least
+thirteen identity-bound samples and three detailed mapping observations.
+
+The fixed public sample set contains two root and two app jobs per implementation:
+
+| TV / implementation | HTTPS admission median / maximum | Worker-phase median | Journal begin / finish medians |
+| --- | ---: | ---: | ---: |
+| QN90A managed | 131.802 / 147.703 ms | 29.823 ms | 24.772 / 30.446 ms |
+| QN90A native | 108.419 / 111.361 ms | 18.697 ms | 21.456 / 21.964 ms |
+| S90D managed | 142.744 / 151.967 ms | 38.340 ms | 29.174 / 29.514 ms |
+| S90D native | 134.053 / 143.497 ms | 24.687 ms | 28.261 / 29.532 ms |
+
+These small mixed-profile samples are descriptive, not tail distributions. More
+usefully, the additional S90D native root retained-fixture admission took
+1263.781 ms: journal begin 30.847 ms, worker 24.283 ms and journal finish
+1129.298 ms. Its request is bound to the saved fixture intent and verified native
+selection. S90D also reproduced a slow public managed forget at 1338.224 ms:
+journal begin 193.771 ms, worker 20.394 ms and journal finish 1061.122 ms.
+QN90A maintenance exec requests took 1307.403 and 1256.663 ms, dominated by
+1220.967 and 1151.516 ms in journal finish. Other S90D journal-begin delays also
+occurred, including an upload chunk. These observations locate these particular
+delays in service publication, not worker execution. Existing historical outliers
+remain distinct evidence.
+
+Journal publication includes serialization, file write/sync, rename, parent
+sync and scheduling. Phase timing cannot separate these subintervals or prove a
+storage mechanism. Handler duration excludes prior TLS setup and subsequent
+response transmission; its difference from HTTPS elapsed time is not pure network
+latency. The observer still perturbs resource use and can miss short-lived processes.
+No durability optimization or no-regression/endurance gate is claimed here.
+
+Both rounds ended managed-ready on their trial boots/coordinators, with retained
+jobs/enrollment protected, native/observer scopes removed, SDK loopback restored,
+owned units inactive and independent trial rescue start counters zero. S90D's
+deployment rescue was also checked before disarming. QN90A deployment acceptance
+disarmed its 300-second rescue about 26.948 seconds after the restore intent; a
+later cleanup check found all six deployment timer/service entries unloaded and
+inactive, so their historical start counters were unavailable. The extra cleanup
+initially refused an unloaded timer; read-only reconciliation preceded a check
+that skips already-inactive timers. No installation or uncertain request was
+replayed. This evidence limitation remains explicit in the sanitized record.
+
+No reboot, standby, global policy, persistent capability or SMACK change occurred.
+Raw requests, identities, signing data and captures remain private. Next: partition
+service publication costs and address the reproduced tails while preserving
+intent/result durability. Native-only capability entry, full lifecycle/resource
+and 24-hour mixed endurance evidence, native-default observation and eventual
+.NET retirement remain unfinished.
