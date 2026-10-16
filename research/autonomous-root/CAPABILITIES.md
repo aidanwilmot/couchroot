@@ -1372,3 +1372,15 @@ passed preservation and cleanup, then a fresh immutable S90D endurance invocatio
 started with native readiness, the 24-hour quiet job and collectors. The private
 admission now requires a fresh coordinator; no production guard was relaxed.
 See [admission evidence](native-worker/service-coordinator-endurance-admission-results.json).
+
+## Hardware qualification paused by owner
+
+Both endurance runs were stopped and reconciled at the owner's request. S90D
+remains on 0.7.50 and QN90A on 0.7.48; both are managed-ready. Completed captures
+were preserved, owned test jobs were cancelled and verified through managed
+return before forgetting, and original jobs/enrollment/protected files matched.
+All owned rescue timers retired unfired and SDK remains on loopback. No package
+or power state changed. Neither shortened run satisfies 24-hour endurance.
+Hardware qualification awaits explicit owner direction; local work may continue,
+but no native-default or .NET-retirement gate is waived by this pause. See
+[pause evidence](native-worker/hardware-qualification-paused-results.json).

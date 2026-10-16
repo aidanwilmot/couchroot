@@ -7,6 +7,20 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
+**Hardware qualification is paused at the owner's request.** Both endurance
+controllers are stopped and reconciled. S90D (0.7.50) and QN90A (0.7.48) are
+managed-ready on their original trial boots. Remaining collectors finished and
+their evidence was preserved; test-owned quiet jobs were cancelled, verified
+through managed return and forgotten. Original retained jobs, enrollment and
+protected hashes matched. Owned native scopes were cleaned, all trial/cleanup
+rescues retired unfired, SDK is on loopback, and host supervisors and sleep
+prevention processes exited. Neither shortened run qualifies 24-hour endurance.
+Do not resume hardware trials, deployment or power-transition qualification
+without explicit owner direction. Continue local implementation and verification;
+keep managed fallbacks and unresolved hardware gates intact. See
+[pause and reconciliation evidence](hardware-qualification-paused-results.json).
+Descriptions of active trials below record the preceding state.
+
 S90D recovered from its incomplete service restart after the owner reapplied the
 Developer Mode Host PC setting without restarting. SDK inspection preserved the
 original submitted request without replay, and a fresh guarded launch restored
