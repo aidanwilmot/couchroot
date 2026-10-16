@@ -37,6 +37,13 @@ Pending returns use bounded native offline reconciliation before restoring
 managed state. Full power-lifecycle qualification is still open. None of these
 cross-boot changes is installed yet.
 
+Ordinary signed 0.7.49 candidates are now prepared from `4f39d1d` for both
+profiles. Signatures and forward inventories passed verification; each native
+build reproduced twice. Managed worker, acquisition bridge and all other
+non-manifest payload members are unchanged from 0.7.48. The candidates remain
+uninstalled while the endurance runs continue. See
+[candidate evidence and hardware prerequisites](cross-boot-candidate-results.json).
+
 Both TVs run signed 0.7.48; the preceding integrated qualification ended
 managed-ready. The authenticated timing header now separates file-sync and
 directory-sync elapsed time and counts inside each journal phase. All 19 payload
