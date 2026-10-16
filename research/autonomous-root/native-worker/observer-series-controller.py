@@ -80,6 +80,42 @@ def require_device_storage(output, minimum_free_bytes=256 * 1024**2):
     return min(available)
 
 
+def wait_for_collector_exit(inspect, timeout_seconds=20, clock=time.monotonic, sleep=time.sleep):
+    """Poll a read-only inspection of a retained, identity-bound collector unit.
+
+    A sampling deadline is not process completion: kernel-reader drain and file
+    persistence follow it. Active units' default zero exit status is not success.
+    Launch with RemainAfterExit=yes, bind its readiness receipt, and keep the unit
+    until this observes loaded/active/exited with a nonzero execution timestamp.
+    A collected transient unit can expose default zero status: refuse not-found.
+    The caller bounds each inspection and the enclosing collect callback, then
+    records the result before stopping its owned unit. This helper neither stops
+    the unit nor retries a launch, download or cleanup.
+    """
+    if type(timeout_seconds) not in (int, float) or not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 30:
+        raise ValueError('invalid collector exit observation budget')
+    deadline = clock() + timeout_seconds
+    while True:
+        if clock() >= deadline:
+            raise ObservationStopped('collector exit observation timed out; preserve evidence and recovery')
+        state = inspect()
+        if clock() >= deadline:
+            raise ObservationStopped('collector exit observation timed out; preserve evidence and recovery')
+        if not isinstance(state, dict) or state.get('LoadState') != 'loaded' or state.get('RemainAfterExit') != 'yes':
+            raise ObservationStopped('collector unit identity or load state unavailable')
+        active = state.get('ActiveState')
+        if active == 'active' and state.get('SubState') == 'exited':
+            started = state.get('ExecMainStartTimestampMonotonic')
+            if (not isinstance(started, str) or not started.isascii() or not started.isdecimal()
+                    or len(started) > 20 or not 0 < int(started) < 2**64
+                    or state.get('Result') != 'success' or state.get('ExecMainStatus') != '0'):
+                raise ObservationStopped('collector exited unsuccessfully or without a complete result')
+            return state
+        if not (active == 'active' and state.get('SubState') == 'running' or active == 'activating'):
+            raise ObservationStopped('collector unit failed or has an unknown state')
+        sleep(min(0.25, max(0, deadline-clock())))
+
+
 def run(adapter, plan, clock=time.monotonic, sleep=time.sleep):
     """Return captures and the still-armed rescue after all windows are collected.
 
@@ -88,6 +124,8 @@ def run(adapter, plan, clock=time.monotonic, sleep=time.sleep):
     independent timer before returning. retire_rescue checks it never fired before
     stopping it and then confirms inactivity. collect requires successful exit,
     hash-verified durable download, native identity coverage and owned cleanup.
+    collect must observe actual unit exit; wait_for_collector_exit handles the
+    bounded read-only wait after the sampling deadline, before any download.
     Every method must have bounded calls; an exception stops the run without replay.
     Device-space checks belong inside health(), serialized with all other calls.
     Host deadlines are conservative scheduling guards, not capture evidence.

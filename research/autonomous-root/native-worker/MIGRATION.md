@@ -7,15 +7,17 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-QN90A's first 24-hour attempt stopped after about 35 minutes when its independent
-storage monitor's administrative request conflicted with a job-status read. It
-was reconciled without replay: the remaining collector was downloaded/cleaned,
-the owned quiet job was cancelled and its saved record verified across managed
-return, and retained jobs/enrollment were preserved. The independent .NET rescue
-executed with exit zero and the expected SDK-host setting was observed; SDK was
-then restored to loopback. A fresh supervised trial now performs device-space
-checks synchronously inside health checks, with native selected, a new 24-hour
-quiet job and independent rescue renewal. This is not accepted endurance evidence.
+QN90A has a fresh 24-hour attempt running with serialized storage checks and
+retained collector exit receipts. Two earlier attempts stopped: an administrative
+request conflict after about 35 minutes, then a premature collection check after
+about 15 minutes. Both were reconciled without replay, with owned quiet jobs
+cancelled, saved results verified across managed return, and original retained
+jobs/enrollment preserved. A short diagnostic then exposed that discarded
+transient units can report default zero exit status. The replacement waits for a
+loaded, retained unit to report actual exit and binds that receipt to the observer.
+It passed a five-second QN90A probe. Earlier capture files remain descriptive
+evidence; their unretained unit polls do not independently prove successful exit.
+The 24-hour gate remains open. See [collector exit evidence](observer-exit-retention-results.json).
 S90D's run has not started: its graceful service termination closed the connection
 before the launch request returned, and neither Couchroot nor usable external SDK
 access returned. The TV API remains reachable. Non-power recovery attempts were
@@ -4164,3 +4166,56 @@ and the original rescue/coverage requirements. Source snapshots and operation
 intents remain private and immutable. See [sanitized evidence](observer-resource-analysis-results.json).
 S90D recovery remains pending; this work closes neither both-TV endurance nor
 performance, native-only entry, power lifecycle, native-default or .NET retirement.
+
+## Collector exit retention — 2026-10-16
+
+The serialized-storage endurance attempt stopped after approximately 14.7 minutes.
+A collector was still active when the host's sampling-duration estimate elapsed;
+its default zero exit status was not a completed result. Both pending collectors
+subsequently produced complete files. The owned quiet job was cancelled, its
+record bytes verified across managed return and then forgotten, and original
+retained jobs/enrollment/protected hashes were preserved. The old and replacement
+recovery timers were retired within their budgets without observed execution.
+No mutation was replayed and no power transition occurred.
+
+A five-second exit-wait diagnostic exposed a separate evidence problem: after
+running, its transient unit became `not-found` and exposed zero execution-start
+and exit-status defaults. The host correctly refused that missing evidence. Its
+files were preserved, the bound process and code mount were confirmed absent,
+and only its owned scope was cleaned. That diagnostic is not an accepted capture.
+Earlier unretained unit polls, which checked only inactive/success/zero, do not
+independently prove collector exit. Historical resource numbers remain analysis
+of saved files; they must not be promoted to successful-exit or endurance proof.
+
+Collectors now use `Type=simple` with `RemainAfterExit=yes`, preserving their
+execution result until the adapter records it. A bounded read-only wait requires
+loaded/active/exited, a positive execution timestamp, success and exit zero.
+The adapter additionally matches the unit's executed PID to `observer.ready`
+and requires normal process exit before stopping the owned unit and cleaning its
+verified files. Missing/discarded state, inspection errors, failed exit or timeout
+stop the run with evidence and independent recovery preserved.
+
+The corrected QN90A five-second probe observed 13 states over 5.225 seconds. It
+waited through active/running with zero status, then recorded retained successful
+exit with the matching PID and positive timestamp. Five resource rows and 23
+kernel records verified; the owned unit/scope were removed, the original boot and
+managed worker remained ready, and recovery was retired unfired. S90D could not
+repeat this probe because service and usable SDK access remain unavailable.
+
+Continuity schema 2 now requires each retained exit receipt and validates its
+load/retention/result fields, distinct unit identity, matching observer PID and
+execution timestamp. Legacy schema 1 stays readable but explicitly reports
+`caller-asserted-only` exit evidence. Six new controller tests cover delayed exit,
+discarded/failed units, missing execution evidence, timeout, inspection errors
+and bounded observation; four verifier tests cover retained versus legacy proof,
+default zero status, mismatched execution and reused unit identities. There are
+21 controller, 21 continuity and 13 resource-analysis tests passing, with 13
+Linux-only skips. npm passes 423 tests with 157 skips. No installed package,
+observer/native worker binary, managed bridge or fallback changed.
+
+A fresh QN90A trial uses the retained units and schema 2 while preserving the full
+24-hour job, original coverage duration, mixed workload, serialized storage checks
+and independent 300-second rescue renewal. Its first 220-sample window passed retained-exit verification and owned cleanup.
+This is initial progress, not endurance acceptance. See [sanitized exit evidence](observer-exit-retention-results.json).
+S90D recovery, both-TV endurance, performance, native-only entry, power lifecycle,
+native-default observation and eventual .NET retirement remain open.

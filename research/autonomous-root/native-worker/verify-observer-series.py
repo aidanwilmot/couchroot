@@ -80,8 +80,24 @@ def identity(value):
     return value['pid'], u64(value.get('start_ticks'))
 
 
+def retained_exit(window, observer, started_ms):
+    receipt = window.get('unit_exit')
+    require(isinstance(receipt, dict), 'missing retained unit exit receipt')
+    expected = dict(LoadState='loaded', RemainAfterExit='yes', ActiveState='active',
+                    SubState='exited', Result='success', ExecMainCode='1', ExecMainStatus='0')
+    require(all(receipt.get(key) == value for key, value in expected.items()),
+            'unit exit was not retained or successful')
+    name = receipt.get('Id')
+    require(isinstance(name, str) and re.fullmatch(r'couchroot-observer-[a-f0-9]{32}\.service', name),
+            'invalid collector unit identity')
+    require(u64(receipt.get('ExecMainPID')) == observer[0], 'unit exit process differs from observer')
+    require(0 < u64(receipt.get('ExecMainStartTimestampMonotonic')) <= started_ms * 1000,
+            'unit execution timestamp is missing or after observer readiness')
+    return name
+
+
 def verify_series(manifest, base):
-    require(isinstance(manifest, dict) and type(manifest.get('schema')) is int and manifest['schema'] == 1, 'unknown series schema')
+    require(isinstance(manifest, dict) and type(manifest.get('schema')) is int and manifest['schema'] in (1, 2), 'unknown series schema')
     boot = manifest.get('boot_id')
     require(isinstance(boot, str) and bool(boot), 'missing boot binding')
     coordinator = identity(manifest.get('coordinator'))
@@ -102,6 +118,7 @@ def verify_series(manifest, base):
     offsets = []
     directories = set()
     observer_identities = set()
+    unit_identities = set()
     for window in windows:
         require(isinstance(window, dict), 'invalid window entry')
         require(isinstance(window.get('directory'), str), 'invalid window directory')
@@ -140,6 +157,10 @@ def verify_series(manifest, base):
         ks, ke = number(kernel.get('monotonic_start_ms')), number(kernel.get('monotonic_end_ms'))
         rs, re_ = number(report.get('monotonic_start_ms')), number(report.get('monotonic_end_ms'))
         require(ks <= rs < re_ <= ke and ready.get('monotonic_start_ms') == rs, 'invalid window clock bounds')
+        if manifest['schema'] == 2:
+            unit = retained_exit(window, self_identity, rs)
+            require(unit not in unit_identities, 'collector unit identity reused')
+            unit_identities.add(unit)
         offsets.extend((number(kernel.get('boottime_start_ms')) - ks,
                         number(kernel.get('boottime_end_ms')) - ke))
         require(max(offsets) - min(offsets) < 100, 'suspend or clock discontinuity across windows')
@@ -208,6 +229,7 @@ def verify_series(manifest, base):
     max_gap = max(b - a for a, b in zip(points, points[1:]))
     require(max_gap <= gap_limit, 'periodic resource sampling gap exceeds budget')
     return dict(schema=1, complete=True, windows=len(windows), covered_ms=end-start,
+                successful_exit_evidence='retained-unit-receipts' if manifest['schema'] == 2 else 'caller-asserted-only',
                 resource_samples=resource_rows, maximum_sample_gap_ms=max_gap,
                 unique_kernel_records=unique_records, duplicate_kernel_records_verified=duplicates,
                 first_sequence=str(first_sequence) if first_sequence is not None else None,

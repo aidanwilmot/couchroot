@@ -135,5 +135,65 @@ class ControllerTests(unittest.TestCase):
         self.assertNotIn('retire',[name for _,name in f.events])
         self.assertTrue(any(end>f.now for end in f.timers.values()))
 
+    def collector_state(self, substate='running', **changes):
+        return dict(dict(LoadState='loaded', RemainAfterExit='yes', ActiveState='active',
+                         SubState=substate, Result='success', ExecMainStatus='0',
+                         ExecMainStartTimestampMonotonic='123456'), **changes)
+
+    def test_collector_active_zero_status_is_not_completion(self):
+        f=Fake();observations=[]
+        def inspect():
+            observations.append(f.now)
+            return self.collector_state('running' if f.now<1 else 'exited')
+        result=m.wait_for_collector_exit(inspect,clock=f.clock,sleep=f.sleep)
+        self.assertEqual(result['SubState'],'exited')
+        self.assertEqual(f.now,1)
+        self.assertEqual(len(observations),5)
+
+    def test_collector_exit_wait_requires_retained_execution_evidence(self):
+        f=Fake();states=iter([self.collector_state(ActiveState='activating'),
+                             self.collector_state(),self.collector_state('exited')])
+        result=m.wait_for_collector_exit(lambda:next(states),clock=f.clock,sleep=f.sleep)
+        self.assertEqual(result['SubState'],'exited')
+        for changes in (dict(LoadState='not-found'), dict(RemainAfterExit='no'),
+                        dict(ActiveState='failed'),dict(ActiveState='inactive'),
+                        dict(Result='signal'),dict(ExecMainStatus='1'),dict(ExecMainStatus=None),
+                        dict(ExecMainStartTimestampMonotonic='0'),dict(ExecMainStartTimestampMonotonic=None),
+                        dict(ExecMainStartTimestampMonotonic=str(2**64))):
+            with self.assertRaises(m.ObservationStopped):
+                m.wait_for_collector_exit(lambda:self.collector_state('exited',**changes),clock=f.clock,sleep=f.sleep)
+
+    def test_collector_exit_timeout_leaves_the_unit_and_rescue_untouched(self):
+        f=Fake();calls=[]
+        def inspect():
+            calls.append(f.now)
+            return self.collector_state()
+        with self.assertRaisesRegex(m.ObservationStopped,'timed out'):
+            m.wait_for_collector_exit(inspect,1,clock=f.clock,sleep=f.sleep)
+        self.assertEqual(f.now,1)
+        self.assertEqual(calls,[0,.25,.5,.75])
+        self.assertFalse(f.events)
+
+    def test_collector_inspection_error_is_not_silently_retried(self):
+        calls=[]
+        def inspect():
+            calls.append(True)
+            raise OSError('inspection response unavailable')
+        with self.assertRaisesRegex(OSError,'response unavailable'):
+            m.wait_for_collector_exit(inspect)
+        self.assertEqual(calls,[True])
+
+    def test_slow_exit_inspection_cannot_pass_after_its_budget(self):
+        f=Fake()
+        def inspect():
+            f.now+=2
+            return self.collector_state('exited')
+        with self.assertRaisesRegex(m.ObservationStopped,'timed out'):
+            m.wait_for_collector_exit(inspect,1,clock=f.clock,sleep=f.sleep)
+
+    def test_collector_exit_wait_refuses_unbounded_or_invalid_budgets(self):
+        for seconds in (True,0,-1,31,float('nan'),float('inf'),None):
+            with self.assertRaises(ValueError):m.wait_for_collector_exit(lambda:None,seconds)
+
 
 if __name__=='__main__':unittest.main()

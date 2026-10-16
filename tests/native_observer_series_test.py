@@ -183,6 +183,53 @@ class ObserverSeriesTests(unittest.TestCase):
         self.manifest['windows']=self.manifest['windows'][1:]
         with self.assertRaisesRegex(series.InvalidCapture,'begins after'):self.verify()
 
+    def retain_exits(self):
+        self.manifest['schema']=2
+        # Use a positive monotonic epoch; zero is reserved for never executed.
+        self.manifest['required_start_ms']+=1000
+        self.manifest['required_end_ms']+=1000
+        for index,window in enumerate(self.manifest['windows']):
+            for name,keys in [('observer.ready',('monotonic_start_ms',)),
+                              ('observer.json',('monotonic_start_ms','monotonic_end_ms')),
+                              ('kernel.json',('monotonic_start_ms','monotonic_end_ms','boottime_start_ms','boottime_end_ms'))]:
+                self.edit(index,name,lambda v:v.update({key:v[key]+1000 for key in keys}))
+            path=self.root/window['directory']/'resources.ndjson'
+            rows=[json.loads(line) for line in path.read_text().splitlines()]
+            for row in rows:
+                row['started_monotonic_ms']+=1000;row['finished_monotonic_ms']+=1000
+            raw=''.join(json.dumps(row)+'\n' for row in rows);path.write_text(raw)
+            self.edit(index,'observer.json',lambda v:v.update(bytes=len(raw.encode())))
+            window['unit_exit']=dict(Id='couchroot-observer-'+format(index,'032x')+'.service',
+                                      LoadState='loaded',RemainAfterExit='yes',ActiveState='active',SubState='exited',
+                                      Result='success',ExecMainCode='1',ExecMainStatus='0',
+                                      ExecMainPID=str(100+index),ExecMainStartTimestampMonotonic=str((1000+index*8000)*1000))
+
+    def test_legacy_exit_assertions_are_distinguished_from_retained_receipts(self):
+        self.assertEqual(self.verify()['successful_exit_evidence'],'caller-asserted-only')
+        self.retain_exits()
+        self.assertEqual(self.verify()['successful_exit_evidence'],'retained-unit-receipts')
+
+    def test_discarded_unit_default_zero_status_cannot_prove_success(self):
+        self.retain_exits()
+        self.manifest['windows'][1]['unit_exit'].update(LoadState='not-found',ActiveState='inactive',ExecMainStartTimestampMonotonic='0')
+        with self.assertRaisesRegex(series.InvalidCapture,'not retained'):self.verify()
+
+    def test_retained_exit_requires_real_matching_successful_execution(self):
+        self.retain_exits();window=self.manifest['windows'][1];original=copy.deepcopy(window['unit_exit'])
+        for changes in (dict(ExecMainPID='1010'),dict(ExecMainStartTimestampMonotonic='0'),
+                        dict(ExecMainStartTimestampMonotonic='9000001'),dict(ExecMainCode='2'),
+                        dict(ExecMainStatus='1'),dict(SubState='running'),dict(RemainAfterExit='no'),
+                        dict(Id='unrelated.service'),dict(ExecMainPID=101)):
+            window['unit_exit']=dict(original,**changes)
+            with self.assertRaises(series.InvalidCapture):self.verify()
+        del window['unit_exit']
+        with self.assertRaisesRegex(series.InvalidCapture,'missing retained'):self.verify()
+
+    def test_retained_unit_identity_cannot_be_reused_across_windows(self):
+        self.retain_exits()
+        self.manifest['windows'][1]['unit_exit']['Id']=self.manifest['windows'][0]['unit_exit']['Id']
+        with self.assertRaisesRegex(series.InvalidCapture,'unit identity reused'):self.verify()
+
 
 if __name__ == '__main__':
     unittest.main()

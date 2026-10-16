@@ -692,5 +692,6 @@
     "The old independent .NET rescue ran with exit zero and its expected SDK-host setting was observed through Couchroot. External SDK usability was not tested during that interval.",
     "The serialized storage parser validates capacity snapshots; device/command identity and bounded execution remain adapter responsibilities.",
     "S90D recovery, both-TV endurance, comparative performance, native-only entry, power lifecycle, native-default observation and .NET retirement remain open. No power transition, package update or policy change occurred."
-  ]
+  ],
+  "exit_status_evidence_caveat": "Subsequent QN90A diagnostics showed that discarded transient units expose default zero exit status. These historical schema-1 manifests assert exit zero without a retained unit receipt. Resource values remain descriptive file analysis; successful collector exit is not independently established by those unit polls. New endurance acceptance requires schema 2."
 }

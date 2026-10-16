@@ -7,8 +7,8 @@ TV installation and firmware-specific acceptance; no deployment is implicit.
 Current installed version: signed 0.7.48. Both TVs have passed bounded native public-operation,
 same-boot startup/return, committed guardian-loss recovery and modeled launch-bound
 pre-readiness recovery on both TVs. Those completed rounds ended managed-ready.
-QN90A now has a fresh native endurance trial running after reconciliation of a
-host monitoring conflict; S90D's service remains unavailable pending recovery.
+QN90A now has a fresh native endurance trial using serialized storage checks and
+retained collector exit receipts; S90D's service remains unavailable pending recovery.
 Neither TV has passed the 24-hour gate. Version 0.7.48 adds file/directory journal-sync timing
 without changing the payloads or durability barriers. Historical versioned
 observations below retain their original limits; see the

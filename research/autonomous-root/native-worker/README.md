@@ -1148,7 +1148,7 @@ rows and excessive gaps between actual resource samples reject the series. Empty
 kernel windows do not erase the preceding sequence history. Duration is the
 requested covered interval, never the sum of overlapping windows.
 
-The private manifest has `schema: 1`, `boot_id`, a `coordinator` object with integer
+New qualification manifests use `schema: 2`, `boot_id`, a `coordinator` object with integer
 `pid` and decimal-string `start_ticks`, `observer_sha256`, `native_worker_sha256`,
 `required_start_ms`, `required_end_ms`, `maximum_sample_gap_ms`, and ordered
 `windows`. Each window supplies a contained relative `directory`, `exit_code: 0`,
@@ -1156,6 +1156,24 @@ the same coordinator and executable bindings, and `sha256` mapping the five
 artifact names to their digests. Declare the intended coverage before collecting;
 do not shrink it after discovering missing data. The manifest and capture files
 remain private. The CLI emits a summary and exits zero only on acceptance.
+
+Schema 2 also requires each window's `unit_exit` receipt, recorded before stopping
+the owned collector unit. Launch it with `Type=simple` and `RemainAfterExit=yes`.
+The receipt must show `LoadState=loaded`, `RemainAfterExit=yes`,
+`ActiveState=active`, `SubState=exited`, `Result=success`, `ExecMainCode=1` and
+`ExecMainStatus=0`. `ExecMainPID` must match `observer.ready`; its positive
+`ExecMainStartTimestampMonotonic` must not follow observer readiness. Unit IDs
+must be distinct owned collector names. This establishes the receipt's internal
+bindings; the caller still authenticates the unit inspection and launch.
+
+Legacy schema 1 remains readable for historical file analysis. Its output labels
+successful exit evidence `caller-asserted-only`; it cannot supply retained exit
+proof for new endurance acceptance. The QN90A short probe demonstrated that a
+discarded transient service can return `LoadState=not-found` with default zero
+exit status. The earlier unretained status polls did not distinguish that case.
+Their saved capture measurements remain descriptive, but those polls alone do
+not establish successful collector exit. Schema 2 reports
+`successful_exit_evidence: retained-unit-receipts` after the additional checks.
 
 At most 1,024 windows are accepted. Each resource artifact is bounded to 8 MiB,
 each kernel artifact to 2 MiB, and each window to 1,000 samples. Symlinked capture
@@ -1247,6 +1265,17 @@ default cadence. The full-day fake-clock test exercises all of them and verifies
 that only the final rescue remains armed. Host sleep suppression and bounded
 adapter calls belong to the supervising harness; they do not change TV power
 settings or authorize reboot/standby.
+
+The sampling duration is not a process-exit deadline: kernel reader drain and
+durable file publication follow sampling. Before downloading, the adapter calls
+`wait_for_collector_exit` with an identity-bound, read-only unit inspection. It
+waits at most 20 seconds by default and refuses missing/discarded units, failed
+results, invalid execution timestamps and expiry. Active/running with zero
+status is not completion. Each inspection and the enclosing callback remain
+bounded by the adapter. After loaded/active/exited success, persist the unit
+receipt, verify the files and matching observer PID, stop only that owned retained
+unit, confirm inactivity, and clean its verified scope. An exception preserves
+evidence and recovery; it does not launch, signal, replay or clean anything.
 
 Device-space probes must execute synchronously inside the adapter's bounded
 `health()` callback. A separate `/v1/exec` monitor can hold the administrative
