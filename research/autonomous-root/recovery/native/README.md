@@ -120,3 +120,60 @@ Raw commands, addresses, identities, packages and receipts stay in private state
 No new WGT is needed for this standalone utility; the signed agent remains 0.7.28.
 The installed native utility is available for subsequent journaled rescue runs;
 this qualification does not globally replace existing deployment-kit callers.
+
+## Local builder and journaled caller
+
+`python3 -m tvsetup.native_components --model qn90a --output NEW_DIRECTORY`
+builds all native agent components, including this utility, without invoking
+.NET, loading private site configuration, signing or contacting a TV. Use `s90d`
+for the other profile. Every component is built twice in the digest-pinned,
+network-disabled toolchain; ELF ABI, dependency and GLIBC checks precede manifest
+publication. This utility must retain `librt.so.1`. The bundle is explicitly
+non-deployable as a complete agent because native-only capability entry remains
+unresolved. Ordinary signed-package preparation and its managed payloads are
+unchanged.
+
+`tvsetup.native_rescue` supplies the new caller path for a future, separately
+qualified deployment. It generates commands and journals one-shot submissions;
+it does not connect to a TV, install files or obtain root. A caller must first
+hold the device lock, reject pending setup work and verify the physical device
+and enrolled root executor. Prepare an owned root-only versioned installation:
+`/opt/couchroot-native-recovery/<32-lowercase-hex>/code/sdk-host-recovery`, mode
+0500, with root-owned non-group/other-writable ancestors. Keep logs elsewhere.
+The build output is not itself an installation receipt.
+
+Construct a plan with the exact model, current boot, installed code directory,
+verified binary digest and expected/target addresses. Persist its journal in a
+fresh private directory. Call `submit(plan, 'arm', journal, execute)` where
+`execute(request_id, script)` submits that exact ID once through the admitted
+root executor and returns `exit_code`, `timed_out` and `stdout`. The journal
+records the complete intent and submission clocks before dispatch. Bound the
+executor to 25 seconds and account for that time in the renewal margin; do not
+reuse host monotonic timestamps across host restarts. The arm uses a unique 300-second
+systemd timer, root/System identity and a private read-only code bind. The
+delayed command rechecks boot, firmware and code before running the utility with
+a clean environment, then restarts SDB only after successful readback.
+
+Use `submit(plan, 'retire', journal, execute)` for the same binding. Retirement
+verifies the original service description, stops only its timer, then checks
+that no start job is queued, the service never started and it is inactive.
+`RemainAfterExit=yes` retains
+the execution evidence if the timer fires during disarm. A fired rescue is not
+killed or reported as unfired. An exception or incomplete result is persisted as
+unknown and is never retried or automatically replaced with the managed utility.
+An uncertain arm can be reconciled by the bound retirement command; it remains
+unknown in the historical arm receipt. Uncertain retirement needs inspection,
+not a second submission. Callers retain the independent managed rescue until
+hardware adoption is accepted, and renew recovery with overlap before retiring
+an older timer.
+
+The queued-job check uses systemd's [unit Job property](https://wiki.freedesktop.org/www/Software/systemd/dbus/)
+and requests `--all` so an empty value is explicit. Upstream's
+[property printer](https://github.com/systemd/systemd/blob/v219/src/systemctl/systemctl.c#L3598)
+otherwise permits omission of an empty Job. The exact TV property behavior is
+part of the pending caller qualification, not established by the fake systemd.
+
+Hardware qualification is paused. This new caller has only local fake-systemd
+and real-shell acceptance; historical independent-rescue results above cover
+the utility and previous private orchestration. Existing immutable deployment
+kits are not rewritten. This timer is boot-bound and does not survive reboot.

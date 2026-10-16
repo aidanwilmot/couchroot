@@ -6,6 +6,16 @@ This is a source/caller inventory and removal plan, not a native-only qualificat
 The deployed managed payloads, SDK rescue utility and runtime remain available.
 See [migration status](MIGRATION.md) and [public contract](../CAPABILITIES.md).
 
+Local follow-up, 2026-10-16: `tvsetup.native_components` builds the worker,
+launcher, observer, model-specific setup acquisition library, service acquisition
+library and SDK recovery utility without invoking .NET. Its manifest explicitly
+states that the component bundle is not a deployable agent and still requires
+the managed fallback. It neither changes `autonomous_root.prepare` nor supplies
+the missing capability entry. `tvsetup.native_rescue` adds journaled native
+arm/retire commands for future callers, with boot/code binding, private read-only
+mapping and race-aware disarm. Hardware adoption and existing private callers
+remain paused; this is not a claim that their .NET dependency is removed.
+
 Follow-up: the [native SDK recovery utility](../recovery/native/README.md) now
 implements the conditional setting contract and has independent-rescue acceptance
 on both TVs. The .NET recovery bytes remain unchanged; older private deployment
@@ -267,3 +277,23 @@ firmwares, followed by adoption in agent-required setup and recovery callers. Th
 prerequisites delivered by the preceding milestones—immutable selection binding,
 fresh runtime receipts, held startup, same-transaction return recovery and operation parity—remain reusable
 regardless of the eventual acquisition adapter.
+
+### Exact unresolved entry boundary and next evidence
+
+The remaining gap is earlier than the C acquisition state machine: execute
+original native code from an acceptable mapping while still holding the required
+effective mount and group capabilities in the direct SDK context. The ordinary
+package preload produced no receipt; writable mapping diagnostics were refused;
+the successful private read-only bind was created by the managed bridge. The
+later vendor app-preparation path drops capabilities, and the inspected global
+Launchpad starter is not an isolated replacement. Existing metadata and modeled
+Linux tests cannot establish this firmware-specific entry.
+
+The next useful investigation needs a concrete, isolated mapping/preparation
+path reachable before that capability drop. Its first experiment must produce
+a nonce-bound SDK identity/capability/mapping receipt before any archive or root
+operation. Only after that receipt should the native identity child and bounded
+namespace/archive flow be qualified. Do not repeat failed package-preload trials
+without a new mapping hypothesis or substitute an already-root/managed-created
+read-only bind as independence evidence. No such replacement has been established
+by the current captured-artifact analysis. Device experiments remain paused.
