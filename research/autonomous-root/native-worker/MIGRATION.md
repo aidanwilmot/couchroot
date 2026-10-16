@@ -7,6 +7,21 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
+The most recent S90D service-restart check is incomplete. It reached its
+post-readiness checks and confirmed unchanged retained jobs, but the connection
+closed during final preservation/rescue retirement. Subsequent Couchroot requests
+were refused, and SDK access was unavailable after the rescue deadline. The
+original request remains uncertain and has not been replayed. Host-assisted
+recovery is authorized; independent access must be restored before inspection or
+the reboot trial. QN90A's endurance process remains live. See
+[incomplete restart evidence](s90d-service-restart-incomplete-results.json).
+
+Before that restart, S90D passed the corrected observer's five-second probe with
+five samples, no skipped intervals, complete kernel capture, successful retained
+unit exit, owned cleanup and an unfired retired rescue. Its first sample arrived
+0.439 ms after capture start. This qualifies the short probe, not endurance. See
+[S90D observer admission](observer-s90d-admission-results.json).
+
 S90D's endurance trial stopped after 96.444 minutes and 34 verified windows:
 collector 34's first sample arrived 1.105 seconds late, leaving one skipped
 interval. Its complete kernel capture and all five files were preserved and
