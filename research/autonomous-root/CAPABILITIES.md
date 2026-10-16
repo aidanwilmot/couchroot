@@ -1239,3 +1239,23 @@ inactive and old/replacement native scopes absent. No rescue fired, and enrollme
 and boot identity stayed unchanged. Real checkpoint fault exits are tested locally;
 this does not qualify power loss or natural interruption at the exact write.
 See [startup binding results](native-worker/startup-binding-results.json).
+
+
+## Single durable job admission — 0.7.46
+
+Native job admission publishes a complete running record once while the
+contained child is held behind its gate. Both file and directory sync precede
+command execution; terminal persistence is unchanged. Existing publication names
+are refused before fork, and exclusive publication never replaces a late foreign
+record. Unpublished failures retire the gated child; published uncertain outcomes
+retain their ID for reconciliation. Allocation, pipe, fork and identity failures
+retain rejected-ID evidence when storage permits. No recovery path replays work.
+
+Both TVs passed signed public root/app jobs and return to managed, plus bounded
+per-worker address-space refusal/restart and an ordinary-worker latency comparison.
+Original records, enrollment and boots were preserved; test resources were retired
+and independent rescues were verified inactive without firing. Local tests cover
+publication interruption and injected launch/storage failures. This does not
+qualify power loss or sustained pressure. Performance and endurance gates remain
+open, and the .NET entry bridge, worker fallback and independent rescue remain.
+See [single-publication results](native-worker/single-publication-results.json).

@@ -707,7 +707,7 @@ class NativeWorkerTests(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
     def test_orphan_initial_intents_recover_without_replay(self):
-        for stage in ['created','partial','synced','linked']:
+        for stage in ['created','partial','synced','linked','published','released']:
             with self.subTest(stage=stage):
                 self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
                 self.restart({'COUCHROOT_NATIVE_JOB_INTENT_FAULT':stage})
@@ -715,12 +715,15 @@ class NativeWorkerTests(unittest.TestCase):
                 request=dict(op='job.start',id='native-orphan-intent',command='touch '+str(self.root/'unexpected-intent'),profile='root',timeout_ms=1000)
                 self.send(f'OP\t{self.seq}\t'+base64.b64encode(json.dumps(request).encode()).decode())
                 self.proc.wait(timeout=5);self.assertEqual(self.proc.returncode,86)
-                self.assertFalse((self.root/'unexpected-intent').exists())
+                witness=self.root/'unexpected-intent'
+                if stage!='released':self.assertFalse(witness.exists())
+                existed=witness.exists()
                 self.restart()
                 result=self.job('job.status','native-orphan-intent')['result']
                 self.assertEqual(result['state'],'interrupted');self.assertIsNone(result['record']['exit_code'])
-                if stage!='linked':self.assertFalse(result['record']['launch_started'])
+                if stage in ('created','partial','synced'):self.assertFalse(result['record']['launch_started'])
                 self.assertFalse(self.job('job.start','native-orphan-intent',command='true',profile='root',timeout_ms=1000)['ok'])
+                self.assertEqual(witness.exists(),existed)
                 self.assertFalse(any(p.name.startswith(('.intent-','.repair-')) for p in (self.root/'.jobs').iterdir()))
                 self.assertTrue(self.job('job.forget','native-orphan-intent')['ok'])
 

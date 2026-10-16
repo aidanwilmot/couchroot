@@ -30,14 +30,17 @@ class JobStartTimingTests(unittest.TestCase):
         self.n.proc.wait(timeout=5)
         self.id = 'native-delayed-start'
         pid_file = Path(self.tmp.name)/'worker-pid'
+        directory = 'directory' in self._testMethodName
         self.n.restart(extra_env={
             'LD_PRELOAD': str(library),
-            'COUCHROOT_IO_TEST_PATH': str(self.n.root/'.jobs'/f'{self.id}.json.next'),
+            'COUCHROOT_IO_TEST_PATH': str(self.n.root/'.jobs') if directory else str(self.n.root/'.jobs'/'.intent-'),
             'COUCHROOT_IO_TEST_OP': 'fsync',
             'COUCHROOT_IO_TEST_MODE': ('blocked' if 'stalled' in self._testMethodName else
                                       'fail' if 'failed' in self._testMethodName else 'progress'),
-            **({'COUCHROOT_IO_TEST_PID_FILE': str(pid_file)}
-               if 'stalled' in self._testMethodName else {}),
+            'COUCHROOT_IO_TEST_PID_FILE': str(pid_file),
+            **({'COUCHROOT_IO_TEST_EXACT': '1',
+                'COUCHROOT_IO_TEST_AFTER_FILE': str(self.n.root/'.jobs'/f'{self.id}.json')}
+               if directory else {}),
         })
         pid_file.write_text(str(self.n.worker_pid))
 
@@ -94,7 +97,65 @@ class JobStartTimingTests(unittest.TestCase):
         self.assertEqual(witness.read_bytes(), b'x')
         self.assertFalse(survivor.exists())
 
-    def test_failed_preparation_never_releases_or_replays_command(self):
+    def test_slow_directory_preparation_keeps_command_gated(self):
+        _, witness = self.delayed_start('sleep .05; exit 7', 500)
+        terminal = self.n.completed(self.id)
+        self.assertEqual(terminal['state'], 'completed')
+        self.assertEqual(terminal['exit_code'], 7)
+        self.assertFalse(terminal['timed_out'])
+        self.assertFalse(terminal['persistence_failed'])
+        self.assertEqual(witness.read_bytes(), b'x')
+
+    def test_failed_initial_publication_never_releases_command_or_leaks_child(self):
+        witness = self.n.root/'executed'
+        children = Path(f'/proc/{self.n.worker_pid}/task/{self.n.worker_pid}/children')
+        before = children.read_text()
+        result = self.n.job('job.start', self.id, command='touch '+str(witness),
+                            timeout_ms=500, profile='root')
+        self.assertFalse(result['ok'])
+        self.assertIn('cannot be persisted; not launched', result['error'])
+        self.assertEqual(children.read_text(), before)
+        self.assertFalse(self.n.job('job.status', self.id)['ok'])
+        self.assertFalse((self.n.root/'.jobs'/f'{self.id}.json').exists())
+        self.assertFalse(witness.exists())
+        self.n.seq += 1
+        self.n.send(f'SHUTDOWN\t{self.n.seq}')
+        self.n.receive()
+        self.n.proc.wait(timeout=5)
+        self.n.restart()
+        self.assertFalse(self.n.job('job.status', self.id)['ok'])
+        self.assertFalse(witness.exists())
+        # The failed exclusive publication positively reported no execution.
+        self.n.start_job('exit 9', id=self.id)
+        self.assertEqual(self.n.completed(self.id)['exit_code'], 9)
+
+    def test_conflicting_publication_preserves_foreign_bytes_and_retires_gated_child(self):
+        witness = self.n.root/'executed'
+        record = self.n.root/'.jobs'/f'{self.id}.json'
+        foreign = b'foreign concurrent writer must survive'
+        children = Path(f'/proc/{self.n.worker_pid}/task/{self.n.worker_pid}/children')
+        before = children.read_text()
+        def conflict():
+            deadline = time.monotonic()+5
+            while not list((self.n.root/'.jobs').glob('.intent-*')):
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(.01)
+            record.write_bytes(foreign)
+            record.chmod(0o600)
+        thread = threading.Thread(target=conflict)
+        thread.start()
+        result = self.n.job('job.start', self.id, command='touch '+str(witness),
+                            timeout_ms=500, profile='root')
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(result['ok'])
+        self.assertEqual(record.read_bytes(), foreign)
+        self.assertEqual(children.read_text(), before)
+        self.assertFalse(witness.exists())
+        self.assertFalse(list((self.n.root/'.jobs').glob('.intent-*')))
+        record.unlink()  # Only this fixture's exact, never-accepted foreign bytes.
+
+    def test_failed_directory_sync_retains_published_id_without_execution(self):
         witness = self.n.root/'executed'
         result = self.n.job('job.start', self.id, command='touch '+str(witness),
                             timeout_ms=500, profile='root')
@@ -102,7 +163,10 @@ class JobStartTimingTests(unittest.TestCase):
         self.assertIn('Launch failed after intent', result['error'])
         terminal = self.n.completed(self.id)
         self.assertEqual(terminal['exit_code'], 137)
+        self.assertTrue(terminal['persistence_failed'])
         self.assertFalse(witness.exists())
+        record = self.n.root/'.jobs'/f'{self.id}.json'
+        self.assertEqual(json.loads(record.read_text())['id'], self.id)
         self.assertFalse(self.n.job('job.start', self.id, command='touch '+str(witness),
                                     timeout_ms=500, profile='root')['ok'])
         self.n.seq += 1
@@ -110,10 +174,11 @@ class JobStartTimingTests(unittest.TestCase):
         self.n.receive()
         self.n.proc.wait(timeout=5)
         self.n.restart()
-        self.assertEqual(self.n.job('job.status', self.id)['result']['state'], 'interrupted')
+        retained = self.n.job('job.status', self.id)['result']
+        self.assertIn(retained['state'], ('interrupted', 'cancelled'))
         self.assertFalse(witness.exists())
-        self.n.start_job('exit 9', id='native-after-failed-save')
-        self.assertEqual(self.n.completed('native-after-failed-save')['exit_code'], 9)
+        self.assertFalse(self.n.job('job.start', self.id, command='true',
+                                    timeout_ms=500, profile='root')['ok'])
 
     def test_stalled_preparation_watchdog_keeps_command_gated(self):
         witness = self.n.root/'executed'

@@ -1007,3 +1007,28 @@ worker from `cced593`. QN90A used proc-stat observations; S90D used pidfds after
 known-failed, fully cleaned diagnostic trials. One final shutdown sample per TV
 was 112 ms and 32 ms respectively, not a timing distribution or an endurance gate.
 See [handoff results](handoff-results.json) for scope and evidence limitations.
+
+## Single durable job publication
+
+Successful job admission creates a contained child behind the existing pipe
+gate, then exclusively publishes its complete running record, including PID and
+start ticks. The record file and containing directory must both sync before the
+gate opens. This replaces the earlier PID-zero publication plus running-record
+replacement with one publication; terminal persistence is unchanged.
+
+Existing final, update-temporary and same-worker intent names are refused before
+fork. Exclusive linking still prevents replacement if a conflicting final record
+appears later. A failure before publication kills and reaps the gated child before
+clearing its slot; no monitor can later invent a record over foreign bytes.
+Allocation, pipe, fork and identity failures retain a rejected ID when persistence
+is available. A linked record whose directory sync fails remains reserved and
+enters the existing cancellation/recovery path. Uncertain outcomes are never
+automatically replayed.
+
+The local tests cover real gated children at each publication interruption,
+pre-fork metadata refusal, failed allocation/pipe/fork/identity acquisition,
+slow and failed syncs, watchdog expiry, terminal records and managed return.
+Worker loss before any publication cannot execute the command; the guardian
+retires its child. An explicit later request may use that unrecorded ID after
+reconciliation. See [qualification results](single-publication-results.json) and
+the dated migration entry for device evidence and performance limits.

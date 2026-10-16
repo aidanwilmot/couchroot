@@ -149,7 +149,9 @@ static int job_write(int fd, const void *buf, size_t n) {
 /* No library JSON objects cross the supervisor lock. Records contain only
  * validated identifiers, kernel integers and generated timestamps, never
  * command text. */
-static int job_save(Job *j, int exclusive) {
+static int job_save_tracked(Job *j, int exclusive, int *published) {
+  if (published)
+    *published = 0;
   char name[80], temp[128], bytes[768], code[24];
   snprintf(name, sizeof name, "%s.json", j->id);
   if (exclusive)
@@ -198,6 +200,8 @@ static int job_save(Job *j, int exclusive) {
 #endif
     if (linkat(jobs_dir, temp, jobs_dir, name, 0))
       good = 0;
+    else if (published)
+      *published = 1;
 #ifdef NATIVE_WORKER_FAULT_TEST
     if (good && intent_fault && !strcmp(intent_fault, "linked"))
       _exit(86);
@@ -210,7 +214,14 @@ static int job_save(Job *j, int exclusive) {
     unlinkat(jobs_dir, temp, 0);
   if (good && fsync(jobs_dir))
     good = 0;
+#ifdef NATIVE_WORKER_FAULT_TEST
+  if (good && exclusive && intent_fault && !strcmp(intent_fault, "published"))
+    _exit(86);
+#endif
   return good;
+}
+static int job_save(Job *j, int exclusive) {
+  return job_save_tracked(j, exclusive, NULL);
 }
 static J *job_snapshot(Job *j) {
   J *r = obj();
@@ -543,6 +554,20 @@ static J *job_operation_locked(J *request, const char *op) {
       return failure("Verified app launcher unavailable");
     if (j || !empty)
       return failure("Job already exists or retention limit reached");
+    /* Check all publication names before allocating a child. The directory's
+     * lifetime lock excludes another worker; linkat below remains the final
+     * no-replacement guard against an external conflicting writer. */
+    const char *patterns[] = {"%s.json", "%s.json.next"};
+    char existing[128];
+    struct stat prior;
+    for (unsigned i = 0; i < sizeof patterns / sizeof *patterns; i++) {
+      snprintf(existing, sizeof existing, patterns[i], id);
+      if (!fstatat(jobs_dir, existing, &prior, AT_SYMLINK_NOFOLLOW) || errno != ENOENT)
+        return failure("Job intent already exists or cannot be inspected; not launched");
+    }
+    snprintf(existing, sizeof existing, ".intent-%s-%s", worker_id, id);
+    if (!fstatat(jobs_dir, existing, &prior, AT_SYMLINK_NOFOLLOW) || errno != ENOENT)
+      return failure("Job intent already exists or cannot be inspected; not launched");
     int count = 0;
     DIR *d = scan_directory(jobs_dir);
     if (!d)
@@ -564,13 +589,10 @@ static J *job_operation_locked(J *request, const char *op) {
     struct tm utc;
     gmtime_r(&now, &utc);
     strftime(j->started, sizeof j->started, "%Y-%m-%dT%H:%M:%SZ", &utc);
-    if (!job_save(j, 1)) {
-      job_clear(j);
-      return failure(
-          "Job intent already exists or cannot be persisted; not launched");
-    }
-    /* From here a published intent must never be reused or replayed. Every
-     * failure closes only descriptors this call allocated and keeps the ID. */
+    /* Create only a contained, gated child. The first durable publication will
+     * contain its complete running identity, rather than syncing a PID-zero
+     * record and immediately replacing it. No command can run before both
+     * that publication's file and directory barriers have completed. */
     int pipes[2][2] = {{-1, -1}, {-1, -1}}, gate[2] = {-1, -1};
     const char *why =
         "Insufficient descriptors; job intent retained, not launched";
@@ -635,7 +657,45 @@ static J *job_operation_locked(J *request, const char *op) {
       pipes[s][0] = -1;
     }
     strcpy(j->state, "running");
-    int prepared = job_identity(pid, j->identity) && job_save(j, 0);
+#ifdef NATIVE_WORKER_FAULT_TEST
+    if (getenv("COUCHROOT_NATIVE_JOB_INTENT_FAULT") &&
+        !strcmp(getenv("COUCHROOT_NATIVE_JOB_INTENT_FAULT"), "forked")) {
+      fprintf(stderr, "prototype: gated job child %ld\n", (long)pid);
+      _exit(86);
+    }
+#endif
+    int published = 0, identified = job_identity(pid, j->identity);
+    int prepared = identified && job_save_tracked(j, 1, &published);
+    if (!identified || (!prepared && !published)) {
+      /* No final record from this attempt exists. Never let the monitor later
+       * synthesize one over a conflicting ID or a failed initial publication.
+       * Keep the leader unreaped through kill_group, then close only our FDs.
+       * EXITKILL/PDEATHSIG also cover interruption of this cleanup. */
+      job_kill(j);
+      close(gate[1]);
+      pid_t retired;
+      do {
+        retired = waitpid(pid, NULL, 0);
+      } while (retired < 0 && errno == EINTR);
+      if (retired != pid)
+        fatal("unpublished job child retirement unverified");
+      j->reaped = 1;
+      for (int s = 0; s < 2; s++) {
+        close(j->pipes[s]);
+        j->pipes[s] = -1;
+      }
+      if (!identified) {
+        j->pid = 0;
+        j->identity[0] = 0;
+        strcpy(j->state, "unknown");
+        int retained = job_save(j, 1);
+        job_clear(j);
+        return failure(retained ? "Job intent retained; child identity unavailable"
+                                : "Job intent cannot be persisted; not launched");
+      }
+      job_clear(j);
+      return failure("Job intent already exists or cannot be persisted; not launched");
+    }
     if (prepared) {
       /* The child cannot execute before this gate. Slow durable preparation
        * must not spend its execution budget or release an already-expired job.
@@ -645,6 +705,11 @@ static J *job_operation_locked(J *request, const char *op) {
       j->deadline = stamp() + timeout;
       prepared = job_write(gate[1], "1", 1);
     }
+#ifdef NATIVE_WORKER_FAULT_TEST
+    if (prepared && getenv("COUCHROOT_NATIVE_JOB_INTENT_FAULT") &&
+        !strcmp(getenv("COUCHROOT_NATIVE_JOB_INTENT_FAULT"), "released"))
+      _exit(86);
+#endif
     if (!prepared) {
       job_kill(j);
       close(gate[1]);
@@ -663,8 +728,13 @@ static J *job_operation_locked(J *request, const char *op) {
     for (int p = 0; p < 2; p++)
       if (gate[p] >= 0)
         close(gate[p]);
-    job_clear(j);
-    return failure(why);
+    /* Retain the existing failed-launch ID contract even though successful
+     * launches no longer need an earlier PID-zero publication. */
+    {
+      int retained = job_save(j, 1);
+      job_clear(j);
+      return failure(retained ? why : "Job intent cannot be persisted; not launched");
+    }
   }
   if (!j)
     return saved_job(request, op, id);

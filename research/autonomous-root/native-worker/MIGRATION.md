@@ -7,18 +7,30 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-The unchanged signed 0.7.45 worker and managed DLL have also completed a bounded
-alternating warm-loopback comparison on both TVs. Memory was lower for native,
-but job latency regressed on QN90A and an S90D app-job sample exceeded one second.
-The performance no-regression gate remains unresolved. These four measured pairs
-per TV do not establish full acquisition, HTTPS or endurance behavior. See
-[production performance observations](production-performance-results.json).
+Both TVs are on signed 0.7.46 with native service acquisition enabled and
+managed selected and ready. Successful native job admission now exclusively
+publishes one complete running record while the contained child remains gated;
+file and directory sync still precede command execution. Both TVs passed public
+root/app jobs, retained-job return to managed, bounded address-space refusal and
+restart without replay, and a fresh ordinary-worker performance comparison.
+Disposable pressure/benchmark scopes and helpers are retired; only fixture jobs
+were forgotten. SDK is on loopback, and all four independent .NET rescue timers
+per TV are inactive without firing. Original
+retained records, enrollment and boots are preserved. The bounded history still
+contains 32 entries per TV: QN90A 26 committed / 6 rolled back; S90D 25 / 7.
+Managed entry and worker DLLs are byte-identical to 0.7.45. See
+[single-publication qualification](single-publication-results.json).
 
-Both TVs are on signed 0.7.45 packages with native service acquisition enabled,
-managed selected and ready. QN90A has 32 settled history entries (26 committed,
-6 rolled back); S90D has 32 (25 committed, 7 rolled back).
-Both passed modeled pre-readiness recovery with a partial successor checkpoint
-and an unpublished initial checkpoint. The service sealed and archived each
+The performance no-regression gate remains unresolved. The prior four-pair
+0.7.45 comparison found slower QN90A jobs and an S90D app-job admission sample
+over one second. The 0.7.46 follow-up also recorded a 1.32-second S90D native root
+completion. It is another bounded comparison, not proof
+that prior outliers are resolved or full acquisition, HTTPS and endurance gates
+are complete. Keep [the original observations](production-performance-results.json)
+and [sync attribution](job-sync-timing-results.json) alongside the new results.
+
+On signed 0.7.45, both passed modeled pre-readiness recovery with a partial
+successor checkpoint and an unpublished initial checkpoint. The service sealed and archived each
 original launch attempt, acquired a distinct native worker on the same
 coordinator, preserved retained bytes, and returned normally to managed. All 21
 owned trial units per TV and the deployment units are inactive; SDK is on loopback,
@@ -3417,3 +3429,74 @@ requirements are:
 
 Implement and qualify that design before the final endurance run; retain the
 earlier performance samples and all .NET fallback/recovery paths.
+
+
+## Single durable job publication — 2026-10-16
+
+Signed 0.7.46 implements the preceding proposal. Successful admission allocates
+and forks a contained child behind its existing gate, then exclusively publishes
+the complete running identity. File sync and directory sync must finish before
+releasing the gate and starting the execution deadline. Admission therefore uses
+two sync calls instead of four; terminal persistence and record format remain
+unchanged. There is no durability relaxation to imitate the managed timings.
+
+Final/update-temporary/same-worker intent names are refused before fork, and the
+exclusive link protects against a late conflicting final record. Unpublished
+failure kills and verifies reaping of the gated child before clearing its slot;
+the monitor cannot later create a record over foreign bytes. Allocation, partial
+pipe, fork and identity failure retain a rejected ID when persistence is possible.
+A linked record remains reserved after directory-sync failure. Worker loss before
+any record exists cannot execute the command; only an explicit later request may
+reuse that unrecorded ID after reconciliation. Recovery never replays work.
+
+Local verification passed 50 native regression tests, seven timing/storage groups,
+six launch-pressure groups, and two publication tests. The publication tests cover
+five pre-fork metadata shapes and real gated-child loss before publication;
+initial-intent interruption also covers six stages through gate release. Fresh
+managed/native fixtures passed six rehearsal cases, 21 ordinary restart cases
+(three fault-only skips), and all 24 cases with a fault-enabled worker. npm passed
+414 with 157 skips. The two initial restart failures were reproduced without
+container init: a killed worker remained a zombie owned by PID 1, and the service
+correctly refused recovery. Fresh `--init` runs passed; no process-absence guard
+was changed. A failed build/test attempt against stale binaries was discarded;
+reported tests use the fresh source-bound build.
+
+Both TVs installed verified signed contents and completed native public root/app
+jobs, normal managed return and public fixture forgetting. Separate ordinary
+workers passed per-process address-space refusal with a live job and saved result,
+restored app execution, refused-ID reconciliation after restart, and cleanup.
+Allocation/pipe/fork/identity injection remains local-only. Each then completed
+two warmup pairs and four measured managed/native pairs using the unchanged
+benchmark. Median admission / observed-completion milliseconds were:
+
+| Device/profile | Prior 0.7.45 native | 0.7.46 managed | 0.7.46 native |
+| --- | ---: | ---: | ---: |
+| QN90A root | 168 / 264 | 106 / 141 | 98 / 185 |
+| QN90A app | 149 / 242 | 57 / 77 | 73 / 166 |
+| S90D root | 60 / 99 | 65 / 89 | 59 / 90 |
+| S90D app | 50 / 90 | 22 / 55 | 23 / 61 |
+
+These samples do not establish a stable tail distribution; nearest-rank p95 is
+the maximum at n=4. They exclude full acquisition and HTTPS service scheduling.
+A new S90D native root sample took 1125.913 ms to admit and 1324.662 ms to
+complete. Its cause, the previous S90D one-second app admission, and the historical
+QN90A command timeout remain unexplained. The performance no-regression gate
+stays open. See
+[sanitized samples and preservation evidence](single-publication-results.json).
+
+Both ended managed-ready and settled on their original boots, with original
+retained records and enrollment preserved. Disposable pressure/benchmark helpers,
+uploads, jobs and scopes are removed;
+native helper runtimes and freezer scopes are absent. Historical service staging
+and sealed launch-fence tombstones remain under the existing recovery contract.
+Owned trial units and all four independent .NET rescue pairs per TV are inactive,
+with no rescue service start. Managed DLLs are unchanged.
+No reboot, standby, global policy, persistent capability or SMACK change occurred.
+Raw logs, package/signing data, device identities and journals remain private.
+
+Next: measure integrated acquisition/public-path latency with continuous resource
+and kernel evidence, investigate remaining tails, and complete mixed endurance.
+Native-only capability entry remains separate unfinished work; preserve the
+managed bridge, fallback and independent rescue throughout. Power transitions
+remain outside the current authorization, and native-default observation and
+.NET retirement are not complete.

@@ -15,6 +15,9 @@ static int selected(int fd, const char *operation) {
   const char *op = getenv("COUCHROOT_IO_TEST_OP");
   if (!prefix || !*prefix || !op || strcmp(op, operation))
     return 0;
+  const char *after = getenv("COUCHROOT_IO_TEST_AFTER_FILE");
+  if (after && access(after, F_OK))
+    return 0;
   /* Optionally delay only the protocol worker, leaving its independent
    * guardian free to persist recovery after the watchdog terminates it. */
   const char *pid_file = getenv("COUCHROOT_IO_TEST_PID_FILE");
@@ -33,7 +36,8 @@ static int selected(int fd, const char *operation) {
   if (n < 0)
     return 0;
   path[n] = 0;
-  return !strncmp(path, prefix, strlen(prefix));
+  return getenv("COUCHROOT_IO_TEST_EXACT") ? !strcmp(path, prefix)
+                                          : !strncmp(path, prefix, strlen(prefix));
 }
 static int delay(void) {
   const char *mode = getenv("COUCHROOT_IO_TEST_MODE");

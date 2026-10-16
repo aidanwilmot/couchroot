@@ -69,6 +69,30 @@ python3 -m unittest discover -s tests -p native_job_migration_test.py
 
 The production ARM build still excludes host substitutions and fault controls.
 
+## Restart container lifecycle
+
+Run each rehearsal/restart integration file in a fresh container with
+`docker run --init`. Guardian-loss cases deliberately kill the parent of real
+workers and commands. Without a reaping init, those children remain zombies
+under PID 1 and the service correctly refuses recovery while their original
+process identities remain visible. This is not evidence of a worker recovery
+regression; do not weaken the process-absence guard to accommodate the fixture.
+
+For example, with freshly built scratch fixtures:
+
+```sh
+docker run --rm --init --privileged \
+  -v "$PWD:/repo:ro" -v "$FIXTURES:/fx:ro" -w /repo \
+  -e COUCHROOT_PARITY_CONTAINER=1 -e COUCHROOT_REHEARSAL=1 \
+  -e NATIVE_WORKER=/fx/native/worker \
+  -e MANAGED_PARITY=/fx/managed/Harness.dll \
+  couchroot-parity-test:arm64 node --test tests/native-restart-integration.test.cjs
+```
+
+Use a separate container for `native-rehearsal-integration.test.cjs`. The three
+startup fault cases additionally require a fault-enabled worker and
+`COUCHROOT_STARTUP_FAULT=1`; the ordinary worker run skips them.
+
 ## Production lifetime checks
 
 `native_lifetime_test.py` checks explicit production-mode admission, status,

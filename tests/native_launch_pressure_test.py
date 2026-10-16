@@ -30,6 +30,14 @@ class LaunchPressureTests(unittest.TestCase):
     def test_fork_failure_releases_pipes_and_preserves_intent(self):
         self.injected_failure('fork', 1, 'Job intent retained; launch failed')
 
+    def test_pipe_failure_releases_partial_allocations_and_preserves_intent(self):
+        for occurrence in (1, 2, 3):
+            with self.subTest(pipe=occurrence):
+                self.injected_failure('pipe2', occurrence, 'Job intent retained; launch failed')
+
+    def test_identity_failure_retires_child_and_preserves_rejected_id(self):
+        self.injected_failure('identity', 1, 'Job intent retained; child identity unavailable')
+
     def injected_failure(self, mode, occurrence, error):
         n = self.n
         with tempfile.TemporaryDirectory() as tmp:
@@ -47,7 +55,7 @@ class LaunchPressureTests(unittest.TestCase):
             config.write_text(f'{n.worker_pid} {mode} {occurrence}')
             before = {p.name for p in Path(f'/proc/{n.worker_pid}/fd').iterdir()}
             marker = n.root/'unexpected-execution'
-            identifier = 'native-launch-failure'
+            identifier = f'native-launch-failure-{mode}-{occurrence}'
             result = n.job('job.start', identifier, command='touch '+str(marker),
                            timeout_ms=1000, profile='root')
             config.unlink()
@@ -58,8 +66,9 @@ class LaunchPressureTests(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertFalse(n.job('job.start', identifier, command='touch '+str(marker),
                                    timeout_ms=1000, profile='root')['ok'])
-            n.start_job('exit 9', id='native-after-launch-failure')
-            self.assertEqual(n.completed('native-after-launch-failure')['exit_code'], 9)
+            after = f'native-after-{mode}-{occurrence}'
+            n.start_job('exit 9', id=after)
+            self.assertEqual(n.completed(after)['exit_code'], 9)
             n.seq += 1
             n.send(f'SHUTDOWN\t{n.seq}')
             n.receive()
