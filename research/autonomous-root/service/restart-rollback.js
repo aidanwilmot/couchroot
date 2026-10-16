@@ -13,7 +13,7 @@ const {hash,atomic}=require('./policy');
 const {providerId}=require('./restart-inventory');
 const {validateSnapshot}=require('./retained-install');
 const {snapshotManagedJobs,sourceExitGuard}=require('./retained-state');
-const {processIdentities}=require('./worker-processes');
+const {processIdentities,processAbsenceGuard}=require('./worker-processes');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const ID=/^[a-f0-9]{32}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/,INTENT='.restart-rollback.pending',RECEIPT='.restart-rollback.json';
 const FORWARD=['prepared','state-ready','trial-ready'],RESUME=['rollback-required','rollback-state-ready'],BLOCKING=['managed-restore.pending','managed-launch.pending'];
@@ -74,13 +74,13 @@ function loadEvidence(directory,id,phase){
 }
 // Read-only: boot, recorded process identities and unit cgroups. It never stops,
 // signals or removes; any running remnant fails the command.
-function observeCommand(e){
- const gone=e.known.map(([,p])=>'if test -e /proc/'+p.pid+'/stat; then line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" != '+p.start_ticks+'; fi\n').join('');
- return 'set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+sourceExitGuard(e.source)+gone+
+function observeCommand(e,{bootId=e.boot_id===undefined?e.source.boot_id:e.boot_id,knownBootId=e.boot_id===undefined?e.source.boot_id:e.boot_id}={}){
+ const gone=e.known.map(([,p])=>processAbsenceGuard(p,knownBootId,bootId)).join('');
+ return 'set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+sourceExitGuard(e.source,bootId)+gone+
   'for unit in '+e.units.join(' ')+'; do\nstate=$(systemctl show -p LoadState -p ActiveState -p SubState -p MainPID -p ControlGroup "$unit")\n'+
   'cg=$(printf "%s\\n" "$state" | sed -n "s/^ControlGroup=//p")\nprocs=absent\n'+
   'case "$cg" in "") ;; /system.slice/couchroot-*.service) if test -e "/sys/fs/cgroup/systemd$cg/cgroup.procs"; then procs=$(wc -l < "/sys/fs/cgroup/systemd$cg/cgroup.procs"); fi;; *) exit 1;; esac\n'+
-  'printf "Unit=%s\\n%s\\nProcs=%s\\n" "$unit" "$state" "$procs"\ndone\n'+gone+sourceExitGuard(e.source)+'printf "RESTART-ROLLBACK-OBSERVED\\n"\n';
+  'printf "Unit=%s\\n%s\\nProcs=%s\\n" "$unit" "$state" "$procs"\ndone\n'+gone+sourceExitGuard(e.source,bootId)+'printf "RESTART-ROLLBACK-OBSERVED\\n"\n';
 }
 function parseObservation(stdout,units){
  check(typeof stdout==='string'&&stdout.length<4096&&stdout.endsWith('RESTART-ROLLBACK-OBSERVED\n'),'remnant observation failed');

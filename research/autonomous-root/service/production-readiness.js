@@ -7,17 +7,21 @@ const {selectionStatus,SelectionJournal}=require('./worker-selection');
 const {planInstallation}=require('./retained-install');
 const {sourceExitGuard,validateRecord}=require('./retained-state');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
-const {processIdentities}=require('./worker-processes');
+const {processIdentities,bootGuard}=require('./worker-processes');
 const {inspectProductionUnit}=require('./observer-unit');
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 const hex=(v,n)=>typeof v==='string'&&v.length===n&&/^[a-f0-9]+$/.test(v);
 function check(ok){if(!ok)throw Error('Production readiness evidence unavailable');}
-function validateLaunch(record){
+function validateLaunch(record){validateLaunchFields(record,false);}
+// Effective runtime records retain the original managed source while binding
+// the current native processes to a later boot. Initial launches stay strict.
+function validateRuntimeLaunch(record){validateLaunchFields(record,true);}
+function validateLaunchFields(record,runtime){
  check(record&&Object.keys(record).sort().join('|')==='boot_id|device|directory|id|launcher_sha256|manifest_sha256|phase|port|schema|scope|source|state_receipt_sha256|token_file|token_sha256|unit|worker_sha256');
  check(record.schema===1&&record.phase==='submitted'&&hex(record.id,32)&&['s90d','qn90a'].includes(record.device));
  for(const k of ['manifest_sha256','state_receipt_sha256','token_sha256','worker_sha256','launcher_sha256'])check(hex(record[k],64));
  check(record.directory==='/opt/couchroot-worker-'+record.id&&record.scope===record.directory+'/state'&&record.unit==='couchroot-worker-'+record.id+'.service');
- sourceExitGuard(record.source);check(record.boot_id===record.source.boot_id);
+ sourceExitGuard(record.source);bootGuard(record.boot_id);check(runtime||record.boot_id===record.source.boot_id);
  check(Number.isInteger(record.port)&&record.port>=1024&&record.port<=65535&&typeof record.token_file==='string'&&/^\/opt\/usr\/home\/owner\/apps_rw\/MiniRoot01\/data\/worker-state\/production-[a-zA-Z0-9]{6}\/token$/.test(record.token_file)&&!record.token_file.includes('\n'));
 }
 function productionIdentity(info,peer,record,provider){
@@ -87,4 +91,4 @@ async function readyProduction({record,journalDirectory,selectionFile,channel,ex
   return Object.freeze({record:Object.freeze(ready),readiness_sha256:receipt,selection});
  }catch(cause){throw Object.assign(Error('Production readiness requires reconciliation'),{outcome:'unknown',cause});}
 }
-module.exports={readyProduction,validateLaunch,productionIdentity,runtimeCommand};
+module.exports={readyProduction,validateLaunch,validateRuntimeLaunch,productionIdentity,runtimeCommand};

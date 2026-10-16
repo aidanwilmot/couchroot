@@ -6,6 +6,18 @@ function identity(v){
  return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')==='pid|start_ticks'&&
   Number.isInteger(v.pid)&&v.pid>0&&v.pid<=2147483647&&typeof v.start_ticks==='string'&&/^(0|[1-9][0-9]{0,19})$/.test(v.start_ticks);
 }
+function bootGuard(boot){
+ if(typeof boot!=='string'||boot.length!==36||!BOOT.test(boot))throw Error('Invalid observed boot identity');
+ return 'test "$(cat /proc/sys/kernel/random/boot_id)" = '+boot+'\n';
+}
+// Explicitly bind observation to the authenticated executor's boot. A saved
+// PID/start pair has meaning only within its own boot; never inspect a recycled
+// current-boot PID as evidence about a process from an earlier boot.
+function processAbsenceGuard(p,identityBoot,observedBoot=identityBoot){
+ if(!identity(p)||p.pid<=1)throw Error('Invalid absent process identity');
+ bootGuard(identityBoot);const guard=bootGuard(observedBoot);
+ return guard+(identityBoot===observedBoot?'if test -e /proc/'+p.pid+'/stat; then line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" != '+p.start_ticks+'; fi\n':'');
+}
 function processIdentities(info,authenticatedPid){
  const p=info&&info.processes,native=info&&['native-prototype','native-bootstrap'].includes(info.implementation);
  if(!info||!BOOT.test(info.boot_id)||typeof info.worker_id!=='string'||!/^[a-f0-9]{32}$/.test(info.worker_id)||
@@ -64,4 +76,4 @@ async function waitForProcessExit(bound,options={}){
 // trial's original managed source (held rehearsal) or, after native activation
 // retired that provider, to the active native worker it replaces.
 function returnProviderSource(source,record){const s=JSON.stringify(source);return !!record&&(s===JSON.stringify(record.source)||!!record.worker_identity&&s===JSON.stringify(record.worker_identity));}
-module.exports={processIdentities,observeProcesses,waitForProcessExit,startTicks,returnProviderSource};
+module.exports={processIdentities,observeProcesses,waitForProcessExit,startTicks,returnProviderSource,bootGuard,processAbsenceGuard};

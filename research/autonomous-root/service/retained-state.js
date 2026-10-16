@@ -2,7 +2,7 @@
 // Read a stopped managed worker's retained records through an independent
 // executor. No record is rewritten and no job is started, signalled or replayed.
 const crypto=require('crypto');
-const {processIdentities}=require('./worker-processes');
+const {processIdentities,processAbsenceGuard}=require('./worker-processes');
 const ROOT='/opt/couchroot-agent/jobs';
 const ID=/^[A-Za-z0-9-]{16,64}$/;
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
@@ -33,12 +33,11 @@ function validateRecord(name,bytes){
  check(record.process_start===undefined||record.process_start===null||typeof record.process_start==='string');
  return record;
 }
-function guard(source){
+function guard(source,bootId){
  check(source&&source.processes&&source.processes.worker&&source.processes.guardian===null&&typeof source.boot_id==='string'&&source.boot_id.length===36&&typeof source.worker_id==='string'&&source.worker_id.length===32);
  const normalized=processIdentities({...source,capabilities:['worker-process-identity-v1']},source.processes.worker.pid);check(JSON.stringify(normalized)===JSON.stringify(source)&&source.processes.worker.pid>1);
  const p=source.processes.worker;
- return 'test "$(cat /proc/sys/kernel/random/boot_id)" = '+source.boot_id+'\n'+
-  'if test -e /proc/'+p.pid+'/stat; then line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" != '+p.start_ticks+'; fi\n';
+ return processAbsenceGuard(p,source.boot_id,bootId===undefined?source.boot_id:bootId);
 }
 function prefix(source){return 'set -eu\nPATH=/usr/bin:/bin\nexport PATH\n'+guard(source)+
  'for p in /opt /opt/couchroot-agent '+ROOT+'; do test ! -L "$p"; if test -e "$p"; then test -d "$p"; fi; done\n';}

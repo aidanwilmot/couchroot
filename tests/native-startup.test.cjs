@@ -32,3 +32,17 @@ test('restart launch has valid shell syntax and reuses only the committed scope'
  const id='1'.repeat(32),a={id,port:12345,token_file:path.dirname(f.record.token_file)+'/restart-'+id,token_sha256:'a'.repeat(64)},command=launchCommand(f.record,a);
  assert.equal(spawnSync('/bin/sh',['-n'],{input:command}).status,0);assert.match(command,/--production/);assert.match(command,/sha256sum/);assert.throws(()=>launchCommand(f.record,{...a,token_file:'/tmp/foreign'}));
 }));
+
+test('cross-boot runtime retains original commitment and activation without relabeling their source',()=>fixture(f=>{
+ const boot='00000000-0000-0000-0000-000000000002';
+ const next={...f.record,boot_id:boot,worker_identity:{...f.record.worker_identity,boot_id:boot,worker_id:'f'.repeat(32)},unit_started_monotonic:'456'};
+ const receipt={schema:2,id:f.id,phase:'ready',readiness_sha256:f.activation.readiness_sha256,activation_sha256:hash(JSON.stringify(f.activation)),record:next};
+ f.write(f.id+'.runtime.json',receipt);
+ assert.deepEqual(startupCandidate(f.file).record,next);assert.deepEqual(readRuntime(f.dir,f.id).original,f.record);
+ assert.equal(startupCandidate(f.file).activation.boot_id,f.record.boot_id);
+ for(const invalid of [{...receipt,schema:1},{...receipt,record:{...next,worker_identity:{...next.worker_identity,boot_id:f.record.boot_id}}},{...receipt,record:{...next,source:{...next.source,boot_id:boot}}},{...receipt,record:f.record}]){
+  f.write(f.id+'.runtime.json',invalid);assert.throws(()=>startupCandidate(f.file));
+ }
+ const {worker_identity,unit_started_monotonic,...launch}=next;
+ assert.throws(()=>require('../research/autonomous-root/service/production-readiness').validateLaunch({...launch,phase:'submitted'}));
+}));

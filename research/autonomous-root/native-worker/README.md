@@ -15,8 +15,10 @@ owned runtime views; namespace descriptor and bind pins remain conservative
 blockers. Legacy journals remain limited to same-boot recovery. Seven focused
 Linux fixtures cover these rules, including production kernel-resource checks
 with redirected filesystem inputs. This source change is not installed or
-qualified on either TV. The service still refuses cross-boot selected-native
-startup until its receipt, fence, retained-state and return paths are integrated.
+qualified on either TV. Local service source now integrates boot-aware startup,
+retained-state verification and managed return while keeping the original
+activation immutable. A schema-2 runtime receipt binds replacement processes to
+the new boot. Installed 0.7.48 still has its original same-boot restriction.
 
 The prototype uses the existing HMAC protocol with strict sequence ordering,
 bounded binary chunks and structured failure responses. It implements status,

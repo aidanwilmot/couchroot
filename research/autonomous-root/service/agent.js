@@ -16,7 +16,7 @@ const {cleanupRestartRollback}=require('./restart-cleanup');
 const {startupCandidate,startSelectedNative}=require('./native-startup');
 const {runtimeRead,nativeReadiness}=require('./native-runtime');
 const {restartReturnCandidate,reconcileRestartReturn}=require('./restart-return');
-const {validateLaunch}=require('./production-readiness');
+const {validateLaunch,validateRuntimeLaunch}=require('./production-readiness');
 const {validateManagedLaunch}=require('./managed-readiness');
 const {privateRead}=require('./private-state');
 const {activateProduction}=require('./production-activation');
@@ -500,7 +500,7 @@ function createAgent(config,options={}){
     const {worker_identity,unit_started_monotonic,launcher_sha256,...launch}=readyRecord;validateManagedLaunch({...launch,phase:'submitted'});
     if(!/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic)||typeof launcher_sha256!=='string'||launcher_sha256.length!==64||!/^[a-f0-9]+$/.test(launcher_sha256)||launch.origin_id!==token.stopped.transaction_id||launch.boot_id!==boot||launch.manifest_sha256!==sourceVersion)throw Error('Managed session does not match stopped handoff');
     const directory=path.dirname(options.selectionFile),nativeText=runtimeRead(path.join(directory,launch.origin_id+'.production.json'),16384),nativeRecord=JSON.parse(nativeText),restoreText=privateRead(path.join(directory,launch.id+'.managed-restore.json'),16384),restored=JSON.parse(restoreText);
-    const {worker_identity:nativeIdentity,unit_started_monotonic:nativeStarted,...nativeLaunch}=nativeRecord;validateLaunch({...nativeLaunch,phase:'submitted'});
+    const {worker_identity:nativeIdentity,unit_started_monotonic:nativeStarted,...nativeLaunch}=nativeRecord;validateRuntimeLaunch({...nativeLaunch,phase:'submitted'});
     if(nativeRecord.phase!=='ready'||nativeRecord.id!==launch.origin_id||token.targetVersion!=='native-prototype|'+nativeRecord.manifest_sha256||(previous&&JSON.stringify(previous.record)!==nativeText)||JSON.stringify(nativeRecord.source)!==JSON.stringify(token.source)||JSON.stringify(nativeIdentity)!==JSON.stringify(launch.source)||!nativeStarted||hash(restoreText)!==launch.state_receipt_sha256||restored.phase!=='restored'||restored.id!==launch.origin_id||restored.transition_id!==launch.id)throw Error('Managed restoration is not bound to this handoff');
     const committed=()=>{const s=selectionStatus(options.selectionFile),h=s.history&&s.history[s.history.length-1],rollback=launch.id===launch.origin_id;
      if(s.phase!=='stable'||s.selected_implementation!=='managed'||s.selected_manifest_sha256!==sourceVersion||!h||h.id!==launch.id||h.outcome!==(rollback?'rolled-back':'committed')||h.state_sha256!==launch.state_receipt_sha256||h.readiness_sha256!==readinessDigest||h.quiescence_sha256!==restored.quiescence_sha256||h.from.implementation!==(rollback?'managed':'native-prototype')||h.to.implementation!==(rollback?'native-prototype':'managed')||h.from.manifest_sha256!==(rollback?sourceVersion:nativeRecord.manifest_sha256)||h.to.manifest_sha256!==(rollback?nativeRecord.manifest_sha256:sourceVersion))throw Error('Committed managed rollback required');
@@ -512,7 +512,7 @@ function createAgent(config,options={}){
      if(committed()!==selected||next._conn!==peer||currentBoot()!==boot||!['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)||peer.identity.smack!=='User')throw Error('Managed peer changed during adoption');
      validateReadiness(info,{implementation:'managed',bootId:boot,launcherSha256:launcher_sha256});
      const identityNow=processIdentities(info,peer.identity.pid),resources=validateResourceInventory(info);
-     if(JSON.stringify(identityNow)!==JSON.stringify(worker_identity)||resources.jobs.length||resources.transfers.length||resources.helpers.length||[token.source,launch.source].some(s=>s.worker_id===identityNow.worker_id||Object.values(s.processes).some(p=>p&&p.pid===peer.identity.pid)))throw Error('Managed identity or resources changed');
+     if(JSON.stringify(identityNow)!==JSON.stringify(worker_identity)||resources.jobs.length||resources.transfers.length||resources.helpers.length||[token.source,launch.source].some(s=>s.worker_id===identityNow.worker_id||s.boot_id===boot&&Object.values(s.processes).some(p=>p&&p.pid===peer.identity.pid)))throw Error('Managed identity or resources changed');
      const adoptedGeneration=++generation,previousClose=next.onClose;
      channel=next;connected=true;workerReady=true;workerStatus=info;workerStatusAt=process.uptime();identity=peer.identity;launching=false;lastError=null;nativeRuntime=null;
      if(timer){clearTimeout(timer);timer=null;}

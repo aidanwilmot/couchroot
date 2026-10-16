@@ -32,7 +32,7 @@ function managedIdentity(info,peer,record,provider,original){
  check(!r.jobs.length&&!r.helpers.length&&!r.transfers.length&&identity.processes.worker.pid>1&&hex(identity.worker_id,32));
  check(provider&&provider.processes&&provider.processes.guardian&&provider.boot_id===record.boot_id);
  check(JSON.stringify(processIdentities({...provider,implementation:'native-prototype',guardian_pid:provider.processes.guardian.pid,capabilities:['worker-process-identity-v1']},provider.processes.worker.pid))===JSON.stringify(provider));
- for(const source of [record.source,provider,original])check(source.worker_id!==identity.worker_id&&Object.values(source.processes).every(p=>!p||p.pid!==identity.processes.worker.pid));
+ for(const source of [record.source,provider,original])check(source.worker_id!==identity.worker_id&&(source.boot_id!==identity.boot_id||Object.values(source.processes).every(p=>!p||p.pid!==identity.processes.worker.pid)));
  return identity;
 }
 function managedRuntimeCommand(record,identity,inputs,launcherSha256){

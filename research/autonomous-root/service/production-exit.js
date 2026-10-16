@@ -1,13 +1,13 @@
 'use strict';
 // Read-only exit evidence through an independent executor. Never signal a PID.
-const {validateLaunch}=require('./production-readiness');
+const {validateRuntimeLaunch}=require('./production-readiness');
 const {processIdentities,observeProcesses}=require('./worker-processes');
 const {inspectProductionUnit}=require('./observer-unit');
 function check(ok,detail){if(!ok)throw Error('Production exit evidence unavailable'+(detail?': '+detail:''));}
 const unitSummary=u=>u.active_state+'/'+u.sub_state+' pid='+u.main_pid+' code='+u.exec_code+' status='+u.exec_status;
 async function prepareProductionExit({record,execute}){
  record=JSON.parse(JSON.stringify(record));check(record.phase==='ready'&&typeof execute==='function');
- const {worker_identity,unit_started_monotonic,...launch}=record;validateLaunch({...launch,phase:'submitted'});
+ const {worker_identity,unit_started_monotonic,...launch}=record;validateRuntimeLaunch({...launch,phase:'submitted'});
  const identity=processIdentities({...worker_identity,implementation:'native-prototype',guardian_pid:worker_identity.processes.guardian.pid,capabilities:['worker-process-identity-v1']},worker_identity.processes.worker.pid);
  check(JSON.stringify(identity)===JSON.stringify(worker_identity)&&identity.boot_id===record.boot_id&&/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic));
  const guard='test "$(cat /proc/sys/kernel/random/boot_id)" = '+record.boot_id+'\n';

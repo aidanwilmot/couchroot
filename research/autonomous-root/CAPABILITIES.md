@@ -1280,3 +1280,23 @@ Its managed readiness is verified on the new boot. The installed selected-native
 restart receipts remain bound to their original boot; this recovery does not
 qualify native cross-boot startup. The .NET entry, managed worker and independent
 300-second rescue remain available. See [transfer and recovery evidence](native-worker/observer-transfer-recovery-results.json).
+
+
+## Local cross-boot startup integration
+
+Local source now binds a selected-native restart to the held executor's observed
+boot, preserving the original activation and migration source. A schema-2 runtime
+receipt may replace only the boot, worker identity and unit start binding. Initial
+production launch validation stays strict. Schema-3 startup attempts separately
+record the previous runtime boot and the new launch boot; old fences can be sealed
+on the current boot but cannot authorize replay. Retained-state, managed return
+and activation verification use the appropriate original or current identity.
+
+Three modeled reboot integration cases cover stale guardian recovery, interrupted
+new-boot startup, and a runtime receipt published before startup completion. Each
+also restarts the service again on the new boot and returns to managed while
+preserving retained records. These use synthetic historical receipts and real
+native/managed fixture workers; they do not prove TV reboot behavior. The code is
+not installed on either TV, and both 0.7.48 endurance runs remain undisturbed.
+Pending-bootstrap/return transitions interrupted by another reboot and broader
+power lifecycle acceptance remain open. Neither .NET fallback is removed.

@@ -9,14 +9,15 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','native-startup-journal','native-startup-partial','native-startup-initial','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
- skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY||(mode.startsWith('native-startup-')&&process.env.COUCHROOT_STARTUP_FAULT!=='1'),timeout:90000
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','native-reboot','native-reboot-startup','native-reboot-receipt','native-startup-journal','native-startup-partial','native-startup-initial','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+ skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY||((mode.startsWith('native-startup-')||mode==='native-reboot-startup')&&process.env.COUCHROOT_STARTUP_FAULT!=='1'),timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-restart-')),state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',selectionFile=state+'/selection.json';fs.mkdirSync(state,{recursive:true,mode:0o700});
  const managed='a'.repeat(64),native='b'.repeat(64),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),launcherSha=sha(fs.readFileSync('/bin/true')),workerSha=sha(fs.readFileSync(process.env.NATIVE_WORKER)),runtimeSha=sha(fs.readFileSync('/opt/dotnet/bin/dotnet'));
- const live=mode.startsWith('live-'),observerLoss=mode.startsWith('live-observer-');let faulted=false,cleanupFaulted=false,startupFaulted=false;
- const startupStage={'native-startup-journal':'journal-runtime','native-startup-partial':'partial-runtime','native-startup-initial':'initial-created'}[mode];
+ const live=mode.startsWith('live-'),observerLoss=mode.startsWith('live-observer-');let faulted=false,cleanupFaulted=false,startupFaulted=false,receiptFaulted=false;
+ const reboot=mode.startsWith('native-reboot');
+ const startupStage={'native-reboot-startup':'journal-runtime','native-startup-journal':'journal-runtime','native-startup-partial':'partial-runtime','native-startup-initial':'initial-created'}[mode];
  const children=[],servers=[],roots=['/opt/couchroot-agent'],units=new Map(),commands=new Map();let first,second;
  const unitRoot=root+'/units';fs.mkdirSync(unitRoot);
  // Unknown units report systemd's not-found defaults; the fixture has no cgroups.
@@ -98,6 +99,7 @@ done
  const injected=Error('injected service restart');
  try{
   first=createAgent(loader(new Map(),(name,module)=>{
+   if(name==='policy'&&mode==='native-reboot-receipt'){const atomic=module.exports.atomic;module.exports.atomic=(file,value)=>{const result=atomic(file,value);if(!receiptFaulted&&file.endsWith('.runtime.json')){receiptFaulted=true;throw injected;}return result;};}
    if(name==='managed-return'&&['return-prepared','return-stopped'].includes(mode)){const create=module.exports.createManagedReturn;module.exports.createManagedReturn=o=>{if(mode==='return-prepared')o.openRetirement=async()=>{throw injected;};else{const stop=o.hold.shutdownNative;o.hold.shutdownNative=async(...a)=>{await stop(...a);throw injected;};}return create(o);};}
    if(name==='managed-session'&&mode.startsWith('return-')&&mode.endsWith('ready')){const open=module.exports.openManagedSession;module.exports.openManagedSession=async o=>{if(mode==='return-state-ready')throw injected;await open(o);throw injected;};}
    if(name==='production-readiness'&&mode==='live-production-loss'){
@@ -138,9 +140,9 @@ done
    if(mode==='provider-ready'){const prepare=hold.prepareNative;hold.prepareNative=async id=>{await prepare(id);throw injected;};}
    return hold;};
   if(mode.startsWith('native-')||mode.startsWith('return-')){
-   await first.migrateNative(native,runtimeSha);const before=first.status(),id=before.native_runtime.transaction_id,history=JSON.stringify(before.worker_selection.history),committed=fs.readFileSync(state+'/'+id+'.production.json'),activation=fs.readFileSync(state+'/'+id+'.activation.json');
+   await first.migrateNative(native,runtimeSha);const before=first.status(),id=before.native_runtime.transaction_id;let history=JSON.stringify(before.worker_selection.history),committed=fs.readFileSync(state+'/'+id+'.production.json'),activation=fs.readFileSync(state+'/'+id+'.activation.json');
    await first.operation({op:'job.start',id:'native-keep-00001',profile:'root',timeout_ms:1000,command:'exit 9'});await until(async()=>(await first.operation({op:'status'})).resources.jobs.every(j=>j.monitor_finished));
-   const persistenceLoss=mode==='native-persistence-lost',guardianLoss=mode==='native-guardian-lost'||persistenceLoss,production=JSON.parse(committed),nativeSaved=fs.readFileSync(production.scope+'/.jobs/native-keep-00001.json');
+   const persistenceLoss=mode==='native-persistence-lost',guardianLoss=mode==='native-guardian-lost'||persistenceLoss||reboot;let production=JSON.parse(committed),nativeSaved=fs.readFileSync(production.scope+'/.jobs/native-keep-00001.json');
    if(guardianLoss){
     await first.operation({op:'job.start',id:'native-live-00001',profile:'root',timeout_ms:60000,command:'printf x >> '+root+'/effect; sleep 50'});
     await until(()=>fs.existsSync(root+'/effect'));assert.equal(fs.readFileSync(root+'/effect','utf8'),'x');
@@ -176,16 +178,19 @@ done
     }
    }else if(mode==='native-lost')servers[servers.length-1]._conn._socket.destroy();else{first.stop();for(const s of servers.slice())s.close();}
    await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
+   if(reboot){const historical=require('./native-reboot-state.cjs').historicalBoot(state,id);production=historical.record;committed=historical.committed;activation=historical.activation;history=historical.history;}
    second=mode==='native-committed'||mode.startsWith('return-')?createAgent(loader(new Map())):first;await acquire(second);
    let interruptedAttempt;
-   if(startupStage){
+   if(startupStage||mode==='native-reboot-receipt'){
     await until(()=>second.restartInventory().native_startup&&second.restartInventory().native_startup.phase==='failed',40000);
-    assert.equal(second.status().worker_ready,false);assert(startupFaulted);
-    interruptedAttempt=JSON.parse(fs.readFileSync(state+'/'+id+'.startup.json'));assert.equal(interruptedAttempt.schema,2);assert.equal(interruptedAttempt.phase,'submitted');
+    assert.equal(second.status().worker_ready,false);assert(startupStage?startupFaulted:receiptFaulted);
+    interruptedAttempt=JSON.parse(fs.readFileSync(state+'/'+id+'.startup.json'));assert.equal(interruptedAttempt.schema,reboot?3:2);assert.equal(interruptedAttempt.phase,'submitted');
     assert.equal(interruptedAttempt.source_worker_id,production.worker_identity.worker_id);
-    const failed=units.get(production.unit);assert.equal(failed.child.exitCode,86);
-    const checkpoint=production.scope+'/.jobs/'+(startupStage==='initial-created'?'guardian.initial':'guardian');assert(fs.existsSync(checkpoint));
-    if(startupStage!=='initial-created')assert.equal(JSON.parse(fs.readFileSync(checkpoint)).startup_token_sha256,interruptedAttempt.token_sha256);
+    if(startupStage){
+     const failed=units.get(production.unit);assert.equal(failed.child.exitCode,86);
+     const checkpoint=production.scope+'/.jobs/'+(startupStage==='initial-created'?'guardian.initial':'guardian');assert(fs.existsSync(checkpoint));
+     if(startupStage!=='initial-created')assert.equal(JSON.parse(fs.readFileSync(checkpoint)).startup_token_sha256,interruptedAttempt.token_sha256);
+    }else{const published=JSON.parse(fs.readFileSync(state+'/'+id+'.runtime.json'));assert.equal(published.schema,2);assert.equal(published.record.boot_id,boot);assert.notEqual(published.record.worker_identity.worker_id,interruptedAttempt.source_worker_id);}
     second.stop();for(const server of servers.slice())server.close();
     await until(()=>children.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
     second=createAgent(loader(new Map()));await acquire(second);
@@ -196,7 +201,7 @@ done
     const after=second.status();assert.equal(after.selected_implementation,'managed');assert.equal(after.worker_selection.history.slice(-1)[0].id,returnId);assert.equal(after.worker_selection.history.length,2);
     assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(second.restartInventory().boundary,'settled');assert.equal(second.restartInventory().restart_return.phase,'complete');assert.equal(second.canResumeManaged('wrong-return-request-0001'),false);assert.equal(second.canResumeManaged('original-return-request-0001'),true);const resumed=await second.resumeManagedActivation('original-return-request-0001');assert.equal(resumed.transaction_id,returnId);assert.equal(resumed.native_origin_id,id);return;
    }
-   if(startupStage){
+   if(startupStage||mode==='native-reboot-receipt'){
     assert.equal(fs.readFileSync(interruptedAttempt.fence+'/sealed','utf8'),interruptedAttempt.id+'\n');
     const retired=JSON.parse(fs.readFileSync(state+'/'+id+'.startup-'+interruptedAttempt.id+'.json'));assert.equal(retired.phase,'retired');assert.equal(retired.token_sha256,interruptedAttempt.token_sha256);
     assert(!fs.existsSync(production.scope+'/.jobs/guardian.initial'));assert(!fs.existsSync(production.scope+'/.jobs/guardian.next'));
@@ -219,6 +224,16 @@ done
      await assert.rejects(second.operation({op:'job.start',id:jid,profile:'root',timeout_ms:1000,command:'printf replay >> '+root+'/effect'}));
     }
     assert(!fs.readdirSync(production.scope+'/.jobs').some(n=>n.startsWith('.intent-')||n.startsWith('.repair-')||n.endsWith('.next')));
+   }
+   if(reboot){
+    let runtime=JSON.parse(fs.readFileSync(state+'/'+id+'.runtime.json'));assert.equal(runtime.schema,2);assert.equal(runtime.record.boot_id,boot);assert.equal(runtime.record.source.boot_id,production.boot_id);
+    assert.equal((await second.operation({op:'job.status',id:'native-live-00001'})).record.boot_id,production.boot_id);
+    // Restart again on the new boot before returning to managed. The original
+    // activation stays on the historical boot while the runtime remains current.
+    second.stop();for(const server of servers.slice())server.close();await until(()=>children.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
+    second=createAgent(loader(new Map()));await acquire(second);await until(()=>second.status().worker_ready,15000);
+    runtime=JSON.parse(fs.readFileSync(state+'/'+id+'.runtime.json'));assert.equal(runtime.schema,2);assert.equal(runtime.record.boot_id,boot);
+    assert.deepEqual(fs.readFileSync(state+'/'+id+'.production.json'),committed);assert.deepEqual(fs.readFileSync(state+'/'+id+'.activation.json'),activation);
    }
    await second.returnManaged(runtimeSha).catch(e=>{for(let c=e;c;c=c.cause)console.error(c.stack);throw e;});assert.equal(second.status().worker_ready,true);assert.equal(second.status().selected_implementation,'managed');
    assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);

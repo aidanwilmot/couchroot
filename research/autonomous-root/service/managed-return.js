@@ -5,7 +5,7 @@ const {hash}=require('./policy');
 const {privateRead,privateDirectory}=require('./private-state');
 const {runtimeRead,nativeReadiness}=require('./native-runtime');
 const {SelectionJournal,managedVersion}=require('./worker-selection');
-const {validateLaunch}=require('./production-readiness');
+const {validateRuntimeLaunch}=require('./production-readiness');
 const {openManagedSession}=require('./managed-session');
 const {planNativeSnapshot}=require('./native-retained-state');
 const {validateSnapshot}=require('./retained-install');
@@ -24,7 +24,7 @@ function createManagedReturn({hold,retirement,openRetirement,record,payload,sele
   try{
    move('preflight');check(typeof runtimeSha256==='string'&&/^[a-f0-9]{64}$/.test(runtimeSha256)&&typeof selectionFile==='string'&&path.isAbsolute(selectionFile));
    check(hold&&['snapshotNative','shutdownNative','adoptManaged','completeManaged'].every(k=>typeof hold[k]==='function')&&(ownsProvider?typeof openRetirement==='function':usable(retirement)));
-   const {worker_identity,unit_started_monotonic,...launch}=record;check(record.phase==='ready'&&worker_identity&&unit_started_monotonic);validateLaunch({...launch,phase:'submitted'});
+   const {worker_identity,unit_started_monotonic,...launch}=record;check(record.phase==='ready'&&worker_identity&&unit_started_monotonic);validateRuntimeLaunch({...launch,phase:'submitted'});
    const directory=path.dirname(selectionFile),st=fs.lstatSync(directory);check(privateDirectory(st));
    for(const name of ['managed-restore.pending','managed-launch.pending'])try{fs.lstatSync(path.join(directory,name));throw Error('Managed return requires reconciliation');}catch(e){if(e.code!=='ENOENT')throw e;}
    const journal=new SelectionJournal(selectionFile),initial=journal.read(),h=initial&&initial.history[initial.history.length-1],managed=managedVersion(payload);

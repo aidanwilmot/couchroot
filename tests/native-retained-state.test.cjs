@@ -563,3 +563,14 @@ test('managed activation recovery rejects missing intents, out-of-order cleanup 
   const before=fs.readdirSync(f.dir).sort();await assert.rejects(activateManaged({...f.options,resume:true}));assert.deepEqual(fs.readdirSync(f.dir).sort(),before);assert(fs.existsSync(f.options.managed.token_file));
  });
 });
+
+test('restart snapshot binds the new boot and ignores colliding old process IDs without rewriting records',linux,()=>fixture(async f=>{
+ const current='00000000-0000-0000-0000-000000000002';fs.writeFileSync(f.root+'/boot',current+'\n');
+ for(const [pid,ticks] of [[42,'100'],[51,'199'],[52,'200']]){fs.mkdirSync(f.root+'/proc/'+pid);fs.writeFileSync(f.root+'/proc/'+pid+'/stat',pid+' (reused) S '+Array(18).fill('0').join(' ')+' '+ticks+' 0\n');}
+ staleGuardian(f);const before=fs.readFileSync(f.jobs+'/guardian');
+ await assert.rejects(snapshotNativeRestartJobs(f.options));
+ const result=await snapshotNativeRestartJobs({...f.options,bootId:current});
+ assert.equal(result.snapshot.source.boot_id,boot);assert.deepEqual(fs.readFileSync(f.jobs+'/guardian'),before);
+ for(const entry of result.snapshot.records)assert.deepEqual(Buffer.from(entry.base64,'base64'),f.records.find(r=>r.name===entry.name).bytes);
+ fs.writeFileSync(f.root+'/boot',boot+'\n');await assert.rejects(snapshotNativeRestartJobs({...f.options,bootId:current}));
+}));

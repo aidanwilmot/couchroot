@@ -29,3 +29,15 @@ test('startup fences refuse a mismatched kind or foreign path before command cre
  assert.throws(()=>fenceCommand(r,'true',{kind:'anything'}));
  assert.match(fenceCommand(r,'true',{kind:'startup'}),/flock -n 9/);
 });
+
+test('an old-boot fence may be sealed on the current boot but cannot authorize another launch',linux,()=>{
+ const f=fixture();try{
+  const old={...f.r,boot_id:'00000000-0000-0000-0000-000000000001'};assert.notEqual(old.boot_id,f.r.boot_id);
+  const run=command=>spawnSync('/bin/sh',['-c',command],{encoding:'utf8',timeout:3000});
+  assert.notEqual(run(fenceCommand(old,'touch '+f.tmp+'/late',{kind:'startup'})).status,0);
+  assert.equal(run(fenceCommand(old,'printf SEALED',{kind:'startup',seal:true,bootId:f.r.boot_id})).stdout,'SEALED');
+  assert.equal(fs.readFileSync(f.r.fence+'/sealed','utf8'),f.r.id+'\n');assert(!fs.existsSync(f.tmp+'/late'));
+  assert.throws(()=>fenceCommand(old,'true',{kind:'startup',bootId:f.r.boot_id}));
+  assert.throws(()=>fenceCommand({...old,fence:old.fence.replace('startup','bootstrap')},'true',{kind:'bootstrap',seal:true,bootId:f.r.boot_id}));
+ }finally{f.clean();}
+});

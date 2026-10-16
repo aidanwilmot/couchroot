@@ -2,17 +2,20 @@
 // A submitted, sealed launch attempt can own pre-readiness checkpoints even
 // though its new worker identity was never published as a ready runtime.
 const {hash}=require('./policy');
+const {bootGuard,processAbsenceGuard}=require('./worker-processes');
 const ID=/^[a-f0-9]{32}$/,SHA=/^[a-f0-9]{64}$/;
 const phases=['namespace','runtime-reserved','runtime','freezer-reserved','contained','ready'];
 function check(v){if(!v)throw Error('Interrupted native startup binding unavailable');}
 function eligible(attempt,record){
- return !!(attempt&&attempt.schema===2&&attempt.phase==='submitted'&&attempt.origin_id===record.id&&attempt.boot_id===record.boot_id&&ID.test(attempt.id)&&SHA.test(attempt.token_sha256)&&attempt.fence==='/opt/couchroot-startup-fence-'+attempt.id&&attempt.source_worker_id===record.worker_identity.worker_id);
+ if(!attempt)return false;
+ try{bootGuard(attempt.boot_id);}catch(_){return false;}
+ return !!(attempt.phase==='submitted'&&attempt.origin_id===record.id&&((attempt.schema===2&&attempt.boot_id===record.boot_id)||(attempt.schema===3&&attempt.source_boot_id===record.boot_id))&&ID.test(attempt.id)&&SHA.test(attempt.token_sha256)&&attempt.fence==='/opt/couchroot-startup-fence-'+attempt.id&&attempt.source_worker_id===record.worker_identity.worker_id);
 }
 function validate(j,attempt,record){
- check(j&&j.schema===4&&phases.includes(j.phase)&&j.prepared===(j.phase==='ready')&&j.startup_token_sha256===attempt.token_sha256&&j.boot_id===record.boot_id&&ID.test(j.worker_id)&&j.worker_id!==record.worker_identity.worker_id&&Number.isInteger(j.pid)&&j.pid>1&&j.pid<=2147483647&&typeof j.process_start==='string'&&/^[1-9][0-9]{0,19}$/.test(j.process_start));
+ check(j&&j.schema===4&&phases.includes(j.phase)&&j.prepared===(j.phase==='ready')&&j.startup_token_sha256===attempt.token_sha256&&j.boot_id===attempt.boot_id&&ID.test(j.worker_id)&&j.worker_id!==record.worker_identity.worker_id&&Number.isInteger(j.pid)&&j.pid>1&&j.pid<=2147483647&&typeof j.process_start==='string'&&/^[1-9][0-9]{0,19}$/.test(j.process_start));
  return j;
 }
-async function inspectStartupJournal({attempt,record,execute},plan){
+async function inspectStartupJournal({attempt,record,execute,bootId=record.boot_id},plan){
  check(eligible(attempt,record));
  const files=[],absent=[],contents=new Map();
  for(const name of ['guardian','guardian.initial','guardian.next']){
@@ -40,7 +43,7 @@ async function inspectStartupJournal({attempt,record,execute},plan){
    // service admission checks identity and phase, then pins both exact files.
   }
  }
- const guard='if test -e /proc/'+base.pid+'/stat; then line=$(cat /proc/'+base.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" != '+base.process_start+'; fi\n';
+ const guard=processAbsenceGuard({pid:base.pid,start_ticks:base.process_start},base.boot_id,bootId);
  return {files,absent,guard,owner:base.worker_id,initial:false};
 }
 function checkpointGuard(root,checkpoint){

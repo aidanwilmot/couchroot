@@ -22,10 +22,12 @@ recovery diagnostics were reconciled. QN90A has not been rebooted. See
 The installed selected-native startup path remains bound to the original boot;
 S90D's recovery does not qualify native cross-boot startup.
 
-Local source now adds cross-boot guardian-journal reconciliation as a prerequisite
-for that startup path. This is not installed or device-qualified. Service receipt,
-startup fence, retained-state and managed-return integration still need explicit
-boot-transition handling; the .NET entry, fallback and rescue remain in place.
+Local source now integrates cross-boot guardian reconciliation with selected-native
+startup, separate runtime receipts, startup fences, retained-state verification and
+return to managed. Modeled reboot integration passes locally; this source is not
+installed or device-qualified. The .NET entry, fallback and rescue remain in place.
+Reboots during an already pending bootstrap or return transition remain separate
+recovery boundaries; full power-lifecycle qualification is still open.
 
 Both TVs run signed 0.7.48; the preceding integrated qualification ended
 managed-ready. The authenticated timing header now separates file-sync and
@@ -4313,3 +4315,51 @@ service still rejects cross-boot selected-native startup: runtime/activation
 receipt handling, startup fences, retained-state snapshots and managed return
 must be integrated before fresh both-TV qualification. The 24-hour endurance,
 performance, native-only entry and .NET retirement gates remain open.
+
+## Selected-native boot-transition integration — 2026-10-16
+
+Local service source now separates the immutable original activation from the
+current runtime boot. Runtime receipt schema 2 may replace only the boot, worker
+identity and unit start binding; source, artifacts, installation and activation
+hashes remain pinned. Initial production launches still require the managed
+source and native launch to share a boot. Schema-1 runtime receipts retain their
+same-boot format and checks.
+
+Startup authenticates and pins the held executor's current boot, checks current
+unit/cgroup emptiness, and observes saved PID/start pairs only within their own
+boot. Cross-boot startup attempts use schema 3 with both source and launch boot
+IDs. The old attempt's fence can be sealed on the current boot, but that override
+cannot launch anything or apply to a bootstrap fence. Interrupted checkpoints
+must match the attempt token, source worker and launch boot. A crash after runtime
+publication but before marking the attempt ready is recoverable without repeating
+the original launch. Every replacement gets a new token and fenced intent.
+
+Retained snapshots keep the original identities and record bytes. Native owns
+stale-journal reconciliation; the service reads back each result before admission.
+Managed return, staging retirement and activation now verify current runtime
+processes while retaining the original activation's boot and worker binding.
+Current-boot PID collisions still refuse admission; historical PID collisions do
+not identify a current process.
+
+Three modeled reboot cases passed with real native/managed fixture processes:
+stale guardian recovery, a failed new-boot startup checkpoint, and a runtime
+receipt published before startup completion. All three also completed another
+service restart on the new boot and returned to managed, preserving completed
+records and refusing replay of the interrupted job. Historical receipts are
+synthetic fixtures, rewritten before the tested restart and then required to stay
+immutable. Signing, SDK acquisition and systemd are modeled; no kernel reboot or
+TV mutation occurred in these tests. The first run exposed an activation check
+still comparing the original activation to the new boot; fixing that comparison
+allowed managed return to complete.
+
+Validation passed all 27 distinct restart integration cases (26 in the complete
+matrix and the added receipt-crash case separately), six managed/native/managed
+rehearsals, 63 focused Linux cases with one environment-gated skip, and the final
+npm suite with 427 passed and 162 skipped. Native ASAN/UBSAN and managed fixtures
+were freshly built; integration suites used separate disposable containers.
+
+Installed version remains 0.7.48 on both TVs. Their live endurance source snapshots
+and packages were not changed. Both-TV deployment/reboot qualification remains
+pending until the active trials finish. Reboot during an already pending bootstrap
+or return transition, wider power lifecycle, 24-hour endurance, performance,
+native-only entry and .NET retirement remain open. No .NET fallback was removed.
