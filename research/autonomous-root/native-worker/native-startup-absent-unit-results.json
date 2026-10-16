@@ -58,12 +58,43 @@
       },
       "fixture_correction": "Use container init to reap orphaned EXITKILL victims; rebuilt fault-enabled worker for the four gated fault cases.",
       "single_full_green_run": false
-    }
+    },
+    "real_shell_cases_require_explicit_disposable_container": true
   },
   "qualification_limits": [
-    "The corrected service has not yet been deployed.",
-    "The failed original reboot trial remains rejected; later recovery will be recorded separately.",
-    "QN90A remains on 0.7.48 during its untouched endurance invocation.",
+    "The original failed reboot trial remains rejected; signed repair recovered its persisted cross-boot state on the owner restart boot.",
+    "A clean boot with corrected 0.7.50 already installed remains unqualified.",
+    "QN90A remains on 0.7.48 during its untouched endurance invocation; its cross-boot deployment and qualification remain pending.",
+    "Neither TV has completed 24-hour endurance or resource-trend acceptance.",
     ".NET entry, managed fallback, independent SDK rescue and all identity/ownership guards remain required."
-  ]
+  ],
+  "signed_repair": {
+    "version": "0.7.50",
+    "source_commit": "2c1ac4a",
+    "s90d_installed": true,
+    "installed_entries_verified": 86,
+    "changed_package_members": [
+      "author-signature.xml",
+      "config.xml",
+      "service/native-startup.js",
+      "signature1.xml"
+    ],
+    "all_payload_members_identical_to_previous_package": true,
+    "native_manifest_identical": true,
+    "actual_cross_boot_native_startup_recovered": true,
+    "interrupted_bootstrap_reconciled_across_boot": true,
+    "original_failed_attempt_replayed": false,
+    "original_receipts_and_job_bytes_preserved": true,
+    "managed_return_completed": true,
+    "saved_job_records_preserved_through_return": true,
+    "saved_job_output_unavailable_by_existing_contract": true,
+    "original_jobs_preserved": true,
+    "enrollment_and_protected_hashes_preserved": true,
+    "owned_native_scopes_removed": true,
+    "deployment_and_return_rescues_retired_unfired": true,
+    "sdk_loopback_at_acceptance": true,
+    "setup_journal_completed": true,
+    "additional_reboot_submitted_for_repair": false,
+    "qn90a_candidate_prepared_but_not_deployed": true
+  }
 }

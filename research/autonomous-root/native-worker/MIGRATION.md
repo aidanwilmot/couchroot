@@ -20,12 +20,28 @@ unconditional `systemctl stop` failed because the old transient unit was absent.
 Public native admission stayed closed. The postboot rescue fired successfully
 and restored host SDK access. The owner then restarted S90D again; identity and
 firmware were reverified and the original receipt/job hashes still matched.
-The interrupted state is archived privately. The absent-unit fix is local and
-has not yet been deployed; no successful native reboot acceptance is claimed.
+The interrupted state is archived privately. Signed 0.7.50 now repairs that state:
+selected-native startup and interrupted-bootstrap reconciliation completed on the
+owner's later boot, followed by a verified managed return. Original receipts and
+saved job records survived; enrollment and protected files matched, and deployment
+and return rescues retired unfired. All 86 installed entries were verified. This
+qualifies recovery of actual cross-boot state after maintenance, not a clean boot
+with 0.7.50 already installed. The failed original reboot remains rejected.
 QN90A's endurance remains active and unchanged. See
 [absent-unit failure and fix evidence](native-startup-absent-unit-results.json).
 
-Before that restart, S90D passed the corrected observer's five-second probe with
+S90D's first endurance invocation after repair was refused before migration:
+the private harness admitted a completed return, but the production API allows
+only one migration per coordinator. No collector or quiet job started; selection,
+jobs and enrollment matched, and its rescue retired unfired. A separate guarded
+service restart with a retained launcher restored a fresh managed coordinator
+on the same boot. Preservation and cleanup passed before retiring that rescue.
+A new immutable invocation now runs the native worker, quiet job and collectors;
+its admission requires no prior native operation. The production guard is
+unchanged, and the failed invocation remains separate. See
+[coordinator admission evidence](service-coordinator-endurance-admission-results.json).
+
+Before the reboot trial, S90D passed the corrected observer's five-second probe with
 five samples, no skipped intervals, complete kernel capture, successful retained
 unit exit, owned cleanup and an unfired retired rescue. Its first sample arrived
 0.439 ms after capture start. This qualifies the short probe, not endurance. See
@@ -40,14 +56,15 @@ removed, SDK on loopback and rescues retired unfired. The failed interval remain
 rejected. See [S90D startup-gap evidence](observer-s90d-readiness-gap-results.json).
 QN90A's corrected-observer trial remains active. Neither TV has passed 24 hours.
 
-S90D now runs signed 0.7.49 and has passed a same-boot native migration, public
-execution/jobs, selected-native disable/enable recovery and managed return.
+Before the reboot trial, S90D ran signed 0.7.49 and passed a same-boot native
+migration, public execution/jobs, selected-native disable/enable recovery and
+managed return.
 Production/activation receipts and the native job remained byte-identical across
 restart; original retained jobs, enrollment and protected files survived the round.
 The deployment and trial rescues were retired unfired, owned scopes were removed
 and SDK is on loopback. QN90A remains on 0.7.48 while its trial runs. See
 [S90D installation and smoke evidence](cross-boot-s90d-install-results.json).
-Cross-boot recovery is not yet hardware-qualified on either TV.
+That earlier round did not qualify cross-boot recovery.
 
 QN90A's fourth attempt stopped after about 39 minutes when collector 13 exited with status 1:
 its first sample arrived 1.143 seconds after the declared start, leaving one
@@ -69,8 +86,9 @@ it does not qualify the subsequently installed cross-boot startup code.
 Local source now integrates cross-boot guardian reconciliation with selected-native
 startup, separate runtime receipts, startup fences, retained-state verification and
 return to managed. Modeled reboot integration passes locally. S90D has this source
-installed, but cross-boot behavior remains unqualified. The .NET entry, fallback
-and rescue remain in place.
+installed, with actual interrupted cross-boot recovery now verified after repair;
+clean boot qualification remains open. The .NET entry, fallback and rescue remain
+in place.
 Local source now also reconciles interrupted bootstraps and pending returns
 across boots, with fresh executor, unit-absence and retained-state checks.
 Pending returns use bounded native offline reconciliation before restoring

@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
 const {launchCommand}=require('../research/autonomous-root/service/native-startup');
-const linux={skip:process.platform!=='linux'||process.getuid()!==0};
+const linux={skip:process.platform!=='linux'||process.env.COUCHROOT_PARITY_CONTAINER!=='1'||process.getuid()!==0};
 function fixture({crossBoot,loaded},run){
  const id=crypto.randomBytes(16).toString('hex'),attemptId=crypto.randomBytes(16).toString('hex'),directory='/opt/couchroot-worker-'+id,scope=directory+'/state',fence='/opt/couchroot-startup-fence-'+attemptId,tmp=fs.mkdtempSync(os.tmpdir()+'/startup-unit-'),bin=tmp+'/bin',tokenDirectory=tmp+'/tokens';
  const boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),old='00000000-0000-0000-0000-000000000001',digest=b=>crypto.createHash('sha256').update(b).digest('hex');

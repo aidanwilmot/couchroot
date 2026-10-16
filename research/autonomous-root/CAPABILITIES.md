@@ -1347,3 +1347,28 @@ Neither TV has completed endurance or hardware cross-boot qualification. The .NE
 entry bridge, managed fallback and independent rescue remain unchanged. See
 [S90D installed qualification](native-worker/cross-boot-s90d-install-results.json)
 and [failed capture reconciliation](native-worker/observer-s90d-readiness-gap-results.json).
+
+## S90D signed 0.7.50 cross-boot repair
+
+The authorized native-selected reboot on 0.7.49 exposed a launch refusal when
+the previous transient unit was absent. The independent rescue restored SDK
+access. After the owner restarted again, signed 0.7.50 recovered native startup
+from the retained cross-boot receipts and reconciled the interrupted bootstrap.
+All 86 installed entries were verified. Original receipts and saved job bytes
+matched, and saved job records survived the subsequent managed return. Enrollment,
+retained jobs and protected hashes were preserved; deployment and return rescues
+retired unfired. Every payload member is unchanged from 0.7.49.
+
+This verifies repair of actual cross-boot state after maintenance. It does not
+accept the original failed reboot or qualify a clean boot with the corrected
+package already installed. QN90A remains on 0.7.48 during endurance. Both TVs still
+need full endurance/resource acceptance; clean reboot and pending-return reboot
+qualification remain open. The .NET entry and both fallback/recovery paths remain.
+See [repair evidence](native-worker/native-startup-absent-unit-results.json).
+
+After repair, the production API correctly refused a second migration in the
+same coordinator before journal mutation. A separate guarded service restart
+passed preservation and cleanup, then a fresh immutable S90D endurance invocation
+started with native readiness, the 24-hour quiet job and collectors. The private
+admission now requires a fresh coordinator; no production guard was relaxed.
+See [admission evidence](native-worker/service-coordinator-endurance-admission-results.json).

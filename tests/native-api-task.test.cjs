@@ -86,6 +86,24 @@ test('restart recovery binds the original journaled return ID without replaying 
  assert.throws(()=>f.tasks.resume({id:'restart-recovery-0001',rehearsal_id:original}));
 }));
 
+test('completed managed return refuses a second trial before journal mutation until coordinator restart',()=>fixture(async f=>{
+ let migrations=0;
+ f.agent.migrateNative=async()=>{migrations++;return {};};
+ f.agent.returnManaged=async()=>({selected_implementation:'managed',admission_held:false});
+ f.tasks.migrate(value);await tick();await tick();
+ f.agent.status=()=>({connected:true,worker_ready:true,selected_implementation:'native-prototype',admission_held:false,native_runtime:{transaction_id:'c'.repeat(32)}});
+ f.tasks.returnManaged({id:'completed-return-0001',runtime_sha256:value.runtime_sha256});await tick();await tick();
+ f.agent.status=()=>({connected:true,worker_ready:true,selected_implementation:'managed',admission_held:false});
+ const status=f.tasks.status(),journal=fs.readFileSync(f.dir+'/requests.json');
+ assert.equal(status.kind,'native.return-managed');assert.equal(status.state,'completed');
+ for(const kind of ['migrate','rehearse'])assert.throws(()=>f.tasks[kind]({...value,id:'next-trial-request-0001'}));
+ assert.deepEqual(f.tasks.status(),status);assert.deepEqual(fs.readFileSync(f.dir+'/requests.json'),journal);assert.equal(migrations,1);
+ const restarted=createNativeTasks({agent:f.agent,journal:new Journal(f.dir+'/requests.json')});
+ assert.throws(()=>restarted.migrate(value),/already submitted/);
+ restarted.migrate({...value,id:'fresh-coordinator-0001'});await tick();await tick();
+ assert.equal(restarted.status().state,'completed');assert.equal(migrations,2);
+}));
+
 
 test('a return refused before mutation permits a new request after live jobs settle',()=>fixture(async f=>{
  f.agent.status=()=>({connected:true,worker_ready:true,selected_implementation:'native-prototype',admission_held:false,native_runtime:{transaction_id:'c'.repeat(32)}});
