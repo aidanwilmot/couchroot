@@ -18,6 +18,9 @@ static int production_mode, bootstrap_mode;
 static char worker_start_ticks[32], guardian_start_ticks[32];
 static int directory = -1;
 static char root[PATH_MAX], launcher[PATH_MAX], launcher_sha[65], worker_id[33];
+/* Hash of the private launch token, not the token itself. It binds every
+ * startup checkpoint to the coordinator's durable attempt before readiness. */
+static char startup_token_sha256[65];
 #include "file-policy.h"
 static volatile sig_atomic_t active_child = 0;
 /* Async-signal-safe. Callers keep the leader unreaped until after this group
@@ -473,6 +476,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
     double uptime = (double)up.tv_sec + up.tv_nsec / 10000000 / 100.0;
     json_object_object_add(j, "uptime_seconds", json_object_new_double(uptime));
     str(j, "worker_id", worker_id);
+    str(j, "startup_token_sha256", startup_token_sha256);
     J *processes = obj(), *worker = obj(), *guardian = obj();
     num(worker, "pid", getpid());
     str(worker, "start_ticks", worker_start_ticks);
@@ -511,6 +515,7 @@ static J *operation(J *request, Wire *w, const char *seq) {
                            "prototype-helper-lifecycle-v1",
                            "prototype-independent-launcher-v1",
                            "prototype-crash-guardian-v1",
+                           "startup-token-binding-v1",
                            "prototype-command-fault-diagnostics-v1"};
     if (bootstrap_mode) {
       const char *held[] = {"held-bootstrap-v1", "resource-inventory-v1", "worker-process-identity-v1", "guardian-parent-identity-v1"};
@@ -793,6 +798,13 @@ int main(int argc, char **argv) {
   signal(SIGCHLD, SIG_DFL);
   jobs_storage();
   guardian_reconcile();
+  int startup_token = open(argv[3], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (startup_token < 0 || fstat(startup_token, &st) ||
+      !S_ISREG(st.st_mode) || st.st_uid || (st.st_mode & 077) ||
+      st.st_nlink != 1 || st.st_size < 1 || st.st_size > 64 ||
+      !request_filedigest(startup_token, startup_token_sha256))
+    fatal("private startup token binding required");
+  close(startup_token);
   helpers_init();
   guardian_journal("namespace");
   startup_fault("namespace");
@@ -824,13 +836,17 @@ int main(int argc, char **argv) {
   Wire w = {0};
   int token = open(argv[3], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
   if (token < 0 || fstat(token, &st) || !S_ISREG(st.st_mode) ||
-      st.st_uid != 0 || (st.st_mode & 077))
+      st.st_uid != 0 || (st.st_mode & 077) || st.st_nlink != 1)
     fatal("private token required");
   char encoded[128];
   ssize_t n = read(token, encoded, sizeof encoded - 1);
   close(token);
   if (n < 1 || n > 64)
     fatal("token size");
+  char consumed_sha256[65];
+  digest(encoded, (size_t)n, consumed_sha256);
+  if (strcmp(consumed_sha256, startup_token_sha256))
+    fatal("startup token changed");
   encoded[n] = 0;
   while (n && isspace((unsigned char)encoded[n - 1]))
     encoded[--n] = 0;

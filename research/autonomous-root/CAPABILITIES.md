@@ -4,8 +4,9 @@ These changes require rebuilding the service and worker together. Existing insta
 0.1.x workers do not expose the new operations. Source validation is separate from
 TV installation and firmware-specific acceptance; no deployment is implicit.
 
-Current qualification: signed 0.7.43 has passed bounded native public-operation,
-same-boot startup/return and committed guardian-loss recovery on both TVs. Managed is selected and ready
+Current qualification: signed 0.7.45 has passed bounded native public-operation,
+same-boot startup/return, committed guardian-loss recovery and modeled launch-bound
+pre-readiness recovery on both TVs. Managed is selected and ready
 after acceptance. Historical versioned observations below retain their original
 limits; see the current native recovery and parity sections for newer evidence.
 
@@ -1207,3 +1208,34 @@ All 19 payload members are unchanged; .NET acquisition and fallback remain
 available with the independent rescue. This qualifies the modeled persistence
 boundaries, not power loss or pre-readiness guardian ownership. See
 [persistence recovery results](native-worker/persistence-recovery-results.json).
+
+## Launch-bound pre-readiness recovery — 0.7.45
+
+Each new selected-native startup attempt binds its original transaction, boot,
+source worker and token digest to a durable exclusive launch fence. Complete
+native startup journals and authenticated readiness report that same digest.
+Retiring an uncertain attempt seals its fence, excludes a delayed launch and
+proves the original unit/processes absent before recovery can proceed.
+
+A sealed submitted attempt may authorize its pre-readiness guardian checkpoints,
+including bounded partial successor or unpublished initial files. Complete
+identities, phases and token bindings must agree. Partial bytes never supply an
+identity. The service pins exact files and absent checkpoint names; native
+performs resource ownership checks and reconciliation under the scope lock.
+Unexpected job metadata and records owned by an unaccepted worker are refused.
+Retained-record readback, checkpoint cleanup and final authenticated readiness
+gate admission. Recovery archives the original attempt and uses a fresh launch;
+it does not replay commands or jobs. Unbound legacy attempts and foreign journals
+cannot use this admission path. The .NET entry bridge, managed fallback and
+independent rescue remain available.
+
+Both TVs passed partial-successor and unpublished-initial checkpoint recovery
+with ordinary signed 0.7.45 workers. The private harness modeled lost readiness
+publication while acquisition was disabled and verified the fixtures through
+independent SDK access. The same coordinator recovered native, preserved retained
+bytes, and returned normally to managed; public forgetting retired only fixture
+jobs. Both ended managed-ready and settled with SDK on loopback, owned units
+inactive and old/replacement native scopes absent. No rescue fired, and enrollment
+and boot identity stayed unchanged. Real checkpoint fault exits are tested locally;
+this does not qualify power loss or natural interruption at the exact write.
+See [startup binding results](native-worker/startup-binding-results.json).

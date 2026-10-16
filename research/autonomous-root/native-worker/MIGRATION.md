@@ -7,15 +7,27 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-Both TVs are on signed 0.7.44 packages with native service acquisition enabled,
+Both TVs are on signed 0.7.45 packages with native service acquisition enabled,
 managed selected and ready. QN90A has 32 settled history entries (26 committed,
 6 rolled back); S90D has 32 (25 committed, 7 rolled back).
-Both passed committed guardian loss with owned incomplete job-persistence files,
+Both passed modeled pre-readiness recovery with a partial successor checkpoint
+and an unpublished initial checkpoint. The service sealed and archived each
+original launch attempt, acquired a distinct native worker on the same
+coordinator, preserved retained bytes, and returned normally to managed. All 21
+owned trial units per TV and the deployment units are inactive; SDK is on loopback,
+native scopes are absent, and no independent rescue fired. Installed contents,
+enrollment and original boots are verified. Managed DLLs are unchanged; the native
+worker now binds startup checkpoints to the durable attempt's token digest.
+These hardware cases model lost readiness publication with disabled acquisition
+and independent SDK readback; actual checkpoint fault exits are qualified locally.
+See [launch-bound startup evidence](startup-binding-results.json).
+
+On 0.7.44, both passed committed guardian loss with owned incomplete job-persistence files,
 automatic native reacquisition through the same coordinator, normal managed
 return, and public managed `job.forget` for every recovered fixture. The live
 job retained its unknown exit code and single execution witness; no maintenance deletion of job records was needed. All owned
 units are inactive, old/replacement native scopes are absent, and SDK is on loopback.
-All 19 payload members remain byte-identical to 0.7.43; this milestone changes
+All 19 payload members were byte-identical to 0.7.43; that milestone changed
 only service code. The preceding 0.7.43 managed worker upgrades preserved the
 selection digest guard:
 an independently verified managed probe and SDK-confirmed retirement supplied
@@ -25,8 +37,9 @@ See [interrupted-job and managed-upgrade evidence](interrupted-forget-results.js
 The service admits bounded intent/repair files and record-save temporaries only
 with a complete stale guardian journal bound to the last accepted runtime. Native
 alone reconciles them; record readback and metadata absence gate admission.
-Managed-return snapshots remain strict. Incomplete guardian startup journals
-remain held. See [persistence recovery evidence](persistence-recovery-results.json)
+Managed-return snapshots remain strict. Pre-readiness guardian journals require
+the new sealed submitted-attempt binding; unbound or foreign evidence remains
+held. See [persistence recovery evidence](persistence-recovery-results.json)
 and [committed guardian evidence](active-guardian-results.json).
 Both also passed a bounded per-worker address-space pressure round on unchanged
 0.7.41 bytes: new allocation refusal preserved a live job and saved result,
@@ -3197,3 +3210,67 @@ journals to their original launch attempt. Incomplete or differently owned
 guardian journals remain held rather than adopted. Fully native capability entry,
 broader lifecycle coverage, performance/endurance and native-default rollout are
 still open.
+
+### Launch-bound pre-readiness recovery — 2026-10-15
+
+Selected-native startup now records a schema-2 attempt before submitting its
+launch. It binds the original transaction, boot, last accepted worker, private
+token digest and a unique startup fence. The command and retirement share the
+same exclusive fence lock. Retirement seals that fence before proving unit and
+process absence; a delayed original command cannot launch afterward. The small
+sealed fence remains as a tombstone, as with held-bootstrap recovery.
+
+Native hashes its private launch token before creating new startup checkpoints.
+Every complete checkpoint carries that digest, and authenticated readiness must
+report the same binding. Token consumption checks it again. Complete successor
+checkpoints cannot change, remove or introduce a binding; older journals without
+the field retain their existing native reconciliation contract.
+
+After sealing a submitted attempt, the service can admit its bounded startup
+checkpoints even when that worker never acquired an accepted runtime receipt.
+Complete journals must bind to that attempt and boot, and successor identities
+and phases must agree. Empty or partial initial files rely on the sealed attempt,
+not an inferred identity from incomplete bytes. Every present file and absent
+checkpoint name is pinned during the retained-state snapshot. Native still
+validates resource ownership and performs reconciliation under its scope lock.
+Unexpected job metadata or records owned by an unaccepted startup are refused.
+
+Retained-record readback, temporary-checkpoint absence, reconciliation reporting
+and a final authenticated identity check precede runtime publication and public
+admission. The original intent stays available if snapshot validation fails;
+recovery archives that original attempt and creates a fresh one instead of
+replaying its launch. Legacy service attempts cannot authorize this new path.
+
+Local validation passed 414 repository tests (157 optional skips), 49 native
+regression cases (one optional skip), five launch-binding groups, three Linux
+launch-fence cases, six bootstrap-recovery cases and 49 retained-state cases.
+Freshly rebuilt native and managed fixtures passed six rehearsal cases and all
+21 ordinary restart cases. A separate fault build passed three coordinator
+restart cases after real exits at a complete successor, partial successor and
+unpublished initial checkpoint. These test-only exits are not in signed builds.
+
+Both signed 0.7.45 installations passed the two hardware cases on their ordinary
+production worker. A real guardian SIGKILL preceded the partial-successor
+fixture; a graceful worker exit preceded the empty unpublished-initial fixture.
+With acquisition disabled, the private harness preserved the accepted receipts,
+restored the last accepted source runtime, and changed the actual new attempt
+back to submitted. It pinned the checkpoint bytes under the scope lock and
+verified the modeled state through independent SDK acquisition before enabling
+ordinary service recovery. This models interrupted readiness publication; it
+does not establish a natural crash at the exact write instruction or power loss.
+
+Each original coordinator retired and sealed the uncertain attempt, reconciled
+the checkpoints and admitted a distinct worker. Committed receipts and retained
+records stayed byte-identical. Normal managed return preserved both fixture
+results; public managed forgetting removed only those fixtures. Enrollment,
+protected hashes, original retained inventory and boot identity survived.
+All 21 trial units per TV and the deployment units are inactive; all old and
+replacement native process/runtime/freezer identities are absent. SDK is on
+loopback, no setup operation is pending, and none of the independent 300-second
+.NET rescues fired. All managed DLLs remain unchanged. See
+[sanitized evidence](startup-binding-results.json).
+
+Fully native capability entry, remaining lifecycle coverage, production
+performance/endurance and native-default observation remain open. The .NET
+bridge, worker fallback and independent rescue remain deployed; no reboot,
+standby or global policy change occurred.

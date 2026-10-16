@@ -262,6 +262,9 @@ static int reconcile_resources(J *j) {
   int64_t schema, pid;
   J *prepared = get(j, "prepared");
   const char *phase = textval(j, "phase");
+  if (get(j, "startup_token_sha256") &&
+      !hexvalid(textval(j, "startup_token_sha256"), 64))
+    return 0;
   if (!integer(j, "schema", &schema) || !prepared ||
       !json_object_is_type(prepared, 1) ||
       !((schema == 2 && json_object_get_boolean(prepared)) ||
@@ -392,6 +395,16 @@ static int reconcile_successor(J *old, J *next) {
   int a = reconcile_phase(old), b = reconcile_phase(next);
   if (!a || b != a + 1)
     return 0;
+  /* Legacy checkpoints remain recoverable, but a successor cannot add,
+   * remove or change a launch binding midway through startup. */
+  const char *old_token = textval(old, "startup_token_sha256"),
+             *next_token = textval(next, "startup_token_sha256");
+  if (get(old, "startup_token_sha256") ||
+      get(next, "startup_token_sha256")) {
+    if (!hexvalid(old_token, 64) || !hexvalid(next_token, 64) ||
+        strcmp(old_token, next_token))
+      return 0;
+  }
   const char *identity[] = {"worker_id", "boot_id", "process_start"};
   for (size_t i = 0; i < sizeof identity / sizeof *identity; i++) {
     const char *x = textval(old, identity[i]), *y = textval(next, identity[i]);

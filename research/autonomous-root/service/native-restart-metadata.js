@@ -6,7 +6,7 @@ const ID='[a-zA-Z0-9-]{16,64}',SHA=/^[a-f0-9]{64}$/;
 const terminal=new Set(['completed','cancelled','timed_out','interrupted']);
 function check(v){if(!v)throw Error('Native restart persistence evidence unavailable');}
 function metadataCommand(plan){
- return plan.prefix+'listing=$(find '+plan.root+' -mindepth 1 -maxdepth 1 ! -name lock ! -name .import-manifest ! -name guardian ! -name "*.json" -print)\nif test -n "$listing"; then printf "%s\\n" "$listing" | (count=0; while IFS= read -r file; do\n'+
+ return plan.prefix+'listing=$(find '+plan.root+' -mindepth 1 -maxdepth 1 ! -name lock ! -name .import-manifest ! -name guardian '+(plan.journalNames||[]).filter(n=>n!=='guardian').map(n=>'! -name '+n+' ').join('')+'! -name "*.json" -print)\nif test -n "$listing"; then printf "%s\\n" "$listing" | (count=0; while IFS= read -r file; do\n'+
   'count=$((count+1)); test "$count" -le 192\nname=${file##*/}\ncase "$name" in *[!a-zA-Z0-9.-]*) exit 1;; esac\n'+
   'test -f "$file"; test ! -L "$file"; test "$(stat -c "%u:%a" "$file")" = 0:600\n'+
   'size=$(stat -c %s "$file"); test "$size" -ge 0; test "$size" -lt 2048\nlinks=$(stat -c %h "$file"); test "$links" -ge 1; test "$links" -le 2\n'+
@@ -49,7 +49,7 @@ function validateMetadata(entries,snapshot){
 // Read back every retained result before admission. Unchanged records must
 // retain their exact bytes. Only this guardian's nonterminal records may change.
 async function verifyRestartRecords({retained,record,channel,execute}){
- const snapshot=retained.snapshot,owner=snapshot.source.worker_id,expected=new Map();
+ const snapshot=retained.snapshot,owner=Object.prototype.hasOwnProperty.call(retained,'reconciliation_worker_id')?retained.reconciliation_worker_id:snapshot.source.worker_id,expected=new Map();
  for(const entry of snapshot.records){const value=decoded(entry);expected.set(value.id,{entry,value,mutable:!!retained.guardian_sha256&&value.worker_id===owner&&!terminal.has(value.state)});}
  for(const e of retained.metadata||[])if(e.kind==='intent'&&!expected.has(e.id))expected.set(e.id,{orphan:true});
  for(const [id,item] of expected){
@@ -64,7 +64,7 @@ async function verifyRestartRecords({retained,record,channel,execute}){
  }
  const root=record.scope+'/.jobs',names=[...expected.keys()].sort().map(id=>id+'.json');
  let command='set -eu\nLC_ALL=C\nexport LC_ALL\n';
- for(const e of retained.metadata||[])command+='test ! -e '+root+'/'+e.name+'; test ! -L '+root+'/'+e.name+'\n';
+ for(const e of [...retained.metadata||[],...retained.checkpoint_files||[]])command+='test ! -e '+root+'/'+e.name+'; test ! -L '+root+'/'+e.name+'\n';
  for(const [id,item] of expected){
   const p=root+'/'+id+'.json';command+='test -f '+p+'; test ! -L '+p+'; test "$(stat -c "%u:%h:%a" '+p+')" = 0:1:600\n';
   if(item.entry&&!item.mutable)command+='test "$(sha256sum '+p+' | cut -d " " -f1)" = '+item.entry.sha256+'\n';

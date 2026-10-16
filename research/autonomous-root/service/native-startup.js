@@ -14,6 +14,7 @@ const {observeCommand,parseObservation}=require('./restart-rollback');
 const {inspectProductionUnit}=require('./observer-unit');
 const {snapshotNativeRestartJobs}=require('./native-retained-state');
 const {verifyRestartRecords}=require('./native-restart-metadata');
+const {fenceCommand}=require('./launch-fence');
 function check(v){if(!v)throw Error('Selected native startup evidence unavailable');}
 function exists(p){try{fs.lstatSync(p);return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}}
 function sync(p){const fd=fs.openSync(p,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}}
@@ -35,7 +36,7 @@ function launchCommand(record,attempt){
  const d=record.directory,s=record.scope,q=v=>"'"+v.replace(/'/g,"'\\''")+"'";
  const digest=(p,sha)=>'test "$(sha256sum '+q(p)+' | cut -d " " -f1)" = '+sha+'\n';
  const file=(p,mode,sha)=>'test -f '+q(p)+'; test ! -L '+q(p)+'\ntest "$(stat -c "%u:%h:%a" '+q(p)+')" = 0:1:'+mode+'\n'+digest(p,sha);
- return 'set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+
+ const command='set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n'+
   'test "$(cat /proc/sys/kernel/random/boot_id)" = '+record.boot_id+'\n'+
   [d,d+'/code',s].map(p=>'test -d '+p+'; test ! -L '+p+'; test "$(stat -c "%u:%a" '+p+')" = 0:700\n').join('')+
   file(d+'/code/worker','500',record.worker_sha256)+file(s+'/launcher','400',record.launcher_sha256)+
@@ -45,6 +46,7 @@ function launchCommand(record,attempt){
   'systemctl stop '+record.unit+'\nsystemctl reset-failed '+record.unit+' 2>/dev/null || true\n'+
   '(set -C; cat '+q(attempt.token_file)+' > '+s+'/token)\nchmod 600 '+s+'/token\n'+digest(s+'/token',attempt.token_sha256)+
   'systemd-run --quiet --unit='+record.unit+' '+['User=0','Group=0','SmackProcessLabel=System','PrivateMounts=yes','BindReadOnlyPaths='+d+'/code','TimeoutStopSec=5s','RemainAfterExit=yes','KillMode=control-group','NoNewPrivileges=yes','AmbientCapabilities=','StandardOutput=null','StandardError=null'].map(p=>'--property='+q(p)).join(' ')+' '+[d+'/code/worker','127.0.0.1',String(attempt.port),s+'/token',s,s+'/launcher',record.launcher_sha256,'--production'].map(q).join(' ')+'\nprintf "NATIVE-RESTART-SUBMITTED\\n"\n';
+ return attempt.schema===2?fenceCommand(attempt,command,{kind:'startup'}):command;
 }
 async function startSelectedNative({selectionFile,executor}){
  const candidate=startupCandidate(selectionFile);check(candidate);const {record,activation,installation,selected}=candidate,directory=path.dirname(selectionFile),intent=path.join(directory,record.id+'.startup.json');
@@ -53,17 +55,22 @@ async function startSelectedNative({selectionFile,executor}){
  const own=await confirm(),run=async(c,t)=>{check(JSON.stringify(await confirm())===JSON.stringify(own));const result=await executor.execute(c,t);check(JSON.stringify(await confirm())===JSON.stringify(own));return result;};
  const evidence={source:record.source,known:Object.entries(record.worker_identity.processes),units:[record.unit]};
  const observe=async()=>{const r=await run(observeCommand(evidence),10000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr);parseObservation(r.stdout,evidence.units);};
- await observe();
+ await observe();let previousAttempt=null;
  // A prior uncertain launch is never retried until its unit is empty. Its token
  // can be removed only with the persisted digest; archive the resolved attempt.
  if(exists(intent)){
-  const prior=JSON.parse(privateRead(intent,16384));check(prior.schema===1&&prior.origin_id===record.id&&/^[a-f0-9]{32}$/.test(prior.id)&&['submitted','ready','retired'].includes(prior.phase)&&/^[a-f0-9]{64}$/.test(prior.token_sha256)&&prior.token_file===path.dirname(record.token_file)+'/restart-'+prior.id);
+  const prior=JSON.parse(privateRead(intent,16384));check([1,2].includes(prior.schema)&&prior.origin_id===record.id&&/^[a-f0-9]{32}$/.test(prior.id)&&['submitted','ready','retired'].includes(prior.phase)&&/^[a-f0-9]{64}$/.test(prior.token_sha256)&&prior.token_file===path.dirname(record.token_file)+'/restart-'+prior.id);
+  if(prior.schema===2){
+   check(/^[a-f0-9]{32}$/.test(prior.source_worker_id)&&prior.boot_id===record.boot_id&&prior.fence==='/opt/couchroot-startup-fence-'+prior.id);
+   const sealed=await run(fenceCommand(prior,observeCommand(evidence),{kind:'startup',seal:true}),10000);
+   check(sealed&&sealed.exit_code===0&&!sealed.timed_out&&!sealed.stderr);parseObservation(sealed.stdout,evidence.units);previousAttempt=prior;
+  }
   const r=await run('set -eu\nif test -e '+record.scope+'/token || test -L '+record.scope+'/token; then test -f '+record.scope+'/token; test ! -L '+record.scope+'/token; test "$(sha256sum '+record.scope+'/token | cut -d " " -f1)" = '+prior.token_sha256+'; rm '+record.scope+'/token; fi\n',5000);check(r.exit_code===0&&!r.timed_out&&!r.stderr);
   if(exists(prior.token_file)){check(hash(privateRead(prior.token_file,44))===prior.token_sha256);fs.unlinkSync(prior.token_file);}
   if(exists(path.dirname(prior.token_file)))fs.rmdirSync(path.dirname(prior.token_file));
-  atomic(path.join(directory,record.id+'.startup-'+prior.id+'.json'),{...prior,phase:'retired'});fs.unlinkSync(intent);sync(directory);
+  atomic(path.join(directory,record.id+'.startup-'+prior.id+'.json'),{...prior,phase:'retired'});sync(directory);
  }
- const retained=await snapshotNativeRestartJobs({record,installation,execute:run});
+ const retained=await snapshotNativeRestartJobs({record,installation,execute:run,attempt:previousAttempt});
  const tokenDirectory=path.dirname(record.token_file);check(!exists(tokenDirectory));fs.mkdirSync(tokenDirectory,{mode:0o700});
  const secret=crypto.randomBytes(32),id=crypto.randomBytes(16).toString('hex'),tokenFile=tokenDirectory+'/restart-'+id;fs.writeFileSync(tokenFile,secret.toString('base64'),{mode:0o600,flag:'wx'});sync(tokenDirectory);sync(directory);
  let channel,timer,resolve,reject,closed=false;
@@ -71,18 +78,19 @@ async function startSelectedNative({selectionFile,executor}){
  channel=new RootAgentServer({secret,bindHost:'127.0.0.1',port:0,onConnect:peer=>resolve(peer),onClose:()=>{closed=true;reject(Error('Native restart transport closed'));}});
  try{
   await new Promise((yes,no)=>{channel.start(yes);channel._server.once('error',no);});
-  const attempt={schema:1,id,origin_id:record.id,phase:'submitted',port:channel.listeningPort(),token_file:tokenFile,token_sha256:hash(secret.toString('base64'))};
+  const attempt={schema:2,id,source_worker_id:record.worker_identity.worker_id,boot_id:record.boot_id,fence:'/opt/couchroot-startup-fence-'+id,origin_id:record.id,phase:'submitted',port:channel.listeningPort(),token_file:tokenFile,token_sha256:hash(secret.toString('base64'))};
   await observe();bound();atomic(intent,attempt);timer=setTimeout(()=>reject(Error('Native restart connection deadline')),35000);
   const r=await run(launchCommand(record,attempt),25000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&r.stdout==='NATIVE-RESTART-SUBMITTED\n');
   const peer=await connection;clearTimeout(timer);check(!closed&&channel._conn===peer&&['uid','euid','gid','egid'].every(k=>peer.identity[k]===0)&&peer.identity.smack==='System');
   const info=await channel.operation({op:'status'});validateReadiness(info,{implementation:'native-prototype',bootId:record.boot_id,launcherSha256:record.launcher_sha256});
-  check(!retained.guardian_sha256||info.stale_guardian_reconciled===true);
+  check(info.capabilities.includes('startup-token-binding-v1')&&info.startup_token_sha256===attempt.token_sha256);
+  check(!retained.reconciliation_required||info.stale_guardian_reconciled===true);
   const identity=processIdentities(info,peer.identity.pid),resources=validateResourceInventory(info);check(!resources.jobs.length&&!resources.transfers.length&&!resources.helpers.length&&identity.worker_id!==record.worker_identity.worker_id);
   const unit=await inspectProductionUnit({unit:record.unit,bootId:record.boot_id,execute:run});check(unit.active_state==='active'&&unit.sub_state==='running'&&unit.main_pid===identity.processes.guardian.pid&&unit.exec_code===0&&unit.exec_status===0);
   const verify='set -eu\n'+Object.values(identity.processes).map(p=>'line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" = '+p.start_ticks+'\ntest /proc/'+p.pid+'/exe -ef '+record.directory+'/code/worker\n').join('')+'test ! -e '+record.scope+'/token\nprintf "NATIVE-RESTART-VERIFIED\\n"\n';
   const verified=await run(verify,5000);check(verified.exit_code===0&&!verified.timed_out&&!verified.stderr&&verified.stdout==='NATIVE-RESTART-VERIFIED\n');
-  check(!closed&&channel._conn===peer&&JSON.stringify(processIdentities(await channel.operation({op:'status'}),peer.identity.pid))===JSON.stringify(identity));bound();
   await verifyRestartRecords({retained,record,channel,execute:run});
+  check(!closed&&channel._conn===peer&&JSON.stringify(processIdentities(await channel.operation({op:'status'}),peer.identity.pid))===JSON.stringify(identity));bound();
   const next={...record,worker_identity:identity,unit_started_monotonic:unit.started_monotonic};
   atomic(path.join(directory,record.id+'.runtime.json'),{schema:1,id:record.id,phase:'ready',readiness_sha256:candidate.readiness_sha256,activation_sha256:activation.receipt_sha256,record:next});
   atomic(intent,{...attempt,phase:'ready'});fs.unlinkSync(tokenFile);fs.rmdirSync(tokenDirectory);sync(directory);

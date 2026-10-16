@@ -5,6 +5,7 @@ const fs=require('fs'),path=require('path');
 const {privateRead,privateDirectory}=require('./private-state');
 const {hash,atomic}=require('./policy');
 const {processIdentities}=require('./worker-processes');
+const {fenceCommand}=require('./launch-fence');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');
 const ID=/^[a-f0-9]{32}$/,SHA=/^[a-f0-9]{64}$/,BOOT=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const check=v=>{if(!v)throw Error('Bootstrap recovery evidence unavailable');};
@@ -34,25 +35,6 @@ function recoveryCandidate(selectionFile,bootId){
  const record=validateRecord(JSON.parse(privateRead(file,16384)),directory);
  check(record.id===id&&record.boot_id===bootId&&hash(privateRead(selectionFile,65536))===record.selection_sha256);
  return record;
-}
-// The lock and seal survive scope removal until explicit verified retirement.
-// A delayed original SDK command will acquire this same lock and refuse the seal.
-function fenceCommand(r,body,{seal=false}={}){
- check(ID.test(r.id)&&r.fence==='/opt/couchroot-bootstrap-fence-'+r.id&&BOOT.test(r.boot_id));
- const f=r.fence;
- const fixed=n=>'test -f '+f+'/'+n+'; test ! -L '+f+'/'+n+'; test "$(stat -c "%u:%h:%a:%s" '+f+'/'+n+')" = 0:1:600:33; test "$(cat '+f+'/'+n+')" = '+r.id+'\n';
- const inner='set -eu\ntest /proc/self/fd/9 -ef '+f+'/lock\n'+
-  'test "$(cat /proc/sys/kernel/random/boot_id)" = '+r.boot_id+'\n'+
-  'for name in '+f+'/*; do case "$name" in '+f+'/lock) ;; '+f+'/started|'+f+'/sealed) ;; *) exit 1;; esac; done\n'+
-  'if test -e '+f+'/started || test -L '+f+'/started; then '+fixed('started')+'fi\n'+
-  (seal?'if test -e '+f+'/sealed || test -L '+f+'/sealed; then '+fixed('sealed')+'else (set -C; printf "%s\\n" '+r.id+' > '+f+'/sealed); fi\n':
-   'test ! -e '+f+'/sealed; test ! -L '+f+'/sealed; test ! -e '+f+'/started; test ! -L '+f+'/started\n(set -C; printf "%s\\n" '+r.id+' > '+f+'/started)\n')+body;
- return 'set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\numask 077\n'+
-  'test "$(cat /proc/sys/kernel/random/boot_id)" = '+r.boot_id+'\n'+
-  'if ! mkdir '+f+' 2>/dev/null; then test -d '+f+'; test ! -L '+f+'; fi\ntest "$(stat -c "%u:%a" '+f+')" = 0:700\n'+
-  'if test ! -e '+f+'/lock && test ! -L '+f+'/lock; then (set -C; : > '+f+'/lock) 2>/dev/null || true; fi\n'+
-  'test -f '+f+'/lock; test ! -L '+f+'/lock; test "$(stat -c "%u:%h:%a:%s" '+f+'/lock)" = 0:1:600:0\n'+
-  'exec 9<'+f+'/lock\n/usr/bin/flock -n 9\n'+inner;
 }
 function recoveryCommand(r){
  const d=r.directory,s=r.scope,u=r.unit;

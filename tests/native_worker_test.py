@@ -28,6 +28,8 @@ class NativeWorkerTests(unittest.TestCase):
         self.sock,_=self.listener.accept();self.sock.settimeout(5);self.stream=self.sock.makefile('rb')
         self.sock.sendall(b'SAMSUNG-TV-ROOT/1\t'+self.nonce.hex().encode()+b'\n')
         auth=self.receive().split('\t');self.assertEqual(auth[0],'AUTH');self.worker_pid=int(auth[1]);self.assertNotEqual(self.worker_pid,self.proc.pid)
+    def stage_token(self):
+        self.token.write_bytes(base64.b64encode(self.secret));self.token.chmod(0o600)
     def restart(self, extra_env=None, pass_fds=()):
         self.stream.close();self.sock.close()
         _,stderr=self.proc.communicate(timeout=5)
@@ -640,6 +642,7 @@ class NativeWorkerTests(unittest.TestCase):
         for stage in ['initial-created','initial-partial','initial-synced']:
             with self.subTest(stage=stage):
                 self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+                self.stage_token()
                 result=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':stage},capture_output=True,timeout=5)
                 self.assertEqual(result.returncode,86,result.stderr)
                 initial=self.root/'.jobs/guardian.initial'
@@ -671,6 +674,7 @@ class NativeWorkerTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
     def test_runtime_reservation_rejects_nonempty_or_wrong_parent(self):
         self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        self.stage_token()
         r=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':'runtime-created'},capture_output=True,timeout=5)
         self.assertEqual(r.returncode,86,r.stderr)
         path=self.root/'.jobs/guardian';raw=path.read_bytes();journal=json.loads(raw)
@@ -693,6 +697,7 @@ class NativeWorkerTests(unittest.TestCase):
     def test_journal_write_errors_cleanup_owned_temporaries(self):
         for stage in ['namespace','runtime-reserved','runtime','freezer-reserved','contained','ready']:
             self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+            self.stage_token()
             r=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':'fail-'+stage},capture_output=True,timeout=5)
             self.assertEqual(r.returncode,1,r.stderr)
             self.assertIn(b'injected journal persistence failure',r.stderr)
@@ -766,6 +771,7 @@ class NativeWorkerTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('NATIVE_WORKER_FAULT_TEST'), 'fault-injection build required')
     def test_temporary_checkpoint_identity_refusal(self):
         self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        self.stage_token()
         result=subprocess.run(self.worker_args,env={**os.environ,'COUCHROOT_NATIVE_STARTUP_FAULT':'journal-runtime'},capture_output=True,timeout=5)
         self.assertEqual(result.returncode,86,result.stderr)
         path=self.root/'.jobs/guardian.next';original=path.read_bytes();journal=json.loads(original)
@@ -798,6 +804,7 @@ class NativeWorkerTests(unittest.TestCase):
         self.assertEqual(marker.read_text(),'unresolved')
     def test_launcher_source_integrity_rejection(self):
         self.seq+=1;self.send(f'SHUTDOWN\t{self.seq}');self.receive();self.proc.wait(timeout=5)
+        self.stage_token()
         source=self.root/'launcher-source';source.write_bytes(b'invalid'*10)
         for digest in ['0'*64,hashlib.sha256(source.read_bytes()).hexdigest()]:
             args=self.worker_args.copy();args[-1]=digest

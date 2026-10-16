@@ -5,8 +5,9 @@ const {validateLaunch}=require('./production-readiness');
 const {processIdentities}=require('./worker-processes');
 const {metadataCommand,parseMetadata,metadataGuard,validateMetadata}=require('./native-restart-metadata');
 const {validateRecord,parseManifest,sourceExitGuard}=require('./retained-state');
+const {eligible,inspectStartupJournal,checkpointGuard}=require('./native-startup-journal');
 function check(ok){if(!ok)throw Error('Native rollback snapshot unavailable');}
-function planNativeSnapshot(record,installation,guardianSha256=null,metadata=[]){
+function planNativeSnapshot(record,installation,guardianSha256=null,metadata=[],checkpoint=null){
  check(guardianSha256===null||/^[a-f0-9]{64}$/.test(guardianSha256));
  check(record&&record.phase==='ready');const {worker_identity,unit_started_monotonic,...launch}=record;validateLaunch({...launch,phase:'submitted'});
  check(typeof unit_started_monotonic==='string'&&/^[1-9][0-9]{0,19}$/.test(unit_started_monotonic)&&unit_started_monotonic.trim()===unit_started_monotonic);
@@ -16,15 +17,16 @@ function planNativeSnapshot(record,installation,guardianSha256=null,metadata=[])
  check(installation&&installation.schema===1&&installation.phase==='ready'&&installation.id===record.id&&installation.directory===record.directory&&installation.scope===record.scope&&installation.manifest_sha256===record.manifest_sha256&&JSON.stringify(installation.source)===JSON.stringify(record.source)&&hash(JSON.stringify(installation))===record.state_receipt_sha256);
  check(typeof installation.installed_manifest_sha256==='string'&&installation.installed_manifest_sha256.length===64&&/^[a-f0-9]+$/.test(installation.installed_manifest_sha256));
  const root=record.scope+'/.jobs';
- const guard=sourceExitGuard(record.source)+Object.values(worker_identity.processes).map(p=>'if test -e /proc/'+p.pid+'/stat; then line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" != '+p.start_ticks+'; fi\n').join('');
+ const guard=sourceExitGuard(record.source)+Object.values(worker_identity.processes).map(p=>'if test -e /proc/'+p.pid+'/stat; then line=$(cat /proc/'+p.pid+'/stat); rest=${line##*) }; set -- $rest; test "$#" -ge 20; shift 19; test "$1" != '+p.start_ticks+'; fi\n').join('')+(checkpoint?checkpoint.guard:'');
  const linked=metadata.filter(e=>e.links===2).map(e=>root+'/'+e.id+'.json');
  const fileGuard=p=>'test -f '+p+'; test ! -L '+p+'; '+(linked.length?'case '+p+' in '+linked.join('|')+') test "$(stat -c "%u:%h:%a" '+p+')" = 0:2:600;; *) test "$(stat -c "%u:%h:%a" '+p+')" = 0:1:600;; esac\n':'test "$(stat -c "%u:%h:%a" '+p+')" = 0:1:600\n');
  const binding='set -eu\nPATH=/usr/bin:/bin\nexport PATH\n'+guard+
   [record.directory,record.scope,root].map(p=>'test -d '+p+'; test ! -L '+p+'; test "$(stat -c "%u:%a" '+p+')" = 0:700\n').join('')+
   fileGuard(root+'/lock')+'test "$(stat -c %s '+root+'/lock)" -eq 0\n'+fileGuard(root+'/.import-manifest')+'test "$(sha256sum '+root+'/.import-manifest | cut -d " " -f1)" = '+installation.installed_manifest_sha256+'\n';
- const prefix=binding+(guardianSha256===null?'test ! -e '+root+'/guardian; test ! -L '+root+'/guardian\n':fileGuard(root+'/guardian')+'test "$(sha256sum '+root+'/guardian | cut -d " " -f1)" = '+guardianSha256+'\n')+metadataGuard(root,metadata);
- const manifest=prefix+'listing=$(find '+root+' -mindepth 1 -maxdepth 1 ! -name lock ! -name .import-manifest '+(guardianSha256?'! -name guardian ':'')+metadata.map(e=>'! -name '+e.name+' ').join('')+'-print)\nif test -n "$listing"; then printf "%s\\n" "$listing" | (count=0; while IFS= read -r file; do\ncount=$((count+1)); test "$count" -le 64\nname=${file##*/}; id=${name%.json}; test "$name" != "$id"\ncase "$id" in *[!a-zA-Z0-9-]*) exit 1;; esac\ntest "${#id}" -ge 16; test "${#id}" -le 64\n'+fileGuard('"$file"')+'size=$(stat -c %s "$file"); test "$size" -ge 1; test "$size" -lt 2048\nsum=$(sha256sum "$file"); printf "%s %s %s\\n" "$name" "$size" "${sum%% *}"\ndone)\nfi\n'+guard+'printf "SNAPSHOT-END\\n"\n';
- return {root,guard,binding,prefix,manifest,fileGuard};
+ const prefix=binding+(checkpoint?checkpointGuard(root,checkpoint):(guardianSha256===null?'test ! -e '+root+'/guardian; test ! -L '+root+'/guardian\n':fileGuard(root+'/guardian')+'test "$(sha256sum '+root+'/guardian | cut -d " " -f1)" = '+guardianSha256+'\n'))+metadataGuard(root,metadata);
+ const journalNames=checkpoint?checkpoint.files.map(e=>e.name):guardianSha256?['guardian']:[];
+ const manifest=prefix+'listing=$(find '+root+' -mindepth 1 -maxdepth 1 ! -name lock ! -name .import-manifest '+journalNames.map(n=>'! -name '+n+' ').join('')+metadata.map(e=>'! -name '+e.name+' ').join('')+'-print)\nif test -n "$listing"; then printf "%s\\n" "$listing" | (count=0; while IFS= read -r file; do\ncount=$((count+1)); test "$count" -le 64\nname=${file##*/}; id=${name%.json}; test "$name" != "$id"\ncase "$id" in *[!a-zA-Z0-9-]*) exit 1;; esac\ntest "${#id}" -ge 16; test "${#id}" -le 64\n'+fileGuard('"$file"')+'size=$(stat -c %s "$file"); test "$size" -ge 1; test "$size" -lt 2048\nsum=$(sha256sum "$file"); printf "%s %s %s\\n" "$name" "$size" "${sum%% *}"\ndone)\nfi\n'+guard+'printf "SNAPSHOT-END\\n"\n';
+ return {root,guard,binding,prefix,manifest,fileGuard,journalNames};
 }
 async function snapshotWithPlan({record,execute},plan){
  check(typeof execute==='function');const started=process.hrtime();
@@ -48,19 +50,25 @@ async function snapshotNativeRestartJobs(options){
  const {record,installation,execute}=options,plan=planNativeSnapshot(record,installation),file=plan.root+'/guardian';
  const command=plan.binding+'if test -e '+file+' || test -L '+file+'; then\n'+plan.fileGuard(file)+'size=$(stat -c %s '+file+'); test "$size" -gt 0; test "$size" -lt 4096\nbase64 '+file+'\nelse printf "ABSENT\\n"; fi\n'+plan.guard;
  const r=await execute(command,5000);check(r&&r.exit_code===0&&!r.timed_out&&!r.stderr&&typeof r.stdout==='string'&&r.stdout.length<6000);
- let digest=null;
+ let digest=null,checkpoint=null;
  if(r.stdout!=='ABSENT\n'){
   const compact=r.stdout.replace(/\n/g,''),bytes=Buffer.from(compact,'base64');check(bytes.toString('base64')===compact);
   const journal=JSON.parse(bytes.toString('utf8')),identity=record.worker_identity;
-  check(journal.schema===4&&journal.phase==='ready'&&journal.prepared===true&&journal.worker_id===identity.worker_id&&journal.boot_id===identity.boot_id&&journal.pid===identity.processes.guardian.pid&&journal.process_start===identity.processes.guardian.start_ticks);
-  digest=hash(bytes);
- }
+  const accepted=journal.schema===4&&journal.phase==='ready'&&journal.prepared===true&&journal.worker_id===identity.worker_id&&journal.boot_id===identity.boot_id&&journal.pid===identity.processes.guardian.pid&&journal.process_start===identity.processes.guardian.start_ticks;
+  if(accepted)digest=hash(bytes);
+  else {check(eligible(options.attempt,record));checkpoint=await inspectStartupJournal(options,plan);check(checkpoint);}
+ }else if(eligible(options.attempt,record))checkpoint=await inspectStartupJournal(options,plan);
+ if(checkpoint){const base=checkpoint.files.find(e=>e.name==='guardian');digest=base?base.sha256:null;}
  let metadata=[];
- if(digest){
-  const result=await execute(metadataCommand(planNativeSnapshot(record,installation,digest)),5000);
+ if(digest||checkpoint){
+  const result=await execute(metadataCommand(planNativeSnapshot(record,installation,digest,[],checkpoint)),5000);
   check(result&&result.exit_code===0&&!result.timed_out&&!result.stderr);metadata=parseMetadata(result.stdout,record.worker_identity.worker_id);
+  // No public job or command can have run in an unaccepted startup. Its only
+  // admissible unfinished metadata is the native startup checkpoint itself.
+  check(!checkpoint||!metadata.length);
  }
- const snapshot=await snapshotWithPlan(options,planNativeSnapshot(record,installation,digest,metadata));validateMetadata(metadata,snapshot);
- return {snapshot,guardian_sha256:digest,metadata};
+ const snapshot=await snapshotWithPlan(options,planNativeSnapshot(record,installation,digest,metadata,checkpoint));validateMetadata(metadata,snapshot);
+ if(checkpoint&&checkpoint.owner)check(snapshot.records.every(e=>JSON.parse(Buffer.from(e.base64,'base64').toString('utf8').replace(/^\uFEFF/,'' )).worker_id!==checkpoint.owner));
+ return {snapshot,guardian_sha256:digest,metadata,reconciliation_required:!!(digest||checkpoint),reconciliation_worker_id:checkpoint?checkpoint.owner:record.worker_identity.worker_id,checkpoint_files:checkpoint?checkpoint.files.filter(e=>e.name!=='guardian'):[]};
 }
 module.exports={snapshotNativeJobs,snapshotNativeRestartJobs,planNativeSnapshot};

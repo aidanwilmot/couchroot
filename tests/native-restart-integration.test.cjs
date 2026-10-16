@@ -9,13 +9,14 @@ const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
-for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
- skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:90000
+for(const mode of ['abandon-prepared','provider-ready','state-ready','trial-ready','native-committed','native-disable','native-lost','native-guardian-lost','native-persistence-lost','native-startup-journal','native-startup-partial','native-startup-initial','return-prepared','return-stopped','return-state-ready','return-trial-ready','live-provider-loss','live-state-ready','live-trial-ready','live-published-commit','live-ambiguous-commit','live-observer-loss','live-observer-ack-lost','live-production-loss'])test('coordinator recovers or holds an interrupted handoff ('+mode+')',{
+ skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY||(mode.startsWith('native-startup-')&&process.env.COUCHROOT_STARTUP_FAULT!=='1'),timeout:90000
 },async()=>withRetirementState(async()=>{
  assert(!fs.existsSync('/opt/couchroot-agent'),'Run in a separate fresh container');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-restart-')),state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',selectionFile=state+'/selection.json';fs.mkdirSync(state,{recursive:true,mode:0o700});
  const managed='a'.repeat(64),native='b'.repeat(64),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),launcherSha=sha(fs.readFileSync('/bin/true')),workerSha=sha(fs.readFileSync(process.env.NATIVE_WORKER)),runtimeSha=sha(fs.readFileSync('/opt/dotnet/bin/dotnet'));
- const live=mode.startsWith('live-'),observerLoss=mode.startsWith('live-observer-');let faulted=false,cleanupFaulted=false;
+ const live=mode.startsWith('live-'),observerLoss=mode.startsWith('live-observer-');let faulted=false,cleanupFaulted=false,startupFaulted=false;
+ const startupStage={'native-startup-journal':'journal-runtime','native-startup-partial':'partial-runtime','native-startup-initial':'initial-created'}[mode];
  const children=[],servers=[],roots=['/opt/couchroot-agent'],units=new Map(),commands=new Map();let first,second;
  const unitRoot=root+'/units';fs.mkdirSync(unitRoot);
  // Unknown units report systemd's not-found defaults; the fixture has no cgroups.
@@ -51,8 +52,10 @@ done
    if(command.includes('NATIVE-RESTART-SUBMITTED')){
     const filename=fs.readdirSync(state).find(n=>n.endsWith('.startup.json')),a=JSON.parse(fs.readFileSync(state+'/'+filename)),r=JSON.parse(fs.readFileSync(state+'/'+a.origin_id+'.production.json'));
     assert.equal(a.phase,'submitted');assert.equal(sha(fs.readFileSync(a.token_file)),a.token_sha256);
+    if(a.schema===2){const command=require('../research/autonomous-root/service/launch-fence').fenceCommand(a,'printf FENCED\n',{kind:'startup'});const fenced=await super.execute(command,5000);assert.equal(fenced.exit_code,0,fenced.stderr);roots.push(a.fence);}
     fs.copyFileSync(a.token_file,r.scope+'/token');fs.chmodSync(r.scope+'/token',0o600);
-    start(r.directory+'/code/worker',['127.0.0.1',String(a.port),r.scope+'/token',r.scope,r.scope+'/launcher',launcherSha,'--production'],r.unit);
+    const startupEnv=startupStage&&!startupFaulted?{COUCHROOT_NATIVE_STARTUP_FAULT:startupStage}:{};startupFaulted=true;
+    start(r.directory+'/code/worker',['127.0.0.1',String(a.port),r.scope+'/token',r.scope,r.scope+'/launcher',launcherSha,'--production'],r.unit,startupEnv);
     return {exit_code:0,timed_out:false,stdout:'NATIVE-RESTART-SUBMITTED\n',stderr:''};
    }
    if(command.includes('FALLBACK-RUNTIME-VERIFIED'))command=command.replaceAll('/usr/bin/dotnet','/opt/dotnet/bin/dotnet');
@@ -65,7 +68,7 @@ done
    if(mode==='live-observer-ack-lost'&&!cleanupFaulted&&command.includes('OBSERVER-RECOVERY-RETIRED')){assert.equal(result.exit_code,0);cleanupFaulted=true;throw Error('observer cleanup acknowledgement lost');}return result;
   }
  }
- function start(command,args,unit){const child=spawn(command,args,{stdio:['ignore','ignore','pipe']}),ended=once(child,'exit');let stderr='';child.stderr.on('data',v=>{stderr=(stderr+v).slice(-16384);});const v={child,ended,command,stderr:()=>stderr};children.push(v);if(unit)units.set(unit,v);return v;}
+ function start(command,args,unit,extraEnv={}){const child=spawn(command,args,{stdio:['ignore','ignore','pipe'],env:{...process.env,...extraEnv}}),ended=once(child,'exit');let stderr='';child.stderr.on('data',v=>{stderr=(stderr+v).slice(-16384);});const v={child,ended,command,stderr:()=>stderr};children.push(v);if(unit)units.set(unit,v);return v;}
  function write(name,value){fs.writeFileSync(state+'/'+name,typeof value==='string'?value:JSON.stringify(value),{mode:0o600});}
  function nativeStage(id,kind,options){
   const directory='/opt/couchroot-'+kind+'-'+id,scope=directory+'/state';if(kind==='retirement'){assert(!fs.existsSync(directory));roots.push(directory);fs.mkdirSync(directory,{mode:0o700});fs.mkdirSync(scope,{mode:0o700});}else roots.push(directory);
@@ -174,10 +177,30 @@ done
    }else if(mode==='native-lost')servers[servers.length-1]._conn._socket.destroy();else{first.stop();for(const s of servers.slice())s.close();}
    await until(()=>old.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
    second=mode==='native-committed'||mode.startsWith('return-')?createAgent(loader(new Map())):first;await acquire(second);
+   let interruptedAttempt;
+   if(startupStage){
+    await until(()=>second.restartInventory().native_startup&&second.restartInventory().native_startup.phase==='failed',40000);
+    assert.equal(second.status().worker_ready,false);assert(startupFaulted);
+    interruptedAttempt=JSON.parse(fs.readFileSync(state+'/'+id+'.startup.json'));assert.equal(interruptedAttempt.schema,2);assert.equal(interruptedAttempt.phase,'submitted');
+    assert.equal(interruptedAttempt.source_worker_id,production.worker_identity.worker_id);
+    const failed=units.get(production.unit);assert.equal(failed.child.exitCode,86);
+    const checkpoint=production.scope+'/.jobs/'+(startupStage==='initial-created'?'guardian.initial':'guardian');assert(fs.existsSync(checkpoint));
+    if(startupStage!=='initial-created')assert.equal(JSON.parse(fs.readFileSync(checkpoint)).startup_token_sha256,interruptedAttempt.token_sha256);
+    second.stop();for(const server of servers.slice())server.close();
+    await until(()=>children.every(c=>c.child.exitCode!==null||c.child.signalCode!==null),10000);
+    second=createAgent(loader(new Map()));await acquire(second);
+   }
+
    await until(()=>second.status().worker_ready,15000);
    if(mode.startsWith('return-')){
     const after=second.status();assert.equal(after.selected_implementation,'managed');assert.equal(after.worker_selection.history.slice(-1)[0].id,returnId);assert.equal(after.worker_selection.history.length,2);
     assert.equal((await second.operation({op:'job.status',id:'native-keep-00001'})).record.exit_code,9);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);assert.equal(second.restartInventory().boundary,'settled');assert.equal(second.restartInventory().restart_return.phase,'complete');assert.equal(second.canResumeManaged('wrong-return-request-0001'),false);assert.equal(second.canResumeManaged('original-return-request-0001'),true);const resumed=await second.resumeManagedActivation('original-return-request-0001');assert.equal(resumed.transaction_id,returnId);assert.equal(resumed.native_origin_id,id);return;
+   }
+   if(startupStage){
+    assert.equal(fs.readFileSync(interruptedAttempt.fence+'/sealed','utf8'),interruptedAttempt.id+'\n');
+    const retired=JSON.parse(fs.readFileSync(state+'/'+id+'.startup-'+interruptedAttempt.id+'.json'));assert.equal(retired.phase,'retired');assert.equal(retired.token_sha256,interruptedAttempt.token_sha256);
+    assert(!fs.existsSync(production.scope+'/.jobs/guardian.initial'));assert(!fs.existsSync(production.scope+'/.jobs/guardian.next'));
+    assert.notEqual(JSON.parse(fs.readFileSync(state+'/'+id+'.startup.json')).id,interruptedAttempt.id);
    }
    const after=second.status();assert.equal(after.selected_implementation,'native-prototype');assert.notEqual(after.worker_id,before.worker_id);assert.equal(after.native_runtime.transaction_id,id);assert.equal(JSON.stringify(after.worker_selection.history),history);
    assert.deepEqual(fs.readFileSync(state+'/'+id+'.production.json'),committed);assert.deepEqual(fs.readFileSync(state+'/'+id+'.activation.json'),activation);

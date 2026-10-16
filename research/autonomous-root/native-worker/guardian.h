@@ -60,6 +60,7 @@ static void guardian_journal(const char *phase) {
   (void)freezer_stat;
 #endif
   str(j, "worker_id", worker_id);
+  str(j, "startup_token_sha256", startup_token_sha256);
   str(j, "boot_id", current_boot);
   num(j, "pid", getpid());
   str(j, "process_start", identity);

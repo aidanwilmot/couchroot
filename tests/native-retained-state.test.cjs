@@ -99,6 +99,39 @@ test('restart refuses unbound debris, unsafe links and changed persistence bytes
  },mode==='overflow'?64:2);
 });
 
+function interruptedStartup(f,phase='runtime-reserved'){
+ const attempt={schema:2,id:'e'.repeat(32),source_worker_id:f.options.record.worker_identity.worker_id,boot_id:boot,origin_id:f.options.record.id,phase:'submitted',fence:'/opt/couchroot-startup-fence-'+'e'.repeat(32),token_sha256:'f'.repeat(64)};
+ const journal={schema:4,phase,prepared:phase==='ready',worker_id:'1'.repeat(32),boot_id:boot,pid:2147483000,process_start:'456',startup_token_sha256:attempt.token_sha256};
+ fs.writeFileSync(f.jobs+'/guardian',JSON.stringify(journal),{mode:0o600});return {attempt,journal};
+}
+test('restart binds incomplete checkpoints to their original submitted startup token',linux,async()=>{
+ for(const mode of ['base','complete-next','partial-next','initial-empty','initial-partial','ready','absent'])await fixture(async f=>{
+  const {attempt,journal}=interruptedStartup(f,mode==='ready'?'ready':'runtime-reserved');
+  if(mode==='complete-next')fs.writeFileSync(f.jobs+'/guardian.next',JSON.stringify({...journal,phase:'runtime'}),{mode:0o600});
+  if(mode==='partial-next')fs.writeFileSync(f.jobs+'/guardian.next','{',{mode:0o600});
+  if(mode.startsWith('initial')||mode==='absent'){fs.unlinkSync(f.jobs+'/guardian');if(mode!=='absent')fs.writeFileSync(f.jobs+'/guardian.initial',mode==='initial-empty'?'':'{',{mode:0o600});}
+  const before=new Map(fs.readdirSync(f.jobs).map(n=>[n,fs.readFileSync(f.jobs+'/'+n)]));
+  const result=await snapshotNativeRestartJobs({...f.options,attempt});assert.equal(result.reconciliation_required,mode!=='absent');assert.equal(result.snapshot.records.length,2);
+  if(mode!=='absent')assert.equal(result.reconciliation_worker_id,mode.startsWith('initial')?null:journal.worker_id);
+  for(const [n,b] of before)assert.deepEqual(fs.readFileSync(f.jobs+'/'+n),b);
+  if(mode!=='absent')await assert.rejects(snapshotNativeJobs(f.options));
+ });
+});
+test('unaccepted startup checkpoints refuse foreign tokens, old sources, successors and unexpected jobs',linux,async()=>{
+ for(const mode of ['token','source','origin','attempt-ready','legacy','boot','phase','prepared','pid','ticks','next-token','next-phase','initial-conflict','new-job','job-temp','changed'])await fixture(async f=>{
+  const {attempt,journal}=interruptedStartup(f);
+  if(mode==='token')journal.startup_token_sha256='a'.repeat(64);if(mode==='source')attempt.source_worker_id='a'.repeat(32);if(mode==='origin')attempt.origin_id='b'.repeat(32);
+  if(mode==='attempt-ready')attempt.phase='ready';if(mode==='legacy')attempt.schema=1;if(mode==='boot')journal.boot_id='00000000-0000-0000-0000-000000000002';if(mode==='phase')journal.phase='unknown';if(mode==='prepared')journal.prepared=true;if(mode==='pid')journal.pid=1;if(mode==='ticks')journal.process_start='0';
+  fs.writeFileSync(f.jobs+'/guardian',JSON.stringify(journal));
+  if(mode.startsWith('next-'))fs.writeFileSync(f.jobs+'/guardian.next',JSON.stringify({...journal,phase:mode==='next-phase'?'ready':'runtime',startup_token_sha256:mode==='next-token'?'a'.repeat(64):journal.startup_token_sha256}),{mode:0o600});
+  if(mode==='initial-conflict')fs.writeFileSync(f.jobs+'/guardian.initial','',{mode:0o600});
+  if(mode==='new-job')fs.writeFileSync(f.jobs+'/native-forbidden-1.json',JSON.stringify({id:'native-forbidden-1',worker_id:journal.worker_id,boot_id:boot,state:'completed'}),{mode:0o600});
+  if(mode==='job-temp')fs.writeFileSync(f.jobs+'/.intent-'+journal.worker_id+'-native-forbidden-1','',{mode:0o600});
+  let changed=false;const execute=async c=>{const r=await f.execute(c);if(mode==='changed'&&!changed&&c.includes('base64 '+f.options.record.scope+'/.jobs/guardian.next')){changed=true;fs.writeFileSync(f.jobs+'/guardian.next','{',{mode:0o600});}return r;};
+  await assert.rejects(snapshotNativeRestartJobs({...f.options,attempt,execute}));assert(fs.existsSync(f.jobs+'/guardian'));
+ });
+});
+
 const {planManagedRestore}=require('../research/autonomous-root/service/managed-restore-plan');
 async function restoreFixture(f){
  const baselineBody={schema:1,implementation:'managed',source:f.options.record.source,records:f.records.map(r=>({name:r.name,size:r.bytes.length,sha256:hash(r.bytes),base64:r.bytes.toString('base64')}))};
