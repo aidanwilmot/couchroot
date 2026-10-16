@@ -1075,3 +1075,52 @@ windows, sequence loss/reordering, malformed and overflowing numbers, full-width
 sequence values, bounded storage, overruns/EOF, simulated suspension and exclusive
 output creation. Protocol tests verify that delayed output and forget calls are
 measured separately and never duplicate job submission or forgetting.
+
+## Independent acquisition and public-path observer
+
+The diagnostic build also produces `observe`:
+
+```text
+observe PRIVATE_DIRECTORY SECONDS INTERVAL_MS COORDINATOR_PID START_TICKS WORKER_SHA256
+```
+
+It observes for 2–240 seconds at a requested 250–2000 ms interval and accepts
+SIGTERM/SIGINT for an earlier orderly finish. Use a fresh root-owned 0700 output
+directory. It exclusively creates `observer.ready`, `resources.ndjson`,
+`observer.json`, `kernel.raw` and `kernel.json`; existing outputs are refused.
+The ready receipt supplies observer identity and clock/boot bindings. Resource
+snapshots use an 8 MiB prefaulted buffer alongside the kernel collector's 2 MiB
+buffer. Only readiness is synced before measurement; sample and kernel data are
+persisted when observation stops. The bounded deadline has an outer alarm.
+
+For a handoff trial, launch this helper in a separate owned transient unit with
+an unshared mount namespace, private propagation and a read-only bind of its
+owned code directory. A helper registered to the source worker would interfere
+with handoff inventory/retirement; this observer must remain independent. Keep
+the independent 300-second .NET SDK rescue and existing identity, firmware,
+signing, request-journal and owned-cleanup guards. The observer is not an
+installed payload, worker API or fallback replacement.
+
+Snapshots identify the coordinator by PID/start ticks, report the observer's own
+cost separately, discover managed worker/entry/acquisition candidates by their
+managed argument names, and hash native mapped executables against the supplied
+signed-worker digest. Private code binds can appear as `/worker` in proc;
+accepting that discovery hint does not bypass the digest check. Bind candidate
+samples to independently read public worker identities and activation receipts
+before attributing resource usage. Discovery alone is not provenance.
+
+Every reported process is bracketed by start-time and executable/argument checks.
+PID reuse, exec changes, unreadable fields and partial samples remain explicit.
+CPU counters and process start times retain full-width decimal strings. The
+sampler reports RSS/PSS/private/swap sums, lifetime peak RSS, descriptors, threads
+and mount counts. Missing optional kernel fields stay null. It records actual
+sample windows, maximum gaps/durations and skipped intervals; a failed scan,
+missing coordinator, capacity/cache limit, skipped interval or kernel gap fails
+interval coverage while preserving available evidence.
+
+This is periodic coverage, not exact process-tree peaks or complete observation
+of short-lived acquisition/command descendants. CPU excludes already exited
+children; idle wakeups remain unknown. Per-field failures and candidate identities
+still require review even when interval coverage passes. Do not infer leak-free
+endurance from a short trace. Raw paths, PID/start identities and kernel records
+remain private; commit only sanitized, source-bound results.

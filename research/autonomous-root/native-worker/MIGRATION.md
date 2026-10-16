@@ -7,6 +7,24 @@ below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
+The latest installed-path round now spans managed HTTPS commands/jobs/transfers,
+native service acquisition, committed native HTTPS operations and normal managed
+return, with an independent resource/kernel observer. Both TVs passed on unchanged
+signed 0.7.46. Native worker and guardian resource samples bind to their activation
+identities and signed executable digest. QN90A enable-to-ready was 2.367 seconds,
+migration 4.040 seconds and return 13.311 seconds; S90D was 2.583, 7.889 and
+20.435 seconds. These are single host-observed trials, not latency distributions.
+Both ended managed-ready with expected committed history transitions, original
+retained bytes/enrollment and the same trial boot/coordinator process. All owned
+units/scopes are inactive or removed, SDK is on loopback and independent .NET
+rescues did not fire. See [integrated observation](integrated-observer-results.json).
+
+The performance gate remains open: S90D native root admission again took
+1141.376 ms, with observed completion at 1334.111 ms. Managed app through-forget
+also reached 1917.448 ms. The sampler records its own CPU/swap overhead, and its
+one-second snapshots miss short-lived processes; this is not complete process-tree
+or endurance coverage. The acquisition bridge still requires .NET.
+
 Both TVs remain managed-ready on signed 0.7.46. The latest diagnostic qualifies
 continuous read-only kernel capture across two warmup and four measured
 managed/native pairs on each TV. QN90A covered 102.799 seconds / 567 records;
@@ -3578,3 +3596,87 @@ No deployment, deliberate power transition, global policy or persistent
 capability/SMACK change occurred. Next: measure the integrated acquisition/public
 path and continuous resources, retaining this capture coverage and all fallback
 paths; native-only entry and long-duration qualification remain open.
+
+## Integrated HTTPS/acquisition resource observation — 2026-10-16
+
+`observe` is a standalone diagnostic executable, excluded from installed payloads.
+It combines the continuous kernel cursor with bounded in-memory resource samples.
+An independent transient unit gives it a private read-only code mount, so source
+worker retirement and acquisition cannot stop observation or leave a registered
+helper blocking handoff. The existing 300-second .NET SDK rescue remains separate.
+Readiness, PID/start identity, boot, signed worker digest, sample windows and
+owned cleanup are verified before attributing results.
+
+Samples bracket process identity and executable/argument observations, preserve
+CPU/start counters as full-width decimal strings, and record memory, swap,
+descriptors, threads and mounts. Missing fields stay unknown. Actual sample gaps,
+duration, skipped intervals, lost coordinator, bounded-buffer/cache exhaustion
+and kernel gaps remain explicit. SIGTERM ends observation and persists evidence.
+The observer never changes kernel logging, worker policy or installed code.
+
+Nine observer tests, nine kernel-capture tests and five candidate-packaging tests
+passed. They include partial proc data, PID reuse during a sample, bounded runtime,
+signal-driven finish, coordinator loss, output preservation and the private bind
+path/digest regression. npm passed 414 with 157 skips. Two ordinary ARM builds
+were byte-identical. No service/client/tvsetup production code or worker changed;
+the full fixture migration suite was not repeated for this diagnostic-only change.
+
+Each final hardware round ran two commands and two jobs per root/app profile on
+each implementation, uploaded and checksum-verified an 8,677,890-byte download,
+disabled/re-enabled native service acquisition while managed was selected, migrated
+to native, and returned normally to managed. Managed/native fixture results survived
+the relevant transitions and were forgotten through the public API. Fresh TLS is
+used for individual job requests; transfers retain pinned keep-alive sessions.
+Host job/transfer durations include durable local journaling, polling and local
+checksum/fsync work. The saved RPC measurements separately exclude surrounding
+journal writes. These costs differ from the earlier direct worker benchmark.
+
+| TV | Enable-to-ready | Migrate-to-native | Return-to-managed | Resource samples / kernel records |
+| --- | ---: | ---: | ---: | ---: |
+| QN90A | 2367.464 ms | 4040.360 ms | 13311.208 ms | 41 / 332 |
+| S90D | 2582.892 ms | 7889.016 ms | 20435.403 ms | 50 / 388 |
+
+Each native worker and guardian had at least twelve valid observations bound to
+its activation identity, with no field-read errors. Native worker peak sampled
+PSS was 383 KiB on QN90A and 1385 KiB on S90D; corresponding guardian values were
+219 and 251 KiB. These are sampled values, not exact process-tree peaks. The
+one-second schedule skipped no whole intervals; the largest observed gap was
+1302.362 ms on S90D. Short-lived acquisition processes can be missed: QN90A had
+no managed-entry sample and S90D had one candidate sample.
+
+Observer overhead is material. Its prefaulted resource/kernel buffers total
+10 MiB and can subsequently swap: observed swap reached 10,380 KiB on QN90A and
+4572 KiB on S90D. Observer CPU deltas were 3476 ms over approximately 40 seconds
+and 6220 ms over approximately 49 seconds. Keep this cost separate from worker
+usage, but do not assume it has no scheduling/pressure effect. Per-role CPU
+intervals differ and exclude exited descendants; idle wakeups remain unknown.
+
+The new S90D root admission/completion outlier was 1141.376 / 1334.111 ms, and a
+managed app job took 1917.448 ms through forget. Kernel sequence coverage was
+complete across both final rounds, with no gaps, overruns, capacity exhaustion or
+read errors. The specified OOM, panic/oops/warning, I/O-error and hung-task scans
+had no matches; this neither proves all errors absent nor attributes the tails.
+No no-regression, exact resource-peak or endurance gate is closed by these trials.
+
+Earlier attempts remain distinct evidence. The first QN90A observer missed native
+processes because proc exposed a private bind root as `/worker`; read-only
+inspection proved the signed executable digest at that path. Discovery now
+recognizes it and still requires the digest. An unsupported read-only public
+status operation in the investigation was rejected; the original committed trial
+continued only through its remaining measurements/return/cleanup, without replay.
+S90D's first migration was rejected before launch by the one-trial-per-coordinator
+guard. Its fixture and observer were reconciled and cleaned before service relaunch
+and a fresh trial. Relaunch reset its task in the same WRT host PID; QN90A's hosting
+PID changed. No guard was weakened. A disappearing proc mountinfo entry also caused
+probe cleanup to stop before deletion; explicit absence/terminal-state checks
+permitted its later cleanup. Original evidence remains private.
+
+Both final rounds preserved enrollment, protected files, unrelated apps, retained
+jobs and their trial boots. Selection history contains the expected two committed
+transitions. Native processes/freezer scopes, observer mounts and disposable files
+are absent; all owned units are inactive, SDK is on loopback, and no independent
+rescue fired. No package deployment, deliberate power transition, global policy,
+persistent capability or SMACK change occurred. Next: reduce/quantify observation
+overhead and investigate the remaining latency tails before final mixed endurance;
+native-only entry, broader lifecycle/24-hour evidence and native-default observation
+remain unfinished.
