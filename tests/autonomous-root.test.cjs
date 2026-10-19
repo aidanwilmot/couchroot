@@ -39,7 +39,7 @@ test('permission failures retain the acquisition step and file path',async()=>{
 test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',async()=>{
  const dir=tmp();let server;const pool=new https.Agent({keepAlive:true,maxSockets:1});
  try{
-  function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
+  function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name,...(name==='server'?['-addext','subjectAltName=IP:127.0.0.1']:[])],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
   const serverCert=cert('server'),clientCert=cert('client'),foreign=cert('foreign');
   const pin=hash(new crypto.X509Certificate(clientCert.cert).raw);
   let calls=0,enabled=true,uncertain=false,exitCode=0,badChunk=false,operationUncertain=false,operationCalls=0;
@@ -50,7 +50,7 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   agent.probeObserver=async (digest,requestId)=>{probeCalls++;assert.equal(digest,'a'.repeat(64));assert.ok(journal.rows.some(r=>r.id===requestId&&r.state==='submitted'&&r.sha256===hash('observer.probe:'+digest)));if(probeLost==='failed')throw Object.assign(Error('probe execution refused'),{outcome:'failed'});if(probeLost)throw Error('probe result unknown');return {verified:true,worker_stopped:false};};
   server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
-  function request(route,body,credentials=clientCert,extra={},reuse=false){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:reuse?pool:false,headers:{'Content-Type':'application/json',...extra}},res=>{const socket=res.socket;let parts=[];res.on('data',d=>parts.push(d));res.on('end',()=>{const data=Buffer.concat(parts);resolve({socket,status:res.statusCode,headers:res.headers,body:res.headers['content-type']==='application/octet-stream'?data:JSON.parse(data)});});});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
+  function request(route,body,credentials=clientCert,extra={},reuse=false){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,agent:reuse?pool:false,headers:{'Content-Type':'application/json',...extra}},res=>{const socket=res.socket;let parts=[];res.on('data',d=>parts.push(d));res.on('end',()=>{const data=Buffer.concat(parts);resolve({socket,status:res.statusCode,headers:res.headers,body:res.headers['content-type']==='application/octet-stream'?data:JSON.parse(data)});});});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
   let connections=0;server.on('secureConnection',()=>connections++);
   const clientConfig={host:'127.0.0.1',port,server_certificate:dir+'/server.pem',client_certificate:dir+'/client.pem',client_key:dir+'/client-key.pem',server_sha256:hash(new crypto.X509Certificate(serverCert.cert).raw)};
   fs.writeFileSync(dir+'/client.json',JSON.stringify(clientConfig),{mode:0o600});
@@ -69,14 +69,14 @@ with api.Session(c) as session:
   for(let i=1;i<=129;i++){
    const r=await request('/v1/status',undefined,clientCert,{'Connection':'keep-alive'},true);
    assert.equal(r.status,200);assert.ok(Number(r.headers['content-length'])>0);
-   if(i>1&&i<=128)assert.equal(r.socket,prior);
+   if(i>1&&i<=128)assert.ok(r.socket===prior, `request ${i} should reuse the preceding TLS socket`);
    if(i===128)assert.equal(r.headers.connection,'close');
-   if(i===129)assert.notEqual(r.socket,prior);
+   if(i===129)assert.ok(r.socket!==prior, `request ${i} should use a new TLS socket`);
    prior=r.socket;
   }
   const rejected=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive',Origin:'https://example.invalid'},true);
-  assert.equal(rejected.status,403);assert.equal(rejected.headers['server-timing'],undefined);assert.equal(rejected.socket,prior);assert.equal(rejected.headers.connection,'close');
-  const next=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive'},true);assert.notEqual(next.socket,prior);
+  assert.equal(rejected.status,403);assert.equal(rejected.headers['server-timing'],undefined);assert.ok(rejected.socket===prior, 'Origin rejection should use the existing socket');assert.equal(rejected.headers.connection,'close');
+  const next=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive'},true);assert.ok(next.socket!==prior, 'request after rejection should use a new socket');
   assert.equal(server.keepAliveTimeout,5000);
   await assert.rejects(request('/v1/status',undefined,{}));await assert.rejects(request('/v1/status',undefined,foreign));
   assert.equal((await request('/v1/status')).status,200);
