@@ -106,6 +106,7 @@ class Driver:
                     previous=self.tv.snapshot(privileged=True).get('pairing_config')
                     if not isinstance(previous,dict):raise Refused('Pairing disappeared during preparation')
                     data={**previous,**data,'endpoint':previous['endpoint']}
+                data.pop('token_sha256',None)
                 path=self.folder/(action.id+'-pairing.json');atomic_json(path,data)
             target=self.folder/(action.id+'-payload');shutil.copyfile(path,target)
             info.update(artifact=str(target),sha256=sha(target.read_bytes()))

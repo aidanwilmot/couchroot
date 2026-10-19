@@ -94,7 +94,9 @@ class NAS:
             if current.get(key)!=expected:raise Refused('Private pairing identity mismatch: '+key)
         from .config import validate_endpoint
         validate_endpoint(p['id'],current.get('endpoint'))
-        expected=self.pairing(p)
+        from .secrets import pairing_record
+        current=pairing_record(current)
+        expected=pairing_record(self.pairing(p))
         # Preserve custom URL and extension fields, while detecting receiver credential/pin drift.
         wanted={**current,**expected,'endpoint':current['endpoint']}
         if current!=wanted:

@@ -16,7 +16,7 @@ journals or compiled TV binaries are included. S90D has not been tested.
 ## Behavior
 
 - **Shared interface:** the build copies the signed package's web file list,
-  excluding its manifest, inserts `native-shim.js` after `bridge.js` and appends
+  excluding its manifest, inserts `native-shim.js` after `model.js` and appends
   `native-shim.css` to the bundle's copy of `style.css`.
   There is no second UI implementation or change to the signed WGT.
 - **Engine:** `--engine=default|upgrade` chooses the EWK implementation before

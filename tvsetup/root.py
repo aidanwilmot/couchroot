@@ -28,6 +28,8 @@ using(var c=Process.Start(p)){var o=c.StandardOutput.ReadToEndAsync();var e=c.St
 
 
 def operation_source(script):
+    if script is None:
+        return OPERATION.replace('System.Text.Encoding.UTF8.GetString(Convert.FromBase64String("PAYLOAD"))', 'File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"operation.sh"))')
     return OPERATION.replace('PAYLOAD', base64.b64encode(script.encode()).decode())
 
 
@@ -58,7 +60,29 @@ def build(profile, folder, script, cleanup_index=None):
     return outputs
 
 
-def execute(profile, script, cleanup_index=None, *, native_bundle=None):
+def prepare_artifacts(profile, folder, script, probe, cleanup_index=None, native_bundle=None):
+    """Compile/sign locally before creating any device staging directories."""
+    from . import native_root
+    outputs = (build(profile,folder,script,cleanup_index) if native_bundle is None else
+               native_root.prepare(profile,native_bundle,folder,script,cleanup_index))
+    artifacts = {p:probe+'/'+name for p,name in outputs.items()}
+    archive = folder/(probe+'.tar.gz')
+    with tarfile.open(archive,'w:gz') as tar:
+        payload=b'Authorized bounded setup operation.\n';entry=tarfile.TarInfo('identity-proof.txt')
+        entry.size=len(payload);entry.mode=0o644;tar.addfile(entry,io.BytesIO(payload))
+    private=folder/'test-private.pem';public=folder/'public.pem';signature=folder/(archive.name+'.signature')
+    try:
+        run(['openssl','genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:2048','-out',private])
+        run(['openssl','pkey','-in',private,'-pubout','-out',public])
+        run(['openssl','dgst','-sha256','-sign',private,'-out',signature,archive])
+        run(['openssl','dgst','-sha256','-verify',public,'-signature',signature,archive])
+    finally:
+        private.unlink(missing_ok=True)
+    artifacts.update({public:probe+'/public.pem',archive:'on-demand/'+archive.name,signature:'on-demand/'+signature.name})
+    return artifacts
+
+
+def execute(profile, script, cleanup_index=None, *, native_bundle=None, session=None, capture_result=False):
     toolkit = load()
     cfg = dict(tv_host=profile['host'], expected_model=profile['model'], expected_platform=profile['platform'],expected_device_id=profile['device_id'])
     probe = 'codex-qn90a-root-proof' if profile['id']=='qn90a' else 'codex-namespace-proof'
@@ -69,20 +93,19 @@ def execute(profile, script, cleanup_index=None, *, native_bundle=None):
     guards = managed_guard(profile)+hash_guard('/usr/sbin/sdbd-tarlauncher', LAUNCHER[profile['id']])
     with lock(PRIVATE/(profile['id']+'-root-check.lock')), tempfile.TemporaryDirectory(prefix='setup-root-', dir=PRIVATE) as tmp:
         folder = Path(tmp)
-        # Compile and sign locally before even creating target staging directories.
-        outputs = (build(profile,folder,guards+script,cleanup_index) if native_bundle is None else
-                   native_root.prepare(profile,native_bundle,folder,guards+script,cleanup_index))
-        artifacts = {p:probe+'/'+name for p,name in outputs.items()}
-        archive = folder/(probe+'.tar.gz')
-        with tarfile.open(archive,'w:gz') as tar:
-            payload=b'Authorized bounded setup operation.\n';entry=tarfile.TarInfo('identity-proof.txt')
-            entry.size=len(payload);entry.mode=0o644;tar.addfile(entry,io.BytesIO(payload))
-        private=folder/'test-private.pem';public=folder/'public.pem';signature=folder/(archive.name+'.signature')
-        run(['openssl','genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:2048','-out',private])
-        run(['openssl','pkey','-in',private,'-pubout','-out',public])
-        run(['openssl','dgst','-sha256','-sign',private,'-out',signature,archive])
-        run(['openssl','dgst','-sha256','-verify',public,'-signature',signature,archive])
-        artifacts.update({public:probe+'/public.pem',archive:'on-demand/'+archive.name,signature:'on-demand/'+signature.name})
+        # Every operation still stages, verifies and removes its own remote files.
+        if capture_result:
+            script = 'export TV_SETUP_READ_TMP='+Q(prefix+'/read.tmp')+'\n(\n'+script+'\n) >'+Q(prefix+'/result.txt')+' 2>&1\n'
+        if session is not None and cleanup_index is None and native_bundle is None:
+            from .root_session import prepared
+            artifacts = prepared(profile, Path(session), probe)
+            operation=folder/'operation.sh';operation.write_text(guards+script)
+            artifacts[operation]=probe+'/operation.sh'
+        else:
+            artifacts = prepare_artifacts(profile,folder,guards+script,probe,cleanup_index,native_bundle)
+        if capture_result:
+            for name in ('result.txt','read.tmp'):
+                path=folder/name;path.write_bytes(b'');path.chmod(0o600);artifacts[path]=probe+'/'+name
         callback=toolkit.device(cfg)
         client=toolkit.SdbClient(PRIVATE/'bin/sdb',profile['host']);client.connect();client.require_device()
         # Originals are captured afresh; no dependency on another TV's passwd hash.
@@ -92,7 +115,7 @@ def execute(profile, script, cleanup_index=None, *, native_bundle=None):
         if original.transport_returncode not in (0,1) or not re.search(r'\n\[exit:0\]\s*\Z',original.output) or set(hashes)!={'/etc/passwd','/usr/share/sdbd/public.pem'}:
             raise Refused('Cannot verify original root-transport resources')
         originals=''.join(hash_guard(p,h) for p,h in hashes.items())
-        stage=guards+originals+f'test ! -e {prefix} && test ! -L {prefix}\ntest ! -e {BASE}on-demand && test ! -L {BASE}on-demand\nmkdir {prefix} {BASE}on-demand\n'
+        stage=guards+originals+f'test ! -e {prefix} && test ! -L {prefix}\ntest ! -e {BASE}on-demand && test ! -L {BASE}on-demand\nmkdir -m 700 {prefix} {BASE}on-demand\n'
         if native_bundle is not None:
             stage+=f'mkdir {prefix}/code\n'
         toolkit.capture(cfg,callback,stage,20,'setup-root-stage')
@@ -103,12 +126,27 @@ def execute(profile, script, cleanup_index=None, *, native_bundle=None):
         try:
             for source,target in artifacts.items():client.push(source,PurePosixPath(BASE+target))
             check=''.join(hash_guard(BASE+target,sha(source.read_bytes())) for source,target in artifacts.items())
-            command=guards+originals+"cleanup() {\n"+cleanup+"}\ntrap cleanup EXIT\n"+check
+            command=guards+originals+"cleanup() {\n"+cleanup+"}\n"
+            if capture_result:
+                # Keep only the private result until retrieval; the remote trap
+                # still removes executable payloads even if the callback is lost.
+                completed='\n'.join('rm -f '+Q(BASE+v) for v in artifacts.values() if v!=probe+'/result.txt')
+                if native_bundle is not None:completed+=f'\nrmdir {prefix}/code\n'
+                completed+=f'\nrm -f {prefix}/passwd-view\nrmdir {BASE}on-demand\n'
+                command+="completed() {\n"+completed+"}\ntrap 'status=$?; if test \"$status\" = 0; then completed; else cleanup; fi; exit \"$status\"' EXIT\n"
+            else:command+="trap cleanup EXIT\n"
+            command+=check
+            if capture_result:command+=f'chmod 600 {prefix}/result.txt {prefix}/read.tmp\n'
             if native_bundle is None:
                 command+=f'/usr/bin/dotnet {prefix}/NamespaceRootProbe.dll {prefix}\n'
             else:
                 command+=f'env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus /usr/bin/dotnet {prefix}/NativeEntry.dll probe\n'
             toolkit.capture(cfg,callback,command,45,'setup-root-operation')
+            if capture_result:
+                result=folder/'downloaded-result.txt'
+                client.run(['pull',prefix+'/result.txt',str(result)],check=True)
+                if not result.is_file() or result.stat().st_size>16*1024*1024:raise Refused('Missing or oversized root result')
+                return result.read_text()
         finally:
             # Only known temporary files; never retry the operation on an uncertain result.
             toolkit.capture(cfg,callback,'set -eu\n'+cleanup+originals+

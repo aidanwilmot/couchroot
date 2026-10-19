@@ -426,7 +426,7 @@ class HostTests(unittest.TestCase):
         prefs = self.out / "bad-preferences"
         prefs.write_text("COUCHROOT1 1 2 0 0\nbad id!\tBad\n")
         result = self.launcher(COUCHROOT_NATIVE_STATE=str(prefs))
-        self.assertIn("preferences-import skipped=entry", result.stdout)
+        self.assertIn("preferences-import skipped=format", result.stdout)
         url = next(line for line in result.stdout.splitlines() if line.startswith("mock url="))
         self.assertNotIn("#import=", url)
 
