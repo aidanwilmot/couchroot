@@ -8,10 +8,10 @@ using System.Text.Json;
 
 internal static partial class SamsungTvRootAgent
 {
-    // Linux ARM32 assigns O_NOFOLLOW differently from x86/ARM64.
+    // Linux ARM32 and ARM64 assign O_NOFOLLOW differently from x86.
     private static int ReadOpenFlags(bool macOS, Architecture architecture)
     {
-        return macOS ? 0x104 : (architecture == Architecture.Arm ? 0x8000 : 0x20000) | 0x800;
+        return macOS ? 0x104 : ((architecture == Architecture.Arm || architecture == Architecture.Arm64) ? 0x8000 : 0x20000) | 0x800;
     }
     private static readonly string WorkerId = Guid.NewGuid().ToString("N");
     private const int ChunkBytes = 1024 * 1024;

@@ -13,7 +13,7 @@ internal static partial class SamsungTvRootAgent
     private static void TestReadOpenFlags()
     {
         Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.Arm) == 0x8800, "ARM32 O_NOFOLLOW differs");
-        Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.Arm64) == 0x20800, "ARM64 flags differ");
+        Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.Arm64) == 0x8800, "ARM64 flags differ");
         Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.X64) == 0x20800, "x64 flags differ");
         Check(ReadOpenFlags(true, System.Runtime.InteropServices.Architecture.Arm64) == 0x104, "Darwin flags differ");
     }
