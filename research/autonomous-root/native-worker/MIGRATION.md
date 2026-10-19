@@ -16,10 +16,13 @@ Both installations verified all 86 packaged entries and preserved enrollment,
 protected-file hashes and original saved jobs. Bounded public native operations,
 selected-native disable/enable, and return to managed passed on both models.
 Temporary test jobs were forgotten and final SDK rescue timers retired unfired.
-QN90A also passed the service-restart check. S90D's replacement service became
-ready, then disappeared after restart-helper cleanup; that check remains failed
-with its cause unresolved. Independent SDK rescue and a fresh, verified launch
-restored it on the same boot before final native acceptance.
+QN90A also passed the service-restart check. S90D's original quick restart remains
+a failed trial. Follow-up reproduced the failure before helper cleanup: the new
+worker reused the old WRT host while it was still shutting down. The corrected
+SDK maintenance procedure waits for that host to exit before launching once.
+Stop, wait and launch took about 115 seconds on unchanged 0.7.52; a different WRT
+host and native worker passed readiness, state preservation and stability checks
+after cleanup. See [restart evidence](s90d-service-restart-fix-results.json).
 
 A real S90D teardown interruption on 0.7.51 exposed a resume-path gap. Version
 0.7.52 reuses the existing receipt reconciler before native activation, without
@@ -28,8 +31,9 @@ replaying launch or shutdown. Local failure and ownership tests passed; normal
 remain recorded, not rewritten as successful.
 
 See [rollout evidence](native-bridge-rollout-results.json). No reboot, standby,
-interrupted-power or new endurance trial was performed. S90D service-restart
-reliability and clean-boot qualification remain open. Keep the bridge and fallback;
+interrupted-power or new endurance trial was performed. S90D now has one accepted
+same-boot maintenance restart; unattended restart reliability and clean-boot
+qualification remain open. Keep the bridge and fallback;
 a native-only entry rewrite and fallback removal are deferred. This rollout changes
 the root agent only; Hub, telemetry/settings and NAS services were not redeployed.
 

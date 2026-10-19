@@ -8,10 +8,11 @@ Current installed version: signed **0.7.52**, with native workers selected on
 QN90A and S90D. Both retain the small .NET entry bridge and managed fallback.
 Installation readback, native public operations, selected-native disable/enable
 and normal managed return passed on both TVs. QN90A passed service restart;
-S90D needed independent SDK recovery after its restart check and that qualification
-remains open. No new reboot or endurance gate was completed. See the
+S90D subsequently passed a corrected SDK maintenance restart that waits for the
+old WRT host to exit before launch. Its original failed trial remains recorded.
+No unattended restart, new reboot or endurance gate was completed. See the
 [current migration snapshot](native-worker/MIGRATION.md#current-qualification-snapshot)
-and [rollout evidence](native-worker/native-bridge-rollout-results.json).
+and [restart evidence](native-worker/s90d-service-restart-fix-results.json).
 Historical versioned observations below retain their original limits.
 
 Signed 0.7.38 adds bounded ordinary-production resource qualification on both TVs.

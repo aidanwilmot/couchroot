@@ -97,6 +97,44 @@ installed and protected-file hashes matched, and both TVs had fresh telemetry
 and authenticated root connections at final verification. Physical AC-power
 removal was not tested.
 
+## Service restart during maintenance
+
+Use [restart-service.sh](restart-service.sh) through the existing admitted SDK
+transport, with the per-device setup lock, pending-run check and independent SDK
+rescue already in place. On S90D the app-user launcher cannot read the WRT
+process identity; do not relax its permissions to run this check.
+
+Before opening SDK maintenance, bind the **HTTPS listener's WRT PID and start
+ticks** through the authenticated root connection, and record the boot ID,
+selection, enrollment and retained-job hashes in the private operation journal.
+The PID printed by `app_launcher -k` belongs to the registered service wrapper
+and is not sufficient to identify the JavaScript host.
+
+Run the exact reviewed script with `BOOT_ID WRT_PID START_TICKS` as its three
+arguments. It stops the registered service once, waits up to 120 seconds for the
+bound WRT host to disappear, confirms the wrapper is stopped, then submits one
+launch. It refuses changed identities, unreadable process state, timeout and
+unexpected application status. Keep the SDK window long enough for this wait
+and arrange guarded restoration of loopback before native acquisition; preserve
+the independent rescue until acceptance. A failed or lost response requires
+inspection, not another invocation.
+
+`SERVICE_START_SUBMITTED` is only a launch acknowledgment. Acceptance requires a
+different WRT host and ready native worker on the same boot, unchanged selection
+and protected state, and continued readiness after owned helper cleanup and
+rescue retirement. Keep the signed fallback and original journals. This procedure
+does not qualify reboot, standby or unattended recovery.
+
+The local regression uses a real Linux process whose exit lags behind the
+wrapper's stopped status. Run it with `python3 -m unittest discover -s tests -p
+service_restart_test.py` on Linux; it also covers stale identities, a host that
+does not exit, and unexpected application status.
+
+S90D passed this procedure on unchanged signed 0.7.52: stop, host-exit wait and
+launch took about 115 seconds. A different WRT host and native worker remained
+ready before and after helper cleanup. See the
+[restart evidence](native-worker/s90d-service-restart-fix-results.json).
+
 ## Local preparation and tests
 
 From the repository root:
