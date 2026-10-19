@@ -306,13 +306,13 @@ test('scroll cues follow Home and list boundaries at both viewport sizes without
  for(const viewport of [{width:1920,height:1080},{width:960,height:540}]){
   const p=await setup();await p.setViewportSize(viewport);
   await p.evaluate(()=>localStorage.setItem('minimal-hub.shortcuts.v1',JSON.stringify({version:1,apps:window.testApps})));
-  await p.reload();await p.waitForTimeout(80);
+  await p.reload();await p.locator('#home-scroll.can-scroll-down:not(.can-scroll-up)').waitFor({state:'attached',timeout:3000});
   assert.equal(await p.locator('#home-scroll.can-scroll-down').count(),1);assert.equal(await p.locator('#home-scroll.can-scroll-up').count(),0);
-  for(let i=0;i<4;i++)await key(p,'ArrowDown');await p.waitForTimeout(30);
+  for(let i=0;i<4;i++)await key(p,'ArrowDown');await p.locator('#home-scroll.can-scroll-up:not(.can-scroll-down)').waitFor({state:'attached',timeout:3000});
   assert.equal(await p.locator('#home-scroll.can-scroll-up').count(),1);assert.equal(await p.locator('#home-scroll.can-scroll-down').count(),0);
   assert.ok(await p.locator('#favorites > button').evaluateAll(bs=>bs.every(b=>getComputedStyle(b).opacity==='1')));
-  await p.locator('#edit-apps').click();assert.equal(await p.locator('#editor-scroll.can-scroll-down').count(),1);
-  for(let i=0;i<14;i++)await key(p,'ArrowDown');await p.waitForTimeout(30);
+  await p.locator('#edit-apps').click();await p.locator('#editor-scroll.can-scroll-down').waitFor({state:'attached',timeout:3000});assert.equal(await p.locator('#editor-scroll.can-scroll-down').count(),1);
+  for(let i=0;i<14;i++)await key(p,'ArrowDown');await p.locator('#editor-scroll.can-scroll-up:not(.can-scroll-down)').waitFor({state:'attached',timeout:3000});
   assert.equal(await p.locator('#editor-scroll.can-scroll-up').count(),1);assert.equal(await p.locator('#editor-scroll.can-scroll-down').count(),0);
   await key(p,'Escape');await p.locator('#settings').click();
   for(let i=0;i<6;i++)await key(p,'ArrowDown');

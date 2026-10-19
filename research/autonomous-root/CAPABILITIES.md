@@ -136,8 +136,12 @@ nothing may run on native: activation refuses a native worker with live
 resources.
 
 `POST /v1/native/resume-native` accepts exactly `{id, migration_id}`. It only
-resumes the final activation of that live coordinator's unknown migration. It
-never repeats provider retirement. The client commands are `native-migrate`
+resumes the final activation of that live coordinator's unknown migration. If
+provider teardown was interrupted, it reconciles the bound receipt through the
+still-authenticated production worker before activation. It never repeats provider
+launch or shutdown, and changed ownership keeps admission closed. Activation
+starts once cleanup is verified; an interrupted activation resumes its own intent.
+The original uncertain request remains unchanged. The client commands are `native-migrate`
 (same arguments as `native-rehearse`) and `native-resume-native --request-id
 NEW_REQUEST_ID --migration-id ORIGINAL_REQUEST_ID`.
 
