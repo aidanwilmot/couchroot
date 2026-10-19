@@ -64,10 +64,24 @@ internal static partial class SamsungTvRootAgent
             throw new ArgumentException("Upload target outside managed directories");
         return path;
     }
+    // Operations are serialized by the wire reader. Job monitors mutate only
+    // individual jobs, whose snapshots must be taken under their own locks.
+    // This inventories this worker, not saved records or detached descendants.
+    private static object ResourceInventory()
+    {
+        var transfers = new List<object>();
+        foreach (var pair in Transfers)
+            transfers.Add(new { id=pair.Key, direction=pair.Value.Upload ? "upload" : "download" });
+        var jobs = new List<object>();
+        foreach (var pair in Jobs)
+            lock (pair.Value)
+                jobs.Add(new { id=pair.Key, state=pair.Value.State, monitor_finished=pair.Value.Finished });
+        return new { schema=1, scope="worker-owned", transfers, jobs, helpers=new List<string>(Helpers) };
+    }
     private static object Operation(JsonElement value, string staging, string runtime)
     {
         string op = Text(value, "op");
-        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "binary-download-v1", "binary-upload-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1" } };
+        if (op == "status") return new { boot_id = BootId(), uptime_seconds = double.Parse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture), worker_id = WorkerId, processes = new { worker = new { pid = getpid(), start_ticks = ProcessIdentity(getpid()) }, guardian = (object)null }, resources = ResourceInventory(), app_launcher = new { implementation = "native", sha256 = AppLauncherDigest }, capabilities = new[] { "file-transfer-v1", "binary-download-v1", "binary-upload-v1", "jobs-v1", "app-profile-v1", "helper-view-v1", "native-app-launcher-v1", "resource-inventory-v1", "worker-process-identity-v1" } };
         if (op.StartsWith("helper.", StringComparison.Ordinal)) return HelperOperation(value);
         if (op.StartsWith("job.", StringComparison.Ordinal)) return JobOperation(value);
         if (op == "app.exec")

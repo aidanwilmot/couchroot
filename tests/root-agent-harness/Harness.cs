@@ -3,9 +3,10 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Security.Cryptography;
-class Harness { public static int Main(string[] args){if(args.Length==1 && args[0]=="--native-resource"){using(var resource=typeof(SamsungTvRootAgent).Assembly.GetManifestResourceStream("Couchroot.AppLauncher")){if(resource==null)throw new Exception("Missing resource");Console.WriteLine("NATIVE_RESOURCE_SHA256 "+Convert.ToHexString(SHA256.HashData(resource)).ToLowerInvariant());}return 0;}if(args.Length>0)return SamsungTvRootAgent.Main(args);SamsungTvRootAgent.TestOperations();return 0;} }
+class Harness { public static int Main(string[] args){if(args.Length==2 && args[0]=="--validate-staging"){try{Console.WriteLine(SamsungTvRootAgent.ValidateProductionStaging(args[1]));return 0;}catch(ArgumentException){return 64;}}if(args.Length==1 && args[0]=="--job-identity-test")return SamsungTvRootAgent.TestStartedProcessIdentity();if(args.Length==3 && args[0]=="--parity-wire")return SamsungTvRootAgent.ParityWire(int.Parse(args[1]),args[2]);if(args.Length==2 && args[0]=="--parity")return SamsungTvRootAgent.ParityBridge(args[1]);if(args.Length==1 && args[0]=="--native-resource"){using(var resource=typeof(SamsungTvRootAgent).Assembly.GetManifestResourceStream("Couchroot.AppLauncher")){if(resource==null)throw new Exception("Missing resource");Console.WriteLine("NATIVE_RESOURCE_SHA256 "+Convert.ToHexString(SHA256.HashData(resource)).ToLowerInvariant());}return 0;}if(args.Length>0)return SamsungTvRootAgent.Main(args);SamsungTvRootAgent.TestOperations();return 0;} }
 internal static partial class SamsungTvRootAgent
 {
+    public static string ValidateProductionStaging(string value){return ValidateStagingDirectory(value);}
     private static void Check(bool value,string message){if(!value)throw new Exception(message);}
     private static JsonElement Call(object request,string root){using(var doc=JsonDocument.Parse(JsonSerializer.Serialize(request)))return JsonSerializer.SerializeToElement(Operation(doc.RootElement,root,root));}
     private static void Reject(Action action,string message){try{action();}catch(ArgumentException){return;}catch(InvalidDataException){return;}catch(IOException){return;}throw new Exception(message);}
