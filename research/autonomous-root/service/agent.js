@@ -36,6 +36,13 @@ function launchRequest(stage,gate){
  if(Buffer.byteLength(request)>510)throw Error('SDK launch command exceeds safe transport limit');
  return request;
 }
+async function launchSdk(client,stage,gate,privateLog){
+ // The app writes SDK diagnostics itself; SDK UID 901 needs no log-file access.
+ if(privateLog)fs.writeFileSync(stage+'/launcher.log','',{mode:0o600,flag:'wx'});
+ const output=await sdb.exec(client,launchRequest(stage,gate),{timeout:30000});
+ if(privateLog)fs.appendFileSync(stage+'/launcher.log',output||'');
+ return output;
+}
 function createAgent(config,options={}){
  let running=false,connected=false,launching=false,timer=null,channel=null,client=null,stage=null,attempts=0,generation=0,lastError=null,identity=null,lastAcquired=null,workerReady=false,workerStatus=null,workerStatusAt=0;
  const firmware=options.verifyFirmware||verifyFirmware;
@@ -138,16 +145,10 @@ function createAgent(config,options={}){
    client=opened;
    step='payload staging';clean();const pkg=prepare(channel.listeningPort(),secret,attempt);
    let command=attempt.acquisition?'env -i PATH=/usr/bin:/bin DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus /usr/bin/dotnet '+quote(stage+'/NativeEntry.dll')+' probe '+quote(pkg):'/usr/bin/dotnet '+quote(stage+'/SamsungTvArchiveRoot.dll')+' '+quote(pkg);
-   if(attempt.acquisition){
-    // SDK may append diagnostics but cannot replace the app-owned stage entry.
-    // This transcript is diagnostic only, never readiness or cleanup authority.
-    fs.writeFileSync(stage+'/launcher.log','',{mode:0o622,flag:'wx'});fs.chmodSync(stage+'/launcher.log',0o622);
-    command+=' > '+quote(stage+'/launcher.log')+' 2>&1';
-   }
    // SDK UID 901 cannot create a marker in the app-owned staging directory.
    const gate='/tmp/'+pkg+'-launch-once';
    fs.writeFileSync(stage+'/launch-sdk.sh','set -eu\n'+sdkRuntimeGuard(config)+command+'\n',{mode:0o644,flag:'wx'});
-   step='SDK launcher';const output=await sdb.exec(client,launchRequest(stage,gate),{timeout:30000});
+   step='SDK launcher';const output=await launchSdk(client,stage,gate,!!attempt.acquisition);
    if(!connected&&output)lastError='SDK launcher: '+output.slice(-300).replace(/[\r\n]+/g,' ');
    if(!connected&&running&&gen===generation)throw Error(lastError&&lastError.startsWith('SDK launcher:')?lastError:'Launcher returned without authenticated agent');
   }catch(e){if(running&&gen===generation&&!connected)lastError=(step+': '+String(e.message||e.code)).slice(0,300);}
@@ -686,4 +687,4 @@ function createAgent(config,options={}){
  const restartInventory=()=>{if(!options.selectionFile)return null;try{return {...inventoryRestart(options.selectionFile),bootstrap_recovery:bootstrapRecovery&&{id:bootstrapRecovery.id,phase:bootstrapRecovery.phase,attempts:bootstrapRecovery.attempts,error:bootstrapRecovery.error},native_startup:nativeStartup,restart_return:restartReturn&&{transaction_id:restartReturn.id,phase:restartReturn.phase,attempts:restartReturn.attempts,error:restartReturn.error,result:restartReturn.result||null},startup_reconciliation:reconciliation&&{abandoned:!!reconciliation.abandoned,transaction_id:reconciliation.transaction_id||null,error:reconciliation.error||null},restart_rollback:restartRollback&&{transaction_id:restartRollback.id,phase:restartRollback.phase,trigger:restartRollback.trigger||'service-restart',failed_phase:restartRollback.failed_phase||null,attempts:restartRollback.attempts,error:restartRollback.error,receipt_sha256:restartRollback.result?restartRollback.result.receipt_sha256:null}};}catch(error){return {schema:1,action:'pending-reconciliation',diagnostics:['inventory unavailable: '+String(error.message).slice(0,160)]};}};
  const api={status,start,stop,holdAdmission,probeObserver,restartInventory,cleanupRestart,canCleanupRestart,operation:(value,data)=>submit(owner=>owner.operation(value,data)),execute:(command,timeout)=>submit(owner=>owner.execute(command,timeout)),resumeNativeActivation:()=>{if(!migration)return Promise.reject(Error('No native migration to reconcile'));return migration.resumeActivation();},canResumeManaged,resumeManagedActivation,returnManaged,rehearseNative,migrateNative};return api;
 }
-module.exports={createAgent,launchRequest};
+module.exports={createAgent,launchRequest,launchSdk};

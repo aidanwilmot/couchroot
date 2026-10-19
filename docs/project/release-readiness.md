@@ -336,7 +336,8 @@ pinned SDK for full setup. `--component prepare` checks Python/platform only;
 native source compilation and preference conversion additionally need Docker
 and Node respectively. These checks do not validate device enrollment.
 
-CI runs four jobs on Ubuntu 24.04, with Python 3.12 and Node 22 where needed:
+CI runs four jobs on Ubuntu 24.04, with Python 3.12 and Node 22 where needed,
+plus one focused macOS host check:
 
 - `web-and-offline`: dependency/privacy checks, Python setup and recovery tests,
   telemetry receiver and WebView tests, Node/Chromium tests, and unsigned web
@@ -347,15 +348,19 @@ CI runs four jobs on Ubuntu 24.04, with Python 3.12 and Node 22 where needed:
 - `root-native-launcher`: ARM launcher builds, native collector tests, native
   worker protocol/fault/recovery tests, and the Linux managed launcher harness.
 - `qn90a-web-saver`: the pinned Emscripten reproducibility check.
+- `macos-setup`: macOS 14 ARM64/Python 3.12 setup, installer and UI-deploy tests.
+
+The native job discovers `native_*_test.py` with the host worker, fault hooks,
+acceptance controller and I/O-delay interposer enabled in an isolated Linux
+container. Mount-dependent storage cases and extended lifetime cases remain
+separate local checks; CI is not endurance or hardware acceptance.
 
 Pull requests and pushes to `main` run the suite. Feature-branch pushes do not
 repeat the PR run; use the manual workflow trigger for a branch without a PR.
-New commits cancel outdated runs for the same PR or branch. There is no OS or
-Python-version matrix: macOS and newer-Python compatibility can be checked locally
-before a release or when changing host-specific code. Linux CI does not certify
-macOS behavior. The 2026-10-19 main run's macOS process-group cleanup permission
-error remains a host-specific issue to investigate before claiming that path is
-fixed; the cleanup test remains enabled on Linux.
+New commits cancel outdated runs for the same PR or branch. There is no broad OS
+or Python-version matrix: broader macOS and newer-Python compatibility remain
+local release checks. The focused macOS job covers the supervisor regression
+where a zombie-group `EPERM` masked the observation deadline.
 
 Build manifests include only declared outputs, excluding stale DLLs from other
 research builds. Reports are `dist/reproducibility-web.json` and

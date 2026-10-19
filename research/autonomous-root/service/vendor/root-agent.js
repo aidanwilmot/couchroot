@@ -22,6 +22,8 @@ var operationDeadline = require('../operation-deadlines').operationDeadline;
 var PROTOCOL_VERSION = 'SAMSUNG-TV-ROOT/1';
 var MAX_FRAME_BYTES = 8 * 1024 * 1024;
 var MAX_PENDING = 32;
+var MAX_PREAUTH = 16;
+var MAX_AUTH_BYTES = 512;
 
 function RootAgentServer(opts) {
     opts = opts || {};
@@ -32,6 +34,7 @@ function RootAgentServer(opts) {
     this.onClose = opts.onClose;        // () -> void
     this._server = null;
     this._conn = null;
+    this._preauth = new Set();
     this._listeningPort = 0;
     this.log = [];   // why each connection was rejected; shown in /status
 }
@@ -60,10 +63,13 @@ RootAgentServer.prototype._handle = function (socket) {
     var self = this;
     if (this._conn) { this.note('second connection while one agent is active'); socket.destroy(); return; }
 
+    if (this._preauth.size >= MAX_PREAUTH) { this.note('too many unauthenticated peers'); socket.destroy(); return; }
+    this._preauth.add(socket);
+
     var nonce = crypto.randomBytes(32);
     socket.write(PROTOCOL_VERSION + '\t' + nonce.toString('hex') + '\n');
 
-    var lineBuffer = Buffer.alloc(4096), lineBytes = 0, binary = null, binaryBuffer = null, binaryBytes = 0;
+    var lineBuffer = Buffer.alloc(MAX_AUTH_BYTES), lineBytes = 0, binary = null, binaryBuffer = null, binaryBytes = 0;
     var authed = false;
 
     // the agent must AUTH within 10s; a silent peer is dropped (the host tool
@@ -104,6 +110,7 @@ RootAgentServer.prototype._handle = function (socket) {
                 return;
             }
             authed = true;
+            self._preauth.delete(socket);
             clearTimeout(authTimer);
             self._conn = new RootAgentConnection(socket, self.secret, nonce, ident);
             if (self.onConnect) self.onConnect(self._conn);
@@ -132,9 +139,10 @@ RootAgentServer.prototype._handle = function (socket) {
                 var newline = chunk.indexOf(10, offset);
                 var end = newline < 0 ? chunk.length : newline;
                 var nextBytes = lineBytes + end - offset;
-                if (nextBytes > MAX_FRAME_BYTES) throw Error('frame too large');
+                var limit = authed ? MAX_FRAME_BYTES : MAX_AUTH_BYTES;
+                if (nextBytes > limit) throw Error('frame too large');
                 if (nextBytes > lineBuffer.length) {
-                    var grown = Buffer.alloc(Math.min(MAX_FRAME_BYTES, Math.max(nextBytes, lineBuffer.length * 2)));
+                    var grown = Buffer.alloc(Math.min(limit, Math.max(nextBytes, lineBuffer.length * 2)));
                     lineBuffer.copy(grown, 0, 0, lineBytes); lineBuffer = grown;
                 }
                 chunk.copy(lineBuffer, lineBytes, offset, end); lineBytes = nextBytes;
@@ -156,6 +164,7 @@ RootAgentServer.prototype._handle = function (socket) {
 
     socket.on('error', function (e) { self.note('socket error: ' + (e.message || e)); });
     socket.on('close', function () {
+        self._preauth.delete(socket);
         clearTimeout(authTimer);
         if (self._conn && self._conn._socket === socket) {
             self._conn._failPending(new Error('root agent disconnected'), true);
@@ -187,6 +196,8 @@ RootAgentServer.prototype.execute = function (command, timeoutMs) {
 };
 
 RootAgentServer.prototype.close = function () {
+    this._preauth.forEach(function (socket) { socket.destroy(); });
+    this._preauth.clear();
     if (this._conn) {
         this._conn._failPending(new Error('root agent server closed'));
         try { this._conn._socket.destroy(); } catch (e) {}

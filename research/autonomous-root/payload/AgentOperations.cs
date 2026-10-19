@@ -8,6 +8,15 @@ using System.Text.Json;
 
 internal static partial class SamsungTvRootAgent
 {
+    // Linux ARM32 and ARM64 assign O_NOFOLLOW differently from x86.
+    private static int ReadOpenFlags(bool macOS, Architecture architecture)
+    {
+        if (macOS) return 0x104;
+        int noFollow = architecture == Architecture.Arm || architecture == Architecture.Arm64 ? 0x8000 : 0x20000;
+        // ARM32 still needs O_LARGEFILE for the allowed two-GiB boundary.
+        int largeFile = architecture == Architecture.Arm ? 0x20000 : 0;
+        return noFollow | largeFile | 0x800; // O_NONBLOCK
+    }
     private static readonly string WorkerId = Guid.NewGuid().ToString("N");
     private const int ChunkBytes = 1024 * 1024;
     private const long TransferLimit = 2L * 1024 * 1024 * 1024;
@@ -116,7 +125,7 @@ internal static partial class SamsungTvRootAgent
             else
             {
                 if ((File.GetAttributes(t.Path) & FileAttributes.Directory) != 0 || t.Path.StartsWith("/proc/", StringComparison.Ordinal) || t.Path.StartsWith("/dev/", StringComparison.Ordinal) || t.Path.StartsWith("/sys/", StringComparison.Ordinal)) throw new IOException("Regular disk file required");
-                int flags = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? 0x104 : 0x20800; // O_NOFOLLOW | O_NONBLOCK
+                int flags = ReadOpenFlags(RuntimeInformation.IsOSPlatform(OSPlatform.OSX), RuntimeInformation.ProcessArchitecture);
                 int fd = open(t.Path, flags);
                 if (fd < 0) throw new IOException("Cannot open regular file");
                 var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle((IntPtr)fd, true);
