@@ -110,10 +110,11 @@ jobs:
           mkdir -p test-results/native-telemetry
           docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out" -e OUTPUT_DIR=/out samsung-native-collector:bullseye sh research/native-telemetry/collector/build.sh --host-only
           docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out:ro" samsung-native-collector:bullseye python3 research/native-telemetry/collector/test_collector.py
+      - run: docker build -t couchroot-native-tests:py312 -f tests/native-worker.Dockerfile .
       - name: Native worker protocol and recovery checks
         run: |
           mkdir -p test-results/native-worker
-          docker run --rm --init --pull never --network none --cap-add SYS_PTRACE --security-opt seccomp=unconfined -v "$PWD:/src:ro" -v "$PWD/test-results/native-worker:/out" samsung-native-collector:bullseye sh -eu -c '
+          docker run --rm --init --pull never --network none --cap-add SYS_PTRACE --security-opt seccomp=unconfined -v "$PWD:/src:ro" -v "$PWD/test-results/native-worker:/out" couchroot-native-tests:py312 sh -eu -c '
             gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function -DNATIVE_WORKER_TEST -DNATIVE_WORKER_FAULT_TEST research/autonomous-root/native-worker/worker.c -ldl -pthread -o /out/worker
             gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function research/autonomous-root/native-worker/accept.c -ldl -pthread -o /out/accept
             gcc -shared -fPIC -Wall -Wextra -Werror tests/native-io/delay.c -ldl -o /out/io-delay.so
