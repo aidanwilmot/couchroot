@@ -107,6 +107,7 @@ static void set_signal(int number, void (*handler)(int)) {
     memset(&action, 0, sizeof action);
     action.sa_handler = handler;
     sigemptyset(&action.sa_mask);
+    sigaddset(&action.sa_mask, SIGINT); sigaddset(&action.sa_mask, SIGTERM);
     if (sigaction(number, &action, NULL)) { perror("sigaction"); exit(3); }
 }
 static double now(void) {

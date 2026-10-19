@@ -52,150 +52,10 @@
 #define REARM_SOURCE "isp-service"
 
 /* ---- Boot admission (native-guard.h) ---- */
-static int native_settings_match(const char *source, const char *isp, const char *power, const char *foreground) {
-    return source && isp && power && foreground && !strcmp(source, "isp-service") &&
-        !strcmp(isp, HUB_WEB_APP) && !strcmp(power, "lcdon") && !strcmp(foreground, "");
-}
-static void ng_stamp(const char *event) {
-    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
-    printf("%s %.3f\n", event, t.tv_sec + t.tv_nsec / 1e9); fflush(stdout);
-}
-static double ng_uptime(void) {
-    double value = -1; FILE *f = fopen(UPTIME_PATH, "r");
-    if (f) { if (fscanf(f, "%lf", &value) != 1) value = -1; fclose(f); }
-    return value;
-}
-static int ng_marker(void) { return access(MARKER_PATH, F_OK) == 0; }
-static int ng_display(void) {
-    struct stat s;
-    return access(WM_READY_PATH, F_OK) == 0 && stat(WAYLAND_SOCKET_PATH, &s) == 0 && S_ISSOCK(s.st_mode);
-}
-/* Dynamic ABI declarations match libvconf and libsystemd's public C APIs. */
-static int native_settings_read_checked(int (*match)(const char *, const char *, const char *, const char *)) {
-    void *vc = dlopen("libvconf.so.0", RTLD_NOW | RTLD_LOCAL), *sd = dlopen("libsystemd.so.0", RTLD_NOW | RTLD_LOCAL);
-    if (!vc || !sd) { if (vc) dlclose(vc); if (sd) dlclose(sd); return 0; }
-    char *(*get_str)(const char *) = NULL;
-    int (*open_system)(void **) = NULL, (*set_timeout)(void *, uint64_t) = NULL;
-    int (*call)(void *, const char *, const char *, const char *, const char *, void *, void **, const char *, ...) = NULL;
-    int (*read_reply)(void *, const char *, ...) = NULL;
-    void *(*unref_bus)(void *) = NULL, *(*unref_message)(void *) = NULL;
-#define NG_LOAD(handle, pointer, symbol) do { *(void **)(&pointer) = dlsym(handle, symbol); if (!pointer) goto missing; } while (0)
-    NG_LOAD(vc, get_str, "vconf_get_str");
-    NG_LOAD(sd, open_system, "sd_bus_open_system");
-    NG_LOAD(sd, set_timeout, "sd_bus_set_method_call_timeout");
-    NG_LOAD(sd, call, "sd_bus_call_method");
-    NG_LOAD(sd, read_reply, "sd_bus_message_read");
-    NG_LOAD(sd, unref_bus, "sd_bus_unref");
-    NG_LOAD(sd, unref_message, "sd_bus_message_unref");
-#undef NG_LOAD
-    {
-        char *source = get_str("db/boot/last_service"), *isp = get_str("db/was/isp_app_id");
-        void *bus = NULL, *reply = NULL; const char *power = NULL;
-        int rc = open_system(&bus);
-        if (rc >= 0) rc = set_timeout(bus, 2000000);
-        if (rc >= 0) rc = call(bus, "org.tizen.system.deviced", "/Org/Tizen/System/DeviceD/Display",
-                               "org.tizen.system.deviced.display", "GetState", NULL, &reply, "");
-        if (rc >= 0) rc = read_reply(reply, "s", &power);
-        if (rc <= 0) power = NULL;
-        char *foreground = get_str("memory/appfw/current_fullscreen_appid");
-        printf("native-values source=%s isp=%s power=%s foreground=[%s]\n", source ? source : "<missing>",
-               isp ? isp : "<missing>", power ? power : "<missing>", foreground ? foreground : "<missing>");
-        int ok = match(source, isp, power, foreground);
-        free(source); free(isp); free(foreground);
-        if (reply) unref_message(reply);
-        if (bus) unref_bus(bus);
-        dlclose(sd); dlclose(vc); return ok;
-    }
-missing:
-    dlclose(sd); dlclose(vc); return 0;
-}
-static int native_settings_read(void) { return native_settings_read_checked(native_settings_match); }
-/* Remote power-button restarts can begin in normal mode with the display still
- * in standby. Do not draw over standby or the TV viewer. Wait for lcdon, ask the
- * signed Hub to retire the viewer through Samsung's app lifecycle, then admit
- * only over that Hub. A different source, ISP owner or foreground app cancels.
- * This runs before EFL/Chromium initialization, bounded by both uptime and wall
- * time; it is not a new rule for manual entry or the early background path. */
-enum { NORMAL_WAIT, NORMAL_LAUNCH, NORMAL_READY, NORMAL_CANCEL };
-static int normal_state;
-static int normal_settings_note(const char *source, const char *isp, const char *power, const char *fg) {
-    normal_state = NORMAL_WAIT;
-    if ((source && strcmp(source, REARM_SOURCE)) || (isp && strcmp(isp, HUB_WEB_APP)) ||
-        (fg && *fg && strcmp(fg, HUB_WEB_APP) && strcmp(fg, TV_VIEWER))) normal_state = NORMAL_CANCEL;
-    else if (source && isp && power && fg && !strcmp(power, "lcdon"))
-        normal_state = !strcmp(fg, HUB_WEB_APP) ? NORMAL_READY : NORMAL_LAUNCH;
-    return normal_state == NORMAL_READY;
-}
-static int normal_launch_web(void) {
-    char uid[16]; snprintf(uid, sizeof uid, "%u", (unsigned)getuid());
-    char *args[] = { "app_launcher", "-s", HUB_WEB_APP, "-u", uid, "__NO_LOADING_LAUNCH", "enable", NULL };
-    posix_spawn_file_actions_t actions; pid_t pid;
-    posix_spawn_file_actions_init(&actions);
-    posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY, 0);
-    posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0);
-    int result = posix_spawn(&pid, APP_LAUNCHER, &actions, NULL, args, environ);
-    posix_spawn_file_actions_destroy(&actions);
-    if (result) return 0;
-    double until = now() + 8;
-    for (;;) {
-        int status = 0; pid_t r = waitpid(pid, &status, WNOHANG);
-        if (r == pid) return WIFEXITED(status) && !WEXITSTATUS(status);
-        if ((r < 0 && errno != EINTR) || now() >= until) {
-            kill(pid, SIGKILL);
-            while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {}
-            return 0;
-        }
-        struct timespec delay = { 0, 100000000 }; nanosleep(&delay, NULL);
-    }
-}
-static int normal_boot_guard(void) {
-    double up = ng_uptime();
-    if (up < 0 || up >= 120 || !ng_marker()) return 0;
-    double until = now() + (120 - up < NORMAL_BOOT_WAIT_LIMIT ? 120 - up : NORMAL_BOOT_WAIT_LIMIT);
-    alarm((unsigned)(until - now()) + 2); /* Grace for the last bounded sleep. */
-    ng_stamp("normal-boot-wait");
-    double launch_due = 0; int submitted = 0;
-    while (now() < until && ng_marker()) {
-        up = ng_uptime(); if (up < 0 || up >= 120) break;
-        if (ng_display()) {
-            normal_state = NORMAL_WAIT;
-            int ready = native_settings_read_checked(normal_settings_note);
-            if (normal_state == NORMAL_CANCEL) { ng_stamp("normal-boot-cancelled"); break; }
-            if (ready) {
-                /* The IPC can span the deadline or a cancellation. */
-                if (now() >= until || !ng_marker() || !ng_display()) break;
-                alarm(0); ng_stamp("normal-boot-handoff-ready"); return 1;
-            }
-            if (normal_state == NORMAL_LAUNCH && !submitted && now() >= launch_due && now() + 9 < until) {
-                submitted = normal_launch_web();
-                ng_stamp(submitted ? "normal-boot-web-submitted" : "normal-boot-web-retry");
-                launch_due = now() + 5;
-            }
-        }
-        struct timespec delay = { 0, 200000000 }; nanosleep(&delay, NULL);
-    }
-    alarm(0); return 0;
-}
-static int native_boot_guard(void) {
-    if (access(NORMAL_MODE_PATH, F_OK) == 0) return normal_boot_guard();
-    double up = ng_uptime();
-    if (up < 0 || up >= 46 || !ng_marker()) return 0;
-    alarm((unsigned)(46 - up) + 1); /* Bounds all admission, including library IPC. */
-    while (!ng_display()) {
-        up = ng_uptime(); if (up < 0 || up >= 46 || !ng_marker()) return 0;
-        struct timespec delay = { 0, 200000000 }; nanosleep(&delay, NULL);
-    }
-    ng_stamp("native-compositor-ready");
-    if (!native_settings_read()) return 0;
-    up = ng_uptime();
-    int ok = up >= 0 && up < 46 && ng_marker() && ng_display();
-    alarm(0); return ok;
-}
+#include "../common/platform-core.h"
+static int native_boot_guard(void) { return platform_boot_guard(); }
 
 /* ---- Saved-source re-arm and Home predicates (hub-platform.h) ---- */
-static int home_settings_match(const char *source, const char *isp, const char *power, const char *foreground) {
-    return source && isp && power && foreground && !strcmp(source, "isp-service") && !strcmp(isp, HUB_WEB_APP) && !strcmp(power, "lcdon");
-}
 /* Recheck after hidden rendering: never replace an app/source selected while loading. */
 static int presentation_settings_match(const char *source, const char *isp, const char *power, const char *foreground) {
     return home_settings_match(source, isp, power, foreground) &&
@@ -207,52 +67,6 @@ static int home_settings_note(const char *source, const char *isp, const char *p
         !strcmp(isp, HUB_WEB_APP) && !strcmp(power, "lcdon");
     return home_settings_match(source, isp, power, foreground);
 }
-enum { REARM_OK = 0, REARM_NEEDED = 1, REARM_FOREGROUND = 2, REARM_NOT_ISP = 3, REARM_FAILED = 4, REARM_UNREADABLE = 5 };
-typedef struct { int result, viewer; char previous[64]; } RearmReport;
-static int rearm_decision(const char *isp, const char *last, const char *foreground) {
-    if (!isp || !last || !foreground) return REARM_UNREADABLE;
-    if (strcmp(isp, HUB_WEB_APP)) return REARM_NOT_ISP;
-    return strcmp(last, REARM_SOURCE) ? REARM_NEEDED : REARM_OK;
-}
-static RearmReport source_rearm(char *(*get)(const char *), int (*set)(const char *, const char *)) {
-    RearmReport r = { REARM_UNREADABLE, 0, "" };
-    if (!get || !set) return r;
-    char *isp = get("db/was/isp_app_id"), *last = get("db/boot/last_service"), *fg = get("memory/appfw/current_fullscreen_appid");
-    if (last) snprintf(r.previous, sizeof r.previous, "%s", last);
-    r.result = rearm_decision(isp, last, fg); r.viewer = fg && !strcmp(fg, TV_VIEWER);
-    if (r.result == REARM_NEEDED) {
-        char *check = NULL;
-        if (set("db/boot/last_service", REARM_SOURCE) != 0 || !(check = get("db/boot/last_service")) || strcmp(check, REARM_SOURCE))
-            r.result = REARM_FAILED;
-        free(check);
-    }
-    free(isp); free(last); free(fg); return r;
-}
-static const char *rearm_name(int result) {
-    static const char *names[] = { "ok", "rearmed", "skipped-foreground", "not-isp", "failed", "unreadable" };
-    return result >= 0 && result <= 5 ? names[result] : "unknown";
-}
-static int vconf_api(char *(**get)(const char *), int (**set)(const char *, const char *)) {
-    void *vc = dlopen("libvconf.so.0", RTLD_NOW | RTLD_LOCAL);
-    if (!vc) return 0;
-    *(void **)get = dlsym(vc, "vconf_get_str"); *(void **)set = dlsym(vc, "vconf_set_str");
-    return *get && *set;
-}
-/* Normal-init boots (launcher not dispatched): every 15 s for at most 15 min. */
-static int source_rearm_wait(void) {
-    char *(*get)(const char *) = NULL; int (*set)(const char *, const char *) = NULL;
-    if (!vconf_api(&get, &set)) return 10;
-    for (int i = 0; i < 60; i++) {
-        alarm(10); RearmReport r = source_rearm(get, set); alarm(0);
-        if (r.result != REARM_UNREADABLE) {
-            printf("source-rearm %s previous=%s\n", rearm_name(r.result), r.previous); fflush(stdout);
-            return r.result == REARM_FAILED ? 11 : 0;
-        }
-        sleep(15);
-    }
-    puts("source-rearm gave-up"); return 12;
-}
-
 /* ---- Persistent platform worker (fd 3; one-line text replies) ----
  *   P -> "P <safe>"                                  hidden-window presentation
  *   S -> "S <status> <safe> <foreground>"            strict boot predicates
@@ -285,7 +99,7 @@ static int launcher_worker(void) {
             free(fg);
         } else if (command == 'R') {
             alarm(5);
-            RearmReport r = source_rearm(get, set);
+            RearmReport r = source_rearm(get, set, 0);
             for (char *p = r.previous; *p; p++) if (*p == ' ' || *p == '\n') *p = '_';
             snprintf(line, sizeof line, "R %d %d %s\n", r.result, r.viewer, r.previous);
         } else if (command == 'W') {
@@ -300,17 +114,12 @@ static int launcher_worker(void) {
         } else if (command == 'F') {
             alarm(12);
             char uid[16]; snprintf(uid, sizeof uid, "%u", (unsigned)getuid());
-            char *args[] = { "app_launcher", "-s", HUB_WEB_APP, "-u", uid, "__NO_LOADING_LAUNCH", "enable", NULL };
-            posix_spawn_file_actions_t actions; pid_t pid; int status = 0, ok = 0;
-            posix_spawn_file_actions_init(&actions);
-            posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY, 0);
-            posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0);
-            if (!posix_spawn(&pid, APP_LAUNCHER, &actions, NULL, args, environ)) {
-                pid_t r;
-                do { r = waitpid(pid, &status, 0); } while (r < 0 && errno == EINTR);
-                ok = r == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+            pid_t pid; int status = 0, ok = 0;
+            if (!platform_spawn_app(&pid, APP_LAUNCHER, HUB_WEB_APP, uid, 1, 1)) {
+                pid_t result;
+                do { result = waitpid(pid, &status, 0); } while (result < 0 && errno == EINTR);
+                ok = result == pid && WIFEXITED(status) && !WEXITSTATUS(status);
             }
-            posix_spawn_file_actions_destroy(&actions);
             snprintf(line, sizeof line, "F %d\n", ok);
         } else return 2;
         size_t n = strlen(line); const char *p = line;
@@ -433,9 +242,8 @@ static void lw_close(void) {
 }
 static int lw_start(void) {
     int pair[2];
-    if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair)) return 0;
-    if (pair[1] == 3) { int moved = dup(pair[1]); close(pair[1]); if (moved < 0) { close(pair[0]); return 0; } pair[1] = moved; }
-    fcntl(pair[0], F_SETFD, FD_CLOEXEC); fcntl(pair[1], F_SETFD, FD_CLOEXEC);
+    if (platform_socketpair(pair)) return 0;
+    if (pair[1] == 3) { int moved = fcntl(pair[1], F_DUPFD_CLOEXEC, 4); close(pair[1]); if (moved < 0) { close(pair[0]); return 0; } pair[1] = moved; }
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_adddup2(&actions, pair[1], 3); /* dup2 clears close-on-exec on fd 3. */

@@ -40,7 +40,7 @@ static int read_stat(const char *path, char *comm, size_t size, char *state, int
     if (!f) return 0;
     size_t n = fread(line, 1, sizeof line - 1, f); fclose(f); line[n] = 0;
     char *open = strchr(line, '('), *close = strrchr(line, ')');
-    if (!open || !close || close < open) return 0;
+    if (!size || !open || !close || close <= open || close[1] != ' ' || !close[2]) return 0;
     size_t length = (size_t)(close - open - 1) < size - 1 ? (size_t)(close - open - 1) : size - 1;
     memcpy(comm, open + 1, length); comm[length] = 0;
     for (char *p = comm; *p; p++) if (*p == '\t' || *p == '\n') *p = ' ';
@@ -48,7 +48,7 @@ static int read_stat(const char *path, char *comm, size_t size, char *state, int
      * cminflt majflt cmajflt utime stime cutime cstime priority nice threads
      * itrealvalue starttime vsize rss. */
     unsigned long long v[21] = { 0 }; int field = 0;
-    char *p = close + 2; *state = *p;
+    char *p = close + 2; if (p[1] != ' ') return 0; *state = *p;
     for (char *token = strtok(p + 2, " "); token && field < 21; token = strtok(NULL, " ")) v[field++] = strtoull(token, NULL, 10);
     if (field < 21) return 0;
     *ppid = (int)v[0];

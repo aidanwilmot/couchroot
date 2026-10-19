@@ -22,10 +22,10 @@ for program in host:minimal-hub-webview procsample:minimal-hub-procsample; do
 threads=
 [ "${program%%:*}" = host ] && threads="-Wl,--no-as-needed -lpthread -Wl,--as-needed"
 docker run --rm --platform linux/amd64 --network none \
-  -v "$source_dir:/src:ro" -v "$WEBVIEW_OUTPUT_DIR:/out" samsung-native-collector:bullseye \
+  -v "$source_dir/..:/src:ro" -v "$WEBVIEW_OUTPUT_DIR:/out" samsung-native-collector:bullseye \
   arm-linux-gnueabi-gcc -std=c99 -O2 -Wall -Wextra -Werror \
   -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp \
-  "/src/${program%%:*}.c" -ldl $threads -o "/out/${program#*:}"
+  "/src/webview/${program%%:*}.c" -ldl $threads -o "/out/${program#*:}"
 docker run --rm --platform linux/amd64 --network none \
   -v "$WEBVIEW_OUTPUT_DIR:/out:ro" samsung-native-collector:bullseye \
   arm-linux-gnueabi-readelf -V "/out/${program#*:}" | python3 -c '

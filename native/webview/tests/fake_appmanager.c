@@ -24,7 +24,12 @@ int app_manager_foreach_app_info(bool (*callback)(void *, void *), void *data) {
     return 0;
 }
 int app_info_get_app_id(void *app, char **out) { *out = copy(((App *)app)->id); return 0; }
-int app_info_get_package(void *app, char **out) { *out = copy(((App *)app)->package); return 0; }
+int app_info_get_package(void *app, char **out) {
+ if(getenv("FAKE_OVERSIZE_PACKAGE") && !strcmp(((App*)app)->id,"org.tizen.netflix-app")) {
+  *out=malloc(2049);memset(*out,'x',2048);(*out)[2048]=0;
+ } else *out=copy(((App*)app)->package);
+ return 0;
+}
 int app_info_get_label(void *app, char **out) { *out = copy(((App *)app)->label); return 0; }
 int app_info_get_icon(void *app, char **out) { *out = copy(((App *)app)->icon); return 0; }
 int app_info_is_nodisplay(void *app, bool *out) { *out = ((App *)app)->hidden; return 0; }

@@ -256,6 +256,11 @@ class HostTests(unittest.TestCase):
         self.assertEqual(replies, [{"v": 1, "id": "r9", "ok": False,
                                     "error": {"name": "UnknownError", "message": "Installed apps could not be listed."}}])
 
+    def test_bridge_discovery_rejects_truncated_package_metadata(self):
+        _, replies = self.bridge("hubbridge:1:r9:discover", FAKE_OVERSIZE_PACKAGE="1")
+        self.assertFalse(replies[0]['ok'])
+        self.assertEqual(replies[0]['error']['name'],'UnknownError')
+
     def test_bridge_launch_uses_quiet_hint_except_samsung_home(self):
         _, replies = self.bridge("hubbridge:1:r2:launch:kIciSQlYEM.plex")
         self.assertEqual(replies, [{"v": 1, "id": "r2", "ok": True}])

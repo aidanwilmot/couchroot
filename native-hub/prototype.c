@@ -68,13 +68,13 @@ static void paint(Obj *ee){(void)ee;if(!painted++){stamp("first-render-complete"
  * pipe, and its own process group lets a deadline kill supervisor and launcher together. */
 static const char *hub_launcher=HUB_LAUNCHER;
 static pid_t launcher_spawn(const char *id,int *fd){
- int fds[2];if(pipe(fds))return -1;
- fcntl(fds[0],F_SETFL,O_NONBLOCK);fcntl(fds[0],F_SETFD,FD_CLOEXEC);fcntl(fds[1],F_SETFD,FD_CLOEXEC);
+ int fds[2];if(platform_pipe(fds))return -1;
+ fcntl(fds[0],F_SETFL,O_NONBLOCK);
  pid_t child=fork();
  if(child==0){
   close(fds[0]);setpgid(0,0);signal(SIGCHLD,SIG_DFL);
   sigset_t empty;sigemptyset(&empty);sigprocmask(SIG_SETMASK,&empty,0);
-  pid_t app=fork();if(app==0){close(fds[1]);execl(hub_launcher,"app_launcher","-s",id,"-u","5001","__NO_LOADING_LAUNCH","enable",(char*)0);_exit(127);}
+  pid_t app=-1;if(platform_spawn_app(&app,hub_launcher,id,"5001",1,0))app=-1;
   int status=0;pid_t r=-1;if(app>0)do{r=waitpid(app,&status,0);}while(r<0&&errno==EINTR);
   unsigned char ok=(r==app&&r>0&&WIFEXITED(status)&&WEXITSTATUS(status)==0)?1:2;
   if(write(fds[1],&ok,1)<0)_exit(3);close(fds[1]);_exit(0);
