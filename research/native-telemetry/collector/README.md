@@ -17,7 +17,7 @@ bootstrap, journaled installation/recovery and the retained managed settings
 adapter are implemented and locally tested. Hardware acceptance and deployment
 of that integration remain outstanding. The managed service remains the deployed
 and rollback path. Earlier bounded trials are recorded in the
-[hardware findings](../../../docs/research/native-service-research.md).
+[hardware findings](../../../docs/lab/research/native-service-research.md).
 
 The [QN90A local integration candidate](../../../docs/guides/native-telemetry.md)
 documents preparation, installation, marker handoff and recovery. Its `--native-handoff` mode

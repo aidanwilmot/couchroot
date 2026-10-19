@@ -86,7 +86,7 @@ measurements, rather than assume another optional service is responsible.
 
 ## Evidence and verification
 
-Sanitized timings: [inventory](../../../inventory/qn90a-web-startup-20260922.json).
+Sanitized timings: [inventory](../../../../inventory/qn90a-web-startup-20260922.json).
 Private source snapshots, signed recovery artifacts, journals, native captures,
 and storage archives are under
 `~/.local/share/samsung-tv-research/qn90a/web-startup-profiling/20260922T164316Z/`.

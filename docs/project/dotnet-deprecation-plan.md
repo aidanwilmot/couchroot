@@ -1,4 +1,4 @@
-# Couchroot home-use scope: QN90A basic telemetry
+# Couchroot .NET deprecation plan
 
 Accepted 2026-10-17; status clarified 2026-10-19. Implementation and validation of
 this telemetry integration are local only. No TV or NAS deployment or hardware acceptance
@@ -67,7 +67,7 @@ removal are deferred; do not treat the old root-worker deferral as current statu
 
 Keep existing helpers, manual diagnostics, exact artifacts and executable paths
 needed by installations and recovery journals. Preserve current S90D recovery;
-see its [boot assessment](../devices/s90d/native-boot-assessment.md). Keep only the
+see its [boot assessment](../lab/devices/s90d/native-boot-assessment.md). Keep only the
 active candidate and known-good rollback as supported choices, without deleting
 retained recovery evidence. Freeze new managed features while allowing necessary
 compatibility fixes. Do not add a backend, supervisor, message bus, capability
@@ -84,7 +84,7 @@ These observations explain the scope decision; they are not unfinished tasks.
    had passed short ingestion/rollback trials on both TVs. Recorded RSS was
    2.98–3.88 MiB versus managed snapshots of 22.77–24.29 MiB. Those were individual
    process measurements, not total-TV savings or long-term acceptance; see the
-   [trial evidence](../research/native-service-research.md).
+   [trial evidence](../lab/research/native-service-research.md).
 3. Native counters lacked managed inspector snapshots, and startup/settings
    integration was unfinished. The accepted scope subsequently retired QN90A
    inspector collection and integrated the existing settings adapter locally.

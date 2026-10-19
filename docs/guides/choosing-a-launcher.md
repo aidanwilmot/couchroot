@@ -69,7 +69,7 @@ S90D and other firmware have not been verified.
   session. S90D uses its own AT-HUB splash helper, not the QN90A boot hook.
 - You need the web-only features (sound, hold-OK, fade, telemetry relay, saver).
 
-The [2026-10-12 S90D assessment](../devices/s90d/native-boot-assessment.md)
+The [2026-10-12 S90D assessment](../lab/devices/s90d/native-boot-assessment.md)
 recommends keeping web startup and measuring panel visibility and remote readiness
 before changing the splash path. It does not establish a native boot-speed gain.
 
@@ -119,7 +119,7 @@ both addressed in 2026-10:
    front of the native dispatch. The dispatch now runs first; the other layers still
    run afterwards, in the same order.
 
-See [QN90A boot performance](../devices/qn90a/boot-performance.md) for the
+See [QN90A boot performance](../lab/devices/qn90a/boot-performance.md) for the
 measurements, the evidence, and the remaining limits.
 
 ## The QN90A Live TV trap (both launchers)

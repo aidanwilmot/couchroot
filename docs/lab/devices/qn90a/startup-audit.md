@@ -40,7 +40,7 @@ milestones. That number is not the time to a usable Hub. Service lifetime,
 Type=simple activation and accumulated CPU likewise must not be reported as
 visible startup latency.
 
-The [previous two successful full-reboot trials](../../../research/qn90a-hub-boot/README.md)
+The [previous two successful full-reboot trials](../../../../research/qn90a-hub-boot/README.md)
 show startup relay entry at 18.32–18.38 s, Hub requests at 25.48–25.69 s, and Hub
 foreground at 43.67–44.99 s. The relay requires five seconds of stable readiness
 plus timer observations, contributing roughly six seconds after the first ready

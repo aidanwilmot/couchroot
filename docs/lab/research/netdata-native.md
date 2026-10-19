@@ -88,7 +88,7 @@ QN90A native Netdata, cold reboot, standby/wake and physical remote/playback
 acceptance remain unverified. No permanent cutover was made.
 
 Source, pinned preparation and recovery commands are in
-[`research/native-telemetry/netdata`](../../research/native-telemetry/netdata/README.md).
+[`research/native-telemetry/netdata`](../../../research/native-telemetry/netdata/README.md).
 Private journals retain:
 
 - `20260921T171925Z-3b90a9cf`: runtime-directory startup failure, cleaned.

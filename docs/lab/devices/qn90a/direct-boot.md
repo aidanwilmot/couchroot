@@ -43,7 +43,7 @@ application preference cannot remove this explicit launch request.
 
 The previous measured viewer/context-manager start times of 1.376/2.740 seconds
 are therefore consistent with the script chain and the failed viewer-event
-hooks. Those timings are from the [earlier boot trials](../../../research/qn90a-hub-boot/README.md),
+hooks. Those timings are from the [earlier boot trials](../../../../research/qn90a-hub-boot/README.md),
 not a new reboot during this investigation.
 
 ### 2. Initial boot deliberately skips the configurable first-screen job

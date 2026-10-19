@@ -6,10 +6,10 @@
 > native boot-hook installation and journaled recovery with offline validation.
 > It has not been deployed or hardware-tested; existing private trials still use
 > their original retained drivers for recovery.
-> Use the [web Hub](../web/) for a supported installation, and see
+> Use the [web Hub](../web) for a supported installation, and see
 > [choosing a launcher](../docs/guides/choosing-a-launcher.md).
 
-The [S90D offline assessment](../docs/devices/s90d/native-boot-assessment.md)
+The [S90D offline assessment](../docs/lab/devices/s90d/native-boot-assessment.md)
 defers a graphical port: web startup already precedes the splash/resume gate,
 and panel-visible/input-ready times remain unknown. S90D native headless-service
 evidence is separate from graphical Hub compatibility.
@@ -22,7 +22,7 @@ Private hardware evidence and guarded trial drivers are stored under REA-19.
 The native executable runs as owner UID 5001 in the previously verified private
 read-only VDFS view. Ordinary writable-path execution is rejected even inside a
 developer-signed package on this firmware. See the
-[native execution findings](../docs/research/native-service-research.md).
+[native execution findings](../docs/lab/research/native-service-research.md).
 No Samsung library, executable, signing material or compiled artifact is included.
 
 ## Native parity candidate (QN90A cold-boot tested)

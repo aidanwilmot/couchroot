@@ -146,7 +146,7 @@ normal startup setting. A later combined trial would need separate measurements
 and recovery checks. Actual AC cold-start time, playback and casting remain
 outside these results.
 
-The [sanitized inventory](../../../inventory/qn90a-startup-disable-tests-20260922.json)
+The [sanitized inventory](../../../../inventory/qn90a-startup-disable-tests-20260922.json)
 contains each trial's relay timing, startup conditions, failed-unit observations
 and final restoration checks. Raw device identities and logs remain private.
 

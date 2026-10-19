@@ -260,7 +260,7 @@ Commands are encoded to preserve shell bytes through the older root worker.
 This action alone does not select a startup source or suppress Live TV. Combined
 with the signed ISP-bound Hub trial, one supervised QN90A reboot reached Hub at
 about 118 seconds without Live TV picture/audio or user intervention. The long
-blank wait remains a limitation. See the [direct-boot results](../../docs/devices/qn90a/direct-boot.md#supervised-isp-source--autonomous-agent-trial--2026-10-11)
+blank wait remains a limitation. See the [direct-boot results](../../docs/lab/devices/qn90a/direct-boot.md#supervised-isp-source--autonomous-agent-trial--2026-10-11)
 for exact boundaries, status-window limitations and recovery.
 
 `tvsetup.agent_transport.AgentTransport` is an explicit certificate-pinned
@@ -279,7 +279,7 @@ is pending. The override is in the local registration database, not the signed
 0.1.6 manifest, and may need deliberate reapplication after package replacement.
 The exact AMD library contains a 90-second user-login fallback consistent with
 the remaining delay; its execution was not dynamically traced. See the
-[queue investigation](../../docs/devices/qn90a/direct-boot.md#startup-queue-investigation--2026-10-11).
+[queue investigation](../../docs/lab/devices/qn90a/direct-boot.md#startup-queue-investigation--2026-10-11).
 
 ## Journal rotation update — QN90A 0.1.7
 

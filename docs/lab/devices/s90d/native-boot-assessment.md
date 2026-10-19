@@ -60,7 +60,7 @@ software acknowledgement/resume/foreground timestamps. Do not pool boot types.
 Only if the splash handoff tracks visible and usable Hub time should an earlier
 splash launch or Samsung's splash scheduling policy be tested, one change at a
 time. Neither trial is implemented or authorized here. Use a fresh
-[recovery checkpoint](../../guides/s90d-boot-recovery.md) for each trial. It restores
+[recovery checkpoint](../../../guides/s90d-boot-recovery.md) for each trial. It restores
 the exact prior composite or patched cache; the old splash-only rollback is not
 compatible with that goal. A checkpoint restores next-boot configuration, not an
 already-running helper or overlay.
