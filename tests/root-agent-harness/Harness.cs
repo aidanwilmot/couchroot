@@ -12,7 +12,7 @@ internal static partial class SamsungTvRootAgent
     private static void Reject(Action action,string message){try{action();}catch(ArgumentException){return;}catch(InvalidDataException){return;}catch(IOException){return;}throw new Exception(message);}
     private static void TestReadOpenFlags()
     {
-        Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.Arm) == 0x8800, "ARM32 O_NOFOLLOW differs");
+        Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.Arm) == 0x28800, "ARM32 O_NOFOLLOW/O_LARGEFILE differ");
         Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.Arm64) == 0x8800, "ARM64 flags differ");
         Check(ReadOpenFlags(false, System.Runtime.InteropServices.Architecture.X64) == 0x20800, "x64 flags differ");
         Check(ReadOpenFlags(true, System.Runtime.InteropServices.Architecture.Arm64) == 0x104, "Darwin flags differ");

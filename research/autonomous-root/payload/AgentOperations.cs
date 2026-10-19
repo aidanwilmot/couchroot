@@ -11,7 +11,11 @@ internal static partial class SamsungTvRootAgent
     // Linux ARM32 and ARM64 assign O_NOFOLLOW differently from x86.
     private static int ReadOpenFlags(bool macOS, Architecture architecture)
     {
-        return macOS ? 0x104 : ((architecture == Architecture.Arm || architecture == Architecture.Arm64) ? 0x8000 : 0x20000) | 0x800;
+        if (macOS) return 0x104;
+        int noFollow = architecture == Architecture.Arm || architecture == Architecture.Arm64 ? 0x8000 : 0x20000;
+        // ARM32 still needs O_LARGEFILE for the allowed two-GiB boundary.
+        int largeFile = architecture == Architecture.Arm ? 0x20000 : 0;
+        return noFollow | largeFile | 0x800; // O_NONBLOCK
     }
     private static readonly string WorkerId = Guid.NewGuid().ToString("N");
     private const int ChunkBytes = 1024 * 1024;
