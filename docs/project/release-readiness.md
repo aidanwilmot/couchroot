@@ -123,20 +123,41 @@ manifested DLLs (including generated model-specific runners and ten QN90A cleanu
 variants) and the unsigned Hub package from two paths. It does not certify signed
 package reproducibility or S90D vendor-linked renderer bytes.
 
+The checks can also run independently. Web packaging and the Python/Node test
+suites do not require .NET. The three managed harness scripts must be run
+explicitly; importing them during Python discovery does not execute their tests.
+
 ```sh
-python3 scripts/check-dependencies.py
+python3 scripts/check-dependencies.py --component offline
+python3 scripts/check-dependencies.py --component web
 python3 -m unittest discover -s tests -p '*_test.py'
 python3 -m unittest discover -s research/s90d-telemetry/tests
 npm ci
 npx playwright install chromium
 npm test
+python3 scripts/check-reproducible.py --component web
+
+python3 scripts/check-dependencies.py --component managed
+python3 tests/telemetry_service_test.py
+python3 tests/inspector_collector_test.py
 python3 tests/qn90a_boot_relay_test.py
-python3 scripts/check-reproducible.py
+python3 scripts/check-reproducible.py --component managed
 ```
 
-CI is configured for macOS/Linux with Python 3.12 and 3.14, Node 22, pinned .NET,
-native builds and Chromium. A separate Emscripten job builds the QN90A saver. These
-hosted jobs have **not been run remotely** during this task. No secrets or vendor
+`check-dependencies.py` still defaults to `--component setup`, which requires the
+pinned SDK for full setup. `--component prepare` checks Python/platform only;
+native source compilation and preference conversion additionally need Docker
+and Node respectively. These checks do not validate device enrollment.
+
+CI's `web-and-offline` job runs on macOS/Linux with Python 3.12 and 3.14, Node 22
+and Chromium. It blocks `dotnet` calls even if the hosted runner has an SDK
+preinstalled. The separate `managed` job runs the three C# harnesses and managed
+cross-path builds on macOS/Linux with Python 3.12 and the pinned .NET SDK. Build
+manifests include only declared outputs, excluding stale DLLs from other research
+builds. Separate reports are `dist/reproducibility-web.json` and
+`dist/reproducibility-managed.json`; the default combined command retains
+`dist/reproducibility.json`. A separate Emscripten job builds the QN90A saver. These
+hosted jobs have **not been run remotely** during this change. No secrets or vendor
 libraries are supplied, and no workflow signs, deploys or publishes. The S90D
 GLES-linked renderer is intentionally excluded from public CI pending a reviewed
 vendor-library arrangement and reproducible compiler/sysroot recipe.

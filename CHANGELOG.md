@@ -2,6 +2,35 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Clarify the QN90A telemetry implementation/acceptance docs, run web CI once per
+  OS, and refuse existing staging with a direct path check instead of directory
+  hashing. Preserve explicit recovery and record the local validation and review
+  groups in the [cleanup tracker](docs/project/qn90a-cleanup-plan.md).
+
+- Narrow the home-use milestone to QN90A basic telemetry with the existing signed
+  settings adapter and journaled recovery. Retire continuous QN90A inspector
+  collection and suppress old inventory at ingestion and in the dashboard.
+  Preserve basic counters/history, S90D behavior and existing recovery tools.
+  Wait for queued telemetry handoffs and allow an explicit rollback to retry
+  its exact failed recovery helper after confirming the process has stopped.
+  Defer other helper, boot and root-worker rewrites. Local validation only;
+  no TV or NAS deployment. See [accepted scope](docs/project/dotnet-deprecation-plan.md).
+
+- Reconcile S90D boot documentation with the offline 2026-10-12 assessment:
+  distinguish process events, splash acknowledgement and unmeasured physical UI
+  readiness; defer the native graphical port. Add single-change boot recovery
+  checkpoints for exact composite-helper or patched-cache restoration, using
+  shared setup journals, locks and identity checks. Offline-tested only; no TV
+  access, boot trial or hardware validation was performed.
+
+- Add `couchroot-install` for explicit web/native selection, offline preparation,
+  scoped web setup and enrolled QN90A native boot-hook installation/recovery.
+  Native uses immutable per-run captures, verified staging, an atomic final hook
+  switch and shared resume/rollback journals. Existing preferences and the web
+  fallback are retained. Native failure falls through to the original boot chain.
+  This new backend is offline-tested only; no TV deployment or hardware acceptance
+  has been performed. See [native installation](docs/guides/native-installation.md).
+
 - Add the experimental native Hub (`native-hub/`, QN90A only). It is an Ecore/Evas
   launcher started from the earliest boot hook. QN90A software time to a rendered Hub
   is 8.8–10.1 s across five reboots; the best web path was about 37–47 s.

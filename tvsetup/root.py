@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import tarfile
 import tempfile
 from .common import PRIVATE, REPO, Refused, lock, run, sha
-from .transport import guard, hash_guard, Q
+from .transport import managed_guard, hash_guard, Q
 from .toolkit import load
 
 BASE = '/home/owner/share/tmp/sdk_tools/'
@@ -63,7 +63,7 @@ def execute(profile, script, cleanup_index=None):
     cfg = dict(tv_host=profile['host'], expected_model=profile['model'], expected_platform=profile['platform'],expected_device_id=profile['device_id'])
     probe = 'codex-qn90a-root-proof' if profile['id']=='qn90a' else 'codex-namespace-proof'
     prefix = BASE+probe
-    guards = guard(profile)+hash_guard('/usr/sbin/sdbd-tarlauncher', LAUNCHER[profile['id']])
+    guards = managed_guard(profile)+hash_guard('/usr/sbin/sdbd-tarlauncher', LAUNCHER[profile['id']])
     with lock(PRIVATE/(profile['id']+'-root-check.lock')), tempfile.TemporaryDirectory(prefix='setup-root-', dir=PRIVATE) as tmp:
         folder = Path(tmp)
         # Compile and sign locally before even creating target staging directories.

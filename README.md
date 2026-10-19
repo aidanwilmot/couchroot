@@ -5,7 +5,7 @@
 A minimal Samsung Tizen launcher, a read-only TV inspector, and an experimental
 on-TV root agent. Built through hands-on work with a QN90A and an S90D.
 
-[Get started](#try-the-launcher-on-your-computer) · [Choose a launcher](docs/guides/choosing-a-launcher.md) · [TV setup](docs/guides/tv-setup.md) ·
+[Get started](#try-the-launcher-on-your-computer) · [Choose a launcher](docs/guides/choosing-a-launcher.md) · [Installer](docs/guides/universal-installer.md) · [TV setup](docs/guides/tv-setup.md) ·
 [Root agent](research/autonomous-root/README.md) · [Sources & credits](CREDITS.md) ·
 [0BSD license](LICENSE)
 
@@ -80,6 +80,20 @@ Most people should use the **web Hub**. Choose the native Hub only for a QN90A w
 boot-to-Hub time matters and you accept an experimental, root-dependent boot path.
 The [launcher guide](docs/guides/choosing-a-launcher.md) covers the trade-offs, the
 QN90A Live TV safeguards, and [how the boot time was cut](docs/devices/qn90a/boot-performance.md).
+
+## Command-line installer
+
+Start with an offline recipe for either launcher:
+
+```sh
+./couchroot-install plan --device qn90a --launcher native
+./couchroot-install plan --device s90d --launcher web
+```
+
+The [unified installer](docs/guides/universal-installer.md) prepares review bundles
+for both launchers and installs them through the shared journaled setup engine.
+Native requires an enrolled QN90A baseline and root agent; its install/recovery
+backend is offline-tested only. Preparation does not install or contact a TV.
 
 ## Try the launcher on your computer
 

@@ -1,5 +1,15 @@
 # TV setup and reapplication (unreleased)
 
+For a separately reviewed S90D helper/cache boot trial, see
+[S90D boot checkpoints and recovery](s90d-boot-recovery.md). Its checkpoints use
+the shared device lock and journal, preserving the prior composite helper and
+patched cache rather than restoring the historical splash-only build.
+
+For launcher-focused setup, start with the [unified installer](universal-installer.md).
+It adds offline web/native preparation and a scoped web installation path on this
+shared engine. The [native boot-hook backend](native-installation.md) uses the
+same engine and locks with explicit baseline enrollment; it is offline-tested only.
+
 For a routine Hub interface update on a configured TV, use the shorter
 [UI deployment workflow](ui-deployment.md). It shares this engine’s locks,
 journals and signing checks while preserving full-setup choices.
