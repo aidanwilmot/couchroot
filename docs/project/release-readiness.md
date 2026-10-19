@@ -1,4 +1,89 @@
-# Current publication scope — 2026-10-11
+# Release candidate review — 2026-10-19
+
+Scope: an **experimental source merge**, not stable hardware acceptance. The
+release branch preserves the locally tested installer/telemetry/recovery work in
+checkpoint `28c0054` and incorporates public main `83906b4`, including its WebView
+launcher and root-agent transfer/native-launcher work. Nothing is pushed or
+installed as part of this review. Keep the original checkout for existing recovery
+runs: their source guards deliberately reject a different revision.
+
+## Findings tracker
+
+- [x] Reconcile current public main without dropping its third launcher, managed
+  root projects, binary transport or worker-readiness checks.
+- [x] Run the root-worker managed harness explicitly in the managed CI job;
+  SDK-free discovery no longer invokes it. Keep the existing Linux worker job.
+- [x] Add the collector's host build/tests to the existing Linux native job;
+  no new CI framework, vendor libraries or deployment steps.
+- [x] Fix Node 22 TLS test reuse: generate a localhost certificate and use normal
+  hostname verification. A per-request verification override isolated sockets on
+  Node 22. Preserve authentication, replay and connection-limit assertions.
+- [x] Clarify QN90A basic telemetry versus S90D inspection, pure-C installer versus
+  WebView tools, and preference retention. Historical release decisions below
+  remain dated evidence, not current merge blockers.
+- [x] Validate committed candidate `e16616d` in a clean checkout and scan the
+  publishable tree/history. The follow-up commit records documentation only.
+
+## Local validation evidence
+
+Executable source/CI candidate: `e16616d`; the follow-up record changes Markdown
+only. Logs are private, ignored files under `test-results/public-release/`.
+
+- Python 3.14: 325 setup tests passed with a failing `dotnet` stub first on PATH.
+  The stub was never invoked. The receiver passed 22 tests.
+- Node 22.23.3: all 118 tests passed, including the corrected mutual-TLS/replay
+  test. Both separate WebView JavaScript checks passed.
+- WebView Python tests: 63 discovered, 61 passed, two Linux-only cases skipped on
+  macOS. The separate Linux root-worker harness passed its process-group
+  cancellation, timeout, reboot-interruption, transfer and protocol checks.
+- Managed checks: settings adapter, QN90A inspector exclusion/S90D cadence,
+  18 relay scenarios and explicit root-worker harness passed. Source-built ARM
+  launcher embedding reproduced for QN90A and S90D.
+- Native collector: host build and all 16 tests passed in network-isolated Linux
+  containers. This exercises the host collector, not TV library compatibility.
+- All 42 declared managed assemblies and unsigned web packaging reproduced across
+  source paths. `actionlint`, changed-document links and `git diff --check` passed.
+- A source-only clone of the committed branch passed fresh `npm ci`, Node 22,
+  receiver, WebView and web reproducibility checks with private toolkit/state
+  absent. The explicit managed worker harness also passed there. Python 3.12
+  setup validation passed all 325 tests in a new virtual environment with pinned
+  requirements and .NET blocked. Its first attempt without those requirements
+  failed on missing `lxml`; the correctly provisioned rerun passed.
+
+The tracked-tree privacy heuristic found no matches in 491 source files. The
+source archive excludes ignored/private files. Gitleaks 8.30.1 found the same two
+existing passwd-related SHA-256 file hashes in both source and reachable history;
+manual review confirmed hashes, not credentials. The scoped history heuristic
+found two room-label fixture strings already reachable from public main and only
+public GitHub/noreply author addresses. No history was rewritten. These are
+limited scanner/manual-review results, not a guarantee that every disclosure risk
+has been detected. No new sensitive artifact or identity was found.
+
+## Device validation boundary
+
+Read-only checks on both enrolled TVs matched physical identity, exact firmware,
+architecture, managed runtime/host hashes and the protected root launcher hash.
+Both pinned agents were connected and ready; signed Hub and telemetry package
+paths were present. Both had the managed `enabled` marker, no `native-enabled`
+marker, and no loaded native telemetry unit. No setup journals were pending.
+Raw identities, credentials and command evidence remain in private storage.
+
+These observations validate the existing baseline and transport compatibility.
+They do **not** validate this candidate's native installation, opt-in/out, reboot
+startup or rollback on hardware. No TV/NAS deployment, restart, power transition
+or telemetry handoff was performed. S90D retains its managed collection and
+inspector path; a native S90D telemetry rewrite is outside this candidate.
+
+Before merging, review this branch's final diff and obtain a passing hosted CI
+run on the exact proposed commit. Hosted CI is still pending; this local review
+performs no push. Keep the experimental label and hardware limits in the release
+notes. Before calling the native integration hardware-accepted, complete the
+existing [native telemetry checks](../guides/native-telemetry.md) and
+[hardware acceptance procedure](../guides/hardware-acceptance.md) with separately
+authorized install/recovery/reboot trials. Do not expand this into the deferred
+root-worker, settings, boot or S90D native rewrites.
+
+# Historical publication scope — 2026-10-11
 
 Couchroot is published as experimental source with 0BSD licensing for original
 work and retained upstream notices. The owner authorized a fresh source snapshot,
@@ -123,20 +208,42 @@ manifested DLLs (including generated model-specific runners and ten QN90A cleanu
 variants) and the unsigned Hub package from two paths. It does not certify signed
 package reproducibility or S90D vendor-linked renderer bytes.
 
+The checks can also run independently. Web packaging and the Python/Node test
+suites do not require .NET. The four managed harness scripts must be run
+explicitly; importing them during Python discovery does not execute their tests.
+
 ```sh
-python3 scripts/check-dependencies.py
+python3 scripts/check-dependencies.py --component offline
+python3 scripts/check-dependencies.py --component web
 python3 -m unittest discover -s tests -p '*_test.py'
 python3 -m unittest discover -s research/s90d-telemetry/tests
 npm ci
 npx playwright install chromium
 npm test
+python3 scripts/check-reproducible.py --component web
+
+python3 scripts/check-dependencies.py --component managed
+python3 tests/telemetry_service_test.py
+python3 tests/inspector_collector_test.py
 python3 tests/qn90a_boot_relay_test.py
-python3 scripts/check-reproducible.py
+python3 tests/root_agent_worker_test.py
+python3 scripts/check-reproducible.py --component managed
 ```
 
-CI is configured for macOS/Linux with Python 3.12 and 3.14, Node 22, pinned .NET,
-native builds and Chromium. A separate Emscripten job builds the QN90A saver. These
-hosted jobs have **not been run remotely** during this task. No secrets or vendor
+`check-dependencies.py` still defaults to `--component setup`, which requires the
+pinned SDK for full setup. `--component prepare` checks Python/platform only;
+native source compilation and preference conversion additionally need Docker
+and Node respectively. These checks do not validate device enrollment.
+
+CI's `web-and-offline` job runs on macOS/Linux with Python 3.12 and 3.14, Node 22
+and Chromium. It blocks `dotnet` calls even if the hosted runner has an SDK
+preinstalled. The separate `managed` job runs the four C# harnesses and managed
+cross-path builds on macOS/Linux with Python 3.12 and the pinned .NET SDK. Build
+manifests include only declared outputs, excluding stale DLLs from other research
+builds. Separate reports are `dist/reproducibility-web.json` and
+`dist/reproducibility-managed.json`; the default combined command retains
+`dist/reproducibility.json`. A separate Emscripten job builds the QN90A saver. These
+hosted jobs have **not been run remotely** during this change. No secrets or vendor
 libraries are supplied, and no workflow signs, deploys or publishes. The S90D
 GLES-linked renderer is intentionally excluded from public CI pending a reviewed
 vendor-library arrangement and reproducible compiler/sysroot recipe.

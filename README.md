@@ -5,7 +5,7 @@
 A minimal Samsung Tizen launcher, a read-only TV inspector, and an experimental
 on-TV root agent. Built through hands-on work with a QN90A and an S90D.
 
-[Get started](#try-the-launcher-on-your-computer) · [Choose a launcher](docs/guides/choosing-a-launcher.md) · [TV setup](docs/guides/tv-setup.md) ·
+[Get started](#try-the-launcher-on-your-computer) · [Choose a launcher](docs/guides/choosing-a-launcher.md) · [Installer](docs/guides/universal-installer.md) · [TV setup](docs/guides/tv-setup.md) ·
 [Root agent](research/autonomous-root/README.md) · [Sources & credits](CREDITS.md) ·
 [0BSD license](LICENSE)
 
@@ -23,8 +23,8 @@ apps. Screenshots contain no live device data.*
   **9–10 seconds** after a reboot instead of 37–47 seconds. See
   [choosing a launcher](docs/guides/choosing-a-launcher.md) and
   [QN90A boot performance](docs/devices/qn90a/boot-performance.md).
-- **TV inspector:** read-only app, process and startup inspection alongside the
-  telemetry dashboard. See [telemetry and inspection](docs/guides/telemetry.md).
+- **Telemetry:** QN90A basic health telemetry with the existing settings adapter;
+  S90D retains read-only app, process and startup inspection in the dashboard. See [telemetry and inspection](docs/guides/telemetry.md).
 - **Autonomous root agent:** a separate signed service that reacquires a temporary
   root context through TV-local SDB. It uses certificate-pinned HTTPS, authenticated
   loopback messages, bounded retries and a durable request journal.
@@ -74,6 +74,22 @@ Keep the signed web Hub installed with either native launcher: it holds the ISP
 source role and remains a recovery path. See [choosing a launcher](docs/guides/choosing-a-launcher.md),
 [WebView behavior and recovery](native/webview/README.md), and the
 [QN90A boot measurements](docs/devices/qn90a/boot-performance.md).
+
+## Command-line installer
+
+Start with an offline recipe for the signed web or pure-native launcher:
+
+```sh
+./couchroot-install plan --device qn90a --launcher native
+./couchroot-install plan --device s90d --launcher web
+```
+
+The [unified installer](docs/guides/universal-installer.md) prepares review bundles
+for these two launchers and installs them through the shared journaled setup engine.
+`--launcher native` selects the pure C Hub; the experimental WebView has its own
+[setup and recovery tools](native/webview/README.md).
+Native requires an enrolled QN90A baseline and root agent; its install/recovery
+backend is offline-tested only. Preparation does not install or contact a TV.
 
 ## Try the launcher on your computer
 

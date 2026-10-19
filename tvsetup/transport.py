@@ -33,10 +33,17 @@ STOCK = '/usr/apps/com.samsung.tv.spotlight-ss/lib/arm/libgl-demo-app.so'
 CACHE = '/opt/etc/systemd/oneservice'
 
 
-def guard(profile):
+def identity_guard(profile):
+    """Firmware/architecture checks independent of a managed execution path."""
     script = 'set -eu\n'
     script += f"grep -qx {Q('Version='+profile['firmware']+';')} /etc/prd_info.ini\n"
     script += f'test "$(uname -m)" = {Q(profile["architecture"])}\n'
+    return script
+
+
+def managed_guard(profile):
+    """Retain the runtime and signed-host pins wherever .NET still executes."""
+    script = identity_guard(profile)
     script += f'test -d /usr/share/dotnet/shared/Microsoft.NETCore.App/{Q(profile["runtime"])}\n'
     script += hash_guard('/usr/bin/dotnet', profile['host_sha256'])
     if profile.get('launcher_sha256'): script += hash_guard('/usr/bin/dotnet-launcher', profile['launcher_sha256'])
@@ -96,7 +103,7 @@ class Transport:
         with contextlib.redirect_stdout(io.StringIO()): self.callback = device(self.cfg)
         self.client = SdbClient(PRIVATE/'bin/sdb', profile['host'])
         self.client.connect(); self.client.require_device()
-        self.sdk(guard(profile))
+        self.sdk(identity_guard(profile))
 
     def sdk(self, script, timeout=30):
         result = self.client.capture('(\n'+script+'\n)',callback_host=self.callback,bind_host=self.callback,timeout=timeout)
@@ -114,7 +121,7 @@ class Transport:
             if self.profile['id'] != 's90d': raise Refused('Writable-cache/mount-namespace operation is S90D-only')
             script = 'nsenter -t 1 -m -- sh -c '+Q('set -eu\n'+script)
         path = self.evidence / ('root-'+uuid.uuid4().hex+'.sh')
-        path.write_text(guard(self.profile)+script); path.chmod(0o600)
+        path.write_text(managed_guard(self.profile)+script); path.chmod(0o600)
         # The worker keeps Python root-transport imports isolated and bounds descendants.
         from .common import atomic_json
         configuration=path.with_suffix('.json');atomic_json(configuration,self.profile)
@@ -151,7 +158,7 @@ class Transport:
         diagnostics = {'telemetry_status': '/tmp/minimal-telemetry-'+self.profile['id']+'/status.json',
                        'boot_status': '/tmp/minimal-hub-boot/status.json' if self.profile['id']=='qn90a' else '/opt/minimal-splash/last-boot.log'}
         for name,path in diagnostics.items(): queries[name] = f'if test -r {Q(path)}; then head -c 16384 {Q(path)}; fi'
-        script = guard(self.profile)
+        script = identity_guard(self.profile)
         for name, command in queries.items():
             script += f"printf '\\nTVSETUP_BEGIN:{name}\\n'\n{command}\nprintf '\\nTVSETUP_END:{name}\\n'\n"
         output = self.sdk(script, 45)
