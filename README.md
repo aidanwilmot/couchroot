@@ -4,6 +4,7 @@
 
 A quiet home screen for Samsung Tizen TVs, with optional telemetry and tools for
 setup, administration and recovery. Built around the **QN90A** and **S90D**.
+The project is **Couchroot**; the app installed on your TV is named **Minimal Hub**.
 
 [Try it locally](#try-it-locally) · [TV setup](#put-it-on-a-tv) · [Documentation](docs/README.md) · [Release status](docs/project/release-readiness.md)
 
@@ -36,7 +37,7 @@ apps and contain no live device or account data.*
 
 ## Try it locally
 
-You need **Node.js 20+ and npm**. No TV, signing certificate or root access is
+You need **Node.js 22+ and npm**. No TV, signing certificate or root access is
 required.
 
 ```sh

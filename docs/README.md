@@ -40,7 +40,7 @@ They are not deployment instructions or acceptance of the current source.
 - [QN90A optional-app cleanup](lab/devices/qn90a/app-cleanup.md)
 - [QN90A boot performance: from ~118 s to ~10 s](lab/devices/qn90a/boot-performance.md)
 - [QN90A return after AirPlay mirroring](lab/devices/qn90a/casting.md)
-- [Why Mini Hub did not replace Live TV at cold boot](lab/devices/qn90a/direct-boot.md)
+- [Why Minimal Hub did not replace Live TV at cold boot](lab/devices/qn90a/direct-boot.md)
 - [QN90A Home key routing](lab/devices/qn90a/home.md)
 - [QN90A one-time memory cleanup](lab/devices/qn90a/overhead.md)
 - [QN90A package-image startup investigation](lab/devices/qn90a/package-images.md)
@@ -54,7 +54,7 @@ They are not deployment instructions or acceptance of the current source.
 
 ## Lab: S90D
 
-- [Samsung S90D minimal hub integration](lab/devices/s90d/README.md)
+- [Couchroot integration on Samsung S90D](lab/devices/s90d/README.md)
 - [S90D optional-app cleanup](lab/devices/s90d/app-cleanup.md)
 - [S90D boot-to-dashboard inventory design](lab/devices/s90d/boot-inventory.md)
 - [S90D native Hub feasibility — 2026-10-12](lab/devices/s90d/native-boot-assessment.md)

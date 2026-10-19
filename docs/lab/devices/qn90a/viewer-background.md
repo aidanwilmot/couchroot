@@ -142,7 +142,7 @@ The previously collected `control-one` boot provides a same-run cross-check:
 | Viewer signals `/tmp/tv-viewer_ready` | 4.004 s |
 | Viewer signals `/tmp/cb_show` | 4.015 s |
 | Viewer signals `/tmp/tv-viewer_show_done` | 4.547 s |
-| Current Mini Hub relay enters | 17.980 s |
+| Current Minimal Hub relay enters | 17.980 s |
 
 These are historical event timestamps, not a new measurement of panel display.
 The current relay is much too late to select background initialization. `/tmp`

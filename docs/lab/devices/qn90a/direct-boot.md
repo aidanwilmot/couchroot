@@ -1,4 +1,4 @@
-# Why Mini Hub did not replace Live TV at cold boot
+# Why Minimal Hub did not replace Live TV at cold boot
 
 Investigation: 2026-09-22, QN85QN90AAFXZA, T-NKM2AKUC-2301.1.
 Read-only SDK inspection and offline ARM/.NET reverse engineering. No settings,
@@ -7,7 +7,7 @@ packages, services, firmware or routing were changed; no reboot was requested.
 **The failed first-screen preference trial targeted the wrong startup path.**
 Samsung's early scripts explicitly launch TV-viewer and Samsung Home. The boot
 manager's configurable first-screen launch is skipped on initial/full boot.
-The current Mini Hub relay adds a later launch; it does not replace either early
+The current Minimal Hub relay adds a later launch; it does not replace either early
 script. This explains why saving the Hub ID successfully did not make Hub the
 initial app.
 
@@ -20,8 +20,8 @@ flowchart TD
     F --> S[firstscreen.sh: explicit Samsung Home launch]
     I --> B[systemd: app-boot-manager, initial mode]
     B --> W[Welcome process after display setup]
-    W --> R[Existing Mini Hub boot relay]
-    R --> H[Mini Hub launch and web runtime startup]
+    W --> R[Existing Minimal Hub boot relay]
+    R --> H[Minimal Hub launch and web runtime startup]
 ```
 
 These paths overlap; the diagram is a dependency/dispatch map, not a serial
@@ -37,7 +37,7 @@ app_launcher -f org.tizen.tv-viewer cmd init -u "$USER_ID"
 ```
 
 It retries every 50 ms until the output reports a successful launch. It does not
-read `db/first_screen/type`, `db/appfw/home_appid`, or Mini Hub's routing rows.
+read `db/first_screen/type`, `db/appfw/home_appid`, or Minimal Hub's routing rows.
 `init.wrapper` launches fastboot before it execs systemd. Merely changing an
 application preference cannot remove this explicit launch request.
 
