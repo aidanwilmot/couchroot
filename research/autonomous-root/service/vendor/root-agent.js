@@ -22,7 +22,7 @@ var operationDeadline = require('../operation-deadlines').operationDeadline;
 var PROTOCOL_VERSION = 'SAMSUNG-TV-ROOT/1';
 var MAX_FRAME_BYTES = 8 * 1024 * 1024;
 var MAX_PENDING = 32;
-var MAX_PREAUTH = 2;
+var MAX_PREAUTH = 16;
 var MAX_AUTH_BYTES = 512;
 
 function RootAgentServer(opts) {

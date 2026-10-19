@@ -1,6 +1,7 @@
 """Global observation budgets, lost reboot replies and actual host process cleanup."""
 import copy
 import errno
+import signal
 import subprocess
 import json
 from pathlib import Path
@@ -113,21 +114,30 @@ class ProcessSupervisorTests(unittest.TestCase):
         with patch('tvsetup.common.subprocess.Popen') as popen, patch('tvsetup.common.sys.platform', 'darwin'), patch('tvsetup.common.os.killpg', side_effect=gone) as killpg, patch.dict('os.environ', TV_SETUP_SUPERVISED_PGID=''):
             popen.return_value.__enter__.return_value = child
             with self.assertRaises(DeadlineExpired):run(['helper'], timeout=1, supervise=True)
-        killpg.assert_called_once()
+        self.assertEqual(killpg.call_count,2)
+        killpg.assert_called_with(child.pid,signal.SIGKILL)
 
-    def test_reaped_leader_is_never_signalled(self):
+    def test_reaped_leader_group_is_killed_after_success_and_failure(self):
         for code in (0, 1):
             child = Mock(pid=123, returncode=None)
             def reap(**kwargs):
                 child.returncode = code
                 return b'output', None
             child.communicate.side_effect = reap
-            with self.subTest(code=code), patch('tvsetup.common.subprocess.Popen') as popen, patch('tvsetup.common.os.killpg') as killpg:
+            with self.subTest(code=code), patch('tvsetup.common.subprocess.Popen') as popen, patch('tvsetup.common.os.killpg') as killpg, patch.dict('os.environ', TV_SETUP_SUPERVISED_PGID=''):
                 popen.return_value.__enter__.return_value = child
                 if code:
                     with self.assertRaises(Refused):run(['helper'], supervise=True)
                 else:self.assertEqual(run(['helper'], supervise=True), 'output')
-                killpg.assert_not_called()
+                killpg.assert_called_once_with(child.pid,signal.SIGKILL)
+
+    def test_failed_reaped_leader_does_not_leave_background_helper(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict('os.environ', TV_SETUP_SUPERVISED_PGID=''):
+            marker=Path(tmp)/'orphan-marker'
+            with self.assertRaises(Refused):
+                run(['sh','-c','(sleep 2; touch "$1") >/dev/null 2>&1 & exit 1','sh',marker],timeout=10,supervise=True)
+            time.sleep(3)
+            self.assertFalse(marker.exists(),'Background helper survived supervised cleanup')
 
     def test_linux_permission_errors_are_not_suppressed(self):
         child = Mock(pid=123, returncode=None)

@@ -461,3 +461,44 @@ test('a late telemetry save cannot reopen settings after Back',async()=>{
   } finally {await p.close();}
  }
 });
+
+test('a telemetry save from an earlier visit cannot affect a new pending save',async()=>{
+ for(const success of [true,false]) {
+  const p=await setup();
+  try {
+   await p.locator('#settings').click();await p.locator('#setting-telemetry').click();
+   await p.waitForFunction(()=>!document.getElementById('telemetry-save').disabled);
+   await p.evaluate(()=>{
+    window.telemetryCallbacks=[];
+    window.holdNextTelemetry=()=>{
+     const resolve=tizen.filesystem.resolve;
+     tizen.filesystem.resolve=function(...args){
+      tizen.filesystem.resolve=resolve;
+      window.telemetryCallbacks.push(()=>resolve.apply(this,args));
+     };
+    };
+    window.holdNextTelemetry();
+   });
+   await p.locator('#telemetry-save').click();await key(p,'Escape');
+   await p.locator('#setting-telemetry').click();
+   await p.waitForFunction(()=>!document.getElementById('telemetry-save').disabled);
+   await p.locator('#telemetry-endpoint').fill('https://new.example.invalid/v1/devices/s90d');
+   await p.evaluate(()=>window.holdNextTelemetry());await p.locator('#telemetry-save').click();
+   const status=await p.locator('#telemetry-status').textContent();
+   await p.evaluate(success=>{
+    const setItem=Storage.prototype.setItem;
+    try {
+     if(!success)Storage.prototype.setItem=function(){throw Error('old save failed');};
+     window.telemetryCallbacks[0]();
+    } finally {Storage.prototype.setItem=setItem;}
+   },success);
+   assert.equal(await p.locator('#telemetry-dialog').isVisible(),true);
+   assert.equal(await p.locator('#telemetry-save').isDisabled(),true);
+   assert.equal(await p.locator('#telemetry-status').textContent(),status);
+   assert.equal(await p.locator('#telemetry-endpoint').inputValue(),'https://new.example.invalid/v1/devices/s90d');
+   await p.evaluate(()=>window.telemetryCallbacks[1]());
+   assert.equal(await p.locator('#telemetry-dialog').isVisible(),false);
+   assert.equal(await p.locator('#settings-dialog').isVisible(),true);
+  } finally {await p.close();}
+ }
+});
