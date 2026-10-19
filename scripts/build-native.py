@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root))
 projects=[
+ 'research/autonomous-root/payload/SamsungTvRootAgent.csproj',
+ 'research/autonomous-root/payload/SamsungTvArchiveRoot.csproj',
  'tvsetup/native/Control.csproj',
  'research/namespace-root-probe/NamespaceRootProbe.csproj',
  'research/qn90a-root-probe/NamespaceRootProbe.csproj',

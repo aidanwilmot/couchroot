@@ -1,4 +1,4 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),https=require('https'),crypto=require('crypto'),{execFileSync}=require('child_process');
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),https=require('https'),crypto=require('crypto'),{execFileSync,execFile}=require('child_process');
 const {Journal,config,validateRequest,hash,sdkRuntimeGuard}=require('../research/autonomous-root/service/policy');
 const {createApi}=require('../research/autonomous-root/service/api');
 const {createAgent,launchRequest}=require('../research/autonomous-root/service/agent');
@@ -37,21 +37,68 @@ test('permission failures retain the acquisition step and file path',async()=>{
  finally {a.stop();}
 });
 test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',async()=>{
- const dir=tmp();let server;
+ const dir=tmp();let server;const pool=new https.Agent({keepAlive:true,maxSockets:1});
  try{
-  function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
+  function cert(name){execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',dir+'/'+name+'-key.pem','-out',dir+'/'+name+'.pem','-days','1','-subj','/CN='+name,...(name==='server'?['-addext','subjectAltName=IP:127.0.0.1']:[])],{stdio:'ignore'});return {key:fs.readFileSync(dir+'/'+name+'-key.pem'),cert:fs.readFileSync(dir+'/'+name+'.pem')};}
   const serverCert=cert('server'),clientCert=cert('client'),foreign=cert('foreign');
   const pin=hash(new crypto.X509Certificate(clientCert.cert).raw);
-  let calls=0,enabled=true,uncertain=false;
-  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:0,timed_out:false,stdout:'uid=0',stderr:''};}};
+  let calls=0,enabled=true,uncertain=false,exitCode=0,badChunk=false;
+  const downloadBytes=Buffer.from([0,10,13,128,255]);
+  const agent={status:()=>({connected:enabled}),start:()=>{enabled=true;},stop:()=>{enabled=false;},execute:async()=>{calls++;if(uncertain)throw Error('lost response');return {exit_code:exitCode,timed_out:false,stdout:'uid=0',stderr:''};},operation:async (op,data)=>{if(op.op==='file.read')return {data:downloadBytes,offset:7,sha256:badChunk?'0'.repeat(64):hash(downloadBytes)};if(op.op==='file.commit')throw Object.assign(Error('Target hash conflict'),{outcome:'failed'});if(op.op==='file.write'){assert.equal(op.data,undefined);assert.equal(op.length,5);assert.ok(Buffer.isBuffer(data));assert.equal(data.toString(),'chunk');return {offset:5};}return {state:'running'};}};
   const journal=new Journal(dir+'/requests.json');
   server=createApi({credentials:{...serverCert,ca:clientCert.cert},clientPin:pin,agent,journal,setEnabled:v=>{enabled=v;}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
-  function request(route,body,credentials=clientCert,extra={}){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,checkServerIdentity:()=>undefined,agent:false,headers:{'Content-Type':'application/json',...extra}},res=>{let data='';res.on('data',d=>data+=d);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(data)}));});r.on('error',reject);r.end(body===undefined?undefined:JSON.stringify(body));});}
+  function request(route,body,credentials=clientCert,extra={},reuse=false){return new Promise((resolve,reject)=>{const r=https.request({host:'127.0.0.1',port,path:route,method:body===undefined?'GET':'POST',...credentials,ca:serverCert.cert,agent:reuse?pool:false,headers:{'Content-Type':'application/json',...extra}},res=>{const socket=res.socket;let parts=[];res.on('data',d=>parts.push(d));res.on('end',()=>{const data=Buffer.concat(parts);resolve({socket,status:res.statusCode,headers:res.headers,body:res.headers['content-type']==='application/octet-stream'?data:JSON.parse(data)});});});r.on('error',reject);r.end(body===undefined?undefined:Buffer.isBuffer(body)?body:JSON.stringify(body));});}
+  let connections=0;server.on('secureConnection',()=>connections++);
+  const clientConfig={host:'127.0.0.1',port,server_certificate:dir+'/server.pem',client_certificate:dir+'/client.pem',client_key:dir+'/client-key.pem',server_sha256:hash(new crypto.X509Certificate(serverCert.cert).raw)};
+  fs.writeFileSync(dir+'/client.json',JSON.stringify(clientConfig),{mode:0o600});
+  const script=`import hashlib,importlib.util,json,sys
+spec=importlib.util.spec_from_file_location('client',sys.argv[1]);api=importlib.util.module_from_spec(spec);spec.loader.exec_module(api)
+c=json.load(open(sys.argv[2]))
+with api.Session(c) as session:
+ assert api.request(c,'GET','/v1/status',session=session)['connected']
+ assert api.operation(c,dict(op='file.write',offset=0,sha256=hashlib.sha256(b'chunk').hexdigest()),binary=b'chunk',session=session)['offset']==5
+ assert api.operation(c,dict(op='file.read',offset=7,length=5),session=session)==bytes([0,10,13,128,255])
+ assert api.request(c,'GET','/v1/status',session=session)['connected']
+`;
+  await new Promise((resolve,reject)=>execFile('python3',['-c',script,path.resolve(__dirname,'../research/autonomous-root/client.py'),dir+'/client.json'],{timeout:10000},(err,out,stderr)=>err?reject(Error(stderr||err.message)):resolve(out)));
+  assert.equal(connections,1,'Python JSON and binary requests must share one pinned TLS socket');
+  let prior;
+  for(let i=1;i<=129;i++){
+   const r=await request('/v1/status',undefined,clientCert,{'Connection':'keep-alive'},true);
+   assert.equal(r.status,200);assert.ok(Number(r.headers['content-length'])>0);
+   if(i>1&&i<=128)assert.ok(r.socket===prior, `request ${i} should reuse the preceding TLS socket`);
+   if(i===128)assert.equal(r.headers.connection,'close');
+   if(i===129)assert.ok(r.socket!==prior, `request ${i} should use a new TLS socket`);
+   prior=r.socket;
+  }
+  const rejected=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive',Origin:'https://example.invalid'},true);
+  assert.equal(rejected.status,403);assert.ok(rejected.socket===prior, 'Origin rejection should use the existing socket');assert.equal(rejected.headers.connection,'close');
+  const next=await request('/v1/status',undefined,clientCert,{Connection:'keep-alive'},true);assert.ok(next.socket!==prior, 'request after rejection should use a new socket');
+  assert.equal(server.keepAliveTimeout,5000);
   await assert.rejects(request('/v1/status',undefined,{}));await assert.rejects(request('/v1/status',undefined,foreign));
   assert.equal((await request('/v1/status')).status,200);
   assert.equal((await request('/v1/status',undefined,clientCert,{Origin:'https://example.invalid'})).status,403);
   const v=command();assert.equal((await request('/v1/exec',v)).body.stdout,'uid=0');assert.equal(calls,1);assert.equal((await request('/v1/exec',v)).status,409);assert.equal(calls,1);
+  exitCode=1;const nonzero=await request('/v1/exec',command());assert.equal(nonzero.status,200);assert.equal(nonzero.body.exit_code,1);assert.equal(nonzero.body.stdout,'uid=0');calls=1;
+  const operationId=crypto.randomUUID();
+  const failed=await request('/v1/op',{id:operationId,operation:{op:'file.commit',transfer_id:'example'}});
+  assert.equal(failed.body.outcome,'failed');assert.equal(journal.rows.find(r=>r.id===operationId).state,'completed');
+  const binary=await request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:crypto.randomUUID(),operation:{op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')}})});
+  assert.equal(binary.status,200);assert.equal(binary.body.offset,5);
+  const uploadId=crypto.randomUUID(),uploadOp={op:'file.write',transfer_id:'example',offset:0,sha256:hash('chunk')};
+  const upload=op=>request('/v1/files/write',Buffer.from('chunk'),clientCert,{'X-Operation':JSON.stringify({id:uploadId,operation:op})});
+  assert.equal((await upload({...uploadOp,sha256:hash('other')})).body.outcome,'rejected');
+  assert.ok(!journal.rows.some(r=>r.id===uploadId));
+  assert.equal((await upload({...uploadOp,data:'unexpected'})).body.outcome,'rejected');
+  assert.equal((await upload(uploadOp)).status,200);
+  assert.equal(journal.rows.find(r=>r.id===uploadId).sha256,hash('operation:'+hash(JSON.stringify({...uploadOp,length:5}))));
+  assert.equal((await upload(uploadOp)).body.outcome,'rejected');
+
+  assert.equal((await request('/v1/op',{id:crypto.randomUUID(),operation:{op:'file.write'}})).body.outcome,'rejected');
+  const read=()=>request('/v1/files/read',{id:crypto.randomUUID(),operation:{op:'file.read',transfer_id:'example',offset:7,length:5}});
+  const downloaded=await read();assert.equal(downloaded.status,200);assert.deepEqual(downloaded.body,downloadBytes);assert.equal(downloaded.headers['x-sha256'],hash(downloadBytes));assert.equal(downloaded.headers['x-offset'],'7');
+  badChunk=true;assert.equal((await read()).status,409);
   uncertain=true;const lost=command();assert.equal((await request('/v1/exec',lost)).status,409);assert.equal((await request('/v1/exec',lost)).status,409);assert.equal(calls,2);assert.equal(journal.rows.find(r=>r.id===lost.id).state,'submitted');
   assert.equal((await request('/v1/disable',{})).status,200);assert.equal((await request('/v1/exec',command())).status,503);
   const snapshot=await request('/v1/requests');assert.equal(snapshot.body.sha256,journal.digest());
@@ -61,5 +108,5 @@ test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',
   assert.equal((await request('/v1/journal/archive',{expected_sha256:journal.digest()},clientCert,{Origin:'https://example.invalid'})).status,403);
   assert.equal((await request('/v1/journal/archive',{expected_sha256:journal.digest()})).status,200);assert.equal(calls,2);
   assert.equal((await request('/v1/enable',{})).status,200);assert.equal((await request('/unknown')).status,404);
- }finally{if(server)await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
+ }finally{pool.destroy();if(server)await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});}
 });

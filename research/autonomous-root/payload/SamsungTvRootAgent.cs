@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
-internal static class SamsungTvRootAgent
+internal static partial class SamsungTvRootAgent
 {
     private const string ProtocolVersion = "SAMSUNG-TV-ROOT/1";
     private const string AllowedStagingRoot =
@@ -66,6 +66,7 @@ internal static class SamsungTvRootAgent
                     "setsid failed with errno " + Marshal.GetLastWin32Error());
             }
             DetachStandardStreams();
+            PrepareAppLauncher();
             RunSession(
                 arguments[0],
                 port,
@@ -86,12 +87,29 @@ internal static class SamsungTvRootAgent
         }
         finally
         {
+            StopJobs();
+            CloseTransfers();
+            CloseHelpers();
+            CloseAppLauncher();
             DeleteRuntimeDirectory(runtimeDirectory);
             if (secret != null)
             {
                 Zero(secret);
             }
         }
+    }
+
+    private static void ValidateUploadHeader(string[] fields, out long offset, out int length)
+    {
+        offset = 0; length = 0;
+        if (fields.Length != 6 || fields[0] != "OPWRITE"
+            || !System.Text.RegularExpressions.Regex.IsMatch(fields[2], "\\A[a-f0-9]{32}\\z")
+            || !long.TryParse(fields[3], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out offset)
+            || offset < 0 || offset > TransferLimit
+            || !int.TryParse(fields[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out length)
+            || length < 1 || length > ChunkBytes || length > TransferLimit - offset
+            || fields[5].Length != 64 || !IsDigest(fields[5]))
+            throw new InvalidDataException("Invalid binary upload header");
     }
 
     private static void RunSession(
@@ -112,7 +130,8 @@ internal static class SamsungTvRootAgent
             client.NoDelay = true;
             using (NetworkStream stream = client.GetStream())
             {
-                string hello = ReadLine(stream);
+                var input = new ProtocolReader(stream);
+                string hello = input.ReadLine();
                 string[] helloFields = hello.Split('\t');
                 if (helloFields.Length != 2
                     || helloFields[0] != ProtocolVersion)
@@ -147,7 +166,7 @@ internal static class SamsungTvRootAgent
                 long previousSequence = 0;
                 while (true)
                 {
-                    string line = ReadLine(stream);
+                    string line = input.ReadLine();
                     string payload = VerifyAuthenticated(line, nonce, secret);
                     string[] fields = payload.Split('\t');
                     if (fields.Length < 2)
@@ -162,6 +181,42 @@ internal static class SamsungTvRootAgent
                             "root-agent command sequence is not increasing");
                     }
                     previousSequence = sequence;
+
+                    if (fields[0] == "OPWRITE")
+                    {
+                        // Framing failures terminate the channel. Consume a bounded body
+                        // before reporting operation failures so the next frame stays aligned.
+                        long offset; int length;
+                        ValidateUploadHeader(fields, out offset, out length);
+                        byte[] bytes = input.ReadExact(length);
+                        object uploadResult = null; string failure = null;
+                        try { uploadResult = WriteTransferChunk(fields[2], offset, bytes, fields[5]); }
+                        catch (Exception error)
+                        { failure = System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = error.Message, outcome = "failed" }); }
+                        if (failure == null) WriteOperationSuccess(stream, nonce, secret, fields[1], uploadResult);
+                        else WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + fields[1] + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(failure)));
+                        continue;
+                    }
+
+                    if (fields[0] == "OP" && fields.Length == 3)
+                    {
+                        object operationResult = null;
+                        string response = null;
+                        try
+                        {
+                            using (var document = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(fields[2])))
+                                operationResult = Operation(document.RootElement, readableDirectory, runtimeDirectory);
+                        }
+                        catch (Exception error)
+                        {
+                            response = System.Text.Json.JsonSerializer.Serialize(new { ok = false, error = error.Message, outcome = "failed" });
+                        }
+                        if (response == null)
+                            WriteOperationSuccess(stream, nonce, secret, fields[1], operationResult);
+                        else
+                            WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + fields[1] + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(response)));
+                        continue;
+                    }
 
                     if (fields[0] == "PING" && fields.Length == 2)
                     {
@@ -257,7 +312,7 @@ internal static class SamsungTvRootAgent
                             throw new InvalidDataException(
                                 "WRITEFILE path is outside the allowed directories");
                         }
-                        byte[] data = ReadExact(stream, length);
+                        byte[] data = input.ReadExact(length);
                         string digest;
                         using (SHA256 sha256 = SHA256.Create())
                         {
@@ -340,7 +395,9 @@ internal static class SamsungTvRootAgent
     {
         ProcessStartInfo start = new ProcessStartInfo();
         start.FileName = "/usr/bin/setsid";
-        start.Arguments = "/bin/sh -c " + QuoteArgument(command);
+        start.ArgumentList.Add("/bin/sh");
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add(command);
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
         start.RedirectStandardOutput = true;
@@ -432,6 +489,24 @@ internal static class SamsungTvRootAgent
         return result;
     }
 
+    private static void WriteOperationSuccess(Stream stream, byte[] nonce, byte[] secret, string sequence, object result)
+    {
+        var chunk = result as FileChunk;
+        if (chunk != null)
+        {
+            // The authenticated header binds sequence, range, length and digest.
+            // A partial write is a transport failure; never append a JSON result.
+            WriteAuthenticated(stream, nonce, secret, string.Join("\t", "OPDATA", sequence,
+                chunk.offset.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                chunk.data.Length.ToString(System.Globalization.CultureInfo.InvariantCulture), chunk.sha256));
+            stream.Write(chunk.data, 0, chunk.data.Length);
+            stream.Flush();
+            return;
+        }
+        string response = System.Text.Json.JsonSerializer.Serialize(new { ok = true, result });
+        WriteAuthenticated(stream, nonce, secret, "OPRESULT\t" + sequence + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(response)));
+    }
+
     private static void WriteAuthenticated(
         Stream stream,
         byte[] nonce,
@@ -480,41 +555,62 @@ internal static class SamsungTvRootAgent
         }
     }
 
-    private static string ReadLine(Stream stream)
+    // One reader per connection: line parsing and legacy binary payloads must
+    // consume the same read-ahead buffer. Writes use the original duplex stream.
+    private sealed class ProtocolReader
     {
-        using (MemoryStream buffer = new MemoryStream())
-        {
-            while (buffer.Length <= MaximumLineBytes)
-            {
-                int value = stream.ReadByte();
-                if (value < 0)
-                {
-                    throw new EndOfStreamException("root-agent peer disconnected");
-                }
-                if (value == '\n')
-                {
-                    return Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd('\r');
-                }
-                buffer.WriteByte((byte)value);
-            }
-        }
-        throw new InvalidDataException("root-agent frame exceeds size limit");
-    }
+        private readonly Stream stream;
+        private readonly byte[] bytes = new byte[64 * 1024];
+        private int offset;
+        private int end;
 
-    private static byte[] ReadExact(Stream stream, int length)
-    {
-        byte[] data = new byte[length];
-        int offset = 0;
-        while (offset < length)
+        public ProtocolReader(Stream stream) { this.stream = stream; }
+
+        private bool Fill()
         {
-            int count = stream.Read(data, offset, length - offset);
-            if (count <= 0)
-            {
-                throw new EndOfStreamException("root-agent payload was truncated");
-            }
-            offset += count;
+            if (offset < end) return true;
+            offset = 0;
+            end = stream.Read(bytes, 0, bytes.Length);
+            return end > 0;
         }
-        return data;
+
+        public string ReadLine()
+        {
+            using (var line = new MemoryStream())
+            {
+                while (Fill())
+                {
+                    int newline = Array.IndexOf(bytes, (byte)'\n', offset, end - offset);
+                    int count = (newline < 0 ? end : newline) - offset;
+                    if (count > MaximumLineBytes - line.Length)
+                        throw new InvalidDataException("root-agent frame exceeds size limit");
+                    line.Write(bytes, offset, count);
+                    offset += count;
+                    if (newline >= 0)
+                    {
+                        offset++;
+                        return Encoding.UTF8.GetString(line.GetBuffer(), 0, (int)line.Length).TrimEnd('\r');
+                    }
+                }
+            }
+            throw new EndOfStreamException("root-agent peer disconnected");
+        }
+
+        public byte[] ReadExact(int length)
+        {
+            byte[] data = new byte[length];
+            int copied = 0;
+            while (copied < length)
+            {
+                if (!Fill())
+                    throw new EndOfStreamException("root-agent payload was truncated");
+                int count = Math.Min(length - copied, end - offset);
+                Buffer.BlockCopy(bytes, offset, data, copied, count);
+                offset += count;
+                copied += count;
+            }
+            return data;
+        }
     }
 
     private static byte[] ReadAndRemoveSecret(string path)
@@ -596,11 +692,6 @@ internal static class SamsungTvRootAgent
         {
             return "unavailable:" + exception.GetType().Name;
         }
-    }
-
-    private static string QuoteArgument(string value)
-    {
-        return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
     }
 
     private static string HexEncode(byte[] bytes)

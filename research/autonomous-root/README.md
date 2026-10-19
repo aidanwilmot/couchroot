@@ -8,6 +8,9 @@ local root acquisition, worker recovery and registered-service process recovery.
 Signed-package success is not proof of on-boot entitlement, Node
 runtime support, SDK admission, SMACK access or full privileged API coverage.
 
+See [persistent worker capabilities](CAPABILITIES.md) for the new transfer, job,
+app-user, result and readiness API, its CLI commands, and validation limits.
+
 ## Components
 
 - `service/main.js`: signed service, configured on-boot/auto-restart; starts the

@@ -8,7 +8,8 @@ was measured on one firmware and keep failed experiments for reference.
 
 Set up, deploy, operate and develop.
 
-- [Choosing a launcher: web Hub or native Hub](guides/choosing-a-launcher.md)
+- [Native WebView host and first-boot recovery](../native/webview/README.md)
+- [Choosing a launcher: signed web, pure-native or WebView](guides/choosing-a-launcher.md)
 - [UI design rules](guides/design-guidelines.md)
 - [Device compatibility](guides/device-compatibility.md)
 - [Edit apps — Minimal Hub 0.3.8](guides/edit-apps.md)

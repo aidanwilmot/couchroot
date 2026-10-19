@@ -1,4 +1,54 @@
-# Current publication scope — 2026-10-11
+# Release candidate review — 2026-10-19
+
+Scope: an **experimental source merge**, not stable hardware acceptance. The
+release branch preserves the locally tested installer/telemetry/recovery work in
+checkpoint `28c0054` and incorporates public main `83906b4`, including its WebView
+launcher and root-agent transfer/native-launcher work. Nothing is pushed or
+installed as part of this review. Keep the original checkout for existing recovery
+runs: their source guards deliberately reject a different revision.
+
+## Findings tracker
+
+- [x] Reconcile current public main without dropping its third launcher, managed
+  root projects, binary transport or worker-readiness checks.
+- [x] Run the root-worker managed harness explicitly in the managed CI job;
+  SDK-free discovery no longer invokes it. Keep the existing Linux worker job.
+- [x] Add the collector's host build/tests to the existing Linux native job;
+  no new CI framework, vendor libraries or deployment steps.
+- [x] Fix Node 22 TLS test reuse: generate a localhost certificate and use normal
+  hostname verification. A per-request verification override isolated sockets on
+  Node 22. Preserve authentication, replay and connection-limit assertions.
+- [x] Clarify QN90A basic telemetry versus S90D inspection, pure-C installer versus
+  WebView tools, and preference retention. Historical release decisions below
+  remain dated evidence, not current merge blockers.
+- [ ] Validate the final committed source in a clean checkout and scan the exact
+  publishable tree/history. Record results here before considering it reviewed.
+
+## Device validation boundary
+
+Read-only checks on both enrolled TVs matched physical identity, exact firmware,
+architecture, managed runtime/host hashes and the protected root launcher hash.
+Both pinned agents were connected and ready; signed Hub and telemetry package
+paths were present. Both had the managed `enabled` marker, no `native-enabled`
+marker, and no loaded native telemetry unit. No setup journals were pending.
+Raw identities, credentials and command evidence remain in private storage.
+
+These observations validate the existing baseline and transport compatibility.
+They do **not** validate this candidate's native installation, opt-in/out, reboot
+startup or rollback on hardware. No TV/NAS deployment, restart, power transition
+or telemetry handoff was performed. S90D retains its managed collection and
+inspector path; a native S90D telemetry rewrite is outside this candidate.
+
+Before merging, review this branch's final diff and obtain a passing hosted CI
+run on the exact proposed commit. Hosted CI is still pending; this local review
+performs no push. Keep the experimental label and hardware limits in the release
+notes. Before calling the native integration hardware-accepted, complete the
+existing [native telemetry checks](../guides/native-telemetry.md) and
+[hardware acceptance procedure](../guides/hardware-acceptance.md) with separately
+authorized install/recovery/reboot trials. Do not expand this into the deferred
+root-worker, settings, boot or S90D native rewrites.
+
+# Historical publication scope — 2026-10-11
 
 Couchroot is published as experimental source with 0BSD licensing for original
 work and retained upstream notices. The owner authorized a fresh source snapshot,
@@ -124,7 +174,7 @@ variants) and the unsigned Hub package from two paths. It does not certify signe
 package reproducibility or S90D vendor-linked renderer bytes.
 
 The checks can also run independently. Web packaging and the Python/Node test
-suites do not require .NET. The three managed harness scripts must be run
+suites do not require .NET. The four managed harness scripts must be run
 explicitly; importing them during Python discovery does not execute their tests.
 
 ```sh
@@ -141,6 +191,7 @@ python3 scripts/check-dependencies.py --component managed
 python3 tests/telemetry_service_test.py
 python3 tests/inspector_collector_test.py
 python3 tests/qn90a_boot_relay_test.py
+python3 tests/root_agent_worker_test.py
 python3 scripts/check-reproducible.py --component managed
 ```
 
@@ -151,7 +202,7 @@ and Node respectively. These checks do not validate device enrollment.
 
 CI's `web-and-offline` job runs on macOS/Linux with Python 3.12 and 3.14, Node 22
 and Chromium. It blocks `dotnet` calls even if the hosted runner has an SDK
-preinstalled. The separate `managed` job runs the three C# harnesses and managed
+preinstalled. The separate `managed` job runs the four C# harnesses and managed
 cross-path builds on macOS/Linux with Python 3.12 and the pinned .NET SDK. Build
 manifests include only declared outputs, excluding stale DLLs from other research
 builds. Separate reports are `dist/reproducibility-web.json` and

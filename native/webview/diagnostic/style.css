@@ -1,0 +1,6 @@
+html { color: #e6ebf5; background: #10141c; font: 28px sans-serif; }
+main { margin: 7vh 6vw; }
+h1 { font-size: 52px; }
+pre { white-space: pre-wrap; overflow-wrap: break-word; line-height: 1.5; font-size: 22px; }
+button { background: #243447; color: white; border: 3px solid transparent; border-radius: 12px; padding: 28px 60px; margin-right: 24px; font: inherit; }
+button:focus { outline: 0; border-color: #8edaff; background: #34546e; }

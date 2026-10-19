@@ -207,10 +207,10 @@ test('clock cycles off/12/24, idle preference persists, and minute display refre
 });
 
 test('launch expands selected tile and moves neighbors without delaying launch; failure/reduced motion recover',async()=>{
- const p=await setup();await key(p,'Enter');assert.deepEqual(await p.evaluate(()=>launches),['kIciSQlYEM.plex']);
+ const p=await setup();await p.clock.install();await key(p,'Enter');assert.deepEqual(await p.evaluate(()=>launches),['kIciSQlYEM.plex']);
  assert.equal(await p.locator('.launch-selected').count(),1);assert.match(await p.locator('#favorites > button').first().getAttribute('style'),/scale\(1\.12\)/);
  assert.match(await p.locator('#favorites > button').nth(1).getAttribute('style'),/translateX/);
- await p.waitForTimeout(1300);assert.equal(await p.locator('.launch-motion').count(),0);await key(p,'Escape');
+ await p.clock.runFor(1200);assert.equal(await p.locator('.launch-motion').count(),0);await key(p,'Escape');
  await p.evaluate(()=>window.launchFail=true);await key(p,'Enter');assert.equal(await p.locator('.launch-motion').count(),0);assert.match(await p.locator('#launch-error-title').textContent(),/Could not open/);
  await p.evaluate(()=>window.launchFail=false);await p.emulateMedia({reducedMotion:'reduce'});await key(p,'Escape','ArrowRight','Enter');assert.equal(await p.locator('.launch-motion').count(),0);assert.equal((await p.evaluate(()=>launches)).at(-1),'9Ur5IzDKqV.TizenYouTube');await p.close();
 });

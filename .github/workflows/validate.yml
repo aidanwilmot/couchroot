@@ -50,6 +50,11 @@ jobs:
         if: matrix.python == '3.12'
       - run: npx playwright install --with-deps chromium
         if: matrix.python == '3.12'
+      - run: python -m unittest discover -s native/webview/tests -p 'test_*.py'
+      - run: node native/webview/tests/native-shim.cjs
+        if: matrix.python == '3.12'
+      - run: node native/webview/tests/diagnostic.cjs
+        if: matrix.python == '3.12'
       - run: npm test
         if: matrix.python == '3.12'
       - run: python scripts/check-reproducible.py --component web
@@ -78,8 +83,27 @@ jobs:
       - run: python scripts/check-dependencies.py --component managed
       - run: python tests/telemetry_service_test.py
       - run: python tests/inspector_collector_test.py
+      - run: python tests/root_agent_worker_test.py
       - run: python tests/qn90a_boot_relay_test.py
       - run: python scripts/check-reproducible.py --component managed
+  root-native-launcher:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: docker build -t samsung-native-collector:bullseye research/native-telemetry/collector
+      - run: python3 scripts/check-root-launcher.py
+      - name: Native collector host checks
+        run: |
+          mkdir -p test-results/native-telemetry
+          docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out" -e OUTPUT_DIR=/out samsung-native-collector:bullseye sh research/native-telemetry/collector/build.sh --host-only
+          docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out:ro" samsung-native-collector:bullseye python3 research/native-telemetry/collector/test_collector.py
+      - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release
+      - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble dotnet /app/Harness.dll
   qn90a-web-saver:
     runs-on: ubuntu-24.04
     container: emscripten/emsdk:3.1.64

@@ -87,8 +87,9 @@ For a one-time native preference candidate, add:
 This invokes the existing bounded offline converter (Node required). It accepts an
 explicit JSON export, not a browser database or TV address. It does not copy the
 original export into the bundle, change web preferences, or overwrite native
-preferences. Installing this candidate will need an absence check/backup in the
-future native transaction.
+preferences. Native installation stages the candidate only when preferences are
+absent; existing preference bytes are retained, including edits made by the Hub.
+Recovery retains staged preferences and payloads while restoring the boot hook.
 
 **Web bundles are review artifacts.** Web `apply` rebuilds and signs from the
 current checkout. Native `apply` consumes and verifies the native ELF/preference

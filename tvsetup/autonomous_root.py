@@ -45,9 +45,12 @@ def prepare(device, site, sign=True, version=None):
         p=stage/'config.xml';p.write_text(p.read_text().replace('version="0.1.0"','version="'+version+'"'))
     shutil.copytree(SOURCE/'service',stage/'service')
     payload=stage/'payload';payload.mkdir(mode=0o700)
+    from .root_launcher import build as build_launcher
+    launcher = build_launcher(folder/'native-app-launcher', builder.command)
     for name in ('SamsungTvRootAgent','SamsungTvArchiveRoot'):
         output=folder/'compiled'/name
-        builder.build_managed(SOURCE/'payload'/(name+'.csproj'),output)
+        builder.build_managed(SOURCE/'payload'/(name+'.csproj'),output,
+                              native_app_launcher=launcher if name=='SamsungTvRootAgent' else None)
         for suffix in ('dll','deps.json','runtimeconfig.json'):
             shutil.copyfile(output/(name+'.'+suffix),payload/(name+'.'+suffix))
     atomic_json(payload/'manifest.json',{p.name:sha(p.read_bytes()) for p in payload.iterdir()})

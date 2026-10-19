@@ -38,6 +38,15 @@ class AgentTransportTests(unittest.TestCase):
     def test_arbitrary_file_push_and_namespace_changes_are_refused(self):
         with self.assertRaises(Refused):self.tv.push(Path('not-read'),'/etc/passwd')
         with self.assertRaises(Refused):self.tv.root('true',namespace=True)
+    def test_nonzero_exit_is_a_completed_result(self):
+        self.tv.api=SimpleNamespace(request=lambda *args:dict(id=args[-1]['id'],exit_code=1,stdout='0\n',stderr=''))
+        result=self.tv.execute_result('grep -c missing /tmp/example')
+        self.assertEqual(result['exit_code'],1)
+        self.assertEqual(result['stdout'],'0\n')
+        self.assertEqual(self.tv._execute('false',check=False),'0\n')
+        with self.assertRaisesRegex(Refused,'completed with exit code 1'):self.tv._execute('false')
+        self.assertTrue(all(json.loads(p.read_text())['state']=='completed' for p in self.tv.evidence.glob('*.json')))
+
     def test_command_limit_refuses_before_submission(self):
         with self.assertRaises(Refused):self.tv._execute('x'*16385)
 
