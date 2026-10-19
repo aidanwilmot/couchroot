@@ -549,7 +549,7 @@ function createAgent(config,options={}){
    completeProduction:async (retirementSession,{resume=false}={})=>{
     const adopted=token.adopted;
     const bound=()=>{if(!adopted||adopted.managed||admissionHold!==token||generation!==adopted.generation||channel!==adopted.channel||!running||!connected||!workerReady||!channel._conn)throw Error('Adopted production ownership required');};
-    bound();if(token.activeReturn||token.preparingNativeStop||token.nativeStopAttempted&&!adopted.managed||typeof resume!=='boolean'||token.completionBusy||(!resume&&token.completing)||(resume&&(!token.completing||!token.retired)))throw Error('Production completion requires reconciliation');
+    bound();if(token.activeReturn||token.preparingNativeStop||token.nativeStopAttempted&&!adopted.managed||typeof resume!=='boolean'||token.completionBusy||(!resume&&token.completing)||(resume&&!token.completing))throw Error('Production completion requires reconciliation');
     if((token.retirementSession&&retirementSession!==token.retirementSession)||!retirementSession||typeof retirementSession.retire!=='function'||!retirementSession.record||JSON.stringify(retirementSession.record.source)!==JSON.stringify(token.source)||retirementSession.record.manifest_sha256!==adopted.record.manifest_sha256)throw Error('Matching retirement session required');
     token.completing=true;token.completionBusy=true;const peer=channel._conn;
     const confirm=async()=>{
@@ -560,8 +560,12 @@ function createAgent(config,options={}){
     };
     const execute=async(command,timeout)=>{await confirm();const result=await adopted.channel.execute(command,timeout);await confirm();return result;};
     try{
-     if(!resume)token.retired=JSON.parse(JSON.stringify(await retirementSession.retire({execute,confirmExecutor:confirm,executorPid:peer.identity.pid})));bound();const retired=token.retired;
-     const activation=await activateProduction({resume,record:adopted.record,retired,journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile,execute,confirmNative:async()=>processIdentities(await confirm(),peer.identity.pid)});
+     if(!token.retired){
+      const executor={execute,confirmExecutor:confirm,executorPid:peer.identity.pid};
+      token.retired=JSON.parse(JSON.stringify(await (resume?retirementSession.resumeRetirement(executor):retirementSession.retire(executor))));
+     }
+     bound();const retired=token.retired,resumeActivation=resume&&!!token.activating;token.activating=true;
+     const activation=await activateProduction({resume:resumeActivation,record:adopted.record,retired,journalDirectory:path.dirname(options.selectionFile),selectionFile:options.selectionFile,execute,confirmNative:async()=>processIdentities(await confirm(),peer.identity.pid)});
      const info=await confirm();bound();nativeRuntime={...adopted,activation,selection:JSON.stringify(selectionStatus(options.selectionFile))};workerStatus=info;workerStatusAt=process.uptime();
      if(!runtimeAllowed(selection()))throw Error('Native selection changed before admission');admissionHold=null;
      return {transaction_id:adopted.record.id,worker_id:info.worker_id,admission_held:false,activation_sha256:activation.receipt_sha256};

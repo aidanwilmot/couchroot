@@ -5,8 +5,9 @@ const {privateDirectory}=require('./private-state');
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const {RootAgentServer}=require('./vendor/root-agent');
 const {submitRetirement}=require('./retirement-launch');
-const {readyRetirement}=require('./retirement-readiness');
+const {readyRetirement,privateRead}=require('./retirement-readiness');
 const {shutdownRetirement,cleanupRetirement,finishRetirement}=require('./retirement-teardown');
+const {reconcileRetirement}=require('./retirement-reconcile');
 async function openRetirementSession(options){
  const {journalDirectory}=options;
  if(typeof journalDirectory!=='string'||!path.isAbsolute(journalDirectory))throw Error('Private retirement directory required');
@@ -41,7 +42,7 @@ async function openRetirementSession(options){
   const ready=await readyRetirement({...options,record,channel});
   if(closed||channel._conn!==peer)throw Error('Retirement connection changed during readiness');
   clearTimeout(timer);
-  let retiring=false,inUse=0,exitPending=false;
+  let retiring=false,reconciling=false,retired=false,inUse=0,exitPending=false;
   const call=async(method,request)=>{if(retiring||closed)throw Error('Retirement session is closing');inUse++;try{return await ready.provider[method](request);}finally{inUse--;}};
   const provider=Object.freeze({identity:ready.provider.identity,
    inspectUnit:request=>call('inspectUnit',request),retireUnit:request=>call('retireUnit',request),snapshotManagedJobs:()=>call('snapshotManagedJobs'),installManagedState:options=>call('installManagedState',options),acceptManagedState:options=>call('acceptManagedState',options),launchProduction:options=>call('launchProduction',options),verifyProduction:options=>call('verifyProduction',options),
@@ -68,10 +69,20 @@ async function openRetirementSession(options){
    try{
     const stopped=await shutdownRetirement({record:ready.record,journalDirectory,channel});
     const cleaned=await cleanupRetirement({...executor,record:stopped,journalDirectory});
-    return finishRetirement({record:cleaned,journalDirectory});
+    const result=finishRetirement({record:cleaned,journalDirectory});retired=true;return result;
    }finally{closeTransport();}
   };
-  return Object.freeze({record:ready.record,provider,retire,closeTransport});
+  const resumeRetirement=async executor=>{
+   if(!retiring||!closed||reconciling||retired||inUse||exitPending)throw Error('Retirement reconciliation unavailable');
+   reconciling=true;
+   try{
+    const record=JSON.parse(privateRead(path.join(journalDirectory,ready.record.id+'.retirement.json'),16384));
+    const {phase:before,...expected}=ready.record,{phase:after,...actual}=record;
+    if(JSON.stringify(actual)!==JSON.stringify(expected))throw Error('Retirement ownership changed');
+    const result=await reconcileRetirement({...executor,record,journalDirectory});retired=true;return result;
+   }finally{reconciling=false;}
+  };
+  return Object.freeze({record:ready.record,provider,retire,resumeRetirement,closeTransport});
  }catch(error){
   closeTransport();
   if(!submitted){try{fs.unlinkSync(tokenFile);}catch(e){if(e.code!=='ENOENT')throw e;}fs.rmdirSync(directory);}

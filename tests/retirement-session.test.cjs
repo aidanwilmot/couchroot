@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const file=path.resolve(__dirname,'../research/autonomous-root/service/retirement-session.js'),real=createRequire(file);
 async function fixture(mode,run){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'retirement-session-'));
- let instance,launches=0,readiness=0,launchOptions,closed=0,lifecycle=[];const provider={identity:'verified'};
+ let reconcileRecord={id:'a'.repeat(32),phase:'shutdown-acknowledged'},reconcileCalls=0,instance,launches=0,readiness=0,launchOptions,closed=0,lifecycle=[];const provider={identity:'verified'};
  class Server{
   constructor(options){this.options=options;this._server=new EventEmitter();instance=this;}
   start(callback){if(mode==='listen-error')queueMicrotask(()=>this._server.emit('error',Error('bind failed')));else callback();}
@@ -30,10 +30,11 @@ async function fixture(mode,run){
    cleanupRetirement:async options=>{lifecycle.push('cleanup');assert.equal(options.record.phase,'shutdown-acknowledged');if(mode==='cleanup-error')throw Error('cleanup uncertain');return {phase:'staging-retired'};},
    finishRetirement:options=>{lifecycle.push('finish');assert.equal(options.record.phase,'staging-retired');return {phase:'complete'};}
   };
-  if(name==='./retirement-readiness')return {readyRetirement:async options=>{readiness++;assert.equal(options.channel,instance);assert.equal(options.record.phase,'submitted');if(mode==='ready-error')throw Error('identity mismatch');return {record:{phase:'ready'},provider};}};
+  if(name==='./retirement-reconcile')return {reconcileRetirement:async options=>{reconcileCalls++;assert.equal(options.record.phase,'shutdown-acknowledged');assert.equal(options.journalDirectory,directory);return {phase:'complete'};}};
+  if(name==='./retirement-readiness')return {privateRead:()=>JSON.stringify(reconcileRecord),readyRetirement:async options=>{readiness++;assert.equal(options.channel,instance);assert.equal(options.record.phase,'submitted');if(mode==='ready-error')throw Error('identity mismatch');return {record:{id:'a'.repeat(32),phase:'ready'},provider};}};
   return real(name);
  }});
- try{await run({directory,provider,open:()=>module.exports.openRetirementSession({journalDirectory:directory}),state:()=>({instance,launches,readiness,launchOptions,closed,lifecycle})});}finally{fs.rmSync(directory,{recursive:true,force:true});}
+ try{await run({directory,provider,changeRecord:value=>{reconcileRecord=value;},open:()=>module.exports.openRetirementSession({journalDirectory:directory}),state:()=>({instance,launches,readiness,launchOptions,closed,lifecycle,reconcileCalls})});}finally{fs.rmSync(directory,{recursive:true,force:true});}
 }
 test('session binds private token to loopback listener and requires readiness before returning',()=>fixture('ok',async f=>{
  const session=await f.open(),s=f.state();assert.equal(s.instance.options.bindHost,'127.0.0.1');assert.equal(s.launchOptions.port,12345);assert.equal(s.readiness,1);assert.equal(session.record.phase,'ready');assert.equal(session.provider.identity,'verified');assert.equal(session.channel,undefined);
@@ -93,3 +94,16 @@ test('session retains pending exit across explicit recovery and refuses overlap 
   await assert.rejects(observer.resumeExitObservation());await assert.rejects(observer.waitForExit());assert.equal(resumes,1);session.closeTransport();
  });
 });
+
+test('explicit retirement recovery reconciles the bound receipt without repeating shutdown',()=>fixture('cleanup-error',async f=>{
+ const session=await f.open();await assert.rejects(session.resumeRetirement({}));
+ await assert.rejects(session.retire({}));
+ const result=await session.resumeRetirement({});assert.equal(result.phase,'complete');
+ assert.deepEqual(f.state().lifecycle,['shutdown','cleanup']);assert.equal(f.state().reconcileCalls,1);
+ await assert.rejects(session.resumeRetirement({}));await assert.rejects(session.retire({}));
+}));
+test('retirement recovery refuses changed ownership before reconciliation',()=>fixture('cleanup-error',async f=>{
+ const session=await f.open();await assert.rejects(session.retire({}));
+ f.changeRecord({id:'b'.repeat(32),phase:'shutdown-acknowledged'});
+ await assert.rejects(session.resumeRetirement({}),/ownership changed/);assert.equal(f.state().reconcileCalls,0);
+}));
