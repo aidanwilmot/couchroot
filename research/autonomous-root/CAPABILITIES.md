@@ -4,19 +4,15 @@ These changes require rebuilding the service and worker together. Existing insta
 0.1.x workers do not expose the new operations. Source validation is separate from
 TV installation and firmware-specific acceptance; no deployment is implicit.
 
-Current installed version: signed 0.7.48. Both TVs have passed bounded native public-operation,
-same-boot startup/return, committed guardian-loss recovery and modeled launch-bound
-pre-readiness recovery on both TVs. Those completed rounds ended managed-ready.
-S90D has a native endurance trial running with serialized storage checks, separate
-checksum downloads and retained collector exit receipts. QN90A's latest attempt
-stopped at a collector startup gap and was reconciled to managed; see
-[readiness-gap evidence](native-worker/observer-readiness-gap-results.json). S90D
-recovered after a verified full reboot and host-assisted SDK restoration.
-Neither TV has passed the 24-hour gate. Version 0.7.48 adds file/directory journal-sync timing
-without changing the payloads or durability barriers. Historical versioned
-observations below retain their original limits; see the
+Current installed version: signed **0.7.52**, with native workers selected on
+QN90A and S90D. Both retain the small .NET entry bridge and managed fallback.
+Installation readback, native public operations, selected-native disable/enable
+and normal managed return passed on both TVs. QN90A passed service restart;
+S90D needed independent SDK recovery after its restart check and that qualification
+remains open. No new reboot or endurance gate was completed. See the
 [current migration snapshot](native-worker/MIGRATION.md#current-qualification-snapshot)
-for diagnostics, hardware evidence and the remaining endurance/retirement gates.
+and [rollout evidence](native-worker/native-bridge-rollout-results.json).
+Historical versioned observations below retain their original limits.
 
 Signed 0.7.38 adds bounded ordinary-production resource qualification on both TVs.
 A zero descriptor limit no longer closes an otherwise usable idle session; the

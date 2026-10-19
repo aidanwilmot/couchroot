@@ -14,11 +14,11 @@ name is refused without thawing. All visible current mount namespaces must lack
 owned runtime views; namespace descriptor and bind pins remain conservative
 blockers. Legacy journals remain limited to same-boot recovery. Seven focused
 Linux fixtures cover these rules, including production kernel-resource checks
-with redirected filesystem inputs. This source change is not installed or
-qualified on either TV. Local service source now integrates boot-aware startup,
+with redirected filesystem inputs. The service integrates boot-aware startup,
 retained-state verification and managed return while keeping the original
 activation immutable. A schema-2 runtime receipt binds replacement processes to
-the new boot. Installed 0.7.48 still has its original same-boot restriction.
+the new boot. Both TVs now have 0.7.52, but clean-boot qualification of that
+version remains open; see the current migration snapshot.
 
 Local source also reconciles pending native-to-managed returns across boots.
 The original request, transaction and restore inputs remain authoritative; fresh
@@ -39,7 +39,8 @@ it verifies absence without repairing records. The coordinator still verifies
 the exact resulting record inventory, permitted interrupted outcomes and owned
 cleanup before admission. It executes the pinned binary in a private read-only
 code view. This maintenance mode is not a public protocol operation. These changes
-are locally tested and remain uninstalled while endurance trials continue.
+are included in 0.7.52 and locally tested; installation alone does not qualify
+interrupted-return recovery across boots.
 
 The prototype uses the existing HMAC protocol with strict sequence ordering,
 bounded binary chunks and structured failure responses. It implements status,

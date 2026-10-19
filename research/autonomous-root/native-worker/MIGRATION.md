@@ -1,25 +1,46 @@
 # Native agent parity and .NET retirement plan
 
-Status: migration in progress, 2026-10-16. The original review below used baseline
+Status: owner-authorized native rollout, 2026-10-19. The original review below used baseline
 `f3f911e`, including runtime changes `43ec7bc` and `f9e6d0c`. Historical progress
 entries retain their original qualification limits; use the current snapshot
 below for installed state. The plan itself does not authorize device changes.
 
 ## Current qualification snapshot
 
-**Hardware qualification is paused at the owner's request.** Both endurance
-controllers are stopped and reconciled. S90D (0.7.50) and QN90A (0.7.48) are
-managed-ready on their original trial boots. Remaining collectors finished and
-their evidence was preserved; test-owned quiet jobs were cancelled, verified
-through managed return and forgotten. Original retained jobs, enrollment and
-protected hashes matched. Owned native scopes were cleaned, all trial/cleanup
-rescues retired unfired, SDK is on loopback, and host supervisors and sleep
-prevention processes exited. Neither shortened run qualifies 24-hour endurance.
-Do not resume hardware trials, deployment or power-transition qualification
-without explicit owner direction. Continue local implementation and verification;
-keep managed fallbacks and unresolved hardware gates intact. See
-[pause and reconciliation evidence](hardware-qualification-paused-results.json).
-Descriptions of active trials below record the preceding state.
+Both TVs now run signed **0.7.52 with the native worker selected**. The 7 KiB
+`NativeEntry.dll` remains the small .NET capability-entry bridge. No old managed
+root-agent process remained at final acceptance. The firmware runtime, packaged
+managed fallback and signed rollback packages are retained for recovery.
+
+Both installations verified all 86 packaged entries and preserved enrollment,
+protected-file hashes and original saved jobs. Bounded public native operations,
+selected-native disable/enable, and return to managed passed on both models.
+Temporary test jobs were forgotten and final SDK rescue timers retired unfired.
+QN90A also passed the service-restart check. S90D's replacement service became
+ready, then disappeared after restart-helper cleanup; that check remains failed
+with its cause unresolved. Independent SDK rescue and a fresh, verified launch
+restored it on the same boot before final native acceptance.
+
+A real S90D teardown interruption on 0.7.51 exposed a resume-path gap. Version
+0.7.52 reuses the existing receipt reconciler before native activation, without
+replaying launch or shutdown. Local failure and ownership tests passed; normal
+0.7.52 migration and recovery passed on both TVs. Original uncertain requests
+remain recorded, not rewritten as successful.
+
+See [rollout evidence](native-bridge-rollout-results.json). No reboot, standby,
+interrupted-power or new endurance trial was performed. S90D service-restart
+reliability and clean-boot qualification remain open. Keep the bridge and fallback;
+a native-only entry rewrite and fallback removal are deferred. This rollout changes
+the root agent only; Hub, telemetry/settings and NAS services were not redeployed.
+
+### Earlier qualification and local work
+
+The owner paused the earlier endurance trials on 2026-10-16. Both controllers
+were stopped and reconciled, their original jobs and evidence preserved, and test
+scopes cleaned. Neither shortened run qualified 24-hour endurance. The owner later
+authorized the bounded update above; it does not turn those earlier runs into
+endurance acceptance. See [pause evidence](hardware-qualification-paused-results.json).
+The following entries retain their original scope and limits.
 
 Local follow-up provides a .NET-free **component build**, not a native-only
 installation: `python3 -m tvsetup.native_components --model qn90a --output NEW_DIRECTORY`
