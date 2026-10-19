@@ -1,3 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
  <PropertyGroup><TargetFrameworks>net6.0;netcoreapp3.1</TargetFrameworks><LangVersion>10</LangVersion><OutputType>Exe</OutputType><UseAppHost>false</UseAppHost><CheckEolTargetFramework>false</CheckEolTargetFramework><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+ <!-- Retain the original compiler source paths so this layout move does not
+      change shipped DLL/PDB identities or firmware-pinned assembly hashes. -->
+ <PropertyGroup><PathMap>$(MSBuildProjectDirectory)=/src/research/s90d-telemetry/collector,$(PathMap)</PathMap></PropertyGroup>
 </Project>

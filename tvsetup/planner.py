@@ -79,14 +79,14 @@ def hub_sources(device, *, device_id=None):
     result['telemetry-service.js'] = (REPO/'web/telemetry-service.js').read_bytes()
     if device == 'qn90a':
         result['index.html'] = result['index.html'].replace(b'</head>', b'  <script src="qn90a-idle.js" defer></script>\n</head>')
-        result['qn90a-idle.js'] = (REPO/'research/qn90a-screensaver/hub-idle.js').read_bytes()
+        result['qn90a-idle.js'] = (REPO/'web/qn90a-idle.js').read_bytes()
     return result
 
 
 def source_revision():
-    roots = [REPO/'research/toolkit', REPO/'tvsetup', REPO/'web',REPO/'research/s90d-telemetry',REPO/'research/system-screensaver',
+    roots = [REPO/'research/toolkit', REPO/'tvsetup', REPO/'web',REPO/'research/s90d-telemetry',REPO/'telemetry/s90d-collector',REPO/'research/system-screensaver',
              REPO/'research/s90d-splash',REPO/'research/namespace-root-probe',REPO/'research/qn90a-app-cleanup',REPO/'research/qn90a-screensaver',REPO/'research/qn90a-hub-boot/relay',
-             REPO/'research/qn90a-telemetry-startup/service', REPO/'research/qn90a-telemetry-startup/bootstrap']
+             REPO/'telemetry/qn90a-startup', REPO/'research/qn90a-telemetry-startup/bootstrap']
     files = sorted({p for root in roots for p in root.rglob('*') if p.is_file() and p.suffix in ('.py','.json','.cs','.c','.h','.js','.css','.html','.xml','.csproj','.glsl') and not {'bin','obj'} & set(p.relative_to(root).parts) and p.name not in ('core.js','shaders.js')})
     files=sorted(set(files)|{REPO/'tools/qn90a/root-check.py',REPO/'global.json',REPO/'Directory.Build.props'})
     return sha(b''.join(str(p.relative_to(REPO)).encode()+b'\0'+p.read_bytes() for p in files))
@@ -103,8 +103,8 @@ def artifact_group(path):
 def component_revision(kind):
     groups = {
         'boot': ['research/qn90a-hub-boot/relay'],
-        'service': ['research/qn90a-telemetry-startup/service','research/qn90a-telemetry-startup/bootstrap','research/s90d-telemetry/collector'],
-        'helper': ['research/system-screensaver/boot','research/s90d-splash/Splash.cs','research/s90d-telemetry/collector','research/s90d-telemetry/build.py'],
+        'service': ['telemetry/qn90a-startup','research/qn90a-telemetry-startup/bootstrap','telemetry/s90d-collector'],
+        'helper': ['research/system-screensaver/boot','research/s90d-splash/Splash.cs','telemetry/s90d-collector','research/s90d-telemetry/build.py'],
         'saver': ['research/qn90a-screensaver/core.c','research/qn90a-screensaver/fragment.glsl','research/qn90a-screensaver/build-web.sh','research/system-screensaver/renderer.c','research/system-screensaver/simulation.h','research/system-screensaver/mesh.h']}
     files=[]
     for name in groups[kind]:

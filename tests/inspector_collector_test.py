@@ -19,10 +19,10 @@ def main():
             INSERT INTO package_localized_info VALUES('test','en_US','Test');''')
             c.executemany('INSERT INTO package_app_info VALUES(?,?,?,?,?,?)',[(f'app{i:04}', 'test','svcapp','unknown','true','false') for i in range(1026)])
         before=hashlib.sha256(db.read_bytes()).digest()
-        project(root/'Harness.csproj',[ROOT/'tests/inspector-collector-harness.cs',ROOT/'research/s90d-telemetry/collector/Inspector.cs'],'<OutputType>Exe</OutputType>')
+        project(root/'Harness.csproj',[ROOT/'tests/inspector-collector-harness.cs',ROOT/'telemetry/s90d-collector/Inspector.cs'],'<OutputType>Exe</OutputType>')
         subprocess.run(['dotnet','run','--project',str(root/'Harness.csproj'),'--',str(db)],check=True,timeout=90)
         assert hashlib.sha256(db.read_bytes()).digest()==before
-        project(root/'Scope.csproj',[ROOT/'tests/telemetry-scope-harness.cs',ROOT/'research/s90d-telemetry/collector/Program.cs'],
+        project(root/'Scope.csproj',[ROOT/'tests/telemetry-scope-harness.cs',ROOT/'telemetry/s90d-collector/Program.cs'],
                 '<OutputType>Exe</OutputType><StartupObject>ScopeHarness</StartupObject>')
         subprocess.run(['dotnet','run','--project',str(root/'Scope.csproj')],check=True,timeout=90)
 

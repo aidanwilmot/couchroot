@@ -4,8 +4,8 @@ QN90A firmware **T-NKM2AKUC-2301.1 only**. This host runs the existing `web/`
 interface in Chromium/EWK inside an owner-UID EFL window. It starts from the
 native boot hook. Background admission can precede Samsung's signed web-app
 launch path; normal boot uses the signed Hub for a safe viewer handoff.
-It is a third launcher option alongside the signed [web Hub](../../web/) and
-[pure-native Hub](../../native-hub/); see [the comparison](../../docs/guides/choosing-a-launcher.md).
+It is a third launcher option alongside the signed [web Hub](../../web) and
+[pure-native Hub](../../native-hub); see [the comparison](../../docs/guides/choosing-a-launcher.md).
 
 The source, tests and recovery-command renderer are public. Deployment still
 requires a private, model-bound installer using the shared setup journal, enrolled
@@ -85,7 +85,7 @@ window as a normal Samsung application.
 ## Build and checks
 
 From the repository root, with the existing `samsung-native-collector:bullseye`
-image (see [native collector build](../../research/native-telemetry/collector/README.md)):
+image (see [native collector build](../../telemetry/native-collector/README.md)):
 
 ```sh
 WEBVIEW_OUTPUT_DIR=/tmp/couchroot-webview-build sh native/webview/build.sh

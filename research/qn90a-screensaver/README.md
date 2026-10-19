@@ -89,9 +89,9 @@ With Emscripten installed (tested with Debian Bookworm's package):
 
 ```sh
 sh research/qn90a-screensaver/build-web.sh
-node --test research/qn90a-screensaver/verify-web.cjs
+node --test research/archive/qn90a-screensaver/verify-web.cjs
 ~/.local/share/samsung-tv-research/.venv/bin/python research/qn90a-screensaver/verify-timeout.py
-node research/system-screensaver/verify-shader.cjs
+node research/archive/system-screensaver/verify-shader.cjs
 python3 research/qn90a-screensaver/package.py
 ```
 
@@ -111,7 +111,7 @@ From the repository root:
 ```
 
 Build the QN90A dashboard with `python3 scripts/sign.py --profile MinimalHubQN90A`.
-This stages version 0.4.0 plus `hub-idle.js` outside Git. Install the printed
+This stages version 0.4.0 plus `web/qn90a-idle.js` outside Git. Install the printed
 `MinimalHub.wgt` on `192.0.2.11:26101` with the existing profile. See the exact
 forward-version dashboard rollback in ROLLBACK.md.
 

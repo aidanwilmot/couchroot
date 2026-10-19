@@ -17,7 +17,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='telemetry-service-test-') as tmp:
         root=Path(tmp);harness=ROOT/'tests/telemetry-service-harness'
         collector=root/'collector';collector.mkdir();project(collector/'Telemetry.csproj',[harness/'Collector.cs'])
-        project(root/'Harness.csproj',[harness/'Harness.cs',ROOT/'research/qn90a-telemetry-startup/service/Program.cs'],
+        project(root/'Harness.csproj',[harness/'Harness.cs',ROOT/'telemetry/qn90a-startup/Program.cs'],
                 '<OutputType>Exe</OutputType><StartupObject>Harness</StartupObject>',
                 '<ProjectReference Include="collector/Telemetry.csproj"/>')
         subprocess.run(['dotnet','build',root/'Harness.csproj','-c','Release','--nologo','-v','quiet'],check=True,timeout=90)

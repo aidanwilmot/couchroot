@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const install=require('../research/qn90a-screensaver/hub-idle.js');
+const install=require('../web/qn90a-idle.js');
 function rig(launch) {
   let now=0, next=0; const timers=new Map(), listeners={};
   const doc={hidden:false,addEventListener(name,fn){listeners[name]=fn;}};

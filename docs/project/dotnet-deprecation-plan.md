@@ -80,7 +80,7 @@ These observations explain the scope decision; they are not unfinished tasks.
 
 1. The web UI and C/EFL native Hub already ran without a CLR in the UI itself.
    Their different startup paths addressed actual firmware differences.
-2. The existing [C collector](../../research/native-telemetry/collector/README.md)
+2. The existing [C collector](../../telemetry/native-collector/README.md)
    had passed short ingestion/rollback trials on both TVs. Recorded RSS was
    2.98–3.88 MiB versus managed snapshots of 22.77–24.29 MiB. Those were individual
    process measurements, not total-TV savings or long-term acceptance; see the

@@ -3,8 +3,8 @@ import hashlib
 from pathlib import Path
 import subprocess
 root=Path(__file__).resolve().parent
-subprocess.run(['dotnet','build',str(root/'collector'),'-c','Release','--nologo'],check=True)
-artifact=root/'collector/bin/Release/net6.0/Telemetry.dll'
+subprocess.run(['dotnet','build',str(root.parents[1]/'telemetry/s90d-collector'),'-c','Release','--nologo'],check=True)
+artifact=root.parents[1]/'telemetry/s90d-collector/bin/Release/net6.0/Telemetry.dll'
 digest=hashlib.sha256(artifact.read_bytes()).hexdigest()
 out=root/'bin/helper';out.mkdir(parents=True,exist_ok=True)
 base=root.parent/'system-screensaver/boot'

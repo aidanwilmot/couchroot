@@ -1,6 +1,6 @@
 # Native telemetry
 
-This directory contains the [native collector](collector/README.md) and bounded
+This directory contains the [native collector](../../telemetry/native-collector/README.md) and bounded
 hardware probes for replacing the resident managed worker with a systemd service.
 It does not change the deployment default. See [firmware findings](../../docs/lab/research/native-service-research.md).
 

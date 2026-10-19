@@ -103,13 +103,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-      - run: docker build -t samsung-native-collector:bullseye research/native-telemetry/collector
+      - run: docker build -t samsung-native-collector:bullseye telemetry/native-collector
       - run: python3 scripts/check-root-launcher.py
       - name: Native collector host checks
         run: |
           mkdir -p test-results/native-telemetry
-          docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out" -e OUTPUT_DIR=/out samsung-native-collector:bullseye sh research/native-telemetry/collector/build.sh --host-only
-          docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out:ro" samsung-native-collector:bullseye python3 research/native-telemetry/collector/test_collector.py
+          docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out" -e OUTPUT_DIR=/out samsung-native-collector:bullseye sh telemetry/native-collector/build.sh --host-only
+          docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out:ro" samsung-native-collector:bullseye python3 telemetry/native-collector/test_collector.py
       - run: docker build -t couchroot-native-tests:py312 -f tests/native-worker.Dockerfile .
       - name: Native worker protocol and recovery checks
         run: |

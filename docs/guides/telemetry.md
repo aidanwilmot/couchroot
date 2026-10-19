@@ -59,7 +59,7 @@ signing identity and runtime (.NET 6 for S90D, .NET Core 3.1 for QN90A).
 
 The no-window relay is required because Samsung disallows direct cross-package
 service launches. Source lives in the historical
-`research/qn90a-telemetry-startup/{service,bootstrap}` directories and is shared by
+`telemetry/qn90a-startup` and `research/qn90a-telemetry-startup/bootstrap` directories and is shared by
 both builds. The service does not launch at boot by itself: it starts when Hub
 first opens. Existing model-specific Hub startup remains independent.
 
@@ -218,7 +218,7 @@ native reboot do not establish those behaviors.
 
 Automated: `python3 -m unittest discover -s research/s90d-telemetry/tests -v`,
 `npm test`, `python3 research/s90d-telemetry/build.py`, and
-`node research/s90d-telemetry/dashboard/verify.cjs`.
+`node research/archive/s90d-telemetry/dashboard/verify.cjs`.
 
 Deployed and verified on 2026-09-20:
 
