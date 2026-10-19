@@ -1,7 +1,8 @@
 # Couchroot command-line installer
 
 `./couchroot-install` provides one entry point for choosing, preparing, installing
-and recovering either launcher. Web uses the existing setup engine. Native uses
+and recovering the signed web or pure-native C launcher. The WebView experiment
+uses its [separate tools](../../native/webview/README.md). Web uses the existing setup engine. Native uses
 that same journal engine with an explicitly enrolled QN90A baseline and pinned
 root-agent transport. **Native installation has offline validation only; it has
 not been deployed or tested on a TV.** See [native installation](native-installation.md).

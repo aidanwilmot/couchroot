@@ -21,8 +21,43 @@ runs: their source guards deliberately reject a different revision.
 - [x] Clarify QN90A basic telemetry versus S90D inspection, pure-C installer versus
   WebView tools, and preference retention. Historical release decisions below
   remain dated evidence, not current merge blockers.
-- [ ] Validate the final committed source in a clean checkout and scan the exact
-  publishable tree/history. Record results here before considering it reviewed.
+- [x] Validate committed candidate `e16616d` in a clean checkout and scan the
+  publishable tree/history. The follow-up commit records documentation only.
+
+## Local validation evidence
+
+Executable source/CI candidate: `e16616d`; the follow-up record changes Markdown
+only. Logs are private, ignored files under `test-results/public-release/`.
+
+- Python 3.14: 325 setup tests passed with a failing `dotnet` stub first on PATH.
+  The stub was never invoked. The receiver passed 22 tests.
+- Node 22.23.3: all 118 tests passed, including the corrected mutual-TLS/replay
+  test. Both separate WebView JavaScript checks passed.
+- WebView Python tests: 63 discovered, 61 passed, two Linux-only cases skipped on
+  macOS. The separate Linux root-worker harness passed its process-group
+  cancellation, timeout, reboot-interruption, transfer and protocol checks.
+- Managed checks: settings adapter, QN90A inspector exclusion/S90D cadence,
+  18 relay scenarios and explicit root-worker harness passed. Source-built ARM
+  launcher embedding reproduced for QN90A and S90D.
+- Native collector: host build and all 16 tests passed in network-isolated Linux
+  containers. This exercises the host collector, not TV library compatibility.
+- All 42 declared managed assemblies and unsigned web packaging reproduced across
+  source paths. `actionlint`, changed-document links and `git diff --check` passed.
+- A source-only clone of the committed branch passed fresh `npm ci`, Node 22,
+  receiver, WebView and web reproducibility checks with private toolkit/state
+  absent. The explicit managed worker harness also passed there. Python 3.12
+  setup validation passed all 325 tests in a new virtual environment with pinned
+  requirements and .NET blocked. Its first attempt without those requirements
+  failed on missing `lxml`; the correctly provisioned rerun passed.
+
+The tracked-tree privacy heuristic found no matches in 491 source files. The
+source archive excludes ignored/private files. Gitleaks 8.30.1 found the same two
+existing passwd-related SHA-256 file hashes in both source and reachable history;
+manual review confirmed hashes, not credentials. The scoped history heuristic
+found two room-label fixture strings already reachable from public main and only
+public GitHub/noreply author addresses. No history was rewritten. These are
+limited scanner/manual-review results, not a guarantee that every disclosure risk
+has been detected. No new sensitive artifact or identity was found.
 
 ## Device validation boundary
 
