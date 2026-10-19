@@ -1,11 +1,13 @@
 from pathlib import Path
 import contextlib
+import errno
 import fcntl
 import hashlib
 import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parents[1]
@@ -72,8 +74,15 @@ def run(argv, timeout=180, supervise=False, **kwargs):
     with subprocess.Popen([str(x) for x in argv], start_new_session=own_group,
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs) as child:
         def stop(sig):
+            # communicate() may already have reaped the leader. Its PID can now
+            # belong to an unrelated process group; never signal it again.
+            if child.returncode is not None:return
             with contextlib.suppress(ProcessLookupError):
-                if own_group:os.killpg(child.pid,sig)
+                if own_group:
+                    try:os.killpg(child.pid,sig)
+                    except PermissionError as error:
+                        # Darwin reports EPERM for a group containing only zombies.
+                        if sys.platform != 'darwin' or error.errno != errno.EPERM:raise
                 else:child.send_signal(sig)
         try:
             try:output,_=child.communicate(timeout=timeout)

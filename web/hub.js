@@ -436,7 +436,7 @@
   }
   function updateMovePosition() { document.getElementById('move-position').textContent = 'Position ' + (moveIndex + 1) + ' of ' + moving.length; }
   function returnFromOptions() {
-    moving = null;
+    homeSignature = ''; moving = null;
     if (optionsOrigin === 'home') { renderHome(chosen); } else { renderEdit(chosen); }
   }
   function finishMove() { if (moving && commit(moving)) { returnFromOptions(); message('New order saved.'); } }
@@ -530,8 +530,9 @@
   telemetrySave.addEventListener('click', function () {
     if (telemetryBusy) { return; } telemetryBusy = true; telemetrySave.disabled = true;
     telemetry.save({ schema: 1, enabled: telemetryEnabled.getAttribute('aria-pressed') === 'true', endpoint: telemetryEndpoint.value.trim() }, function () {
+      if (mode !== 'telemetry') { return; }
       telemetryBusy = false; telemetrySave.disabled = false; openSettings(telemetrySetting); message('Monitoring preferences saved. Changes apply within 10 seconds.');
-    }, function (error) { telemetryBusy = false; telemetrySave.disabled = false; telemetryNote(error.message || 'Could not save monitoring preferences.', true); });
+    }, function (error) { if (mode !== 'telemetry') { return; } telemetryBusy = false; telemetrySave.disabled = false; telemetryNote(error.message || 'Could not save monitoring preferences.', true); });
   });
   telemetryCancel.addEventListener('click', function () { if (!telemetryBusy || telemetrySave.disabled) { openSettings(telemetrySetting); } });
   settings.addEventListener('click', function () { openSettings(); });

@@ -425,3 +425,39 @@ test('Samsung Home overlay can be accepted while Hub stays visible; missing call
  assert.equal(await p.locator('#launch-error-title').textContent(),'Could not open Samsung Home');
  await key(p,'Escape');assert.equal(await focusText(p),'Samsung Home');await p.close();
 });
+
+
+test('a second move without arrows has only its own moving tile and badge',async()=>{
+ const p=await setup();
+ try {
+  await p.locator('#edit-apps').click();await key(p,'ArrowDown','Enter','Enter');
+  const first=await p.locator('#favorites .moving').getAttribute('data-id');
+  await key(p,'Escape','ArrowDown','Enter','Enter');
+  assert.equal(await p.locator('#favorites .moving').count(),1);
+  assert.equal(await p.locator('#favorites .move-label').count(),1);
+  assert.notEqual(await p.locator('#favorites .moving').getAttribute('data-id'),first);
+  assert.equal(await p.locator('#favorites .moving').getAttribute('aria-disabled'),null);
+  await key(p,'Enter');assert.equal(await p.locator('#move-banner').isVisible(),false);
+ } finally {await p.close();}
+});
+
+test('a late telemetry save cannot reopen settings after Back',async()=>{
+ for(const success of [true,false]) {
+  const p=await setup();
+  try {
+   await p.locator('#settings').click();await p.locator('#setting-telemetry').click();
+   await p.waitForFunction(()=>!document.getElementById('telemetry-save').disabled);
+   // Hold the real filesystem callback after editing, then navigate away.
+   await p.evaluate(()=>{
+    const resolve=tizen.filesystem.resolve;
+    tizen.filesystem.resolve=function(...args){window.finishTelemetry=()=>resolve.apply(this,args);};
+   });
+   await p.locator('#telemetry-save').click();await key(p,'Escape','Escape');
+   assert.equal(await p.locator('#settings-dialog').isVisible(),false);
+   await p.evaluate(success=>{if(!success)Storage.prototype.setItem=function(){throw Error('save failed');};window.finishTelemetry();},success);
+   assert.equal(await p.locator('#settings-dialog').isVisible(),false);
+   assert.equal(await p.locator('#telemetry-dialog').isVisible(),false);
+   assert.equal(await p.locator('#favorites').isVisible(),true);
+  } finally {await p.close();}
+ }
+});

@@ -8,6 +8,11 @@ using System.Text.Json;
 
 internal static partial class SamsungTvRootAgent
 {
+    // Linux ARM32 assigns O_NOFOLLOW differently from x86/ARM64.
+    private static int ReadOpenFlags(bool macOS, Architecture architecture)
+    {
+        return macOS ? 0x104 : (architecture == Architecture.Arm ? 0x8000 : 0x20000) | 0x800;
+    }
     private static readonly string WorkerId = Guid.NewGuid().ToString("N");
     private const int ChunkBytes = 1024 * 1024;
     private const long TransferLimit = 2L * 1024 * 1024 * 1024;
@@ -116,7 +121,7 @@ internal static partial class SamsungTvRootAgent
             else
             {
                 if ((File.GetAttributes(t.Path) & FileAttributes.Directory) != 0 || t.Path.StartsWith("/proc/", StringComparison.Ordinal) || t.Path.StartsWith("/dev/", StringComparison.Ordinal) || t.Path.StartsWith("/sys/", StringComparison.Ordinal)) throw new IOException("Regular disk file required");
-                int flags = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? 0x104 : 0x20800; // O_NOFOLLOW | O_NONBLOCK
+                int flags = ReadOpenFlags(RuntimeInformation.IsOSPlatform(OSPlatform.OSX), RuntimeInformation.ProcessArchitecture);
                 int fd = open(t.Path, flags);
                 if (fd < 0) throw new IOException("Cannot open regular file");
                 var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle((IntPtr)fd, true);
