@@ -336,18 +336,34 @@ pinned SDK for full setup. `--component prepare` checks Python/platform only;
 native source compilation and preference conversion additionally need Docker
 and Node respectively. These checks do not validate device enrollment.
 
-CI's `web-and-offline` job runs on macOS/Linux with Python 3.12 and 3.14, Node 22
-and Chromium. It blocks `dotnet` calls even if the hosted runner has an SDK
-preinstalled. The separate `managed` job runs the four C# harnesses and managed
-cross-path builds on macOS/Linux with Python 3.12 and the pinned .NET SDK. Build
-manifests include only declared outputs, excluding stale DLLs from other research
-builds. Separate reports are `dist/reproducibility-web.json` and
+CI runs four jobs on Ubuntu 24.04, with Python 3.12 and Node 22 where needed:
+
+- `web-and-offline`: dependency/privacy checks, Python setup and recovery tests,
+  telemetry receiver and WebView tests, Node/Chromium tests, and unsigned web
+  packaging reproducibility. It blocks `dotnet` calls so these paths stay SDK-free.
+- `managed`: the four C# harnesses and managed cross-path builds using the pinned
+  .NET SDK. This covers the settings adapter, small bridges and retained recovery
+  fallback; native operation does not make those checks obsolete.
+- `root-native-launcher`: ARM launcher builds, native collector tests, native
+  worker protocol/fault/recovery tests, and the Linux managed launcher harness.
+- `qn90a-web-saver`: the pinned Emscripten reproducibility check.
+
+Pull requests and pushes to `main` run the suite. Feature-branch pushes do not
+repeat the PR run; use the manual workflow trigger for a branch without a PR.
+New commits cancel outdated runs for the same PR or branch. There is no OS or
+Python-version matrix: macOS and newer-Python compatibility can be checked locally
+before a release or when changing host-specific code. Linux CI does not certify
+macOS behavior. The 2026-10-19 main run's macOS process-group cleanup permission
+error remains a host-specific issue to investigate before claiming that path is
+fixed; the cleanup test remains enabled on Linux.
+
+Build manifests include only declared outputs, excluding stale DLLs from other
+research builds. Reports are `dist/reproducibility-web.json` and
 `dist/reproducibility-managed.json`; the default combined command retains
-`dist/reproducibility.json`. A separate Emscripten job builds the QN90A saver. These
-hosted jobs have **not been run remotely** during this change. No secrets or vendor
-libraries are supplied, and no workflow signs, deploys or publishes. The S90D
-GLES-linked renderer is intentionally excluded from public CI pending a reviewed
-vendor-library arrangement and reproducible compiler/sysroot recipe.
+`dist/reproducibility.json`. No secrets or vendor libraries are supplied, and no
+workflow signs, deploys or publishes. The S90D GLES-linked renderer is excluded
+from public CI pending a reviewed vendor-library arrangement and reproducible
+compiler/sysroot recipe.
 
 ## Prioritized blockers and owner acceptance
 

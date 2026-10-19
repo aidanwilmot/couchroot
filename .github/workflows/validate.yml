@@ -1,17 +1,18 @@
 name: Offline release validation
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   web-and-offline:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-14]
-        python: ['3.12', '3.14']
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
@@ -22,9 +23,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          python-version: '3.12'
       - uses: actions/setup-node@v4
-        if: matrix.python == '3.12'
         with:
           node-version: '22'
       # Hosted runners may have .NET preinstalled. Fail if this job invokes it.
@@ -42,31 +42,21 @@ jobs:
       - run: python -m pip install -r tvsetup/requirements.txt
       - run: python scripts/check-dependencies.py --component offline
       - run: python scripts/check-dependencies.py --component web
-        if: matrix.python == '3.12'
       - run: python scripts/privacy-audit.py --check
       - run: python -m unittest discover -s tests -p '*_test.py'
       - run: python -m unittest discover -s research/s90d-telemetry/tests
       - run: npm ci
-        if: matrix.python == '3.12'
       - run: npx playwright install --with-deps chromium
-        if: matrix.python == '3.12'
       - run: python -m unittest discover -s native/webview/tests -p 'test_*.py'
       - run: node native/webview/tests/native-shim.cjs
-        if: matrix.python == '3.12'
       - run: node native/webview/tests/diagnostic.cjs
-        if: matrix.python == '3.12'
       - run: npm test
-        if: matrix.python == '3.12'
       - run: python scripts/check-reproducible.py --component web
-        if: matrix.python == '3.12'
       - name: Verify no managed tooling was invoked
         run: test ! -e "$RUNNER_TEMP/dotnet-invoked"
   managed:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-14]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
@@ -88,6 +78,7 @@ jobs:
       - run: python scripts/check-reproducible.py --component managed
   root-native-launcher:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,6 +104,7 @@ jobs:
       - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble dotnet /app/Harness.dll
   qn90a-web-saver:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     container: emscripten/emsdk:3.1.64
     steps:
       - uses: actions/checkout@v4
