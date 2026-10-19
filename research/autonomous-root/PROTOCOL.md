@@ -17,16 +17,18 @@ mismatch. TCP fragments and coalesced frames are equivalent.
 
 The worker sends `AUTH pid uid euid gid egid cap_eff smack_base64` (eight
 tab-separated fields). Admission belongs to the server: PID is positive decimal;
-all four IDs must be exactly `0`. The capability mask is hexadecimal text and the
-SMACK label is UTF-8 encoded as base64 (up to 255 bytes). Only one authenticated
+all four IDs must be exactly `0`. Workers send a hexadecimal capability mask and a UTF-8 SMACK label encoded as
+base64 (native capture supports 255 bytes). JS currently stores these two fields
+without validating the mask or enforcing the decoded SMACK length. They are not
+server admission rules; the 512-byte total AUTH bound still applies. Only one authenticated
 worker is active. A competing connection cannot replace it. Sixteen pre-auth
 peers may wait; close, successful authentication and shutdown release the slot.
 Unauthenticated peers have a ten-second overall server deadline. Worker greeting
 reads have a ten-second socket read timeout; this is not an overall lease.
 
 Line limits count bytes before LF, including the tab and MAC. An oversized or
-unauthenticated frame closes the channel. C# additionally tolerates a trailing CR
-in its reader; shared vectors and senders use LF only. Empty authenticated lines
+unauthenticated frame closes the channel. C# additionally accepts uppercase MAC hex and tolerates a trailing CR in its
+reader; native and JS reject both. Senders use lowercase MAC hex and LF. Empty authenticated lines
 are ignored by JS but rejected by workers. Neither extension is portable.
 
 ## Limits
@@ -40,7 +42,7 @@ are ignored by JS but rejected by workers. Neither extension is portable.
 | EXEC command, decoded | 64 KiB, nonempty |
 | EXEC timeout | 100–300,000 ms; default JS 30,000 ms |
 | Held native bootstrap EXEC | 100–25,000 ms (restricted role) |
-| Retained EXEC output | 1 MiB per stream |
+| Retained EXEC output | 1 MiB per stream, plus a truncation notice appended to stderr |
 | Binary operation chunk | 1 MiB |
 | Transfer size | 2 GiB |
 | Legacy managed READFILE / WRITEFILE | 4 MiB |
@@ -84,12 +86,28 @@ and writes, 120 seconds for file open/commit and helper preparation. These budge
 do not extend a job's execution deadline. Held bootstrap disallows uploads and
 retains its restricted operation surface.
 
+## Remaining implementation differences
+
+- OP JSON: native permits 20,000 decoded bytes except `file.write`, whose envelope
+  may reach `ceil(1 MiB / 3) * 4 + 20,000` bytes. JS permits 1,500,000 JSON bytes.
+  C# has no separate OP JSON cap beyond the authenticated line bound. These are
+  retained compatibility differences, not one common OP maximum.
+- Malformed OP JSON ends the native session. C# returns `ok:false` and continues.
+- JS rejects whitespace-only EXEC commands. Both workers reject empty commands
+  but accept nonempty whitespace for the shell to evaluate.
+- JS does not enforce the capability-mask/decoded-SMACK constraints described
+  above. Changing those admission rules requires a separate compatibility decision.
+
 ## Shared vectors and provenance
 
 `tests/fixtures/root-protocol.json` pins wire bytes, MACs, valid/invalid AUTH
 admission, line boundaries and EXEC ranges. npm tests run the JS server; the
-managed harness runs the actual C# reader/MAC; the native CI suite compiles a
-small driver over the worker's actual C primitives. AUTH admission assertions
+managed harness runs the production `RunSession` over loopback TCP; the native
+CI suite drives the compiled worker through its real greeting and dispatch loop.
+Oversized greetings omit LF so an unbounded read cannot pass by later rejecting
+invalid syntax. EXEC tests exercise real timeout/command admission and output
+capture. Held-bootstrap limits and session framing divergences are explicit
+vectors. The parity contract links to this fixture for shared wire limits. AUTH admission assertions
 apply only to JS because workers send AUTH, rather than receive it.
 
 The adapted JS server lives at `service/root-agent.js`, outside `vendor/`.

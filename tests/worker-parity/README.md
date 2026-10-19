@@ -2,7 +2,8 @@
 
 `contract.json` freezes the public operation families, limits, result fields,
 outcome categories and intentional differences against managed agent 0.7.0.
-This is a migration contract, not a declaration that all production integration
+Shared wire limits link to `../fixtures/root-protocol.json` rather than duplicating
+values. This is a migration contract, not a declaration that all production integration
 is complete. Prototype capability names must not be promoted prematurely.
 
 `worker_parity_test.py` sends the same fixtures through the actual managed

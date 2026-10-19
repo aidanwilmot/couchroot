@@ -118,5 +118,71 @@
       "ms": 300001,
       "accepted": false
     }
-  ]
+  ],
+  "held_exec_timeouts": [
+    {
+      "ms": 100,
+      "accepted": true
+    },
+    {
+      "ms": 25000,
+      "accepted": true
+    },
+    {
+      "ms": 25001,
+      "accepted": false
+    },
+    {
+      "ms": 300000,
+      "accepted": false
+    }
+  ],
+  "session_frames": [
+    {
+      "name": "uppercase-mac",
+      "payload": "PING\t2",
+      "uppercase_mac": true,
+      "native": false,
+      "managed": true
+    },
+    {
+      "name": "bad-mac",
+      "payload": "PING\t2",
+      "bad_mac": true,
+      "native": false,
+      "managed": false
+    },
+    {
+      "name": "bad-sequence",
+      "payload": "PING\tno",
+      "native": false,
+      "managed": false
+    },
+    {
+      "name": "non-increasing-sequence",
+      "payload": "PING\t1",
+      "native": false,
+      "managed": false
+    },
+    {
+      "name": "unsupported-verb",
+      "payload": "NO_SUCH_VERB\t2",
+      "native": false,
+      "managed": false
+    },
+    {
+      "name": "empty-line",
+      "raw": "\n",
+      "native": false,
+      "managed": false
+    },
+    {
+      "name": "crlf",
+      "payload": "PING\t2",
+      "crlf": true,
+      "native": false,
+      "managed": true
+    }
+  ],
+  "output_limit_notice": "\n[samsung-tv-root: stdout and stderr exceeded the 1 MiB capture limit]\n"
 }
