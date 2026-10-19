@@ -35,7 +35,7 @@ Exercise affected error/empty states and remote navigation. Run relevant checks
 while iterating and `npm test` before handoff; screenshots are not visual assertions.
 
 If adding shipped assets, update the shared `tvsetup/planner.py::hub_sources`
-manifest and the installed-file inventory in `tvsetup/transport.py` together.
+manifest; the installed-file inventory in `tvsetup/transport.py` derives from it.
 Packaging and signing consume that manifest;
 retain model-specific idle/monitoring additions when packaging QN90A.
 

@@ -77,7 +77,7 @@ a fixed clock and reduced motion. Inspect the images; these are not golden-image
 tests. The older-browser checks exercise selected fallbacks in modern Chromium,
 not a Tizen emulator.
 
-Packaging writes `dist/MinimalHub-unsigned.wgt` and `dist/manifest.json`.
+Packaging writes `dist/MinimalHub-<device>-unsigned.wgt` and `dist/manifest-<device>.json`.
 For an authorized update to an already configured TV, follow
 [UI deployment](ui-deployment.md). It signs current source through the setup
 engine; the unsigned WGT is a local build check, not its deployment input.

@@ -2,6 +2,7 @@
 import contextlib
 from html.parser import HTMLParser
 import io
+import json
 from pathlib import Path
 import runpy
 import subprocess
@@ -11,10 +12,11 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 import zipfile
-from tvsetup.artifacts import Builder, next_version
+from tvsetup.artifacts import Builder
 from tvsetup.common import REPO, Refused
 from tvsetup.installer import web_package
 from tvsetup.planner import Action, hub_sources
+from tvsetup.transport import paths
 
 class Scripts(HTMLParser):
     def __init__(self, html):
@@ -49,8 +51,12 @@ class ManifestTests(unittest.TestCase):
                 self.assertEqual(set(expected),set(scripts)|{'index.html','style.css','icon.png','config.xml'})
                 web_package(device,Path(tmp)/'installer.wgt')
                 self.assertEqual(members(Path(tmp)/'installer.wgt'),expected)
-                subprocess.run([sys.executable,str(REPO/'scripts/package.py'),'--device',device],check=True,stdout=subprocess.PIPE)
-                self.assertEqual(members(REPO/'dist/MinimalHub-unsigned.wgt'),expected)
+                subprocess.run([sys.executable,str(REPO/'scripts/package.py'),'--device',device,'--output-dir',tmp],check=True,stdout=subprocess.PIPE)
+                self.assertEqual(members(Path(tmp)/('MinimalHub-'+device+'-unsigned.wgt')),expected)
+                manifest=json.loads((Path(tmp)/('manifest-'+device+'.json')).read_text())
+                self.assertEqual(manifest['device'],device)
+                self.assertEqual(manifest['package'],'MinimalHub-'+device+'-unsigned.wgt')
+                self.assertEqual({p.removeprefix('/opt/usr/apps/MiniHub001/res/wgt/') for p in paths(device) if p.startswith('/opt/usr/apps/MiniHub001/res/wgt/')},set(expected))
 
     def test_setup_builder_uses_identical_sources_except_forward_version(self):
         for device in ('s90d','qn90a'):
@@ -77,7 +83,8 @@ class ManifestTests(unittest.TestCase):
                         self.assertEqual(set(actual),set(expected)|{'boot-trace.js'})
                         for name in set(expected)-{'index.html','config.xml'}:self.assertEqual(actual[name],expected[name])
                         version=ET.fromstring(expected['config.xml']).get('version')
-                        self.assertEqual(ET.fromstring(actual['config.xml']).get('version'),next_version(version,version))
+                        self.assertEqual(version,'0.4.1')
+                        self.assertEqual(ET.fromstring(actual['config.xml']).get('version'),'0.4.2')
                         self.assertEqual(set(Scripts(actual['index.html'].decode()).sources),{n for n in actual if n.endswith('.js')})
                         if reject:raise Refused('signature rejected')
                     output=io.StringIO()
