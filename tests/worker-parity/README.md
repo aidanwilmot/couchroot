@@ -28,9 +28,9 @@ and imported-record restart behavior. Offline migration tests cover atomic
 publication, interruption/resume, conflicting IDs, retention, links/permissions,
 source preservation and rollback export.
 
-The real HTTPS service, enrollment and implementation selection are unchanged.
-Their end-to-end native selection remains a later integration gate; this harness
-does not simulate it and call that parity. App identity and helper execution need
+This harness covers worker parity, not HTTPS enrollment or implementation
+selection. Those paths now have separate integration tests and dated device
+trials; see the [current release status](../../docs/project/release-readiness.md). App identity and helper execution need
 TV validation because host builds cannot reproduce Smack. The managed oracle runs
 the production source on the test runtime, not the TV's old runtime binary.
 

@@ -27,7 +27,9 @@ apps. Screenshots contain no live device data.*
   S90D retains read-only app, process and startup inspection in the dashboard. See [telemetry and inspection](docs/guides/telemetry.md).
 - **Autonomous root agent:** a separate signed service that reacquires a temporary
   root context through TV-local SDB. It uses certificate-pinned HTTPS, authenticated
-  loopback messages, bounded retries and a durable request journal.
+  loopback messages, bounded retries and a durable request journal. The experimental
+  native worker retains a small .NET entry bridge and managed recovery fallback;
+  it is not a .NET-free installation. See the [release candidate status](docs/project/release-readiness.md).
 - **Setup and recovery tools:** explicit device profiles, firmware/hash checks,
   signature verification, private configuration, backups and recovery journals.
 - **Research:** documented experiments, including failures and model differences.

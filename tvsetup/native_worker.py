@@ -47,7 +47,13 @@ def build(folder, command):
         raise Refused('Native candidate output must be empty')
     folder.mkdir(parents=True, exist_ok=True)
     snapshot = folder / 'source'
-    inputs = sorted((SOURCE / 'native-worker').glob('*.h')) + [
+    # Snapshot only worker inputs, not benchmark/observer/acceptance controllers.
+    # Keep the fault headers: worker.c includes them, with controls compiled out.
+    headers = ('common.h', 'descriptor-budget.h', 'fault-events.h', 'progress.h',
+               'request-io.h', 'file-policy.h', 'jobs.h', 'helpers.h', 'runtime.h',
+               'containment.h', 'guardian.h', 'reconcile.h', 'fault-test.h',
+               'offline-reconcile.h')
+    inputs = [SOURCE / 'native-worker' / name for name in headers] + [
         SOURCE / 'native-worker/worker.c', SOURCE / 'native-worker/build.sh',
         SOURCE / 'native-launcher/app-launcher.c', SOURCE / 'native-launcher/build.sh',
         SOURCE / 'native-observer/process-observer.c', SOURCE / 'native-observer/service-profile.h',

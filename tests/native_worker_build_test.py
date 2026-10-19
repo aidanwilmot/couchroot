@@ -104,6 +104,16 @@ class NativeWorkerBuildTests(unittest.TestCase):
         self.assertEqual(native_worker.inspect_binary(elf(),REPORT.replace('2.17','2.28'))['glibc_max'],'2.28.0')
         with self.assertRaises(Refused):native_worker.inspect_binary(elf(),REPORT.replace('2.17','2.28'),(2,17,0))
 
+    def test_retired_entry_probe_option_refuses_before_preparation(self):
+        with patch('sys.argv', ['prepare', '--device', 'qn90a', '--native-entry-probe']), \
+             patch.object(autonomous_root, 'prepare') as prepare, \
+             patch.object(autonomous_root, 'load_site') as load_site:
+            with self.assertRaises(SystemExit) as raised:
+                autonomous_root.main()
+            self.assertEqual(raised.exception.code, 2)
+            prepare.assert_not_called()
+            load_site.assert_not_called()
+
     def test_candidate_package_keeps_managed_payload_and_default(self):
         with tempfile.TemporaryDirectory() as temp:
             compiler=Compiler()
@@ -129,4 +139,6 @@ class NativeWorkerBuildTests(unittest.TestCase):
             self.assertEqual(candidate['selection'],'managed')
             config=json.loads((folder/'provision/config.json').read_text())
             self.assertFalse(config['enabled']);self.assertNotIn('worker_implementation',config)
+            self.assertNotIn('libentry-receipt.so',manifest)
+            self.assertNotIn('entry-receipt.json',manifest)
             self.assertEqual(result['phase'],'prepared-not-installed')

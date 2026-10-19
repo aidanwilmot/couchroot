@@ -1,6 +1,9 @@
 # QN90A cleanup tracker
 
-Created: 2026-10-19. Status: complete; local cleanup only. Hosted CI and hardware acceptance remain unverified.
+Created: 2026-10-19. Status: complete; historical telemetry cleanup record.
+The [combined release candidate](release-readiness.md) tracks subsequent branch
+reconciliation and validation. Results below apply to the original cleanup state;
+they are not current candidate or hardware acceptance.
 
 Goal: make the existing QN90A basic-telemetry work easier to understand, test and
 maintain. Follow the [accepted scope](dotnet-deprecation-plan.md). This is a local

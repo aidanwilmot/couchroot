@@ -1,4 +1,105 @@
-# Release candidate review — 2026-10-19
+# Combined release candidate — 2026-10-19
+
+Status: locally validated experimental source candidate on `codex/release-candidate`. Combines
+public main `83906b4`, release preparation `4a2325a`, and native worker/restart work
+`85ba4ab` in merge `0ae6a29`. No push, signing, TV/NAS contact or deployment is part
+of this reconciliation. Prior branch test/device results below are historical;
+they do not validate this combined source state.
+
+## Supported scope and limits
+
+- Existing signed web Hub and experimental QN90A native launchers remain intact.
+- QN90A basic native telemetry uses the existing managed settings adapter and
+  setup journals. Continuous QN90A inspection is retired. S90D keeps its existing
+  collector/inspector. The new QN90A telemetry/install transaction is locally
+  tested; its hardware acceptance remains separate.
+- Experimental native root worker includes bounded operations, saved-job
+  preservation, managed return, interrupted-transition recovery and SDK rescue.
+  Keep the small .NET entry bridge, firmware runtime, packaged managed fallback
+  and captured rollback packages. New preparations remain disabled and managed
+  by default; this merge does not promote native selection.
+- Earlier native-selected 0.7.52 trials passed bounded operations/recovery on
+  both models. QN90A passed maintenance restart; S90D passed the corrected wait
+  for the old WRT host to exit (about 115 seconds). The combined candidate is not
+  deployed. Clean boot, standby/power interruption, unattended restart reliability
+  and a complete 24-hour endurance run on the current version remain open.
+
+## Reconciliation and simplicity tracker
+
+- [x] Merge both branches, retaining timing/authentication assertions in the one
+  test conflict and both changes to transport/runtime guards.
+- [x] Preserve the existing setup engine, durable receipts, identity/hash checks,
+  no-replay behavior, managed return and independent rescue. No new coordinator,
+  supervisor, installer or configuration framework.
+- [x] Limit ordinary worker source snapshots to required inputs; benchmark,
+  observation and acceptance controllers remain research/test tooling.
+- [x] Remove `--native-entry-probe` from normal package preparation. Keep its
+  builder, source and evidence for explicitly scoped research and keep immutable
+  historical recovery packages. Native-only entry and fallback removal are deferred.
+- [x] Reconcile current README, changelog and scope; mark old migration/parity
+  instructions historical instead of maintaining competing active plans.
+- [x] Run native worker protocol/fault tests in the existing Linux native CI job,
+  reusing its compiler image. Keep the SDK-free and managed jobs separate; no new
+  test framework or job matrix. The disposable native test needs ptrace for its
+  guardian; it has no network or device credentials.
+- [x] Run combined local setup, JavaScript, managed/native and recovery checks;
+  record actual passes/skips and reproducible-build results below.
+- [x] Check final diff, documentation links, workflow syntax and publishable-tree
+  privacy; preserve the original branch tips and private recovery inputs.
+
+## Local validation of the combined candidate
+
+Validated on 2026-10-19 with Python 3.14 and Node 22.23.3 on macOS, plus
+disposable network-isolated Linux containers. Logs and the non-Markdown input hash
+map are ignored under `test-results/release-candidate/`. The source/configuration
+digest is `4f3ffde81345a01f673de8194ba6618f5098881478fde4b308554f13ecbe4ce3`.
+
+| Boundary | Local result |
+| --- | --- |
+| Setup/recovery Python suite | 668 discovered: 443 passed, 225 platform/integration skips; .NET blocked and unused, private toolkit/state absent |
+| JavaScript/browser on Node 22 | 612 discovered: 434 passed, 178 Linux/integration skips; .NET blocked and unused |
+| Linux worker, parity, files, retained records, pidfd and restart script | 89 passed; worker built with ASAN/UBSAN and fault controls |
+| Linux acquisition, SDK rescue and cross-boot/startup recovery | 35 passed |
+| Real-process restart and managed/native/managed rehearsal | 37 restart cases and six rehearsal cases passed; zero skips |
+| New CI native-worker command | 49 passed, one mount-dependent storage case skipped; that case passed in the separate mount-capable worker run |
+| Receiver / collector | 22 receiver tests and 16 native collector tests passed |
+| WebView | 61 Python tests passed, two Linux-only skips; shim and diagnostic JavaScript checks passed |
+| Managed compatibility | Settings adapter, inspector scope, 18 boot-relay scenarios and root-worker harness passed |
+| Reproducibility | All 42 declared managed assemblies and unsigned web package matched across source paths; ARM launcher embedding matched for both models |
+| Native and bridge builds | Six ordinary native components per model built twice and matched; setup/service entry bundles also matched twice for both models (6 KiB setup / 7 KiB service bridge) |
+| Review checks | Workflow syntax, restart ShellCheck, changed-document relative links and whitespace checks passed |
+
+The initial Python run overlapped a source edit and hit the recovery source guard;
+the unchanged-source rerun and all 19 focused S90D recovery tests passed. The first
+native CI trial lacked ptrace permission; the corrected disposable-container
+command passed without changing runtime guards. Existing SQLite ResourceWarnings
+remain; neither was hidden by relaxing a recovery check.
+
+The tracked-tree privacy audit found no matches in 789 inspected text files.
+Gitleaks on the source-only snapshot reported ten generic-key matches: manual
+review found only 64-character SHA-256 file hashes (including the two existing
+passwd-file hashes and eight source/API-file hashes). No credential was identified.
+These are limited scanner/review results. Ignored binaries, logs and generated
+keys are outside the proposed source commit. Historical research and immutable
+private recovery inputs were not removed or rewritten.
+
+Local validation does not establish TV-library compatibility or hardware lifecycle
+acceptance. The exact combined candidate has not run in hosted CI or on either TV.
+
+## Before merging or publishing
+
+Review the final combined diff and obtain hosted CI on the exact proposed commit.
+Keep experimental labeling and outstanding hardware limits in the release notes.
+Hardware acceptance requires a separately authorized session using the existing
+[telemetry guide](../guides/native-telemetry.md),
+[agent recovery procedure](../../research/autonomous-root/README.md) and
+[hardware checklist](../guides/hardware-acceptance.md). Do not rebuild or delete
+artifacts referenced by existing recovery journals. Full .NET removal, new boot
+architectures and S90D native telemetry/graphical ports are outside this release.
+
+---
+
+# Earlier release-prep review — 2026-10-19
 
 Scope: an **experimental source merge**, not stable hardware acceptance. The
 release branch preserves the locally tested installer/telemetry/recovery work in
@@ -80,8 +181,8 @@ performs no push. Keep the experimental label and hardware limits in the release
 notes. Before calling the native integration hardware-accepted, complete the
 existing [native telemetry checks](../guides/native-telemetry.md) and
 [hardware acceptance procedure](../guides/hardware-acceptance.md) with separately
-authorized install/recovery/reboot trials. Do not expand this into the deferred
-root-worker, settings, boot or S90D native rewrites.
+authorized install/recovery/reboot trials. The later combined candidate includes the separately developed native root
+worker. Settings, boot and S90D telemetry rewrites remain deferred.
 
 # Historical publication scope — 2026-10-11
 

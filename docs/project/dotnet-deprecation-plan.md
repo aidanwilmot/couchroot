@@ -1,7 +1,7 @@
 # Couchroot home-use scope: QN90A basic telemetry
 
 Accepted 2026-10-17; status clarified 2026-10-19. Implementation and validation of
-this integration are local only. No TV or NAS deployment or hardware acceptance
+this telemetry integration are local only. No TV or NAS deployment or hardware acceptance
 has occurred for these changes. Earlier device trials remain historical evidence.
 
 ## Accepted scope
@@ -56,8 +56,14 @@ prerequisites for personal home use.
 
 Defer one-shot helper consolidation, QN90A web boot-helper replacement, S90D
 AT-HUB/saver/splash rewrites, S90D telemetry migration/native graphical launcher,
-root-worker/acquisition replacement, and removal of all .NET dependencies.
+and removal of all .NET dependencies.
 Revisit an item only for a demonstrated reliability, resource or maintenance issue.
+
+The separately developed native root worker/acquisition is now included in the
+[combined release candidate](release-readiness.md), with the small managed entry
+bridge and recovery fallback retained. Its bounded 0.7.52 device trials are
+separate from telemetry acceptance. Further native-only entry work and fallback
+removal are deferred; do not treat the old root-worker deferral as current status.
 
 Keep existing helpers, manual diagnostics, exact artifacts and executable paths
 needed by installations and recovery journals. Preserve current S90D recovery;

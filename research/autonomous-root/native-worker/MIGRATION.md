@@ -37,56 +37,29 @@ qualification remain open. Keep the bridge and fallback;
 a native-only entry rewrite and fallback removal are deferred. This rollout changes
 the root agent only; Hub, telemetry/settings and NAS services were not redeployed.
 
-### Earlier qualification and local work
+## Release candidate scope
 
-The owner paused the earlier endurance trials on 2026-10-16. Both controllers
-were stopped and reconciled, their original jobs and evidence preserved, and test
-scopes cleaned. Neither shortened run qualified 24-hour endurance. The owner later
-authorized the bounded update above; it does not turn those earlier runs into
-endurance acceptance. See [pause evidence](hardware-qualification-paused-results.json).
-The following entries retain their original scope and limits.
+The combined candidate is tracked in [release readiness](../../../docs/project/release-readiness.md).
+Keep the small entry bridge, managed fallback, settings adapter, durable journals
+and independent SDK rescue. Do not make native selection the installation default
+or remove fallback while lifecycle qualification is open. Native-only capability
+entry and further runtime rewrites are deferred, not release prerequisites.
 
-Local follow-up provides a .NET-free **component build**, not a native-only
-installation: `python3 -m tvsetup.native_components --model qn90a --output NEW_DIRECTORY`
-(also `s90d`) builds six ordinary native artifacts with two-build reproducibility
-and ABI/dependency checks. No managed compiler, signing, site configuration or
-device access is needed. The manifest refuses a deployable-agent claim and the
-existing setup adapter rejects this bundle as an acquisition entry. Signed
-packages, default selection and all managed fallback builders remain unchanged.
-
-The new `tvsetup.native_rescue` caller generates boot/firmware/code-bound native
-rescue timers and journals exact arm/retire requests before dispatch. Unknown
-outcomes are not replayed. Retained service exit evidence and post-stop checks
-prevent a timer race from being accepted as unfired. This is locally verified
-orchestration for later adoption; no private historical kit or TV was changed.
-See [native recovery caller contract](../recovery/native/README.md) and
-[local build and test evidence](native-only-local-results.json).
-
-Agent installation and updates now accept `--native-bundle` for their setup
-transport. The existing engine uses a validated private snapshot for every root
-request, avoiding per-request managed probe compilation while retaining the small
-entry bridge. Managed selection remains the default and explicit fallback; an
-uncertain native request is never replayed through it. This caller integration
-passed 343 local Python tests (221 platform/integration skips), including nine new
-selection, dispatch, snapshot and failure tests. Neither TV was contacted.
+`python3 -m tvsetup.native_components --model qn90a --output NEW_DIRECTORY`
+(also `s90d`) builds ordinary components without .NET. This is not an installable
+native-only agent. Signed packages still require managed builds. Installation
+and updates accept `--native-bundle` for setup acquisition through the existing
+engine; uncertain native requests are never replayed through managed fallback.
 See [usage](../../native-root-acquisition/README.md#build-and-use).
 
-Native-only capability entry remains the implementation blocker. The existing
-captured-artifact evidence does not establish an isolated executable mapping with
-the required effective capabilities before vendor app preparation drops them.
-No local stub or removal of runtime checks can close that boundary. Preserve the
-managed bridge until an independently qualified entry replaces it.
+## Historical qualification and implementation notes
 
-When hardware work is explicitly resumed, use fresh journals to qualify the new
-native rescue caller independently, then the verified replacement entry through
-fresh installation, service acquisition, reconnect and failure recovery. Retain
-the managed rescue during these trials. Deploy the latest startup fixes to QN90A
-after reconciliation; run both-TV clean-boot and interrupted-return recovery,
-the remaining approved power lifecycle cases, a new full endurance invocation
-per TV and resource/performance analysis. Only then stage native-default use and
-the proposed observation period before approved fallback removal. Boot-bound
-timers do not constitute reboot-surviving rescue. Native-only packaging and final
-managed build/payload removal remain dependent on those gates.
+The entries below describe their original revisions, states and limits. They
+are evidence, not an active work queue or the current installed state. In
+particular, the owner paused the earlier endurance trials and cleaned their
+controllers; neither shortened run qualified 24-hour endurance. Use the snapshot
+above and release-readiness tracker for current scope. Preserve original failed
+and uncertain trials without rewriting them as successful.
 
 S90D recovered from its incomplete service restart after the owner reapplied the
 Developer Mode Host PC setting without restarting. SDK inspection preserved the

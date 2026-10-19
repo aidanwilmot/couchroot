@@ -3,8 +3,13 @@
 A separate signed web service reacquires a temporary namespace root context over
 loopback SDB and keeps an authenticated worker alive. This is autonomous
 reacquisition, not a firmware root patch. It is prepared for the existing QN90A
-(.NET Core 3.1) and S90D (.NET 6) profiles. **Both TVs have verified reboot startup,
-local root acquisition, worker recovery and registered-service process recovery.**
+(.NET Core 3.1) and S90D (.NET 6) profiles. The experimental native worker retains
+its small .NET entry bridge and managed fallback. Earlier managed releases passed
+reboot and service recovery trials; those results do not qualify the current
+native candidate's complete lifecycle. Both TVs ran native-selected 0.7.52 in
+bounded trials; clean boot, standby/power interruption and full endurance remain
+open. See the [current release scope](../../docs/project/release-readiness.md) and
+[dated qualification snapshot](native-worker/MIGRATION.md#current-qualification-snapshot).
 Signed-package success is not proof of on-boot entitlement, Node
 runtime support, SDK admission, SMACK access or full privileged API coverage.
 

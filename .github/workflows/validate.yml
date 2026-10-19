@@ -102,6 +102,13 @@ jobs:
           mkdir -p test-results/native-telemetry
           docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out" -e OUTPUT_DIR=/out samsung-native-collector:bullseye sh research/native-telemetry/collector/build.sh --host-only
           docker run --rm --pull never --network none -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out:ro" samsung-native-collector:bullseye python3 research/native-telemetry/collector/test_collector.py
+      - name: Native worker protocol and recovery checks
+        run: |
+          mkdir -p test-results/native-worker
+          docker run --rm --init --pull never --network none --cap-add SYS_PTRACE --security-opt seccomp=unconfined -v "$PWD:/src:ro" -v "$PWD/test-results/native-worker:/out" samsung-native-collector:bullseye sh -eu -c '
+            gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function -DNATIVE_WORKER_TEST -DNATIVE_WORKER_FAULT_TEST research/autonomous-root/native-worker/worker.c -ldl -pthread -o /out/worker
+            NATIVE_WORKER=/out/worker NATIVE_WORKER_FAULT_TEST=1 python3 -m unittest discover -s tests -p native_worker_test.py
+          '
       - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release
       - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble dotnet /app/Harness.dll
   qn90a-web-saver:

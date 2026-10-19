@@ -2,6 +2,19 @@
 
 ## 0.1.0.dev1 — unreleased
 
+- Combine public-release preparation and native-worker development into one
+  experimental source candidate. Native root operations, journaled managed/native
+  transitions, retained jobs and SDK rescue coexist with QN90A basic telemetry and
+  the existing settings adapter. Retain the small .NET entry bridge, firmware
+  runtime and managed fallback. Neither native-default installation nor complete
+  .NET removal is claimed.
+- Trim ordinary native build snapshots to worker inputs and remove the deferred
+  capability-entry diagnostic from the normal package command. Keep research
+  evidence and recovery artifacts. The S90D maintenance restart procedure waits
+  for the original WRT host to exit before relaunching once. Previous 0.7.52
+  device results do not qualify this combined candidate; current validation is
+  local only. See [scope and remaining gates](docs/project/release-readiness.md).
+
 - Reconcile the installer/basic-telemetry candidate with the public WebView and
   root-agent changes. Keep root-worker harness execution in managed CI, add native
   collector host checks to the existing Linux job, and fix TLS connection-reuse

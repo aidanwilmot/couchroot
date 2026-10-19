@@ -32,7 +32,7 @@ def certificate(builder, folder, name):
     return sha(ssl.PEM_cert_to_DER_cert(cert.read_text()))
 
 
-def prepare(device, site, sign=True, version=None, native_candidate=False, native_acquisition=False, native_entry_probe=False):
+def prepare(device, site, sign=True, version=None, native_candidate=False, native_acquisition=False):
     profile=configured_profile(device,site)
     if sign:require_trust(profile)
     folder=PRIVATE/'autonomous-root'/device/run_id();folder.mkdir(parents=True,mode=0o700)
@@ -69,12 +69,6 @@ def prepare(device, site, sign=True, version=None, native_candidate=False, nativ
         for name in FILES:
             shutil.copyfile(bundle/'artifacts'/name, payload/name)
         atomic_json(payload/'service-acquisition.json', acquisition)
-    if native_entry_probe:
-        from .native_entry import build as build_entry, ARTIFACT
-        bundle = folder/'native-entry-receipt'
-        receipt = build_entry(profile, bundle, builder.command)
-        shutil.copyfile(bundle/'artifacts'/ARTIFACT, payload/ARTIFACT)
-        atomic_json(payload/'entry-receipt.json', receipt)
     atomic_json(payload/'manifest.json',{p.name:sha(p.read_bytes()) for p in payload.iterdir()})
     shutil.copyfile(SOURCE/'payload/LICENSE',payload/'LICENSE')
     shutil.copyfile(SOURCE/'UPSTREAM.json',stage/'UPSTREAM.json')
@@ -112,10 +106,9 @@ def main():
     parser.add_argument('--device',choices=['qn90a','s90d'],required=True)
     parser.add_argument('--native-candidate',action='store_true',help='Include reproducible native artifacts; managed remains selected')
     parser.add_argument('--native-acquisition', action='store_true', help='Use native service acquisition and held bootstrap; keep managed fallback')
-    parser.add_argument('--native-entry-probe', action='store_true', help='Include the inert, read-only SDK capability receipt library')
     parser.add_argument('--version');parser.add_argument('--site',type=Path);parser.add_argument('--unsigned',action='store_true')
     args=parser.parse_args()
-    try:print(json.dumps(prepare(args.device,load_site(args.site),not args.unsigned,args.version,args.native_candidate,args.native_acquisition,args.native_entry_probe)))
+    try:print(json.dumps(prepare(args.device,load_site(args.site),not args.unsigned,args.version,args.native_candidate,args.native_acquisition)))
     except Refused as e:print(str(e),file=sys.stderr);return 1
     return 0
 

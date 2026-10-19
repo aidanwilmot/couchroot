@@ -4,16 +4,19 @@ This opt-in diagnostic tests a possible replacement for the managed capability
 entry. It performs no root acquisition, mount, system-file change or operation.
 The existing acquisition bridge and .NET recovery utility remain available.
 
-Include the receipt library in the normal signed package with:
+## Deferred experiment
 
-```sh
-python3 -m tvsetup.autonomous_root --device DEVICE --native-candidate \
-  --native-acquisition --native-entry-probe --version VERSION
-```
-Preparation does not install or execute it.
-`tvsetup.native_entry.build` snapshots original sources, pins the compiler image,
-builds twice, compares every output byte and checks ARM softfp/GLIBC compatibility.
-The package's ordinary payload manifest covers the library and its build receipt.
+The release candidate retains the small managed capability-entry bridge. The
+normal package command no longer accepts `--native-entry-probe`; this diagnostic
+is not needed for startup, managed return or SDK rescue. The original research
+source, `tvsetup.native_entry.build`, tests and dated results remain for evidence
+and explicitly scoped future investigation. Existing captured recovery packages
+must be used unchanged; do not rebuild them from this candidate.
+
+The historical trials packaged the receipt at the fixed path below. Their
+builder snapshots sources, pins the compiler image, builds twice and checks ARM
+softfp/GLIBC compatibility. This is research tooling, not a supported release
+installation option.
 
 The host encoder supplies only `loader_type=common-loader` and one fixed preload:
 `/opt/usr/apps/MiniRoot01/res/wgt/payload/libentry-receipt.so`. It implements the
