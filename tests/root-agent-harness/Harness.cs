@@ -29,7 +29,9 @@ internal static partial class SamsungTvRootAgent
         System.Threading.Thread.Sleep(1200);
         Check(!File.Exists(marker), "EXEC background child survived leader exit");
         clock.Restart();
-        Reject(() => Execute("setsid /bin/sh -c 'sleep 4' & sleep .1", 3000), "escaped pipe owner allowed success");
+        string ready = root + "exec-escaped-ready";
+        string escaped = "printf ready > " + ShellQuote(ready) + "; sleep 4";
+        Reject(() => Execute("setsid /bin/sh -c " + ShellQuote(escaped) + " & while [ ! -s " + ShellQuote(ready) + " ]; do sleep .01; done", 3000), "escaped pipe owner allowed success");
         Check(clock.ElapsedMilliseconds < 2500, "escaped pipe owner blocked output drain");
         clock.Restart();
         result = Execute("sleep 10", 100);
