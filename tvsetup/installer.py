@@ -150,7 +150,6 @@ def web_package(device, destination):
     # Same model-aware sources as the shared signing builder, still unsigned.
     from .planner import hub_sources
     members = hub_sources(device)
-    members['config.xml'] = (REPO / 'web/config.xml').read_bytes()
     with zipfile.ZipFile(destination, 'x', zipfile.ZIP_DEFLATED) as archive:
         for name, data in sorted(members.items()):
             info = zipfile.ZipInfo(name, (2026, 9, 19, 0, 0, 0))
