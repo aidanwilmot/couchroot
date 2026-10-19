@@ -590,6 +590,8 @@ static double failed_at;
 static char *launcher_import_fragment(void) {
     const char *path = getenv("COUCHROOT_NATIVE_STATE");
     if (!path || !*path) return NULL;
+    struct stat prefs_stat;
+    if (lstat(path,&prefs_stat)<0 && errno==ENOENT) { puts("preferences-import skipped=missing"); return NULL; }
     HubSaved saved;
     if (!hub_load(&saved, path)) { puts("preferences-import skipped=format"); return NULL; }
     int compact=saved.compact, clock=saved.clock, first=saved.first, selected=saved.selected;

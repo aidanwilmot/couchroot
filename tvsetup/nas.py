@@ -90,6 +90,7 @@ class NAS:
         current=state.get('pairing_config')
         if current is None:return
         if not isinstance(current,dict):raise Refused('Pairing configuration must be an object')
+        if current.get('unsupported'):raise Refused('Malformed private pairing configuration')
         for key,expected in [('device_id',p['id']),('firmware',p['firmware']),('runtime_version',p['runtime'])]:
             if current.get(key)!=expected:raise Refused('Private pairing identity mismatch: '+key)
         from .config import validate_endpoint

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shlex
 import sys
+import tempfile
 import uuid
 from .common import PRIVATE, REPO, Refused, run, sha
 
@@ -89,7 +90,8 @@ class Transport:
     def __init__(self, profile, evidence, *, native_bundle=None):
         self.profile, self.evidence = profile, evidence
         self.evidence.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.root_session = self.evidence/('root-session-'+uuid.uuid4().hex)
+        self._root_temp = tempfile.TemporaryDirectory(prefix='root-session-',dir=self.evidence)
+        self.root_session = Path(self._root_temp.name)
         self.native_bundle = None
         self.root_acquisition = dict(kind='managed')
         if native_bundle is not None:
@@ -105,6 +107,12 @@ class Transport:
         self.client = SdbClient(PRIVATE/'bin/sdb', profile['host'])
         self.client.connect(); self.client.require_device()
         self.sdk(identity_guard(profile))
+
+    def close(self):
+        self._root_temp.cleanup()
+
+    def __enter__(self):return self
+    def __exit__(self,*args):self.close()
 
     def sdk(self, script, timeout=30):
         result = self.client.capture('(\n'+script+'\n)',callback_host=self.callback,bind_host=self.callback,timeout=timeout)
@@ -136,7 +144,11 @@ class Transport:
             argv.extend(['--native-bundle', str(self.native_bundle)])
         try: output = run(argv, timeout=360, cwd=REPO)
         except Refused as error:
-            path.with_suffix('.log').write_text(getattr(error,'output','Interrupted; completion unknown'))
+            detail=getattr(error,'output','Interrupted; completion unknown')
+            if result.exists():
+                saved=json.loads(result.read_text())
+                if saved.get('failed'):detail+='\n'+saved.get('output','')
+            log=path.with_suffix('.log');log.write_text(detail);log.chmod(0o600)
             raise
         path.with_suffix('.log').write_text(output)
         if cleanup_index is not None:return output

@@ -123,6 +123,8 @@ def execute(profile, script, cleanup_index=None, *, native_bundle=None, session=
         if native_bundle is not None:
             cleanup+=f'\nif test -d {prefix}/code; then rmdir {prefix}/code; fi\n'
         cleanup+=f'\nrm -f {prefix}/passwd-view\nfor d in {prefix} {BASE}on-demand; do if test -d "$d"; then rmdir "$d"; fi; done\n'
+        result=folder/'downloaded-result.txt'
+        captured=None
         try:
             for source,target in artifacts.items():client.push(source,PurePosixPath(BASE+target))
             check=''.join(hash_guard(BASE+target,sha(source.read_bytes())) for source,target in artifacts.items())
@@ -132,8 +134,8 @@ def execute(profile, script, cleanup_index=None, *, native_bundle=None, session=
                 # still removes executable payloads even if the callback is lost.
                 completed='\n'.join('rm -f '+Q(BASE+v) for v in artifacts.values() if v!=probe+'/result.txt')
                 if native_bundle is not None:completed+=f'\nrmdir {prefix}/code\n'
-                completed+=f'\nrm -f {prefix}/passwd-view\nrmdir {BASE}on-demand\n'
-                command+="completed() {\n"+completed+"}\ntrap 'status=$?; if test \"$status\" = 0; then completed; else cleanup; fi; exit \"$status\"' EXIT\n"
+                completed+=f'\nrm -f {prefix}/passwd-view\nif test -d {BASE}on-demand; then rmdir {BASE}on-demand || :; fi\n'
+                command+="completed() {\n"+completed+"}\ntrap 'status=$?; completed || :; exit \"$status\"' EXIT\n"
             else:command+="trap cleanup EXIT\n"
             command+=check
             if capture_result:command+=f'chmod 600 {prefix}/result.txt {prefix}/read.tmp\n'
@@ -141,14 +143,30 @@ def execute(profile, script, cleanup_index=None, *, native_bundle=None, session=
                 command+=f'/usr/bin/dotnet {prefix}/NamespaceRootProbe.dll {prefix}\n'
             else:
                 command+=f'env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus /usr/bin/dotnet {prefix}/NativeEntry.dll probe\n'
-            toolkit.capture(cfg,callback,command,45,'setup-root-operation')
+            failure=None
+            try:toolkit.capture(cfg,callback,command,45,'setup-root-operation')
+            except Exception as error:failure=error
             if capture_result:
-                result=folder/'downloaded-result.txt'
-                client.run(['pull',prefix+'/result.txt',str(result)],check=True)
-                if not result.is_file() or result.stat().st_size>16*1024*1024:raise Refused('Missing or oversized root result')
-                return result.read_text()
+                try:
+                    client.pull(PurePosixPath(prefix+'/result.txt'),result)
+                    if not result.is_file() or result.stat().st_size>16*1024*1024:raise Refused('Missing or oversized root result')
+                    captured=result.read_text()
+                except Exception:
+                    if failure is None:raise
+                    captured='Operation output could not be retrieved; completion remains unconfirmed.'
+            if failure is not None:
+                failure.output=captured or ''
+                raise failure
+            return captured
         finally:
-            # Only known temporary files; never retry the operation on an uncertain result.
-            toolkit.capture(cfg,callback,'set -eu\n'+cleanup+originals+
-                            f'test ! -e {prefix}\ntest ! -e {BASE}on-demand\n'
-                            'if ps -eo args | grep -E "[N]amespaceRootProbe.dll|[R]ootIdentity.dll|[N]ativeEntry.dll"; then exit 1; fi\n',20,'setup-root-cleanup')
+            # Only known temporary files; never retry an uncertain operation.
+            # Unlink the downloaded credential-bearing bytes even if cleanup is
+            # interrupted or fails. Only the worker's sanitized result persists.
+            try:
+                toolkit.capture(cfg,callback,'set -eu\n'+cleanup+originals+
+                                f'test ! -e {prefix}\ntest ! -e {BASE}on-demand\n'
+                                'if ps -eo args | grep -E "[N]amespaceRootProbe.dll|[R]ootIdentity.dll|[N]ativeEntry.dll"; then exit 1; fi\n',20,'setup-root-cleanup')
+            except Exception as error:
+                if captured is not None:error.output=captured
+                raise
+            finally:result.unlink(missing_ok=True)

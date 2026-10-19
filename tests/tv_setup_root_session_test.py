@@ -3,7 +3,7 @@ import contextlib
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import tempfile
 from types import SimpleNamespace
@@ -60,7 +60,7 @@ class RootSessionTests(unittest.TestCase):
             with self.assertRaisesRegex(Refused, 'identity/source changed'):
                 prepared({**p, 'runtime':'changed'}, folder, 'probe')
             (folder/'manifest.json').unlink()
-            with self.assertRaises(FileExistsError):
+            with self.assertRaisesRegex(Refused,'Incomplete root session cache'):
                 prepared(p, folder, 'probe')
             build.assert_called_once()
 
@@ -71,7 +71,7 @@ class RootSessionTests(unittest.TestCase):
                 payload='read result\n'*2000
                 p={**profile(device), 'host':'192.0.2.11', 'device_id':'fixture-device'}
                 class Client:
-                    def __init__(self,*args):pass
+                    def __init__(self,*args):self_outer.assertEqual(args[1],p["host"])
                     def connect(self):pass
                     def require_device(self):pass
                     def capture(self,*args,**kwargs):
@@ -81,10 +81,13 @@ class RootSessionTests(unittest.TestCase):
                         if source.name=='operation.sh':scripts.append(source.read_text())
                         if source.name in ('result.txt','read.tmp'):
                             self_outer.assertEqual(source.stat().st_mode & 0o777, 0o600)
-                    def run(self,args,check=False):
-                        self_outer.assertTrue(check)
-                        self_outer.assertEqual(args[0], 'pull')
-                        Path(args[2]).write_text(payload)
+                    def pull(self,remote,local):
+                        self_outer.assertIsInstance(remote,PurePosixPath)
+                        self_outer.assertEqual(remote.name,'result.txt')
+                        self_outer.assertEqual(local.name,'downloaded-result.txt')
+                        local.write_text(payload)
+                    def run(self,*args,**kwargs):
+                        raise AssertionError('unscoped SDB run bypasses serial and pull error checks')
                 self_outer=self
                 lost=False
                 def capture(cfg,callback,script,timeout,label):
@@ -98,8 +101,9 @@ class RootSessionTests(unittest.TestCase):
                     for operation in ('printf first', 'printf second'):
                         self.assertEqual(execute(p, operation, session=folder/'session', capture_result=True), payload)
                     lost=True
-                    with self.assertRaisesRegex(Refused,'lost reply'):
+                    with self.assertRaisesRegex(Refused,'lost reply') as failure:
                         execute(p, 'printf third', session=folder/'session', capture_result=True)
+                    self.assertEqual(failure.exception.output,payload)
                 build.assert_called_once()
                 self.assertEqual(len(scripts),3)
                 for n,word in enumerate(('first','second','third')):
@@ -115,6 +119,19 @@ class RootSessionTests(unittest.TestCase):
                         completed=script.split('completed() {',1)[1].split('}\ntrap',1)[0]
                         self.assertIn('RootIdentity.dll',completed)
                         self.assertNotIn('result.txt',completed)
+                        # Execute the actual generated trap locally, with all paths
+                        # redirected into a temporary tree and rmdir forced to fail.
+                        from tvsetup.root import BASE
+                        trap=script[script.index('cleanup() {'):script.index('\n',script.index("trap '"))]
+                        for status in (0,7):
+                            with tempfile.TemporaryDirectory() as local:
+                                base=Path(local);(base/'on-demand').mkdir()
+                                result=base/('codex-qn90a-root-proof' if device=='qn90a' else 'codex-namespace-proof')/'result.txt'
+                                result.parent.mkdir();result.write_text('failure output')
+                                command='set -eu\nrmdir() { return 1; }\n'+trap.replace(BASE,local+'/')+'\nexit '+str(status)
+                                finished=subprocess.run(['sh','-c',command],capture_output=True)
+                                self.assertEqual(finished.returncode,status,finished.stderr)
+                                self.assertEqual(result.read_text(),'failure output')
                     if label=='setup-root-cleanup':
                         self.assertIn('result.txt',script)
                         self.assertIn('read.tmp',script)
@@ -187,3 +204,84 @@ class PrivateResultsTests(unittest.TestCase):
         nas.pairing.return_value={**original,'token':'rotated-fixture-token'}
         nas.check_pairing(plan,p,state);self.assertEqual(len(plan.actions),1)
         self.assertEqual(plan.actions[0].kind,'pairing')
+
+class RecoveryHygieneTests(unittest.TestCase):
+    def test_failure_output_is_logged_but_read_credentials_are_not(self):
+        from tvsetup import worker
+        for reads in (False,True):
+            with tempfile.TemporaryDirectory() as tmp:
+                tv=object.__new__(Transport);tv.profile=profile('qn90a');tv.evidence=Path(tmp)
+                tv.root_session=Path(tmp)/'session';tv.native_bundle=None
+                secret='fixture-sensitive-value'
+                failure=Refused('remote failed')
+                failure.output=('partial '+secret.encode().hex()) if reads else 'stdout before failure\nstderr reason'
+                def dispatch(argv,**kwargs):
+                    with patch('tvsetup.worker.execute',side_effect=failure):
+                        try:worker.main(argv[3:])
+                        except Refused:
+                            error=Refused('worker failed');error.output='safe worker failure';raise error
+                with patch('tvsetup.transport.run',side_effect=dispatch):
+                    with self.assertRaises(Refused):tv.root('false',json_reads=reads)
+                log=next(Path(tmp).glob('*.log'))
+                if reads:
+                    self.assertNotIn(secret.encode().hex(),log.read_text())
+                    self.assertIn('omitted',log.read_text())
+                else:self.assertIn(failure.output,log.read_text())
+                self.assertEqual(log.stat().st_mode & 0o777,0o600)
+
+    def test_invalid_pairing_is_safe_unsupported_state_not_a_snapshot_failure(self):
+        from tvsetup.worker import decode_reads
+        from tvsetup.planner import plan
+        from tvsetup.config import resolve
+        from tv_setup_planner_test import accepted
+        for value in (["private value"], {'token':123}, 'private value'):
+            data=decode_reads(json.dumps({'pairing_config':json.dumps(value).encode().hex()}))
+            self.assertEqual(data['pairing_config'],{'unsupported':'Malformed private pairing configuration'})
+            state=accepted('qn90a');state.update(data)
+            proposal=plan(profile('qn90a'),resolve('qn90a',overrides={'components':['telemetry']}),state)
+            self.assertTrue(any('Malformed private pairing' in reason for reason in proposal.issues))
+            # Driver.snapshot remains usable by rollback, independently of plan admission.
+            from tvsetup.operations import Driver
+            driver=object.__new__(Driver);driver.tv=Mock();driver.tv.snapshot.return_value=state
+            self.assertEqual(driver.snapshot(),state)
+
+    def test_transport_close_removes_only_its_build_cache_even_on_interrupt(self):
+        client=Mock();client.capture.return_value=SimpleNamespace(output='\n[exit:0]\n',transport_returncode=0)
+        toolkit=SimpleNamespace(device=lambda cfg:'192.0.2.30',SdbClient=lambda *a:client)
+        with tempfile.TemporaryDirectory() as tmp,patch('tvsetup.toolkit.load',return_value=toolkit):
+            root=Path(tmp);(root/'journal.json').write_text('recovery')
+            p={**profile('qn90a'),'host':'192.0.2.11','device_id':'fixture-device'}
+            with self.assertRaises(KeyboardInterrupt):
+                with Transport(p,root) as tv:
+                    cache=tv.root_session;(cache/'partial').write_text('build')
+                    raise KeyboardInterrupt()
+            self.assertFalse(cache.exists());self.assertEqual((root/'journal.json').read_text(),'recovery')
+
+    def test_payload_is_private_under_permissive_umask(self):
+        from tvsetup.operations import Driver
+        from tvsetup.planner import Action
+        with tempfile.TemporaryDirectory() as tmp:
+            driver=object.__new__(Driver);driver.folder=Path(tmp)
+            action=Action('private','telemetry','preferences',None,{'enabled':False},{})
+            old=os.umask(0)
+            try:result=driver.prepare(action)
+            finally:os.umask(old)
+            self.assertEqual(Path(result['artifact']).stat().st_mode & 0o777,0o600)
+
+    def test_download_is_unlinked_before_temp_cleanup_when_pull_is_interrupted(self):
+        from tvsetup import root
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp);operation=folder/'operation';operation.mkdir()
+            p={**profile('qn90a'),'host':'192.0.2.11','device_id':'fixture-device'}
+            client=Mock()
+            client.capture.return_value=SimpleNamespace(transport_returncode=0,output='a'*64+'  /etc/passwd\n'+'b'*64+'  /usr/share/sdbd/public.pem\n[exit:0]\n')
+            def pull(remote,local):
+                local.write_text('sensitive downloaded bytes');raise KeyboardInterrupt()
+            client.pull.side_effect=pull
+            toolkit=SimpleNamespace(device=lambda cfg:'192.0.2.30',SdbClient=lambda *a:client,capture=Mock())
+            with patch.object(root,'PRIVATE',folder),patch.object(root,'load',return_value=toolkit), \
+                 patch.object(root,'prepare_artifacts',return_value={}), \
+                 patch.object(root.tempfile,'TemporaryDirectory',return_value=contextlib.nullcontext(str(operation))):
+                with self.assertRaises(KeyboardInterrupt):root.execute(p,'false',capture_result=True)
+            self.assertFalse((operation/'downloaded-result.txt').exists())
+            self.assertEqual(toolkit.capture.call_args.args[-1],'setup-root-cleanup')

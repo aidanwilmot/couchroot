@@ -335,11 +335,15 @@ acceptance limit, instead of the toolkit's shortened console preview. Snapshot
 reads use a JSON map of hex-encoded values so newlines and quotes cannot confuse
 framing. Pairing `token` becomes `token_sha256` before the worker writes its result,
 snapshot, journal or diagnostic output. Credential changes still trigger pairing
-repair. Actual install payloads and recovery copies remain private and may contain
+repair. Malformed pairing records are marked unsupported during planning without
+blocking recovery snapshots. Actual install payloads and recovery copies remain private and may contain
 credentials; hashes are diagnostics, not replacement credentials.
 
 If a reply is lost, the operation is not retried. The device-side exit trap removes
-executables; the host also attempts cleanup, including the private result file.
+executables while preserving the result for a serial-scoped download, even on
+non-zero exit. Failure output is saved in private evidence; incomplete snapshot
+frames are omitted to protect credentials. The host then attempts remote cleanup
+and always unlinks the downloaded raw result.
 A lost connection can leave cleanup unconfirmed. Preserve the journal and inspect
 staging before another operation. Host tests do not establish cleanup on firmware.
 
@@ -350,8 +354,12 @@ configuration until recovery is resolved. After a successful run, retain the
 recovery set until a subsequent release has been accepted on hardware and its
 rollback window has closed. Do not delete files referenced by a retained journal.
 
+Local `root-session-*` build caches are removed when the transport closes,
+including after Ctrl-C. A forced process kill can leave a cache behind; it may be
+removed once that process is gone. These caches are not recovery backups.
+
 For completed runs whose recovery window has closed, delete diagnostic `evidence/`
-logs, local `root-session-*` build caches and toolkit `sessions/` after 30 days.
+logs and toolkit `sessions/` after 30 days.
 Delete unneeded pairing payloads and backups at the same time; rotate a receiver
 credential if its private copies may have been exposed. Cleanup is manual: setup
 never ages out recovery data automatically. Keep these directories private and

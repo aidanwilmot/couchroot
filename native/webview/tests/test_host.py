@@ -422,6 +422,11 @@ class HostTests(unittest.TestCase):
                                                  {"id": "9Ur5IzDKqV.TizenYouTube", "name": 'You"Tube'}]},
             "layout": "compact", "clock": "24h", "start": "last", "selection": "9Ur5IzDKqV.TizenYouTube"})
 
+    def test_launcher_distinguishes_missing_preferences(self):
+        result = self.launcher(COUCHROOT_NATIVE_STATE=str(self.out / 'absent-preferences'))
+        self.assertIn('preferences-import skipped=missing', result.stdout)
+        self.assertNotIn('preferences-import skipped=format', result.stdout)
+
     def test_launcher_skips_invalid_preferences(self):
         prefs = self.out / "bad-preferences"
         prefs.write_text("COUCHROOT1 1 2 0 0\nbad id!\tBad\n")

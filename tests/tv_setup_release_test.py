@@ -90,6 +90,7 @@ class CLITests(unittest.TestCase):
         class FixtureTransport:
             def __init__(self,p,evidence):self.profile=p;calls.append(('connect',p['host']))
             def snapshot(self,privileged=False):calls.append(('snapshot',privileged));return accepted(self.profile['id'])
+            def close(self):calls.append(('close',self.profile['id']))
         patch('tvsetup.cli.Transport',FixtureTransport).start()
     def invoke(self,*args):
         out=io.StringIO();err=io.StringIO()
@@ -102,6 +103,7 @@ class CLITests(unittest.TestCase):
                 code,out,err=self.invoke(command,'--device',device,'--components','hub','--json')
                 self.assertEqual(code,0,err);self.assertEqual(json.loads(out)['actions'],[])
         self.assertFalse(any(c==('snapshot',True) for c in self.calls))
+        self.assertEqual(sum(c[0]=='close' for c in self.calls),4)
     def test_noninteractive_mutation_requires_yes_before_transport(self):
         code,out,err=self.invoke('apply','--device','qn90a','--json')
         self.assertEqual(code,1);self.assertEqual(self.calls,[]);self.assertIn('--yes',err)
