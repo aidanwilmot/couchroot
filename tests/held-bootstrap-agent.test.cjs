@@ -19,7 +19,7 @@ for(const outcome of ['retired','uncertain','stopped','managed-fallback','recove
  const bytes=Buffer.from('payload'),manifest={};for(const n of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const suffix of ['dll','deps.json','runtimeconfig.json'])manifest[n+'.'+suffix]=real('./policy').hash(bytes);
  const mockfs={...fs,mkdirSync:()=>{},readdirSync:()=>[],writeFileSync:()=>{},chmodSync:()=>{},rmdirSync:()=>{},existsSync:()=>false,lstatSync:()=>{throw Object.assign(Error('absent'),{code:'ENOENT'});}};
  const modules={fs:mockfs,'./policy':{...real('./policy'),read:p=>p.endsWith('/manifest.json')?Buffer.from(JSON.stringify(manifest)):p==='/etc/passwd'?Buffer.from('owner:x:5001:100:Owner:/home/owner/:/bin/sh\n'):bytes,sdkRuntimeGuard:()=>'',verifyFirmware:()=>{}},
-  './vendor/root-agent':{RootAgentServer:Channel},'./vendor/sdb':{connect:async()=>({}),close:()=>{},exec:async()=>{submitted++;channels[0].connect();return '';}},
+  './root-agent':{RootAgentServer:Channel},'./vendor/sdb':{connect:async()=>({}),close:()=>{},exec:async()=>{submitted++;channels[0].connect();return '';}},
   './native-candidate':{candidateStatus:()=>({state:'verified'})},'./worker-selection':{selectionStatus:()=>selected,managedVersion:()=>sha},
   './restart-inventory':{abandonUnsubmitted:()=>({abandoned:false}),inventoryRestart:()=>({})},'./restart-rollback':{restartRollbackCandidate:()=>null},'./restart-return':{restartReturnCandidate:()=>null},
   './service-acquisition':{loadAcquisition:()=>({}),stageAcquisition:()=>{}},

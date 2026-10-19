@@ -3,7 +3,7 @@ const {privateDirectory}=require('./private-state');
 // Own the private callback for one journaled provider launch. Closing this
 // transport is not evidence that the provider or its staging has been retired.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const {RootAgentServer}=require('./vendor/root-agent');
+const {RootAgentServer}=require('./root-agent');
 const {submitRetirement}=require('./retirement-launch');
 const {readyRetirement,privateRead}=require('./retirement-readiness');
 const {shutdownRetirement,cleanupRetirement,finishRetirement}=require('./retirement-teardown');

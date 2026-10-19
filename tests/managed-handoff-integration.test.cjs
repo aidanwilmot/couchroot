@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events'),{createRequire}=require('node:module');
-const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
+const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
 const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
 const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
 for(const mode of ['proc','pidfd','pidfd-bad-digest','probe-qn90a','probe-s90d'])test('managed handoff with '+mode+' preserves retained records and admission ownership',{
@@ -21,7 +21,7 @@ for(const mode of ['proc','pidfd','pidfd-bad-digest','probe-qn90a','probe-s90d']
   return {binary,sha256:crypto.createHash('sha256').update(fs.readFileSync(binary)).digest('hex'),manifest_sha256:input.expectedManifest};
  }};
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,__dirname:path.dirname(source),process,Buffer,setTimeout,clearTimeout,
-  require:name=>mode.startsWith('probe')&&name==='./observer-stage'?stageFixture:name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name)});
+  require:name=>mode.startsWith('probe')&&name==='./observer-stage'?stageFixture:name==='./root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name)});
  const observer=mode.startsWith('pidfd')?{binary:process.env.PROCESS_OBSERVER,sha256:mode==='pidfd-bad-digest'?'0'.repeat(64):crypto.createHash('sha256').update(fs.readFileSync(process.env.PROCESS_OBSERVER)).digest('hex')}:undefined;
  const agent=module.exports.createAgent({device:mode==='probe-s90d'?'s90d':'qn90a'},{verifyFirmware:()=>{},selectionFile:file,managedVersion:()=>version,processObserver:observer,
   ...(mode==='pidfd'?{readProcessFile:()=>{throw Object.assign(Error('proc denied'),{code:'EACCES'});}}:{})});

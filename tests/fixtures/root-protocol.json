@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "secret_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "nonce_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+  "limits": {
+    "frame_bytes": 8388608,
+    "preauth_bytes": 512,
+    "preauth_peers": 16,
+    "auth_timeout_ms": 10000,
+    "exec_min_ms": 100,
+    "exec_max_ms": 300000,
+    "command_bytes": 65536,
+    "output_bytes": 1048576,
+    "binary_chunk_bytes": 1048576
+  },
+  "frames": [
+    {
+      "name": "root-auth",
+      "wire": "AUTH\t42\t0\t0\t0\t0\tffffffffffffffff\tVXNlcg==\tbe088e21f4d359c540eb4a65b0723d198c20cf4687bcda5d0cfd5bc57aac193d\n",
+      "payload": "AUTH\t42\t0\t0\t0\t0\tffffffffffffffff\tVXNlcg==",
+      "mac_valid": true,
+      "auth_valid": true
+    },
+    {
+      "name": "wrong-auth-count",
+      "wire": "AUTH\t42\t0\t0\t0\t0\tffffffffffffffff\t9b332b4d64347ac8f750099f33f2d6da1eeafa195c47299241c931968d5c154b\n",
+      "payload": "AUTH\t42\t0\t0\t0\t0\tffffffffffffffff",
+      "mac_valid": true,
+      "auth_valid": false
+    },
+    {
+      "name": "non-root-auth",
+      "wire": "AUTH\t42\t5001\t5001\t5001\t5001\t0\tVXNlcg==\tce61707b2e726eb0094c9d1bce8e520ef2c4b83a514c163b6a1743bb9190e62a\n",
+      "payload": "AUTH\t42\t5001\t5001\t5001\t5001\t0\tVXNlcg==",
+      "mac_valid": true,
+      "auth_valid": false
+    },
+    {
+      "name": "exec",
+      "wire": "EXEC\t1\t300000\tcHJpbnRmIG9r\t2b97fe0e67f17e11251bd81b3ad083e63504c6b7c6e9af2c62a00725b941dfbd\n",
+      "payload": "EXEC\t1\t300000\tcHJpbnRmIG9r",
+      "mac_valid": true
+    },
+    {
+      "name": "unicode-result",
+      "wire": "RESULT\t1\t0\t0\t4piD\t\t68c82e5b14d492c6b44f773d7b228b3c83d3b5b8587f694b689d7cb29684d974\n",
+      "payload": "RESULT\t1\t0\t0\t4piD\t",
+      "mac_valid": true
+    },
+    {
+      "name": "bad-mac",
+      "wire": "PING\t1\t0000000000000000000000000000000000000000000000000000000000000000\n",
+      "mac_valid": false
+    },
+    {
+      "name": "missing-mac",
+      "wire": "PING\t1\n",
+      "mac_valid": false
+    },
+    {
+      "name": "short-mac",
+      "wire": "PING\t1\tabcd\n",
+      "mac_valid": false
+    }
+  ],
+  "lines": [
+    {
+      "name": "greeting-boundary",
+      "bytes": 512,
+      "limit": 512,
+      "accepted": true
+    },
+    {
+      "name": "oversize-greeting",
+      "bytes": 513,
+      "limit": 512,
+      "accepted": false
+    },
+    {
+      "name": "frame-boundary",
+      "bytes": 8388608,
+      "limit": 8388608,
+      "accepted": true
+    },
+    {
+      "name": "oversize-frame",
+      "bytes": 8388609,
+      "limit": 8388608,
+      "accepted": false
+    }
+  ],
+  "exec_timeouts": [
+    {
+      "ms": 0,
+      "accepted": false
+    },
+    {
+      "ms": 1,
+      "accepted": false
+    },
+    {
+      "ms": 99,
+      "accepted": false
+    },
+    {
+      "ms": 100,
+      "accepted": true
+    },
+    {
+      "ms": 120000,
+      "accepted": true
+    },
+    {
+      "ms": 300000,
+      "accepted": true
+    },
+    {
+      "ms": 300001,
+      "accepted": false
+    }
+  ]
+}

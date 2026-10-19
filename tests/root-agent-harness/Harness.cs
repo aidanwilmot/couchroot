@@ -82,6 +82,7 @@ internal static partial class SamsungTvRootAgent
     public static void TestOperations()
     {
         TestProtocolReader();
+        TestProtocolVectors();
         TestReadOpenFlags();
         Reject(()=>AppCommand("echo should-not-run"),"unprepared native launcher accepted");
         string root=Path.GetTempPath()+"couchroot-operations-"+Guid.NewGuid().ToString("N")+"/";

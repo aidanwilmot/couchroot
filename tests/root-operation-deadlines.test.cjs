@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const {EventEmitter}=require('node:events');
 const crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),net=require('node:net');
 const {execFile,execFileSync}=require('node:child_process');
-const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
+const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
 const {operationDeadline,HTTP_MARGIN_MS,CLIENT_MARGIN_MS}=require('../research/autonomous-root/service/operation-deadlines');
 const contract=require('./worker-parity/contract.json').response_deadlines;
 function signed(secret,nonce,payload){return payload+'\t'+crypto.createHmac('sha256',secret).update(nonce).update('\0').update(payload).digest('hex')+'\n';}

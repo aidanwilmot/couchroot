@@ -2,7 +2,7 @@
 // Run separately in an otherwise idle disposable container: this fixture owns
 // the real managed job directory. TV signing, systemd and mount setup are fixtures.
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events'),{createRequire}=require('node:module');
-const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
+const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const {observeProcesses}=require('../research/autonomous-root/service/worker-processes');
 const {providerId}=require('../research/autonomous-root/service/restart-inventory');
@@ -70,7 +70,7 @@ fi
    const r={schema:1,id,phase:'submitted',implementation:'managed',manifest_sha256:o.managedSha256,runtime_sha256:o.runtimeSha256,state_receipt_sha256:o.receiptSha256,origin_id:inputs.record.id,source:inputs.record.worker_identity,boot_id:boot,unit,directory,stage,files:{'SamsungTvRootAgent.dll':managed,'SamsungTvRootAgent.runtimeconfig.json':managed,'SamsungTvRootAgent.deps.json':managed},port:o.port,token_file:o.tokenFile,token_sha256:o.tokenSha256};write('managed-launch.pending',id+'\n');write(id+'.managed-launch.json',r);start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(o.port),stage],unit);return r;}}
  };
  const base=path.resolve(__dirname,'../research/autonomous-root/service');
- function load(name){if(modules.has(name))return modules.get(name).exports;if(launchers[name])return launchers[name];if(name==='vendor/root-agent')return {RootAgentServer:HostServer};if(name==='vendor/sdb')return {connect:()=>new Promise(()=>{}),close:()=>{}};
+ function load(name){if(modules.has(name))return modules.get(name).exports;if(launchers[name])return launchers[name];if(name==='root-agent')return {RootAgentServer:HostServer};if(name==='vendor/sdb')return {connect:()=>new Promise(()=>{}),close:()=>{}};
   if(name==='worker-selection')return {...require(base+'/'+name),managedVersion:()=>managed};if(name==='native-candidate')return {candidateStatus:()=>({state:'verified'}),loadCandidate:()=>({manifest_sha256:native})};
   const file=base+'/'+name+'.js',real=createRequire(file),module={exports:{}};modules.set(name,module);vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,exports:module.exports,__dirname:path.dirname(file),__filename:file,process,Buffer,URL,setTimeout,clearTimeout,setInterval,clearInterval,setImmediate,clearImmediate,require:n=>n.startsWith('./')&&fs.existsSync(path.resolve(path.dirname(file),n)+'.js')?load(path.relative(base,path.resolve(path.dirname(file),n))):real(n)});if(name==='managed-activation'&&recoverActivation){const activate=module.exports.activateManaged;module.exports.activateManaged=async options=>{const result=await activate(options);if(!activationInterrupted){activationInterrupted=true;throw Error('lost activation acknowledgement');}return result;};}return module.exports;
  }

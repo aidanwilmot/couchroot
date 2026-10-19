@@ -3,7 +3,7 @@
 const assert = require('assert').strict;
 const EventEmitter = require('events');
 const crypto = require('crypto');
-const {RootAgentServer} = require('../../research/autonomous-root/service/vendor/root-agent.js');
+const {RootAgentServer} = require('../../research/autonomous-root/service/root-agent.js');
 class Socket extends EventEmitter {
   constructor() { super(); this.writes = []; this.destroyed = false; }
   write(data) { this.writes.push(data); }
@@ -25,7 +25,7 @@ async function main() {
   }
   await check('disconnect rejects pending commands immediately', async () => {
     const server = new RootAgentServer(); const socket = new Socket(); server._handle(socket); authenticate(server, socket);
-    const pending = server.execute('id', 1).then(() => 'resolved', () => 'rejected');
+    const pending = server.execute('id', 1000).then(() => 'resolved', () => 'rejected');
     socket.destroy();
     assert.equal(await Promise.race([pending, new Promise(r => setImmediate(() => r('still pending')))]), 'rejected');
     server.close();
@@ -38,7 +38,7 @@ async function main() {
   });
   await check('AUTH and RESULT in one TCP chunk are both processed', async () => {
     let pending;
-    const server = new RootAgentServer({onConnect: () => { pending = server.execute('id', 1); }});
+    const server = new RootAgentServer({onConnect: () => { pending = server.execute('id', 1000); }});
     const socket = new Socket(); server._handle(socket);
     socket.emit('data', Buffer.from(frame(server, socket, 'AUTH\t42\t0\t0\t0\t0\t3fffffffff\tVXNlcg==') + frame(server, socket, 'RESULT\t1\t0\t0\tb2s=\t')));
     const result = await Promise.race([pending, new Promise(r => setImmediate(() => r(null)))]);

@@ -1,4 +1,5 @@
 'use strict';
+// Adapted from Vetro 9319cb0 (MIT); see vendor/LICENSE and ../UPSTREAM.json.
 
 // Node port of the SamsungTvRootAgent protocol (server side).
 //
@@ -17,7 +18,7 @@
 
 var net = require('net');
 var crypto = require('crypto');
-var operationDeadline = require('../operation-deadlines').operationDeadline;
+var operationDeadline = require('./operation-deadlines').operationDeadline;
 
 var PROTOCOL_VERSION = 'SAMSUNG-TV-ROOT/1';
 var MAX_FRAME_BYTES = 8 * 1024 * 1024;
@@ -316,7 +317,7 @@ RootAgentConnection.prototype.execute = function (command, timeoutMs) {
     if (typeof command !== 'string' || !command.trim() || Buffer.byteLength(command) > 65536) {
         return Promise.reject(new Error('invalid or oversized command'));
     }
-    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000) {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 300000) {
         return Promise.reject(new Error('invalid command timeout'));
     }
     if (self._socket.destroyed) return Promise.reject(new Error('root agent disconnected'));

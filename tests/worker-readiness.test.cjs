@@ -46,7 +46,7 @@ function fixture(options={},modules={},device='qn90a',config={}){
  const module={exports:{}};
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,__dirname:path.dirname(source),process,Buffer,
   setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout:()=>{},
-  require:name=>modules[name]||(name==='./vendor/root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name))});
+  require:name=>modules[name]||(name==='./root-agent'?{RootAgentServer:Channel}:name==='./vendor/sdb'?{connect:()=>new Promise(()=>{}),close:()=>{}}:realRequire(name))});
  const agent=module.exports.createAgent({device,...config},{verifyFirmware:()=>{},readBootId:()=>BOOT,...options});
  return {agent,channels,timers};
 }

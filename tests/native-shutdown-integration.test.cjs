@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events');
-const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
+const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
 const {processIdentities,observeProcesses,waitForProcessExit}=require('../research/autonomous-root/service/worker-processes');
 const {preparePidfdExit}=require('../research/autonomous-root/service/pidfd-observer');
 for(const mode of ['proc','pidfd'])test('ordinary native worker acknowledges shutdown and guardian cleanup with '+mode,{
