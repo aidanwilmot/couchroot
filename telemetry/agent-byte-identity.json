@@ -285,5 +285,13 @@
     "worker/observe": "aaf22cfbf18a8ca2761eb7939003682ac00432c40c281bacda420c48425787a0",
     "worker/worker": "c82a7f37497a69a407e0fa5c99b09c454bb3e0dcc31a45a1c2994fcb68532ca5",
     "worker/worker-fault-test": "af8da383f9217c0be7f869f307815fb6e1b408b122979687bac8935499e106ce"
+  },
+  "managed_recovery": {
+    "netcoreapp3.1/Recovery.dll": "2b9967e4672adc6b764129964d805ae44f08d2dce727b37e62c48b8e6f699212",
+    "netcoreapp3.1/Recovery.deps.json": "6b984ec03304dfcd3f87482a5ee2975083758cbb014e2342ebf454df953ab6a4",
+    "netcoreapp3.1/Recovery.runtimeconfig.json": "818abac6065c8b3de67cdb136773c1e584705913877ab1f9961d8def7fdbc16d",
+    "net6.0/Recovery.dll": "0a8ca95a55f71578d49eea27c9fbeff8021e5ca2253cd0b4f3706fc43a263b5b",
+    "net6.0/Recovery.deps.json": "93f266e503a41567056bc4c4ac937f1cad8fdbdae7b47d760daaa4d6803fe3a9",
+    "net6.0/Recovery.runtimeconfig.json": "aeb46a15366e38511c192ccf65312442c64e8753b3c16fd2ca0b4cb34a5c59f3"
   }
 }
