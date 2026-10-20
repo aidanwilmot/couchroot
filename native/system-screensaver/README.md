@@ -93,11 +93,11 @@ Use Debian bullseye cross packages `gcc-arm-linux-gnueabi` and
 `libc6-dev-armel-cross`, plus GLES2/KHR headers from libgles-dev/libgl-dev.
 This device uses **ARMv7 softfp**, not armhf. The final shared object's flag is
 `0x5000200`; its required GLIBC versions are 2.4 and 2.17 (TV has 2.30).
-Use a private copy of this TV's `libGLESv2.so.2.0`, named `libGLESv2.so.2`:
+From the repository root, use a private copy of this TV's `libGLESv2.so.2.0`, named `libGLESv2.so.2`:
 
 ```sh
-GLES_LIBRARY_DIR=/path/to/private/tv-libraries ./build.sh
-node verify-shader.cjs
+GLES_LIBRARY_DIR=/path/to/private/tv-libraries sh native/system-screensaver/build.sh
+node research/archive/system-screensaver/verify-shader.cjs
 ```
 
 The verifier compiles the real C simulation and mesh builder with warnings as
@@ -115,8 +115,9 @@ With GLES2/KHR headers available (no real GLES library is needed for this test):
 
 ```sh
 cc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-parameter \
-  -I/path/to/gles-headers verify-render-loop.c -lm -o bin/verify-render-loop
-bin/verify-render-loop
+  -I/path/to/gles-headers research/archive/system-screensaver/verify-render-loop.c \
+  -lm -o /tmp/couchroot-verify-render-loop
+/tmp/couchroot-verify-render-loop
 ```
 
 Native compilation resolves every symbol against the TV GLES library. `bin/` is
