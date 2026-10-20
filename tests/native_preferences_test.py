@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-spec = importlib.util.spec_from_file_location('native_preferences', Path(__file__).parents[1] / 'native-hub/import-chromium-state.py')
+spec = importlib.util.spec_from_file_location('native_preferences', Path(__file__).parents[1] / 'research/archive/native-hub/import-chromium-state.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 

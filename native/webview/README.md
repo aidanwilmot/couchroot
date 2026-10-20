@@ -11,7 +11,7 @@ interface in Chromium/EWK inside an owner-UID EFL window. It starts from the
 native boot hook. Background admission can precede Samsung's signed web-app
 launch path; normal boot uses the signed Hub for a safe viewer handoff.
 It is a third launcher option alongside the signed [web Hub](../../web) and
-[pure-native Hub](../../native-hub); see [the comparison](../../docs/guides/choosing-a-launcher.md).
+[retired pure-native experiment](../../research/archive/native-hub); see [the comparison](../../docs/guides/choosing-a-launcher.md).
 
 The source, tests and recovery-command renderer are public. Deployment still
 requires a private, model-bound installer using the shared setup journal, enrolled

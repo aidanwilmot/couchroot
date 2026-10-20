@@ -19,51 +19,11 @@ from tvsetup.native_install import capture
 
 
 class PreparationTests(unittest.TestCase):
-    def test_opt_in_bundle_is_deterministic_private_and_requires_adapter(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            binary = root/'input'; binary.write_bytes(elf())
-            manifests = []
-            with patch('tvsetup.cli.load_site', side_effect=AssertionError('private site read')), \
-                 patch('tvsetup.native_cli.connect', side_effect=AssertionError('TV connection')), \
-                 patch.object(installer, 'local_command', side_effect=AssertionError('unexpected build')):
-                for name in ('first', 'second'):
-                    out = root/name
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        code = installer.main(['prepare', '--device', 'qn90a', '--launcher', 'native',
-                                               '--native-binary', str(binary), '--native-telemetry-binary', str(binary),
-                                               '--output', str(out)])
-                    self.assertEqual(code, 0)
-                    manifest = json.loads((out/'manifest.json').read_text())
-                    self.assertTrue(manifest['deployment_available'])
-                    self.assertTrue(manifest['apply_consumes_bundle'])
-                    self.assertFalse(manifest['native_telemetry']['inspector_available'])
-                    self.assertEqual(manifest['native_telemetry']['inspector_status'], 'retired')
-                    self.assertFalse(any('inspector' in item.lower() for item in manifest['blockers']))
-                    self.assertTrue(manifest['native_telemetry']['managed_settings_adapter_retained'])
-                    self.assertIsNone(manifest['native_telemetry']['binary_matches_checkout'])
-                    self.assertTrue(manifest['blockers'])
-                    for filename, details in manifest['files'].items():
-                        self.assertEqual(sha((out/filename).read_bytes()), details['sha256'])
-                    self.assertEqual((out/'telemetry-collector').stat().st_mode & 0o777, 0o600)
-                    self.assertNotIn('telemetry', json.loads((out/'web-choices.json').read_text())['components'])
-                    with self.assertRaisesRegex(Refused, 'current signed telemetry adapter'):
-                        capture(root/'run', out, root/'not-read')
-                    self.assertFalse((root/'run').exists())
-                    manifests.append(manifest)
-            self.assertEqual(*manifests)
-
-    def test_bad_elf_and_unsupported_selection_publish_nothing(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); good = root/'hub'; good.write_bytes(elf())
-            bad = root/'collector'; bad.write_bytes(b'not an ARM ELF')
-            for device, launcher in [('qn90a', 'native'), ('qn90a', 'web'), ('s90d', 'native')]:
-                with contextlib.redirect_stderr(io.StringIO()):
-                    code = installer.main(['prepare', '--device', device, '--launcher', launcher,
-                                           '--native-binary', str(good), '--native-telemetry-binary', str(bad),
-                                           '--output', str(root/'bundle')])
-                self.assertEqual(code, 1)
-                self.assertFalse((root/'bundle').exists())
+    def test_retired_launcher_cannot_publish_telemetry_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                installer.main(['prepare','--device','qn90a','--launcher','native','--output',tmp+'/bundle'])
+            self.assertFalse((Path(tmp)/'bundle').exists())
 
     def test_candidate_cannot_be_silently_ignored_by_removing_metadata(self):
         with self.assertRaises(Refused):

@@ -12,7 +12,7 @@ class NativePreferences(unittest.TestCase):
             root=Path(tmp);state=root/'preferences';exe=root/'reader';source=root/'reader.c'
             for launcher in ('native-hub','webview'):
                 if launcher=='native-hub':
-                    code='#include "'+str(ROOT/'native-hub/hub-model.h')+'"\nint main(int argc,char **argv){(void)argc;HubSaved saved;return hub_load(&saved,argv[1])?0:1;}\n'
+                    code='#include "'+str(ROOT/'research/archive/native-hub/hub-model.h')+'"\nint main(int argc,char **argv){(void)argc;HubSaved saved;return hub_load(&saved,argv[1])?0:1;}\n'
                 else:
                     code='#define main host_main\n#include "'+str(ROOT/'native/webview/host.c')+'"\n#undef main\nint main(int argc,char **argv){(void)argc;setenv("COUCHROOT_NATIVE_STATE",argv[1],1);return launcher_import_fragment()?0:1;}\n'
                 source.write_text(code)
