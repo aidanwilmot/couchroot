@@ -8,7 +8,7 @@ separately signed 0.3.8 build; QN90A work must not use its integration or trim c
 **Current Home status:** a later root-assisted [key-routing change](home.md)
 successfully returns from Plex and YouTube to the full dashboard in native-key
 tests. Its exact rollback was tested on the TV. The preference trials below are
-historical failures. The later [boot relay](../../../research/qn90a-hub-boot/) adds
+historical failures. The later [boot relay](../../../../research/qn90a-hub-boot) adds
 full-reboot startup without using those preferences.
 
 ## Signing and application
@@ -182,7 +182,7 @@ Private evidence:
 
 ## Asteroids screensaver port
 
-The [QN90A screensaver port](../../../research/qn90a-screensaver/README.md) diagnosed
+The [QN90A screensaver port](../../../../research/qn90a-screensaver/README.md) diagnosed
 native resets to two hours and a renderer too dim on this LCD. Asteroids 1.0.1
 uses brighter/wider QN90A-only strokes, confirmed visible by the owner. After two
 successful native five-minute trials, the owner selected **dashboard-owned idle**:
@@ -193,4 +193,4 @@ timer is packaged only for MinimalHubQN90A and requires no root service.
 The optional system-wide selector remains a memory patch cleared by full reboot;
 its automatic boot integration is unresolved. The broader global timeout patch
 was superseded and removed. The rejected native-file override was not retried.
-See the port's acceptance evidence and [exact rollback](../../../research/qn90a-screensaver/ROLLBACK.md).
+See the port's acceptance evidence and [exact rollback](../../../../research/qn90a-screensaver/ROLLBACK.md).

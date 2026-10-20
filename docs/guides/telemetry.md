@@ -42,7 +42,7 @@ Unreadable counters are JSON null; missing physical disk/interface sets produce
 no rate instead of zero. No thermal/GPU/video counters are inferred.
 
 For the investigated alternative to the managed service, see
-[native collector supervision](../research/native-service-research.md). It records
+[native collector supervision](../lab/research/native-service-research.md). It records
 successful C collector ingestion trials on both TVs at roughly 3–4 MiB RSS, preserved
 pairing and tested rollback. The managed service remains deployed. QN90A native
 startup and recovery integration are implemented locally; hardware acceptance is
@@ -288,15 +288,15 @@ power, lifecycle or performance behavior.
 A bounded S90D trial ran upstream Netdata v2.11.1 without a resident CLR and
 streamed 121 charts over verified TLS to an isolated test parent. The trial was
 removed; both TVs retain normal managed collection. Automatic native startup
-remains unresolved on the shared path. See the [measurements and remaining work](../research/netdata-native.md).
+remains unresolved on the shared path. See the [measurements and remaining work](../lab/research/netdata-native.md).
 
-The later [QN90A host-bootstrap pilot](../research/native-autostart.md#host-bootstrap-pilot-and-sdk-recovery)
+The later [QN90A host-bootstrap pilot](../lab/research/native-autostart.md#host-bootstrap-pilot-and-sdk-recovery)
 passed isolated native reconciliation and crash restart, but failed postboot SDK
 acceptance. Managed telemetry returned after reboot. The owner's subsequent
 reboot restored SDK access; all pilot resources were removed and both managed
 production streams verified fresh. No native production cutover was made.
 
-The [QN90A web startup pass](../devices/qn90a/web-startup.md) moved Hub's initial
+The [QN90A web startup pass](../lab/devices/qn90a/web-startup.md) moved Hub's initial
 monitoring preference read after foreground focus plus 1.5 seconds. Loading the
 filesystem extension had synchronously blocked JavaScript despite the API's
 callback interface. Public preferences, private pairing and bounded retry policy

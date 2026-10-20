@@ -34,7 +34,7 @@ of the eventual collector's memory use or a fair collector benchmark.
 
 ## Actual collector validation
 
-The [C collector](../../research/native-telemetry/collector/README.md) sent real samples
+The [C collector](../../../research/native-telemetry/collector/README.md) sent real samples
 to the existing NAS receiver on both TVs without changing receiver code, identity,
 credentials, certificate pin or chart history. The same ARM binary served both.
 Each trial drained the managed sampler's lease before starting native collection.
@@ -108,7 +108,7 @@ The collector uses ordinary `main()` and Unix signals. It does not need
 never itself a .NET dependency; the original C# service host introduced the CLR.
 
 The tested unit properties are captured in
-[`probe/lifecycle.service`](../../research/native-telemetry/probe/lifecycle.service).
+[`probe/lifecycle.service`](../../../research/native-telemetry/probe/lifecycle.service).
 They include:
 
 - `User=5001`, `Group=100`, `SmackProcessLabel=User`;
@@ -286,5 +286,5 @@ Addresses are Ghidra addresses, not live ASLR addresses.
 The dedicated package, transient units, temporary mounts, staged payloads and
 probe-only TV backup directories were removed. The production collector and its
 configuration were preserved; source is in
-[`research/native-telemetry`](../../research/native-telemetry/README.md).
-See [telemetry operations](../guides/telemetry.md) for the deployed architecture.
+[`research/native-telemetry`](../../../research/native-telemetry/README.md).
+See [telemetry operations](../../guides/telemetry.md) for the deployed architecture.

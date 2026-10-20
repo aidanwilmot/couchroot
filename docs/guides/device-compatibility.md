@@ -24,7 +24,7 @@ their paint surface, even with mostly idle aggregate CPU. Preserve the isolated
 Home backdrop/footer layers and run the cached-paint browser regression. Validate
 performance with native input and raster-thread CPU on the TV; synthetic handler
 timing or animation-frame callbacks alone do not measure completed presentation.
-See [the performance record](../devices/qn90a/performance.md).
+See [the performance record](../lab/devices/qn90a/performance.md).
 
 Desktop mocks cover discovery, launching and monitoring preference storage.
 They do not reproduce the TV's app inventory, security policy, sound output,
@@ -34,7 +34,7 @@ Changes touching those boundaries need a model-specific on-TV check.
 The TVs use separate signing profiles and integration procedures. Do not infer
 that S90D startup/root helpers work on QN90A. Consult the relevant record:
 
-- [S90D integration](../devices/s90d/README.md)
-- [QN90A integration and browser compatibility](../devices/qn90a/README.md)
-- [QN90A Home routing](../devices/qn90a/home.md)
+- [S90D integration](../lab/devices/s90d/README.md)
+- [QN90A integration and browser compatibility](../lab/devices/qn90a/README.md)
+- [QN90A Home routing](../lab/devices/qn90a/home.md)
 - [Owner operations and release procedure](owner-operations.md)

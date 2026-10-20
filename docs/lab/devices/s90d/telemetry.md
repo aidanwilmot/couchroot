@@ -1,7 +1,7 @@
 # S90D telemetry to TrueNAS Netdata
 
 > The deployed implementation now supports both TVs. See
-> [shared monitoring and current operations](../../guides/telemetry.md).
+> [shared monitoring and current operations](../../../guides/telemetry.md).
 > The remainder records the original S90D rollout and its recovery artifacts.
 
 The TV runs a small managed collector through Samsung's existing signed

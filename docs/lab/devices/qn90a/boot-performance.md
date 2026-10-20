@@ -86,7 +86,7 @@ moved from about 9.2 s to 7.2–9.2 s.
 ## Reproducing the profile
 
 The native launcher has an opt-in profiler (`COUCHROOT_NATIVE_PROFILE=1`, see
-[the native Hub README](../../../native-hub/README.md#opt-in-profiler)). It reports
+[the native Hub README](../../../../native-hub/README.md#opt-in-profiler)). It reports
 per-milestone thread CPU, faults, a 4 ms sample of the main thread's state and
 syscall, and system-wide busy/iowait and runnable counts. It reads the process's own
 `/proc` entries plus system-wide `/proc/stat` and `/proc/diskstats`, and stops at the

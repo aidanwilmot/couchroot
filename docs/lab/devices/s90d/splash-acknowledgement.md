@@ -4,7 +4,7 @@ Investigated and implemented 2026-09-20, firmware T-PTMDAKUC-0090-2130.0.
 **Historical record:** the splash-only helper below was superseded by telemetry
 composites later that day. The current live helper has not been read back for this
 assessment. See the [2026-10-12 assessment](native-boot-assessment.md) and
-[current recovery procedure](../../guides/s90d-boot-recovery.md). Do not use the
+[current recovery procedure](../../../guides/s90d-boot-recovery.md). Do not use the
 old splash-only installer to replace a composite helper.
 
 The initial read-only investigation was followed by owner-authorized deployment
@@ -162,7 +162,7 @@ The historical splash-only installer backed up the original helper and refused
 unrelated versions. Its replacement allowlist is intentionally not broadened to
 composites: doing so could discard telemetry and screensaver integration.
 `tools/s90d/splash.py` now routes to the shared-journal recovery checkpoint tool;
-see [boot recovery](../../guides/s90d-boot-recovery.md). It captures the actual
+see [boot recovery](../../../guides/s90d-boot-recovery.md). It captures the actual
 reviewed baseline before a future trial and never installs the old splash build.
 
 ## Deployment evidence

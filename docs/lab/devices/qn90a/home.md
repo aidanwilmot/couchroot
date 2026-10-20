@@ -80,7 +80,7 @@ Physical-remote/panel confirmation and a subsequent cold-boot/standby check are
 still pending. This is persistent local SQLite configuration, but persistence
 through a future firmware update is not guaranteed: Samsung could regenerate
 its app registration. Startup-to-dashboard is implemented separately by the
-[QN90A boot relay](../../../research/qn90a-hub-boot/); the key route remains unchanged.
+[QN90A boot relay](../../../../research/qn90a-hub-boot); the key route remains unchanged.
 The dashboard's Samsung Home action still launches the stock app directly;
 its physical button check was requested separately from native-key tests.
 

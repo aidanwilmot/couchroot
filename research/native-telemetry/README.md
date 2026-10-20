@@ -2,7 +2,7 @@
 
 This directory contains the [native collector](collector/README.md) and bounded
 hardware probes for replacing the resident managed worker with a systemd service.
-It does not change the deployment default. See [firmware findings](../../docs/research/native-service-research.md).
+It does not change the deployment default. See [firmware findings](../../docs/lab/research/native-service-research.md).
 
 **2026-09-21 follow-up:** native execution and supervision passed on both TVs using
 the **system manager**, `User=5001` and `BindReadOnlyPaths` over a root-owned VDFS
@@ -14,7 +14,7 @@ receiver and pairing contract; privileged boot integration and Hub control remai
 unfinished. The follow-up owner-manager launch test lacks mount authority on both
 TVs; see the firmware findings before choosing a bootstrap design. Probe-only resources are removed after verification.
 
-The [startup/restart investigation](../../docs/research/native-autostart.md)
+The [startup/restart investigation](../../docs/lab/research/native-autostart.md)
 separates proven failure restart from the unresolved QN90A cold-boot bootstrap.
 
 - `probe/probe.c`: ARM executable that prints its identity, writes one diagnostic

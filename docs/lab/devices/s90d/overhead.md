@@ -3,7 +3,7 @@
 > **2026-10-12 recovery correction:** direct `tools/s90d/restore.py` commands
 > below are historical Home-settings procedures with placeholder addressing, not
 > current composite-helper/cache recovery. Use the original shared setup journal
-> for setup rollback and [boot checkpoints](../../guides/s90d-boot-recovery.md) for a future
+> for setup rollback and [boot checkpoints](../../../guides/s90d-boot-recovery.md) for a future
 > S90D boot trial. No current live state or physical boot timing was verified.
 
 ## Background startup investigation — 2026-09-20 UTC
@@ -251,7 +251,7 @@ package dumps. This experiment did not edit them. Root collector staging and
 its temporary transport keys were cleaned; original passwd/public-key hashes
 remained unchanged. The final selected command requires no root collector.
 
-Sanitized results: [home-overhead-verification.json](../../../inventory/samsung/2026-09-19/hub/home-overhead-verification.json).
+Sanitized results: [home-overhead-verification.json](../../../../inventory/samsung/2026-09-19/hub/home-overhead-verification.json).
 
 
 ## Later RAM ranking — 20:25 CDT (01:25 UTC)
@@ -295,4 +295,4 @@ is not evidence of active CPU usage. Disabling them cannot be justified as a
 large resident-memory saving from these numbers alone. sLive's exact feature
 dependencies remain unverified; it was not stopped or labeled disposable.
 
-Sanitized ranking: [ram-ranking.json](../../../inventory/samsung/2026-09-19/hub/ram-ranking.json).
+Sanitized ranking: [ram-ranking.json](../../../../inventory/samsung/2026-09-19/hub/ram-ranking.json).

@@ -136,7 +136,7 @@
     convention, at normal priority.
   - Dispatch moved ahead of the other hook layers.
   - See the [launcher guide](docs/guides/choosing-a-launcher.md) and the
-    [boot performance record](docs/devices/qn90a/boot-performance.md).
+    [boot performance record](docs/lab/devices/qn90a/boot-performance.md).
 - Reduce QN90A Live TV boots after watching TV. Opening Live TV/TV Plus rewrites
   the saved boot source at once, so native re-arms `isp-service` about every 15 s
   while it runs. A power-off before the next re-arm can still start one Live TV boot.

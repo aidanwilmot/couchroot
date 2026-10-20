@@ -5,7 +5,7 @@ boot hook. It changes only AT-HUB's entry in Samsung's writable service cache,
 preserves the original diagnostic script, and restores the read-only renderer
 overlay after reboot. The current renderer runs a dim launcher-colored Asteroids simulation
 and fades to black after ten minutes; the updated helper was verified through
-a full reboot. See [implementation and rollback](../../../research/system-screensaver/README.md).
+a full reboot. See [implementation and rollback](../../../../research/system-screensaver/README.md).
 The notes below document the earlier on-demand root work; its temporary access
 mechanism remains unchanged.
 
