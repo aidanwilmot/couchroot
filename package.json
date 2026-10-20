@@ -1,5 +1,5 @@
 {
-  "name": "samsung-tv-minimal-hub",
+  "name": "couchroot",
   "private": true,
   "scripts": {
     "dev": "node preview/server.cjs",
@@ -13,6 +13,6 @@
     "playwright": "1.61.1"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }

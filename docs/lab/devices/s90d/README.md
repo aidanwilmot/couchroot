@@ -1,4 +1,4 @@
-# Samsung S90D minimal hub integration
+# Couchroot integration on Samsung S90D
 
 > **2026-10-12 recovery correction:** direct `tools/s90d/restore.py` commands
 > below are historical Home-settings procedures with placeholder addressing, not

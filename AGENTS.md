@@ -1,4 +1,4 @@
-# Minimal Hub project guidance
+# Couchroot project guidance
 
 Use the current repository checkout. Keep UI development, UI deployment, and full
 device setup distinct; the user's requested scope determines which workflow runs.

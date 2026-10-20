@@ -1,4 +1,4 @@
-# Minimal Hub
+# Couchroot
 
 Read [AGENTS.md](AGENTS.md) for project routing and shared rules.
 
