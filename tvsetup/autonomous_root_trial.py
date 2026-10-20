@@ -22,6 +22,50 @@ SCOPE = "autonomous-root-pilot"
 PROVISION = ("config.json", "server-key.pem", "server.pem", "client.pem")
 
 
+def required_manifest(folder, option):
+    if not folder.is_dir():
+        raise Refused(
+            option
+            + " requires a directory containing manifest.json"
+            + (" and provision/, not client.json" if option == "--credentials" else "")
+        )
+    path = folder / "manifest.json"
+    try:
+        manifest = read_json(path)
+    except OSError:
+        raise Refused("Cannot read " + option + " manifest: " + str(path)) from None
+    if not isinstance(manifest, dict):
+        raise Refused("Missing or non-object " + option + " manifest: " + str(path))
+    if (
+        not isinstance(manifest.get("package"), str)
+        or not manifest["package"]
+        or not isinstance(manifest.get("package_sha256"), str)
+        or not re.fullmatch("[a-f0-9]{64}", manifest["package_sha256"])
+    ):
+        raise Refused("Incomplete signed-package record in " + option + " manifest")
+    return manifest
+
+
+def disabled_baseline(folder, manifest):
+    """Validate the retained enrollment locally before any privileged inspection."""
+    digests = manifest.get("provisioning")
+    if not isinstance(digests, dict):
+        raise Refused("Missing provisioning record in --credentials manifest")
+    for name in PROVISION:
+        path = folder / "provision" / name
+        try:
+            matches = sha(path.read_bytes()) == digests.get(name)
+        except OSError:
+            raise Refused(
+                "Missing or unreadable provisioning file: " + str(path)
+            ) from None
+        if not matches:
+            raise Refused("Missing or changed provisioning digest: " + name)
+    config = read_json(folder / "provision/config.json")
+    if not isinstance(config, dict) or config.get("enabled") is not False:
+        raise Refused("--credentials must contain a disabled provisioning baseline")
+
+
 def package_files(members):
     return {
         PREFIX + n: (None if n == "signature1.xml" else sha(b))
@@ -288,17 +332,22 @@ def update(
     artifact = artifact.resolve()
     previous = previous.resolve()
     profile = configured_profile(device, site)
-    new = read_json(artifact / "manifest.json")
-    old = read_json(previous / "manifest.json")
+    new = required_manifest(artifact, "--artifact")
+    old = required_manifest(previous, "--previous")
     credentials = (credentials or previous).resolve()
-    credential_manifest = read_json(credentials / "manifest.json")
+    credential_manifest = required_manifest(credentials, "--credentials")
     for item in (new, old, credential_manifest):
         if item.get("device") != device or item.get("target_binding") != binding(
             site, device
         ):
             raise Refused("Update target binding differs")
-        if sha(Path(item["package"]).read_bytes()) != item["package_sha256"]:
+        try:
+            digest = sha(Path(item["package"]).read_bytes())
+        except OSError:
+            raise Refused("Signed package missing or unreadable") from None
+        if digest != item["package_sha256"]:
             raise Refused("Signed package changed")
+    disabled_baseline(credentials, credential_manifest)
     current, old_version = verify_package(Path(old["package"]), profile, PACKAGE)
     desired, new_version = verify_package(Path(new["package"]), profile, PACKAGE)
     if tuple(map(int, new_version.split("."))) <= tuple(
@@ -325,8 +374,6 @@ def update(
                 raise Refused(
                     "Provisioning must be restored to disabled baseline before update"
                 )
-        if read_json(credentials / "provision/config.json")["enabled"] is not False:
-            raise Refused("Not a disabled baseline")
         a = Action(
             "001-root-update",
             "autonomous-root",
@@ -386,7 +433,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", choices=["qn90a", "s90d"], required=True)
     parser.add_argument("--artifact", type=Path, required=True)
-    parser.add_argument("--credentials", type=Path)
+    parser.add_argument(
+        "--credentials",
+        type=Path,
+        help="Disabled provisioning directory containing manifest.json and provision/ "
+        "(defaults to --previous); not the authenticated client's client.json",
+    )
     parser.add_argument("--previous", type=Path)
     parser.add_argument("--site", type=Path)
     parser.add_argument("--yes", action="store_true")
