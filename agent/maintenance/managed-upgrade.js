@@ -5,7 +5,8 @@
 // probe has exited and its resources have been checked through the SDK route.
 const fs=require('fs'),path=require('path');
 const {hash}=require('../service/policy');
-const {validate,managedVersion}=require('../service/worker-selection');
+const {validate}=require('../service/worker-selection');
+const {managedVersion}=require('./managed-version');
 const {validateReadiness,validateResourceInventory}=require('../service/worker-readiness');
 const {processIdentities}=require('../service/worker-processes');
 const {snapshotManagedJobs,validateRecord,sourceExitGuard}=require('../service/retained-state');

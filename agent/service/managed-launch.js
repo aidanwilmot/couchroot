@@ -1,11 +1,12 @@
 'use strict';
 // One-shot managed fallback launch from accepted rollback state. No acquisition
 // is repeated: the caller supplies the independent, already running provider.
+const { managedVersion } = require('../maintenance/managed-version');
 const fs = require('fs'),
   path = require('path');
 const { hash, read, atomic } = require('./policy');
 const { privateRead, privateDirectory } = require('./private-state');
-const { managedVersion, selectionStatus } = require('./worker-selection');
+const { selectionStatus } = require('./worker-selection');
 const { planManagedRestore } = require('./managed-restore-plan');
 const { acceptManagedRestore } = require('./managed-restore');
 const { planNativeSnapshot } = require('./native-retained-state');

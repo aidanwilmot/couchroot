@@ -17,7 +17,7 @@
     {
       "path": "service/root-agent.js",
       "upstream": "rooting/service/root-agent.js",
-      "sha256": "5a9bc67e9e2b808ed6304b0b8a3c36a81d28bfb4838cb659cb43449feaf05cbc",
+      "sha256": "dea96675e6c048fd28d7b05335dfee867a3f4cc7b8f0447f66be309a5ac0fc27",
       "upstream_sha256": "86e114f9805d358ae36c461a06d28fd8bcb58754fafdb1c11b23a25ab9ee6645",
       "modified": true,
       "pre_format_sha256": "ba4fba75135e5496704c030606a69bea33abf426f91bba80754c5cfd81f86535",

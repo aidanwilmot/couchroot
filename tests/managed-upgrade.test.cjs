@@ -1,7 +1,8 @@
+const {managedVersion}=require('../agent/maintenance/managed-version');
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {hash}=require('../agent/service/policy');
-const {SelectionJournal,managedVersion}=require('../agent/service/worker-selection');
+const {SelectionJournal}=require('../agent/service/worker-selection');
 const {planUpgrade,runtimeGuard,verifyUpgrade}=require('../agent/maintenance/managed-upgrade');
 const boot='00000000-0000-0000-0000-000000000001';
 function fixture(){

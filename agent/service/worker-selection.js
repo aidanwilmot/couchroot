@@ -4,7 +4,7 @@
 const fs = require('fs'),
   path = require('path'),
   crypto = require('crypto');
-const { atomic, hash, read } = require('./policy');
+const { atomic } = require('./policy');
 const HEX = /^[a-f0-9]{64}$/;
 function check(ok) {
   if (!ok) throw Error('Invalid worker selection journal');
@@ -417,25 +417,8 @@ function selectionStatus(file) {
     };
   }
 }
-function managedVersion(payload) {
-  const manifest = JSON.parse(read(path.join(payload, 'manifest.json'))),
-    files = [];
-  for (const name of ['SamsungTvArchiveRoot', 'SamsungTvRootAgent'])
-    for (const suffix of ['dll', 'runtimeconfig.json', 'deps.json']) {
-      const file = name + '.' + suffix,
-        digest = hash(read(path.join(payload, file), 4 * 1024 * 1024));
-      check(
-        typeof manifest[file] === 'string' &&
-          HEX.test(manifest[file]) &&
-          digest === manifest[file]
-      );
-      files.push([file, digest]);
-    }
-  return hash(JSON.stringify(files));
-}
 module.exports = {
   SelectionJournal,
   selectionStatus,
   validate,
-  managedVersion,
 };

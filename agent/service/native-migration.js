@@ -1,11 +1,12 @@
 'use strict';
 const { privateDirectory } = require('./private-state');
 // Single-use live handoff controller. Uncertain work stays held for recovery.
+const { managedVersion } = require('../maintenance/managed-version');
 const fs = require('fs'),
   path = require('path');
 const { hash } = require('./policy');
 const { loadCandidate } = require('./native-candidate');
-const { SelectionJournal, managedVersion } = require('./worker-selection');
+const { SelectionJournal } = require('./worker-selection');
 const { openProductionSession } = require('./production-session');
 const { createManagedReturn } = require('./managed-return');
 function check(ok) {

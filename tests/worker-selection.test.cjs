@@ -1,8 +1,9 @@
+const {managedVersion}=require('../agent/maintenance/managed-version');
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
 const {createRequire}=require('node:module');
-const {SelectionJournal,selectionStatus,managedVersion}=require('../agent/service/worker-selection');
+const {SelectionJournal,selectionStatus}=require('../agent/service/worker-selection');
 const {createAgent}=require('../agent/service/agent');
 const M={implementation:'managed',manifest_sha256:'a'.repeat(64)},N={implementation:'native-prototype',manifest_sha256:'b'.repeat(64)},Q='c'.repeat(64),S='d'.repeat(64),R='e'.repeat(64);
 function fixture(){const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'worker-selection-')));const file=path.join(dir,'worker-selection.json');return {dir,file,j:new SelectionJournal(file),close:()=>fs.rmSync(dir,{recursive:true,force:true})};}
@@ -68,7 +69,8 @@ test('history remains bounded and readable after many complete transitions',()=>
   assert.equal(f.j.read().history.length,32);assert.equal(selectionStatus(f.file).phase,'stable');
  }finally{f.close();}
 });
-test('managed artifact version binds the six managed package bytes',()=>{
+test('retired maintenance owns managed versioning, outside the shipped selection module',()=>{
+ assert.equal(require('../agent/service/worker-selection').managedVersion,undefined);
  const f=fixture();try{
   const {hash}=require('../agent/service/policy'),index={};
   for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const suffix of ['dll','runtimeconfig.json','deps.json']){const file=name+'.'+suffix;fs.writeFileSync(path.join(f.dir,file),file);index[file]=hash(file);}
