@@ -6,6 +6,7 @@ or platform policy and does not replace service acquisition/bootstrap.
 
 from pathlib import Path
 import json
+import os
 import re
 import shutil
 import struct
@@ -82,7 +83,18 @@ def build(profile, destination, command, *, service=False):
     ).strip()
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", image):
         raise Refused("Cannot pin native acquisition toolchain")
-    base = ["docker", "run", "--rm", "--platform", "linux/amd64", "--network", "none"]
+    # Keep private build outputs owned by the caller on Linux bind mounts.
+    base = [
+        "docker",
+        "run",
+        "--rm",
+        "--platform",
+        "linux/amd64",
+        "--network",
+        "none",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+    ]
     compiler = command(
         base + [image, "arm-linux-gnueabi-gcc", "-dumpfullversion", "-dumpversion"]
     ).strip()
