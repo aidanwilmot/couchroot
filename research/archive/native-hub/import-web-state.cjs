@@ -2,7 +2,7 @@
 // Offline conversion of an explicit localStorage export. Never reads browser
 // databases, reaches a TV, or writes back to the web Hub.
 const fs = require('node:fs');
-const Model = require('../web/model.js');
+const Model = require('../../../web/model.js');
 function convert(storage) {
   if (!storage || typeof storage !== 'object' || Array.isArray(storage)) throw new Error('Expected an object containing exported localStorage keys');
   let apps = Model.defaults;

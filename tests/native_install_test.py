@@ -421,11 +421,24 @@ class NativePreflightTests(unittest.TestCase):
             self.assertNotEqual(before,native_cli.agent_binding(site,'qn90a',path))
 
 
+def invoke_recovery_backend(args):
+    """Seed old journals through the retained backend, not the retired front door."""
+    values=list(args); values[values.index('--launcher')+1]='web'
+    parsed=installer.parser().parse_args(values); parsed.launcher='native'
+    try:
+        if parsed.dry_run:
+            installer.emit(installer.dispatch(parsed), parsed.json)
+            return 0
+        return native_cli.main(parsed)
+    except Refused:
+        return 1
+
+
 class NativeCLITests(unittest.TestCase):
     def invoke(self,args):
         out=io.StringIO()
         with contextlib.redirect_stdout(out),contextlib.redirect_stderr(io.StringIO()):
-            code=installer.main(args)
+            code=invoke_recovery_backend(args)
         return code,out.getvalue()
 
     def test_full_cli_apply_status_resume_rollback_uses_captured_journal(self):

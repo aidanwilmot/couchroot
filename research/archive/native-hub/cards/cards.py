@@ -201,7 +201,7 @@ def preview(out,specs):
         x=gap+(i%cols)*(W+gap);y=gap+(i//cols)*(H+60)
         parts.append(f'<g transform="translate({x},{y})">{svg_card(s,W,H)}</g><text x="{x}" y="{y+H+32}" font-family="Helvetica" font-size="20" fill="#a8aa9e">{s["name"]} — {objects(s)} objects</text>')
     parts.append('</svg>');svg=out/'cards.svg';svg.write_text(''.join(parts))
-    png=out/'cards.png';node=shutil.which('node');repo=Path(__file__).resolve().parents[2]
+    png=out/'cards.png';node=shutil.which('node');repo=Path(__file__).resolve().parents[4]
     if node and (repo/'node_modules/playwright').exists():
         js=f"const {{chromium}}=require('playwright');(async()=>{{const b=await chromium.launch();const p=await b.newPage({{viewport:{{width:{cols*(W+gap)+gap},height:{rows*(H+60)+gap}}}}});await p.setContent(require('fs').readFileSync({json.dumps(str(svg))},'utf8'));await p.screenshot({{path:{json.dumps(str(png))}}});await b.close();}})();"
         subprocess.run([node,'-e',js],cwd=repo,check=True)

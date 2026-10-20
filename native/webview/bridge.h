@@ -12,7 +12,7 @@
  * Platform calls never run in this (multi-threaded Chromium) process: a
  * posix_spawn'ed copy of this executable does the work and reports on a pipe,
  * which the EFL thread drains without blocking. The mechanisms match the
- * QN90A-verified native Hub prototype (native-hub/): app-manager
+ * QN90A-verified native Hub prototype (retired pure-native experiment): app-manager
  * enumeration and /usr/bin/app_launcher with the AMD quiet-launch hint. */
 #include <fcntl.h>
 #include <spawn.h>
@@ -21,7 +21,7 @@
 #endif
 #include "../common/platform-core.h"
 /* Bullseye's ARM fcntl default symbol is GLIBC_2.28. QN90A needs the legacy
- * interface (as in native-hub/); only integer flags are used here. */
+ * interface (as in the retired experiment); only integer flags are used here. */
 #if defined(__linux__) && defined(__arm__) && defined(__GLIBC__)
 __asm__(".symver fcntl, fcntl@GLIBC_2.4");
 #endif
