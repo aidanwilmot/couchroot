@@ -1,7 +1,7 @@
 /* Test real renderer lifecycle with a deterministic clock and stub GLES driver. */
 #define _POSIX_C_SOURCE 200809L
 #define clock_gettime test_clock_gettime
-#include "../../system-screensaver/renderer.c"
+#include "../../../native/system-screensaver/renderer.c"
 #include <assert.h>
 static double test_time=100;
 static int uploads,draws,clears,width=1920;

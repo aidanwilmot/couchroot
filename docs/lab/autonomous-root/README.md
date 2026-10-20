@@ -18,21 +18,21 @@ app-user, result and readiness API, its CLI commands, and validation limits.
 
 ## Components
 
-- `service/main.js`: signed service, configured on-boot/auto-restart; starts the
+- `agent/service/main.js`: signed service, configured on-boot/auto-restart; starts the
   maintenance endpoint before attempting root. Disabled by default.
-- `service/agent.js`: exact firmware/runtime/SDK-launcher hashes, per-attempt
+- `agent/service/agent.js`: exact firmware/runtime/SDK-launcher hashes, per-attempt
   ephemeral keys and token, loopback SDK, private mount namespace, detached worker.
   At most eight acquisitions per service lifetime, with capped exponential delay.
   Runtime hashes are checked by SDK before executing the payload: the S90D's
   package label cannot stat `/usr/bin/dotnet` directly. The guarded script is
   staged on the TV, and its invocation is bounded below the SDK command limit.
-- `service/api.js`: HTTPS port 28443 with a required, exactly pinned client
+- `agent/service/api.js`: HTTPS port 28443 with a required, exactly pinned client
   certificate. No unauthenticated routes, browser CORS or dashboard integration.
   Root protocol listens only on loopback and authenticates frames with HMAC.
-- `service/policy.js`: bounded requests and durable intent journal. A duplicate
+- `agent/service/policy.js`: bounded requests and durable intent journal. A duplicate
   request ID is rejected even after restart. A lost response remains uncertain;
   commands are never automatically replayed. Logs store command hashes, not text.
-- `client.py`: enrolled computer client with server certificate validation and an
+- `agent/client.py`: enrolled computer client with server certificate validation and an
   exact certificate pin. No network retries. Explicit command files allow owner
   administration with full shell semantics inside the agent's privilege context.
 - `tvsetup.autonomous_root`: local per-device preparation using the shared

@@ -8,7 +8,7 @@ test ! -e "$1" && test ! -L "$1"
 mkdir -m 700 "$1"
 # S90D libvconf imports shm_open without declaring librt. Keep librt in the
 # global dependency set even though this executable does not call it directly.
-"${CC:-arm-linux-gnueabi-gcc}" -ffile-prefix-map="$src"=/src/research/autonomous-root/recovery/native -std=c99 -O2 -Wall -Wextra -Werror \
+"${CC:-arm-linux-gnueabi-gcc}" -std=c99 -O2 -Wall -Wextra -Werror \
  -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wl,-z,relro,-z,now \
  ${ARCH_FLAGS:--march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp} \
  "$src/recovery.c" -ldl -Wl,--no-as-needed -l:librt.so.1 -Wl,--as-needed -o "$1/sdk-host-recovery"

@@ -83,13 +83,17 @@ def hub_sources(device, *, device_id=None):
     return result
 
 
-def source_revision():
+def source_files():
     roots = [REPO/'tools/toolkit', REPO/'tvsetup', REPO/'web',REPO/'telemetry/s90d',REPO/'telemetry/s90d-collector',REPO/'native/system-screensaver',
              REPO/'native/s90d-splash',REPO/'agent/namespace-root-probe',REPO/'setup/qn90a-app-cleanup',REPO/'native/qn90a-screensaver',REPO/'native/qn90a-boot-relay',
-             REPO/'telemetry/qn90a-startup', REPO/'telemetry/qn90a-bootstrap']
+             REPO/'telemetry/qn90a-startup', REPO/'telemetry/qn90a-bootstrap', REPO/'setup/qn90a-home-route']
     files = sorted({p for root in roots for p in root.rglob('*') if p.is_file() and p.suffix in ('.py','.json','.cs','.c','.h','.js','.css','.html','.xml','.csproj','.glsl') and not {'bin','obj'} & set(p.relative_to(root).parts) and p.name not in ('core.js','shaders.js')})
     files=sorted(set(files)|{REPO/'tools/qn90a/root-check.py',REPO/'global.json',REPO/'Directory.Build.props'})
-    return sha(b''.join(str(p.relative_to(REPO)).encode()+b'\0'+p.read_bytes() for p in files))
+    return files
+
+
+def source_revision():
+    return revision(source_files())
 
 
 def artifact_group(path):
@@ -100,7 +104,7 @@ def artifact_group(path):
     return None
 
 
-def component_revision(kind):
+def component_files(kind):
     groups = {
         'boot': ['native/qn90a-boot-relay'],
         'service': ['telemetry/qn90a-startup','telemetry/qn90a-bootstrap','telemetry/s90d-collector'],
@@ -110,7 +114,30 @@ def component_revision(kind):
     for name in groups[kind]:
         path=REPO/name
         files.extend([path] if path.is_file() else [p for p in path.rglob('*') if p.is_file() and not {'bin','obj'} & set(p.relative_to(path).parts)])
-    return sha(b''.join(str(p.relative_to(REPO)).encode()+b'\0'+p.read_bytes() for p in sorted(files)))
+    return files
+
+
+def revision(files):
+    # Names in this compatibility manifest are labels only, never paths to open.
+    # Normalize the two relocated helper inputs, preserving all other source bytes.
+    manifest = json.loads((REPO/'source-revision-names.json').read_text())
+    records = []
+    for path in files:
+        current = path.relative_to(REPO).as_posix()
+        canonical = current
+        for moved, original in sorted(manifest['names'].items(), key=lambda item: -len(item[0])):
+            if current == moved or current.startswith(moved + '/'):
+                canonical = original + current[len(moved):]
+                break
+        data = path.read_bytes()
+        for moved, original in manifest['content_replacements'].get(current, {}).items():
+            data = data.replace(moved.encode(), original.encode())
+        records.append((canonical, data))
+    return sha(b''.join(name.encode()+b'\0'+data for name, data in sorted(records)))
+
+
+def component_revision(kind):
+    return revision(component_files(kind))
 
 
 def package_files(state, pkg, expected):
