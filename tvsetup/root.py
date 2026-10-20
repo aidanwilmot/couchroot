@@ -168,6 +168,7 @@ def staging_script(prefix, archives, native=False):
         + f"mkdir {Q(prefix)}\nmade_prefix=1\n"
         + f"if mkdir {Q(on_demand)} 2>/dev/null; then :; else test -d {Q(on_demand)}; test ! -L {Q(on_demand)}; fi\n"
         + (f"mkdir {Q(prefix + '/code')}\n" if native else "")
+        + f"stat -c '%U:%G:%a' {Q(prefix)}\n"
         + "trap - EXIT\n"
     )
 

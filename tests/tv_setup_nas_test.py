@@ -96,7 +96,7 @@ class RebootTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch('tvsetup.cli.observe',return_value={'boot':after['boot'],'verification':verification(profile('qn90a'),after)}), patch('tvsetup.cli.time.sleep'):
             result=reboot_verify(profile('qn90a'),Initial(),Path(folder),30)
         self.assertIn('independently',result['startup']);self.assertEqual(len(calls),1)
-        self.assertIn('systemd-run --no-block',calls[0]);self.assertIn('--on-active=15s',calls[0]);self.assertIn('busctl --timeout=5 --system call',calls[0]);self.assertNotIn('nohup',calls[0]);self.assertNotIn('systemctl reboot',calls[0]);self.assertIn('Reboot',calls[0]);self.assertNotIn('app_launcher',calls[0]);self.assertNotIn('systemctl start',calls[0])
+        self.assertIn('systemd-run --unit=',calls[0]);self.assertIn('--on-active=10s',calls[0]);self.assertIn('busctl --timeout=5 --system call',calls[0]);self.assertNotIn('nohup',calls[0]);self.assertNotIn('systemctl reboot',calls[0]);self.assertIn('Reboot',calls[0]);self.assertNotIn('app_launcher',calls[0]);self.assertNotIn('systemctl start',calls[0])
 
 class DashboardVerificationTests(unittest.TestCase):
     def test_receiver_requires_matching_fresh_boot_and_both_devices(self):

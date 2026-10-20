@@ -272,15 +272,12 @@ def operate(command, identity, site):
             bootstrap.save()
             # Same reviewed deviced API as tv-setup reboot verification. The delay
             # permits the bounded administrative helper to finish its own cleanup.
-            command_text = (
-                "sleep 15; busctl --timeout=5 --system call org.tizen.system.deviced "
-                "/Org/Tizen/System/DeviceD/Power org.tizen.system.deviced.power "
-                'Reboot s "Owner-authorized native bootstrap pilot"'
-            )
+            from .reboot import reboot_command
+
             tv.root(
-                "nohup /bin/sh -c "
-                + Q(command_text)
-                + " >/dev/null 2>&1 </dev/null &\n"
+                reboot_command(
+                    "native-bootstrap-reboot", "Owner-authorized native bootstrap pilot"
+                )
             )
             result = "one reboot submitted"
         return dict(run=identity, action=command, result=result)

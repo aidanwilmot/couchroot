@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 import shutil
-import stat
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -15,7 +15,11 @@ class StagingTests(unittest.TestCase):
     def stage(self, base, native=False):
         with patch.object(root, 'BASE', str(base) + '/'):
             script = root.staging_script(str(base/'probe'), [str(base/'on-demand/probe.tar.gz')], native)
-        return subprocess.run(['sh', '-c', 'set -eu\numask 022\n' + script], capture_output=True)
+        self.assertNotRegex(script, r"mkdir\s+[^\n]*-m\b|chmod\b|umask\b")
+        self.assertIn("stat -c '%U:%G:%a' " + root.Q(str(base/'probe')), script)
+        # macOS uses -f; only adapt stat for this local shell fixture.
+        adapter = 'stat() { /usr/bin/stat -f "%Su:%Sg:%Lp" "$3"; }\n' if sys.platform == 'darwin' else ''
+        return subprocess.run(['sh', '-c', 'set -eu\n' + adapter + script], capture_output=True)
 
     def test_upload_traverses_stage_and_keeps_agent_archives(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -24,9 +28,6 @@ class StagingTests(unittest.TestCase):
             retained = archives/'archive-root-agent.tar.gz'; retained.write_bytes(b'agent archive')
             self.assertEqual(self.stage(base).returncode, 0)
             stage = base/'probe'
-            # SDB/WRT is not the staging owner's UID. The old 0700 regression
-            # prevents its path traversal before the upload can finish.
-            self.assertTrue(stage.stat().st_mode & stat.S_IXOTH)
             payload = base/'upload'; payload.write_bytes(b'payload')
             shutil.copyfile(payload, stage/'operation.sh')
             self.assertEqual((stage/'operation.sh').read_bytes(), b'payload')
