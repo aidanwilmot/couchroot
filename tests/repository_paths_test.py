@@ -11,7 +11,7 @@ DEVICE_ENTRY_POINTS = ('tools/qn90a/root-check.py', 'tools/qn90a/home-integratio
                        'tools/qn90a/home-route.py', 'tools/qn90a/cast.py',
                        'tools/qn90a/screensaver.py', 'tools/qn90a/cleanup.py',
                        'tools/qn90a/trim.py', 'tools/s90d/restore.py', 'tools/s90d/splash.py',
-                       'native-hub/cards/cards.py')
+                       'research/archive/native-hub/cards/cards.py')
 
 
 def python_sources():

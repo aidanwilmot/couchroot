@@ -7,7 +7,7 @@ They are not deployment instructions or acceptance of the current source.
 
 ## Guides
 
-- [Choosing a launcher: signed web, pure-native or WebView](guides/choosing-a-launcher.md)
+- [Choosing a launcher](guides/choosing-a-launcher.md)
 - [UI design rules](guides/design-guidelines.md)
 - [Device compatibility](guides/device-compatibility.md)
 - [Edit apps in Minimal Hub](guides/edit-apps.md)
@@ -77,7 +77,7 @@ They are not deployment instructions or acceptance of the current source.
 ## Implementation references
 
 - [Native WebView host and recovery](../native/webview/README.md)
-- [Native launcher](../native-hub/README.md)
+- [Retired pure-native experiment](../research/archive/native-hub/README.md)
 - [Root agent and recovery](lab/autonomous-root/README.md)
 
 The offline `python3 scripts/check-docs.py` check validates repository-relative

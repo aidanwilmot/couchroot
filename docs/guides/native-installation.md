@@ -1,3 +1,7 @@
+> Retired experiment. New pure-native preparation and installation are disabled.
+> The recovery commands below remain for existing journals only. For new launcher
+> choices, see [choosing a launcher](choosing-a-launcher.md).
+
 # Native boot-hook installation and recovery
 
 The QN90A native backend is implemented in `couchroot-install` and uses the shared

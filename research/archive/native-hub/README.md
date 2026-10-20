@@ -1,21 +1,25 @@
+# Retired pure-native Hub experiment
+
+This experiment is retired and superseded by [the WebView host](../../../native/webview/README.md), which reuses the shipped web interface. It is no longer a launcher installation choice or a CI build target. Historical source, measurements and rollback notes remain here for recovery; they are not deployment instructions for a new installation.
+
 # Native Hub startup experiment
 
 > Current installer boundary: the shared native core supports normal-mode handoff,
 > but `tvsetup/native_hook.py` still starts and monitors the public native install
 > only in background mode. Normal-mode and standby behavior on merged Phase 2 is
 > unaccepted on hardware. Historical private hook results below do not override
-> that boundary; see the [owner checklist](../docs/project/release-readiness.md#current-acceptance-gates-merged-phase-2).
+> that boundary; see the [owner checklist](../../../docs/project/release-readiness.md#current-acceptance-gates-merged-phase-2).
 
 > **Status:** experimental, QN90A firmware T-NKM2AKUC-2301.1 only. This folder contains
 > the launcher source, tests, card styles and records. The
-> [unified installer](../docs/guides/native-installation.md) now implements enrolled
+> [unified installer](../../../docs/guides/native-installation.md) now implements enrolled
 > native boot-hook installation and journaled recovery with offline validation.
 > It has not been deployed or hardware-tested; existing private trials still use
 > their original retained drivers for recovery.
-> Use the [web Hub](../web) for a supported installation, and see
-> [choosing a launcher](../docs/guides/choosing-a-launcher.md).
+> Use the [web Hub](../../../web) for a supported installation, and see
+> [choosing a launcher](../../../docs/guides/choosing-a-launcher.md).
 
-The [S90D offline assessment](../docs/lab/devices/s90d/native-boot-assessment.md)
+The [S90D offline assessment](../../../docs/lab/devices/s90d/native-boot-assessment.md)
 defers a graphical port: web startup already precedes the splash/resume gate,
 and panel-visible/input-ready times remain unknown. S90D native headless-service
 evidence is separate from graphical Hub compatibility.
@@ -28,7 +32,7 @@ Private hardware evidence and guarded trial drivers are stored under REA-19.
 The native executable runs as owner UID 5001 in the previously verified private
 read-only VDFS view. Ordinary writable-path execution is rejected even inside a
 developer-signed package on this firmware. See the
-[native execution findings](../docs/lab/research/native-service-research.md).
+[native execution findings](../../../docs/lab/research/native-service-research.md).
 No Samsung library, executable, signing material or compiled artifact is included.
 
 ## Native parity candidate (QN90A cold-boot tested)

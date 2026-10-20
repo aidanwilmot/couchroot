@@ -1,6 +1,6 @@
 #ifndef HUB_MODEL_H
 #define HUB_MODEL_H
-#include "../native/common/preferences.h"
+#include "../../../native/common/preferences.h"
 typedef enum { HOME, EDIT, PICK, ACTIONS, MOVING, SETTINGS, RESET, ERROR_PAGE } HubPage;
 typedef struct {
  HubSaved saved, draft; HubApp catalog[HUB_MAX], removed;

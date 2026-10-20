@@ -1,0 +1,22 @@
+{
+  "baseline": "33e4936",
+  "comparison": "ARM host, sampler and complete WebView bundle before/after pure-native archival",
+  "all_identical": true,
+  "files": {
+    "diagnostic/index.html": "3e525ac2766043f0c6942423983100a83d3e302fe6dc0591ffb49c0eba247c32",
+    "diagnostic/probe.js": "d1b9fc17029de5407669e72eb38bba004f364099c3797fda26ac5fd527d3d582",
+    "diagnostic/style.css": "18e4809b6b5a84b04b9d30fa8a30792d00134b9c06dbc045e6b899d1b2ce38dd",
+    "hub/bridge.js": "ce65756407d1ccf7a6accd3ea2dad7d58955e89fdf868481ade5268e6112ca16",
+    "hub/feedback.js": "373866501f1dfd96b75d9d330cf68f8a0e215f071ca743ef3134d2cc8d42204d",
+    "hub/hub.js": "45930ee1886ae8effbc5700ca2ed50eccedabda553759cc5a8076defd34fba5d",
+    "hub/icon.png": "35e84f49b4a1d5f826f5972335530c82de7a7d2d83f90e7181477d0fb49a06a5",
+    "hub/index.html": "c8d20d4cd7282b16a27b441484c3cf94428297d8590849ae1acef62fcc0f3996",
+    "hub/model.js": "c99503c673e5d11fba7d85891b4b83a1ec655e756591d0318abf766c6ce01a2e",
+    "hub/native-shim.js": "e20b5e9a8fbd2225afc57f2cd76fcc08cc19ca6a3701fe3500d8bb8f90e24335",
+    "hub/presentation.js": "1dd07be303382f36bece658b7722eedf70952c0d1c609b75e5ee4f50759cd192",
+    "hub/style.css": "972df59b0f33ca5526c96f393f3bf01e08d946d3624c4b940b36f09e7e13f946",
+    "hub/telemetry.js": "497aef83e7168483347d8a8cf1ae0ac012cd9026d03b58958217859f93591d26",
+    "minimal-hub-procsample": "cc6aa440123022e51006f80fdabfcacd3d70edcadb55926d1c47b8b926f5bc46",
+    "minimal-hub-webview": "08f0f635d7518c05e1db861fdedf01bff431d84c234eff132780a602b471f801"
+  }
+}

@@ -1,3 +1,7 @@
+> Phase 4 retires the pure-native experiment. Its historical acceptance rows below
+> remain recovery context, not a new installation plan. WebView is the experimental
+> native option and still requires fresh hardware acceptance.
+
 # Current acceptance gates: merged Phase 2
 
 PRs #10, #11 and #12 are merged into main, but **have not been tested on either
@@ -423,7 +427,7 @@ CI has seven job definitions (ten checks after expanding the Linux matrix):
 - `managed`: four C# harnesses and managed cross-path builds with the pinned SDK.
 - `root-native-launcher`: ARM launcher builds, native collector checks, native
   protocol/fault/recovery and slow-I/O tests, plus the managed launcher harness.
-- `native-launcher-builds`: both ARM graphical launchers and native Hub host tests.
+- `native-launcher-builds`: WebView ARM host/sampler builds with GLIBC and startup libpthread gates.
 - `arm64-parity`: real managed/native workers, process observer and storage cases
   in disposable ARM64 containers on `ubuntu-24.04-arm`. Tmpfs tests run with the
   explicit mount capability; a preflight checks the container policy. Rehearsal,

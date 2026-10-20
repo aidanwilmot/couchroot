@@ -61,7 +61,6 @@ configuration, keys and recovery journals stay outside Git.
 | Launcher | Devices | Status |
 | --- | --- | --- |
 | **Signed web Hub** | QN90A, S90D | Default installation; full platform integration |
-| **Pure-native Hub** | QN90A | Experimental C/EFL launcher |
 | **Native WebView Hub** | QN90A | Experimental web UI in a native host |
 
 [Compare launchers and boot measurements →](docs/guides/choosing-a-launcher.md)
@@ -73,11 +72,10 @@ offline plan before any device access:
 ./couchroot-install plan --device qn90a --launcher web
 ```
 
-`--launcher native` selects the pure-native Hub and requires an enrolled QN90A
-baseline and root agent. Its new installation/recovery backend is locally tested;
-hardware acceptance remains open. WebView has [separate tools](native/webview/README.md).
-Keep the signed web Hub installed as the fallback for either native launcher.
-For an existing setup, see [updating just the UI](docs/guides/ui-deployment.md).
+The experimental native option is the [WebView host](native/webview/README.md),
+using its separate private, journaled procedure. Pure-native drawing is retired;
+`--launcher native` remains available only for status and recovery of existing
+journals, not new installs.
 
 ## What's ready—and what's experimental
 
