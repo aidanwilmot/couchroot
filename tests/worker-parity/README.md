@@ -162,3 +162,27 @@ staging-directory validator without starting a worker. The generated managed
 fallback launch tests use this entry to check actual runtime arguments separately
 from canonical filesystem staging. Set `MANAGED_PARITY` to the rebuilt harness
 when running `tests/native-retained-state.test.cjs` to include this contract check.
+
+## CI coverage
+
+The `arm64-parity` job uses `ubuntu-24.04-arm`, Node 22 and a digest-pinned test
+image. `run-ci.sh` builds the host worker, acceptance controller, I/O delay fixture
+and observer, then enables `COUCHROOT_PARITY_CONTAINER`, `MANAGED_PARITY`,
+`PROCESS_OBSERVER`, fault controls and mount-based storage tests. It runs native,
+worker-parity and observer Python suites plus the JavaScript files using those
+three integration gates, sequentially to protect process-global test state.
+
+These suites remain explicitly opt-in, not hardware acceptance:
+
+- `NATIVE_WORKER_LIFETIME_TEST`: two extended production-lifetime cases; the
+  bounded CI run covers ordinary lifetime behavior but not the long soak.
+- `COUCHROOT_REHEARSAL` / `COUCHROOT_STARTUP_FAULT`: bootstrap recovery, held
+  bootstrap, startup fence, managed/native rehearsal and restart-fault integration.
+  They need separate fresh containers and distinct production/fault workers as
+  described above; the parity job does not supply that rehearsal orchestration.
+- `NATIVE_CANDIDATE_BUILD`: ordinary packaged-candidate and observer-stage cases
+  need the separately assembled ARM package and manifest, not the host-test worker.
+
+These remaining gates can run locally with their documented fixtures. Firmware,
+SMACK, physical Home/standby and TV runtime acceptance cannot be established by
+host CI. No job has device credentials, deployment or publishing access.

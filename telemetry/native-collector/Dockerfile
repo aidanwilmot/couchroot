@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim
+FROM debian:bullseye-slim@sha256:e5b6442dd2e9684cf5e87d8338b5968f3b348636fc0be6d7850a381e3731a2bd
 RUN printf '%s\n' 'deb http://archive.debian.org/debian bullseye main' > /etc/apt/sources.list && \
     printf 'Package: *\nPin: release n=bullseye\nPin-Priority: 1001\n' > /etc/apt/preferences.d/archive && \
     apt-get update -qq && \
