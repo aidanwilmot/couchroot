@@ -1,6 +1,11 @@
 #!/bin/sh
 # Run only in a disposable Linux ARM64 container with a read-only checkout.
 set -eu
+# Fail before the long suites if the runner's container policy blocks mount tests.
+mount_probe=$(mktemp -d)
+mount -t tmpfs -o size=1m tmpfs "$mount_probe"
+umount "$mount_probe"
+rmdir "$mount_probe"
 cc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function \
   -DNATIVE_WORKER_TEST -DNATIVE_WORKER_FAULT_TEST \
   agent/native-worker/worker.c -ldl -pthread -o /out/worker
