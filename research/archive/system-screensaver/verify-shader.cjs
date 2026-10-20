@@ -3,9 +3,9 @@ const {chromium}=require('playwright');
 const fs=require('node:fs'),{execFileSync}=require('node:child_process'),assert=require('node:assert/strict');
 (async()=>{
   fs.mkdirSync(__dirname+'/bin',{recursive:true});
-  execFileSync('cc',['-std=c99','-O2','-Wall','-Wextra','-Werror',__dirname+'/sample-animation.c','-lm','-o',__dirname+'/bin/sample-animation']);
+  execFileSync('cc',['-std=c99','-O2','-Wall','-Wextra','-Werror',__dirname+'/../../system-screensaver/sample-animation.c','-lm','-o',__dirname+'/bin/sample-animation']);
   const simulation=JSON.parse(execFileSync(__dirname+'/bin/sample-animation',[__dirname+'/bin/frames.bin'],{encoding:'utf8'}));
-  const source=fs.readFileSync(__dirname+'/renderer.c','utf8');
+  const source=fs.readFileSync(__dirname+'/../../system-screensaver/renderer.c','utf8');
   const shader=name=>[...source.match(new RegExp(`static const char \\*${name} =([\\s\\S]*?);\\n`))[1].matchAll(/"(?:[^"\\]|\\.)*"/g)].map(m=>JSON.parse(m[0])).join('');
   const frames=fs.readFileSync(__dirname+'/bin/frames.bin');
   const browser=await chromium.launch({headless:true});

@@ -17,9 +17,9 @@ bootstrap, journaled installation/recovery and the retained managed settings
 adapter are implemented and locally tested. Hardware acceptance and deployment
 of that integration remain outstanding. The managed service remains the deployed
 and rollback path. Earlier bounded trials are recorded in the
-[hardware findings](../../../docs/lab/research/native-service-research.md).
+[hardware findings](../../docs/lab/research/native-service-research.md).
 
-The [QN90A local integration candidate](../../../docs/guides/native-telemetry.md)
+The [QN90A local integration candidate](../../docs/guides/native-telemetry.md)
 documents preparation, installation, marker handoff and recovery. Its `--native-handoff` mode
 shares pairing/preferences and the lease but requires `native-enabled` with no
 managed `enabled` marker. Device operations require separate authorization;
@@ -37,14 +37,14 @@ are not redistributed or copied onto either TV.
 From the repository root, with an absolute `PRIVATE_BUILD` directory:
 
 ```sh
-docker build --platform linux/amd64 -t samsung-native-collector:bullseye research/native-telemetry/collector
+docker build --platform linux/amd64 -t samsung-native-collector:bullseye telemetry/native-collector
 docker run --rm --platform linux/amd64 \
   -v "$PWD:/src:ro" -v "$PRIVATE_BUILD:/out" \
   -e OUTPUT_DIR=/out -e TV_LIB_DIR=/out/tv-libs \
-  samsung-native-collector:bullseye sh research/native-telemetry/collector/build.sh
+  samsung-native-collector:bullseye sh telemetry/native-collector/build.sh
 docker run --rm --platform linux/amd64 \
   -v "$PWD:/src:ro" -v "$PRIVATE_BUILD:/out:ro" \
-  samsung-native-collector:bullseye python3 research/native-telemetry/collector/test_collector.py
+  samsung-native-collector:bullseye python3 telemetry/native-collector/test_collector.py
 python3 -m unittest discover -s tests -p native_trial_test.py
 ```
 
@@ -107,5 +107,5 @@ The active target is QN90A basic counters with the existing signed settings
 adapter and shared-engine recovery. Continuous QN90A inspector snapshots are
 intentionally retired; they are not a native parity requirement. S90D migration
 and helper/root-worker rewrites are deferred. See the
-[accepted scope](../../../docs/project/dotnet-deprecation-plan.md) and
-[installation and recovery boundary](../../../docs/guides/native-telemetry.md).
+[accepted scope](../../docs/project/dotnet-deprecation-plan.md) and
+[installation and recovery boundary](../../docs/guides/native-telemetry.md).

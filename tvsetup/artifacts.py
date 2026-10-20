@@ -194,12 +194,12 @@ class Builder:
                 output=stage/'compiled';self.build_managed(project/'Boot.csproj',output)
                 sources=[(output/n,'bin/'+n) for n in ('Boot.dll','Boot.deps.json','Boot.runtimeconfig.json')]
             else:
-                project=REPO/'research/qn90a-telemetry-startup/service'
-                for name,proj in [('Service',project),('Bootstrap',project.parent/'bootstrap')]:
+                project=REPO/'telemetry/qn90a-startup'
+                for name,proj in [('Service',project),('Bootstrap',REPO/'research/qn90a-telemetry-startup/bootstrap')]:
                     output=stage/name;self.build_managed(proj/(name+'.csproj'),output)
                     sources += [(p,'bin/'+p.name) for p in output.glob(name+'.*') if p.suffix!='.pdb']
                 output=stage/'collector'
-                self.command(['dotnet','build',REPO/'research/s90d-telemetry/collector/Telemetry.csproj','-c','Release','--nologo','-v','quiet','-f',self.profile['framework'],'-o',output])
+                self.command(['dotnet','build',REPO/'telemetry/s90d-collector/Telemetry.csproj','-c','Release','--nologo','-v','quiet','-f',self.profile['framework'],'-o',output])
                 sources.append((output/'Telemetry.dll','bin/Telemetry.dll'))
             manifest=ET.fromstring((project/'tizen-manifest.xml').read_bytes())
             manifest.set('version',next_version(action.options['previous_version'],manifest.get('version')))
@@ -217,6 +217,6 @@ class Builder:
             path=self.folder/'empty';path.write_bytes(b'');return path
         if not self.helper_built:
             self.command([sys.executable,REPO/'research/s90d-telemetry/build.py']);self.helper_built=True
-        if kind=='collector':return REPO/'research/s90d-telemetry/collector/bin/Release/net6.0/Telemetry.dll'
+        if kind=='collector':return REPO/'telemetry/s90d-collector/bin/Release/net6.0/Telemetry.dll'
         name='Boot.dll' if kind=='helper' else kind
         return REPO/'research/s90d-telemetry/bin/helper/bin/Release/net6.0'/name

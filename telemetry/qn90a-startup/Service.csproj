@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>netcoreapp3.1;net6.0</TargetFrameworks><OutputType>Exe</OutputType><UseAppHost>false</UseAppHost><CheckEolTargetFramework>false</CheckEolTargetFramework></PropertyGroup> <!-- Retain the original compiler source paths so this layout move does not
+      change shipped DLL/PDB identities or firmware-pinned assembly hashes. -->
+ <PropertyGroup><PathMap>$(MSBuildProjectDirectory)=/src/research/qn90a-telemetry-startup/service,$(PathMap)</PathMap></PropertyGroup>
+</Project>

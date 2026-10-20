@@ -489,7 +489,7 @@ refuses further staging. No arbitrary external launcher path is accepted.
 
 `native-app-launcher-v1` in the ready worker's capabilities identifies this path.
 The internal worker readiness handshake also returns the embedded launcher's SHA-256.
-Build the toolchain image from `research/native-telemetry/collector/Dockerfile`
+Build the toolchain image from `telemetry/native-collector/Dockerfile`
 before preparing signed autonomous-root packages. The shared builder compiles from
 source and embeds the result in the worker DLL for each TV framework. Ordinary
 standalone .NET builds without the resource are useful for host tests but refuse

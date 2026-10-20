@@ -37,7 +37,9 @@ for target in $targets; do
     fi
     # json-c is linked statically because the TVs expose different SONAMEs.
     # TLS/HTTP stay on the verified firmware libraries (OpenSSL 1.1.1, libcurl 4).
+    # Keep canonical debug paths stable across the product-source relocation.
     "$compiler" -std=c11 -O2 -g -Wall -Wextra -Werror -fstack-protector-strong \
+        -ffile-prefix-map="$collector_source"=/src/research/native-telemetry/collector \
         -D_FORTIFY_SOURCE=2 -fPIE $target_flags -I"$target_include" \
         "$collector_source/main.c" "$collector_source/config.c" \
         "$collector_source/sample.c" "$collector_source/send.c" \

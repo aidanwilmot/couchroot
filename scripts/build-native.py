@@ -18,9 +18,9 @@ projects=[
  'research/root-identity-probe/RootIdentity.csproj',
  'research/qn90a-root-probe/RootIdentity.csproj',
  'research/qn90a-hub-boot/relay/Boot.csproj',
- 'research/qn90a-telemetry-startup/service/Service.csproj',
+ 'telemetry/qn90a-startup/Service.csproj',
  'research/qn90a-telemetry-startup/bootstrap/Bootstrap.csproj',
- 'research/s90d-telemetry/collector/Telemetry.csproj',
+ 'telemetry/s90d-collector/Telemetry.csproj',
 ]
 
 

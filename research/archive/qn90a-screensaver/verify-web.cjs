@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 const path=require('node:path');
-const url='file://'+path.resolve(__dirname,'web/index.html');
+const url='file://'+path.resolve(__dirname,'../../qn90a-screensaver/web/index.html');
 test('QN90A Asteroids: offline rendering, bounded C ticks, native exit and preserved black deadline',async()=>{
   const browser=await chromium.launch({headless:true});
   try {

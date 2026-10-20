@@ -35,7 +35,7 @@ filesystem read and write.
 
 ## Collection and startup
 
-`research/s90d-telemetry/collector/Program.cs` reads bounded snapshots of
+`telemetry/s90d-collector/Program.cs` reads bounded snapshots of
 `/proc/stat`, `/proc/meminfo`, `/proc/net/dev`, `/proc/diskstats`, uptime and its
 own CPU/RSS. It does not inspect app content, URLs, viewing history or credentials.
 Sampling is every ten seconds, at nice +10, with a three-second network deadline.
@@ -206,7 +206,7 @@ this removes only the dashboard service and retains the receiver. Remove the
 receiver-only app spec for routine receiver updates, as that would remove the
 dashboard service; always preserve the current live custom-app configuration.
 
-Live verification (`node research/s90d-telemetry/dashboard/verify.cjs`) passed:
+Live verification (`node research/archive/s90d-telemetry/dashboard/verify.cjs`) passed:
 all six charts contain real readings; all four history ranges load; pause/resume,
 keyboard inspection and 390px mobile layout work; simulated stale and failed
 responses clear live cards while retaining history; unsupported ranges and source
