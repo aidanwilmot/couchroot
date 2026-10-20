@@ -2,14 +2,14 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {createRequire}=require('node:module');
-const runtime=require('../research/autonomous-root/service/observer-runtime');
+const runtime=require('../agent/service/observer-runtime');
 test('observer transaction is stable and rejects absent or ambiguous request identities',()=>{
  const id=runtime.observerTransactionId('request-identity-001');assert.match(id,/^[a-f0-9]{32}$/);
  assert.equal(runtime.observerTransactionId('request-identity-001'),id);assert.notEqual(runtime.observerTransactionId('request-identity-002'),id);
  for(const input of [undefined,'','short','x'.repeat(65),'request-identity-001\n','request/identity-001'])assert.throws(()=>runtime.observerTransactionId(input));
 });
 function credentials(change={}){
- const source=path.resolve(__dirname,'../research/autonomous-root/service/observer-runtime.js'),real=createRequire(source),module={exports:{}};
+ const source=path.resolve(__dirname,'../agent/service/observer-runtime.js'),real=createRequire(source),module={exports:{}};
  const defaults={Pid:'42',Tgid:'41',Uid:'5001 5001 5001 5001',Gid:'100 100 100 100',Groups:'29 100 201',CapEff:'0000000000000000',...change};
  const links=change.links&&change.links.slice();
  const fakeFs={readlinkSync:()=>links?links.shift():change.self||'41/task/42',readFileSync:file=>file.endsWith('status')?['Pid','Tgid','Uid','Gid','Groups','CapEff'].map(key=>key+':\t'+defaults[key]).join('\n'):(change.label||'User::Pkg::MiniRoot01')};
@@ -35,7 +35,7 @@ test('service credential capture uses the held executor and rejects incomplete e
 
 test('runtime confirms actual supervisor credentials before fresh worker confirmation',async()=>{
  for(const failure of [false,'credentials','not-running','handoff','provider-probe','handoff-mismatch']){
-  const source=path.resolve(__dirname,'../research/autonomous-root/service/observer-runtime.js'),real=createRequire(source),module={exports:{}},events=[];
+  const source=path.resolve(__dirname,'../agent/service/observer-runtime.js'),real=createRequire(source),module={exports:{}},events=[];
   let departed=false;
   const boot='00000000-0000-0000-0000-000000000001';
   const stat=()=>({isDirectory:()=>true,isSymbolicLink:()=>false,uid:5001,mode:0o42700,dev:1,ino:2});

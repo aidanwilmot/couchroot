@@ -3,7 +3,7 @@
 The measurements below motivated replacing the per-command managed launcher while
 retaining .NET for the persistent worker. The shared package builder now embeds the
 source-built launcher in the signed worker DLL; both `app.exec` and app-profile
-jobs use it. See [capability documentation](../CAPABILITIES.md) for lifecycle and
+jobs use it. See [capability documentation](../../docs/lab/autonomous-root/CAPABILITIES.md) for lifecycle and
 build requirements. A later [native worker experiment](../native-worker/README.md) compares startup,
 memory, CPU and partial capability parity; the deployed worker remains .NET.
 
@@ -23,7 +23,7 @@ The installed managed worker was the previously accepted version 0.2.0. Both
 prototype executables were uploaded with verified digests and staged through its
 private read-only helper views. The launcher binary was 13,160 bytes, unstripped.
 Raw logs, device identities and credentials remain private. Aggregated values are
-in [results.json](results.json).
+in [results.json](../../docs/lab/autonomous-root/native-launcher/results.json).
 
 Thirty measured pairs per TV followed three warmup pairs. Order alternated within
 each pair. `bench.c` used a monotonic clock around fork/exec/wait4, launching the
@@ -119,7 +119,7 @@ the measured build used `arm-linux-gnueabi-gcc` in the existing Bullseye toolcha
 Keep output outside the source checkout:
 
 ```sh
-sh research/autonomous-root/native-launcher/build.sh /private/native-launcher-build
+sh agent/native-launcher/build.sh /private/native-launcher-build
 python3 tests/native_app_launcher_test.py
 ```
 

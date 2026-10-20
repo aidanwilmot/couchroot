@@ -2,8 +2,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
 const {createRequire}=require('node:module');
-const {SelectionJournal,selectionStatus,managedVersion}=require('../research/autonomous-root/service/worker-selection');
-const {createAgent}=require('../research/autonomous-root/service/agent');
+const {SelectionJournal,selectionStatus,managedVersion}=require('../agent/service/worker-selection');
+const {createAgent}=require('../agent/service/agent');
 const M={implementation:'managed',manifest_sha256:'a'.repeat(64)},N={implementation:'native-prototype',manifest_sha256:'b'.repeat(64)},Q='c'.repeat(64),S='d'.repeat(64),R='e'.repeat(64);
 function fixture(){const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'worker-selection-')));const file=path.join(dir,'worker-selection.json');return {dir,file,j:new SelectionJournal(file),close:()=>fs.rmSync(dir,{recursive:true,force:true})};}
 function advance(j,s,phase,evidence){return j.advance(s.revision,s.pending.id,phase,evidence);}
@@ -40,7 +40,7 @@ test('failed publication retains an inspection marker before or after rename',()
  for(const after of [false,true]){
   const f=fixture();try{
    f.j.initialize(M);
-   const source=path.resolve(__dirname,'../research/autonomous-root/service/worker-selection.js'),realRequire=createRequire(source),policy=realRequire('./policy'),module={exports:{}};
+   const source=path.resolve(__dirname,'../agent/service/worker-selection.js'),realRequire=createRequire(source),policy=realRequire('./policy'),module={exports:{}};
    vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,exports:module.exports,process,Buffer,require:name=>name==='./policy'?{...policy,atomic:(...args)=>{if(after)policy.atomic(...args);throw Error('simulated durable write failure');}}:realRequire(name)});
    const j=new module.exports.SelectionJournal(f.file);assert.throws(()=>j.begin(1,N,Q));assert.equal(j.failed,true);
    assert.equal(selectionStatus(f.file).phase,'inspection-required');assert.equal(selectionStatus(f.file).launch_allowed,false);
@@ -70,7 +70,7 @@ test('history remains bounded and readable after many complete transitions',()=>
 });
 test('managed artifact version binds the six managed package bytes',()=>{
  const f=fixture();try{
-  const {hash}=require('../research/autonomous-root/service/policy'),index={};
+  const {hash}=require('../agent/service/policy'),index={};
   for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const suffix of ['dll','runtimeconfig.json','deps.json']){const file=name+'.'+suffix;fs.writeFileSync(path.join(f.dir,file),file);index[file]=hash(file);}
   fs.writeFileSync(path.join(f.dir,'manifest.json'),JSON.stringify(index));const first=managedVersion(f.dir);assert.match(first,/^[a-f0-9]{64}$/);
   fs.appendFileSync(path.join(f.dir,'SamsungTvRootAgent.dll'),'changed');assert.throws(()=>managedVersion(f.dir));
@@ -93,7 +93,7 @@ test('service does not acquire through submitted pending native or mismatched se
  }
 });
 test('retained-record import and rollback exports bind to committed selection receipts',()=>{
- const {execFileSync}=require('node:child_process'),{hash}=require('../research/autonomous-root/service/policy');
+ const {execFileSync}=require('node:child_process'),{hash}=require('../agent/service/policy');
  const f=fixture();try{
   const managed=path.join(f.dir,'managed'),native=path.join(f.dir,'native'),rollback=path.join(f.dir,'rollback');
   for(const dir of [managed,native,rollback])fs.mkdirSync(dir,{mode:0o700});

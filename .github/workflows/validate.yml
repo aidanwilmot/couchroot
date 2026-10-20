@@ -115,8 +115,8 @@ jobs:
         run: |
           mkdir -p test-results/native-worker
           docker run --rm --init --pull never --network none --cap-add SYS_PTRACE --security-opt seccomp=unconfined -v "$PWD:/src:ro" -v "$PWD/test-results/native-worker:/out" couchroot-native-tests:py312 sh -eu -c '
-            gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function -DNATIVE_WORKER_TEST -DNATIVE_WORKER_FAULT_TEST research/autonomous-root/native-worker/worker.c -ldl -pthread -o /out/worker
-            gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function research/autonomous-root/native-worker/accept.c -ldl -pthread -o /out/accept
+            gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function -DNATIVE_WORKER_TEST -DNATIVE_WORKER_FAULT_TEST agent/native-worker/worker.c -ldl -pthread -o /out/worker
+            gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function agent/native-worker/accept.c -ldl -pthread -o /out/accept
             gcc -shared -fPIC -Wall -Wextra -Werror tests/native-io/delay.c -ldl -o /out/io-delay.so
             # Mount-dependent and extended lifetime checks need separate local runs.
             NATIVE_WORKER=/out/worker NATIVE_WORKER_FAULT_TEST=1 COUCHROOT_PARITY_CONTAINER=1 NATIVE_ACCEPT=/out/accept NATIVE_IO_DELAY=/out/io-delay.so python3 -m unittest discover -s tests -p "native_*_test.py"

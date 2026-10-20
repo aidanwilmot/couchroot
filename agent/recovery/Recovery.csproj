@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>netcoreapp3.1;net6.0</TargetFrameworks><OutputType>Exe</OutputType><UseAppHost>false</UseAppHost><CheckEolTargetFramework>false</CheckEolTargetFramework></PropertyGroup><PropertyGroup><PathMap>$(MSBuildProjectDirectory)=/src/research/autonomous-root/recovery,$(PathMap)</PathMap></PropertyGroup></Project>

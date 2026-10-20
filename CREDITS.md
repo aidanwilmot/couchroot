@@ -8,15 +8,15 @@ research available. Inclusion here does not imply their endorsement.
 
 | Source | Contribution | License / provenance |
 | --- | --- | --- |
-| [Andrea Ricci's Vetro](https://github.com/andrearicci93/vetro) | SDB/ADB transport, root-agent protocol and tar modules used by the autonomous service; its TV-local loopback approach informed our startup experiments. | MIT; [retained notice](research/autonomous-root/service/vendor/LICENSE), [pinned revision and hashes](research/autonomous-root/UPSTREAM.json) |
-| [chris-ritsen/samsung-tv-root](https://github.com/chris-ritsen/samsung-tv-root) | Archive-root and root-worker C# payloads, obtained through the pinned Vetro source tree and built locally for each TV runtime. Earlier host-root work also used this project's research. | [Unlicense](research/autonomous-root/payload/LICENSE); [payload provenance](research/autonomous-root/UPSTREAM.json) |
+| [Andrea Ricci's Vetro](https://github.com/andrearicci93/vetro) | SDB/ADB transport, root-agent protocol and tar modules used by the autonomous service; its TV-local loopback approach informed our startup experiments. | MIT; [retained notice](agent/service/vendor/LICENSE), [pinned revision and hashes](agent/UPSTREAM.json) |
+| [chris-ritsen/samsung-tv-root](https://github.com/chris-ritsen/samsung-tv-root) | Archive-root and root-worker C# payloads, obtained through the pinned Vetro source tree and built locally for each TV runtime. Earlier host-root work also used this project's research. | [Unlicense](agent/payload/LICENSE); [payload provenance](agent/UPSTREAM.json) |
 
 The protocol regression checks in `tests/autonomous-root/protocol.test.cjs`
 are also adapted from Vetro and retain its MIT attribution.
 
 Our service lifecycle, certificate-pinned administration API, setup integration,
 model-specific guards and recovery tests are documented in the
-[autonomous agent notes](research/autonomous-root/README.md). They should not be
+[autonomous agent notes](docs/lab/autonomous-root/README.md). They should not be
 attributed wholesale to upstream, nor should our hardware observations be taken
 as upstream compatibility claims.
 

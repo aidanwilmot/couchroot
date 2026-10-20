@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),{spawnSync}=require('node:child_process');
-const {recoveryCommand}=require('../research/autonomous-root/service/native-return-recovery');
+const {recoveryCommand}=require('../agent/service/native-return-recovery');
 const id='a'.repeat(32),boot='00000000-0000-0000-0000-000000000001',sha='b'.repeat(64);
 test('offline command pins owned read-only code, boot and journal without publishing a worker',()=>{
  for(const kind of ['worker','retirement']){

@@ -8,7 +8,7 @@ import tempfile
 import threading
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1]/'research/autonomous-root/restart-service.sh'
+SCRIPT = Path(__file__).resolve().parents[1]/'agent/restart-service.sh'
 HOST = '''import ctypes,signal,time
 ctypes.CDLL(None).prctl(15,b'wrt-service',0,0,0)
 def stop(*args):

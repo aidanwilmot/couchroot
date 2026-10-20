@@ -9,7 +9,7 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT/'research/autonomous-root/recovery/native'
+SOURCE = ROOT/'agent/recovery/native'
 FIXTURE = ROOT/'tests/native-sdk-recovery'
 
 

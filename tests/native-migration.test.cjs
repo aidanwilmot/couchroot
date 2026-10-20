@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),{createRequire}=require('node:module');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
-const sourceFile=path.resolve(__dirname,'../research/autonomous-root/service/native-migration.js'),real=createRequire(sourceFile),managed='a'.repeat(64),native='b'.repeat(64),receipt='c'.repeat(64),readiness='d'.repeat(64);
+const {SelectionJournal}=require('../agent/service/worker-selection');
+const sourceFile=path.resolve(__dirname,'../agent/service/native-migration.js'),real=createRequire(sourceFile),managed='a'.repeat(64),native='b'.repeat(64),receipt='c'.repeat(64),readiness='d'.repeat(64);
 async function fixture(fail,fn){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'native-migration-')),selectionFile=directory+'/selection.json',journal=new SelectionJournal(selectionFile),events=[];let released=false,closed=0,id,controller;
  const step=name=>{events.push(name);if(fail===name)throw Error('injected '+name);if(fail&&fail.step===name)throw fail.error;};

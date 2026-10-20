@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const {snapshotManagedJobs,validateRecord,manifestCommand}=require('../research/autonomous-root/service/retained-state');
+const {snapshotManagedJobs,validateRecord,manifestCommand}=require('../agent/service/retained-state');
 const boot='00000000-0000-0000-0000-000000000001',source={boot_id:boot,worker_id:'a'.repeat(32),processes:{worker:{pid:42,start_ticks:'123'},guardian:null}},name='retained-job-0001.json';
 const bytes=Buffer.from(JSON.stringify({id:name.slice(0,-5),boot_id:boot,state:'completed',pid:0,exit_code:7,process_start:null})),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const manifest=()=>`${name} ${bytes.length} ${hash(bytes)}\nSNAPSHOT-END\n`;

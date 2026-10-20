@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const boot='00000000-0000-0000-0000-000000000001',sha='a'.repeat(64),id='b'.repeat(32),flush=()=>new Promise(r=>setImmediate(r));
 for(const outcome of ['retired','uncertain','stopped','managed-fallback','recovery','recovery-uncertain'])test('native bootstrap handoff keeps admission held through '+outcome,async()=>{
  const recovering=outcome.startsWith('recovery');
- const source=path.resolve(__dirname,'../research/autonomous-root/service/agent.js'),real=createRequire(source),channels=[];
+ const source=path.resolve(__dirname,'../agent/service/agent.js'),real=createRequire(source),channels=[];
  const held={implementation:'native-bootstrap',boot_id:boot,uptime_seconds:1,worker_id:'c'.repeat(32),lifetime_mode:'held-bootstrap',lifetime_seconds:300,guardian_pid:20,processes:{worker:{pid:21,start_ticks:'10'},guardian:{pid:20,start_ticks:'9'}},app_launcher:{sha256:sha,independently_staged:true},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]},capabilities:['held-bootstrap-v1','resource-inventory-v1','worker-process-identity-v1','guardian-parent-identity-v1']};
  if(outcome==='managed-fallback'||recovering)Object.assign(held,{implementation:'managed',capabilities:['file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1','resource-inventory-v1','worker-process-identity-v1'],app_launcher:{sha256:sha,implementation:'native'},processes:{worker:{pid:21,start_ticks:'10'},guardian:null}});
  const selected={phase:'stable',selected_implementation:'native-prototype',selected_manifest_sha256:sha,launch_allowed:false,history:[{id,outcome:'committed',readiness_sha256:sha}]};

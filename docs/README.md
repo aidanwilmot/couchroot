@@ -78,9 +78,17 @@ They are not deployment instructions or acceptance of the current source.
 
 - [Native WebView host and recovery](../native/webview/README.md)
 - [Native launcher](../native-hub/README.md)
-- [Root agent and recovery](../research/autonomous-root/README.md)
+- [Root agent and recovery](lab/autonomous-root/README.md)
 
 The offline `python3 scripts/check-docs.py` check validates repository-relative
 Markdown/HTML links and anchors and requires every document under `docs/` in this
 index. Site-root web routes and external URLs are outside its scope. The two
 generated saver scripts are checked by the separate saver build/reproducibility job.
+
+## Lab: autonomous root
+
+- [Persistent worker capabilities](lab/autonomous-root/CAPABILITIES.md)
+- [Autonomous TV administration prototype](lab/autonomous-root/README.md)
+- [Agent .NET dependency inventory](lab/autonomous-root/native-worker/DOTNET-INVENTORY.md)
+- [Native agent parity and .NET retirement plan](lab/autonomous-root/native-worker/MIGRATION.md)
+- [Production files and retained job compatibility](lab/autonomous-root/native-worker/PARITY.md)

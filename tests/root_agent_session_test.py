@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
-spec=importlib.util.spec_from_file_location('session_client',Path(__file__).resolve().parents[1]/'research/autonomous-root/client.py')
+spec=importlib.util.spec_from_file_location('session_client',Path(__file__).resolve().parents[1]/'agent/client.py')
 client=importlib.util.module_from_spec(spec);spec.loader.exec_module(client)
 CONFIG=dict(host='example.invalid',port=28443,server_certificate='server.pem',client_certificate='client.pem',client_key='client.key',server_sha256=hashlib.sha256(b'certificate').hexdigest())
 

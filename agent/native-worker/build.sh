@@ -15,7 +15,7 @@ for name in $targets; do
  case "$name" in
    *-fault-test) unit=${name%-fault-test}; fault_flags=-DNATIVE_WORKER_FAULT_TEST ;;
  esac
- "${CC:-arm-linux-gnueabi-gcc}" -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function \
+ "${CC:-arm-linux-gnueabi-gcc}" -ffile-prefix-map="$src"=/src/research/autonomous-root/native-worker -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function \
   -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wl,-z,relro,-z,now \
   ${ARCH_FLAGS:--march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp} \
   $fault_flags "$src/$unit.c" -ldl -pthread -o "$1/$name"

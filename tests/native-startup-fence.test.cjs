@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),crypto=require('node:crypto'),{spawn,spawnSync}=require('node:child_process'),{once}=require('node:events');
-const {fenceCommand}=require('../research/autonomous-root/service/launch-fence');
+const {fenceCommand}=require('../agent/service/launch-fence');
 const linux={skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||process.getuid()!==0};
 function fixture(){const id=crypto.randomBytes(16).toString('hex'),fence='/opt/couchroot-startup-fence-'+id,tmp=fs.mkdtempSync(os.tmpdir()+'/startup-fence-'),r={id,fence,boot_id:fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim()};
  const command=(body,seal=false)=>fenceCommand(r,body,{kind:'startup',seal}),run=(body,seal=false)=>spawnSync('/bin/sh',['-c',command(body,seal)],{encoding:'utf8',timeout:3000});

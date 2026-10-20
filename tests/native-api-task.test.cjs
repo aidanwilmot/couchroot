@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {Journal}=require('../research/autonomous-root/service/policy'),{createNativeTasks}=require('../research/autonomous-root/service/native-api-task');
+const {Journal}=require('../agent/service/policy'),{createNativeTasks}=require('../agent/service/native-api-task');
 const value={id:'native-rehearsal-0001',manifest_sha256:'a'.repeat(64),runtime_sha256:'b'.repeat(64)},tick=()=>new Promise(r=>setImmediate(r));
 async function fixture(fn){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-api-task-')),journal=new Journal(dir+'/requests.json');let calls=0,complete,fail;const agent={status:()=>({connected:true,worker_ready:true,selected_implementation:'managed',admission_held:false}),rehearseNative:async(m,r)=>{calls++;assert.equal(m,value.manifest_sha256);assert.equal(r,value.runtime_sha256);assert.equal(journal.rows[0].state,'submitted');return new Promise((yes,no)=>{complete=yes;fail=no;});},resumeManagedActivation:async()=>{calls++;return {selected_implementation:'managed',admission_held:false};}};const tasks=createNativeTasks({agent,journal});try{await fn({tasks,journal,agent,dir,calls:()=>calls,complete:r=>complete(r),fail:e=>fail(e)});}finally{fs.rmSync(dir,{recursive:true,force:true});}}
 test('rehearsal journals before dispatch, returns submission and completes asynchronously',()=>fixture(async f=>{

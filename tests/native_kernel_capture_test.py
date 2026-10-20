@@ -47,7 +47,7 @@ int main(int argc,char **argv) {
   return kernel_end(&capture)?0:1;
 }
 ''')
-        native = Path(__file__).resolve().parents[1]/'research/autonomous-root/native-worker'
+        native = Path(__file__).resolve().parents[1]/'agent/native-worker'
         subprocess.run(['gcc', '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
                         '-Wno-unused-function', '-I', str(native), str(source),
                         '-ldl', '-pthread', '-o', str(cls.binary)], check=True)

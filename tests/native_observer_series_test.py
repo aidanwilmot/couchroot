@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-SOURCE = Path(__file__).resolve().parents[1]/'research/autonomous-root/native-worker/verify-observer-series.py'
+SOURCE = Path(__file__).resolve().parents[1]/'agent/native-worker/verify-observer-series.py'
 spec = importlib.util.spec_from_file_location('series', SOURCE)
 series = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(series)

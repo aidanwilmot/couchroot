@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),net=require('node:net'),path=require('node:path');
 const {spawn}=require('node:child_process'),{once}=require('node:events');
-const {createExternalObserver}=require('../research/autonomous-root/service/external-observer');
-const {startTicks}=require('../research/autonomous-root/service/worker-processes');
+const {createExternalObserver}=require('../agent/service/external-observer');
+const {startTicks}=require('../agent/service/worker-processes');
 const BOOT='00000000-0000-0000-0000-000000000001';
 const bound={boot_id:BOOT,worker_id:'a'.repeat(32),capabilities:['worker-process-identity-v1'],processes:{worker:{pid:42,start_ticks:'123'},guardian:null}};
 const pause=()=>new Promise(r=>setTimeout(r,30));

@@ -8,7 +8,7 @@ its small .NET entry bridge and managed fallback. Earlier managed releases passe
 reboot and service recovery trials; those results do not qualify the current
 native candidate's complete lifecycle. Both TVs ran native-selected 0.7.52 in
 bounded trials; clean boot, standby/power interruption and full endurance remain
-open. See the [current release scope](../../docs/project/release-readiness.md) and
+open. See the [current release scope](../../project/release-readiness.md) and
 [dated qualification snapshot](native-worker/MIGRATION.md#current-qualification-snapshot).
 Signed-package success is not proof of on-boot entitlement, Node
 runtime support, SDK admission, SMACK access or full privileged API coverage.
@@ -104,7 +104,7 @@ removal was not tested.
 
 ## Service restart during maintenance
 
-Use [restart-service.sh](restart-service.sh) through the existing admitted SDK
+Use [restart-service.sh](../../../agent/restart-service.sh) through the existing admitted SDK
 transport, with the per-device setup lock, pending-run check and independent SDK
 rescue already in place. On S90D the app-user launcher cannot read the WRT
 process identity; do not relax its permissions to run this check.
@@ -237,10 +237,10 @@ telemetry, pairing, debloat choices and the read-only dashboard are unchanged.
 ## Client examples after device acceptance
 
 ```
-python3 research/autonomous-root/client.py --config PRIVATE_RUN/client.json status
-python3 research/autonomous-root/client.py --config PRIVATE_RUN/client.json requests
-python3 research/autonomous-root/client.py --config PRIVATE_RUN/client.json exec --command-file PRIVATE_SCRIPT
-python3 research/autonomous-root/client.py --config PRIVATE_RUN/client.json disable
+python3 agent/client.py --config PRIVATE_RUN/client.json status
+python3 agent/client.py --config PRIVATE_RUN/client.json requests
+python3 agent/client.py --config PRIVATE_RUN/client.json exec --command-file PRIVATE_SCRIPT
+python3 agent/client.py --config PRIVATE_RUN/client.json disable
 ```
 
 `enable` persists enabled state and permits boot-time attempts; `disable` persists
@@ -260,7 +260,7 @@ Commands are encoded to preserve shell bytes through the older root worker.
 This action alone does not select a startup source or suppress Live TV. Combined
 with the signed ISP-bound Hub trial, one supervised QN90A reboot reached Hub at
 about 118 seconds without Live TV picture/audio or user intervention. The long
-blank wait remains a limitation. See the [direct-boot results](../../docs/lab/devices/qn90a/direct-boot.md#supervised-isp-source--autonomous-agent-trial--2026-10-11)
+blank wait remains a limitation. See the [direct-boot results](../devices/qn90a/direct-boot.md#supervised-isp-source--autonomous-agent-trial--2026-10-11)
 for exact boundaries, status-window limitations and recovery.
 
 `tvsetup.agent_transport.AgentTransport` is an explicit certificate-pinned
@@ -279,7 +279,7 @@ is pending. The override is in the local registration database, not the signed
 0.1.6 manifest, and may need deliberate reapplication after package replacement.
 The exact AMD library contains a 90-second user-login fallback consistent with
 the remaining delay; its execution was not dynamically traced. See the
-[queue investigation](../../docs/lab/devices/qn90a/direct-boot.md#startup-queue-investigation--2026-10-11).
+[queue investigation](../devices/qn90a/direct-boot.md#startup-queue-investigation--2026-10-11).
 
 ## Journal rotation update — QN90A 0.1.7
 
@@ -294,7 +294,7 @@ retained; deleting them would remove their replay history.
 An enrolled administrator can also archive explicitly:
 
 ```sh
-python3 research/autonomous-root/client.py --config /absolute/private/client.json archive-journal
+python3 agent/client.py --config /absolute/private/client.json archive-journal
 ```
 
 The client reads `/v1/requests` and submits its digest to

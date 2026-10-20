@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {createObserverRetirement,validateProvider}=require('../research/autonomous-root/service/observer-retirement');
+const {createObserverRetirement,validateProvider}=require('../agent/service/observer-retirement');
 const boot='00000000-0000-0000-0000-000000000001',sha='a'.repeat(64),unit='couchroot-observer-'+'b'.repeat(32)+'.service';
 const bound={unit,bootId:boot,sha256:sha};
 const source={boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}};
@@ -47,7 +47,7 @@ test('parallel requests cannot overlap retirement',async()=>{
 });
 test('late readiness cannot issue a retirement command after its deadline',async()=>{
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{createRequire}=require('node:module');
- const file=path.resolve(__dirname,'../research/autonomous-root/service/observer-retirement.js'),module={exports:{}},real=createRequire(file);let now=0;
+ const file=path.resolve(__dirname,'../agent/service/observer-retirement.js'),module={exports:{}},real=createRequire(file);let now=0;
  vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,require:real,process:{hrtime:()=>[Math.floor(now/1000),(now%1000)*1000000]}});
  const f=fixture(),p=await module.exports.createObserverRetirement({channel:f.channel,source,bound,launcherSha256:sha});
  f.channel.operation=async()=>{now=9000;return f.info;};
@@ -66,7 +66,7 @@ test('failed source-exit check cannot be retried or followed by mutation',async(
 
 function rollbackFixture(failure){
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{createRequire}=require('node:module');
- const file=path.resolve(__dirname,'../research/autonomous-root/service/observer-retirement.js'),module={exports:{}},real=createRequire(file),f=fixture(),events=[];
+ const file=path.resolve(__dirname,'../agent/service/observer-retirement.js'),module={exports:{}},real=createRequire(file),f=fixture(),events=[];
  const native={boot_id:boot,worker_id:'e'.repeat(32),processes:{worker:{pid:92,start_ticks:'300'},guardian:{pid:91,start_ticks:'299'}}};
  const inputs={record:{id:'f'.repeat(32),phase:'ready',boot_id:boot,source,worker_identity:native},installation:{id:'f'.repeat(32)},baseline:{sha256:sha}},snapshot={sha256:'b'.repeat(64),records:[]};
  const receipt={transition_id:'f'.repeat(32),receipt_sha256:'c'.repeat(64)},launch={id:'f'.repeat(32),phase:'submitted'};

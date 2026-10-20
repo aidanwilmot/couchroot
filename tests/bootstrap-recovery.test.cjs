@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {hash}=require('../research/autonomous-root/service/policy');
-const {markerId,recoveryCandidate,reconcileBootstrap,validateRecord,recoveryCommand}=require('../research/autonomous-root/service/bootstrap-recovery');
+const {hash}=require('../agent/service/policy');
+const {markerId,recoveryCandidate,reconcileBootstrap,validateRecord,recoveryCommand}=require('../agent/service/bootstrap-recovery');
 const boot='00000000-0000-0000-0000-000000000001',id='b'.repeat(32),sha='a'.repeat(64);
 function fixture(run){const directory=fs.mkdtempSync(path.join(os.tmpdir(),'bootstrap-recovery-')),file=directory+'/'+id+'.bootstrap.json',selection=directory+'/worker-selection.json',marker=directory+'/bootstrap-launch.pending';
  fs.writeFileSync(selection,'{"selection":"unchanged"}',{mode:0o600});
@@ -37,7 +37,7 @@ test('cleanup receipt persisted before marker removal can finish after restart',
 }));
 test('preparation publishes a complete durable receipt before its exclusive marker',()=>fixture(f=>{
  const vm=require('node:vm'),{createRequire}=require('node:module');
- const source=path.resolve(__dirname,'../research/autonomous-root/service/held-bootstrap.js'),real=createRequire(source),stage='/home/owner/share/tmp/sdk_tools/archive-root-'+id.slice(0,16),bytes=Buffer.from('signed bytes'),staged=new Map();
+ const source=path.resolve(__dirname,'../agent/service/held-bootstrap.js'),real=createRequire(source),stage='/home/owner/share/tmp/sdk_tools/archive-root-'+id.slice(0,16),bytes=Buffer.from('signed bytes'),staged=new Map();
  fs.unlinkSync(f.marker);fs.unlinkSync(f.file);let published=false;
  const mockfs={...fs,writeFileSync:(p,b,o)=>{if(p.startsWith(stage+'/')){assert(!staged.has(p));staged.set(p,b);}else fs.writeFileSync(p,b,o);},symlinkSync:(target,marker)=>{
   const record=JSON.parse(fs.readFileSync(f.file));assert.equal(record.schema,2);assert.equal(record.selection_sha256,hash(fs.readFileSync(f.selection)));assert.equal(record.file,f.file);assert.equal(target,id+'.bootstrap.json');published=true;fs.symlinkSync(target,marker);

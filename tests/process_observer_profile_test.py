@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-SOURCE = Path(__file__).resolve().parents[1]/'research/autonomous-root/native-observer'
+SOURCE = Path(__file__).resolve().parents[1]/'agent/native-observer'
 ENABLED = sys.platform == 'linux' and os.environ.get('COUCHROOT_PARITY_CONTAINER') == '1'
 
 @unittest.skipUnless(ENABLED, 'isolated root Linux container required')

@@ -96,7 +96,7 @@ S90D retains its existing collector and inspector.
 
 See [release readiness](docs/project/release-readiness.md),
 [telemetry and settings](docs/guides/telemetry.md), and
-[root-agent operation and recovery](research/autonomous-root/README.md).
+[root-agent operation and recovery](agent/README.md).
 Read the recovery procedure before enabling the agent: a failed start with
 Developer Mode pointing to loopback may require restoring computer access with
 the TV remote.

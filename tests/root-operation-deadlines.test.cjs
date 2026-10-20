@@ -4,8 +4,8 @@ const assert=require('node:assert/strict');
 const {EventEmitter}=require('node:events');
 const crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),net=require('node:net');
 const {execFile,execFileSync}=require('node:child_process');
-const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
-const {operationDeadline,HTTP_MARGIN_MS,CLIENT_MARGIN_MS}=require('../research/autonomous-root/service/operation-deadlines');
+const {RootAgentServer}=require('../agent/service/root-agent');
+const {operationDeadline,HTTP_MARGIN_MS,CLIENT_MARGIN_MS}=require('../agent/service/operation-deadlines');
 const contract=require('./worker-parity/contract.json').response_deadlines;
 function signed(secret,nonce,payload){return payload+'\t'+crypto.createHmac('sha256',secret).update(nonce).update('\0').update(payload).digest('hex')+'\n';}
 class Socket extends EventEmitter {
@@ -49,8 +49,8 @@ test('a confirmed result cancels its longer deadline',async t=>{
 });
 test('enrolled Python client receives a slow operation through HTTPS and the real wire',
  {skip:!process.env.COUCHROOT_DEADLINE_TEST,timeout:60000},async()=>{
- const {createApi}=require('../research/autonomous-root/service/api');
- const {Journal,hash}=require('../research/autonomous-root/service/policy');
+ const {createApi}=require('../agent/service/api');
+ const {Journal,hash}=require('../agent/service/policy');
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'couchroot-deadline-'));
  let api,peer,replyTimer;const channel=new RootAgentServer();
  try{
@@ -85,7 +85,7 @@ with api.Session(c) as session:
  assert time.monotonic()-start>=41
  assert api.operation(c,dict(op='file.status',transfer_id='fixture'),session=session)['operation']=='file.status'
 `;
-  await new Promise((resolve,reject)=>execFile('python3',['-c',script,path.resolve(__dirname,'../research/autonomous-root/client.py'),dir+'/client.json'],{timeout:55000},(error,out,err)=>error?reject(Error(err||error.message)):resolve(out)));
+  await new Promise((resolve,reject)=>execFile('python3',['-c',script,path.resolve(__dirname,'../agent/client.py'),dir+'/client.json'],{timeout:55000},(error,out,err)=>error?reject(Error(err||error.message)):resolve(out)));
   assert.equal(requests,2);assert.equal(journal.rows.length,1);assert.equal(journal.rows[0].state,'completed');
  }finally{
   clearTimeout(replyTimer);if(peer)peer.destroy();channel.close();if(api){api.closeAllConnections();await new Promise(resolve=>api.close(resolve));}fs.rmSync(dir,{recursive:true,force:true});

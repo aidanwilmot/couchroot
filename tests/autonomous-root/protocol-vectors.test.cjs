@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),EventEmitter=require('node:events');
 const crypto=require('node:crypto');
 const vectors=require('../fixtures/root-protocol.json');
-const {RootAgentServer}=require('../../research/autonomous-root/service/root-agent');
+const {RootAgentServer}=require('../../agent/service/root-agent');
 class Socket extends EventEmitter {
  constructor(){super();this.writes=[];this.destroyed=false;}
  write(value){this.writes.push(value);}

@@ -2,7 +2,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
 const {createRequire}=require('node:module');
-const source=path.resolve(__dirname,'../research/autonomous-root/service/policy.js'),localRequire=createRequire(source);
+const source=path.resolve(__dirname,'../agent/service/policy.js'),localRequire=createRequire(source);
 function fixture(run){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'journal-sync-timing-')),file=path.join(dir,'requests.json');
  let now=0,fail=0;const calls=[];

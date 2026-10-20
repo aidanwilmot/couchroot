@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const {snapshotManagedJobs}=require('../research/autonomous-root/service/retained-state');
-const {installRetainedState,acceptRetainedState,planInstallation,validateSnapshot}=require('../research/autonomous-root/service/retained-install');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+const {snapshotManagedJobs}=require('../agent/service/retained-state');
+const {installRetainedState,acceptRetainedState,planInstallation,validateSnapshot}=require('../agent/service/retained-install');
+const {SelectionJournal}=require('../agent/service/worker-selection');
 const boot='00000000-0000-0000-0000-000000000001',source={boot_id:boot,worker_id:'a'.repeat(32),processes:{worker:{pid:42,start_ticks:'123'},guardian:null}},manifestSha256='b'.repeat(64),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 function snapshot(count=2){const records=Array.from({length:count},(_,i)=>{const name=('retained-job-'+String(i).padStart(4,'0')).padEnd(count===64?64:17,'x')+'.json',bytes=Buffer.from(JSON.stringify({id:name.slice(0,-5),boot_id:boot,state:i?'unknown':'completed',pid:0,exit_code:i?null:7}));return {name,size:bytes.length,sha256:hash(bytes),base64:bytes.toString('base64')};});const body={schema:1,implementation:'managed',source,records};return {...body,sha256:hash(Buffer.from(JSON.stringify(body)))};}
 test('installation plan binds snapshot and handles the full retention limit within wire bounds',()=>{

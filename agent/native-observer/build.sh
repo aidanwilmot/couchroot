@@ -7,7 +7,7 @@ if test "$#" -ne 1; then
 fi
 src=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 mkdir -p "$1"
-"${CC:-arm-linux-gnueabi-gcc}" -std=c99 -O2 -Wall -Wextra -Werror \
+"${CC:-arm-linux-gnueabi-gcc}" -ffile-prefix-map="$src"=/src/research/autonomous-root/native-observer -std=c99 -O2 -Wall -Wextra -Werror \
     -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wl,-z,relro,-z,now \
     -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp \
     "$src/process-observer.c" -o "$1/process-observer"

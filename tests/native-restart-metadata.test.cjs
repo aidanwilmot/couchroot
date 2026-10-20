@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {hash}=require('../research/autonomous-root/service/policy');
-const {parseMetadata,verifyRestartRecords}=require('../research/autonomous-root/service/native-restart-metadata');
+const {hash}=require('../agent/service/policy');
+const {parseMetadata,verifyRestartRecords}=require('../agent/service/native-restart-metadata');
 const owner='a'.repeat(32),boot='00000000-0000-0000-0000-000000000001';
 function fixture(){
  const saved={id:'native-saved-0001',boot_id:boot,state:'completed',exit_code:9},live={id:'native-active-01',boot_id:boot,worker_id:owner,state:'running',pid:123,process_start:'456',exit_code:null};

@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),{createRequire}=require('node:module');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{hash}=require('../research/autonomous-root/service/policy'),{planInstallation}=require('../research/autonomous-root/service/retained-install');
-const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-return.js'),real=createRequire(file),managed='a'.repeat(64),native='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
+const {SelectionJournal}=require('../agent/service/worker-selection'),{hash}=require('../agent/service/policy'),{planInstallation}=require('../agent/service/retained-install');
+const file=path.resolve(__dirname,'../agent/service/managed-return.js'),real=createRequire(file),managed='a'.repeat(64),native='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
 async function fixture(failure,run,{lazy=false}={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'managed-return-')),selectionFile=dir+'/selection.json',journal=new SelectionJournal(selectionFile),events=[];let closes=0,controller;
  journal.initialize({implementation:'managed',manifest_sha256:managed});const id=journal.begin(1,{implementation:'native-prototype',manifest_sha256:native},'c'.repeat(64)).pending.id;

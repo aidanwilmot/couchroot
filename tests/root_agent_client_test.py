@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SOURCE=Path(__file__).resolve().parents[1]/'research/autonomous-root/client.py'
+SOURCE=Path(__file__).resolve().parents[1]/'agent/client.py'
 spec=importlib.util.spec_from_file_location('root_agent_client_tests', SOURCE)
 client=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)

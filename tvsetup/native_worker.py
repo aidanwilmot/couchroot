@@ -7,7 +7,7 @@ import struct
 from .common import REPO, Refused, atomic_json, sha
 from .root_launcher import IMAGE
 
-SOURCE = REPO / 'research/autonomous-root'
+SOURCE = REPO / 'agent'
 ARTIFACTS = {'native-worker': 'worker', 'native-app-launcher': 'app-launcher',
              'native-process-observer': 'process-observer'}
 ALLOWED_NEEDED = {'libc.so.6', 'libdl.so.2', 'libpthread.so.0', 'librt.so.1',

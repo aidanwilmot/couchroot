@@ -128,7 +128,7 @@ separately; keep the independent 300-second .NET SDK rescue armed throughout.
 Restore the original SDK staging, loopback and managed readiness, preserve
 selection/enrollment/job bytes, and disarm all trial units. Both models passed
 this bounded round; see [aggregate evidence](results.json) and the
-[migration record](../autonomous-root/native-worker/MIGRATION.md) for the earlier
+[migration record](../../docs/lab/autonomous-root/native-worker/MIGRATION.md) for the earlier
 failures, S90D timer-stop reconciliation and remaining managed dependency.
 
 
@@ -141,4 +141,4 @@ and uses `ServiceEntry.cs` as the minimal trusted loader. It accepts only a uniq
 identity checks and bounded inline operation. The managed host may canonicalize
 `/home` to `/opt/usr/home`; only these exact stage aliases are accepted. Model-bound
 builds still run twice and preserve the original setup pilot and managed fallback.
-See the [service startup contract](../autonomous-root/CAPABILITIES.md#native-service-acquisition-and-held-startup).
+See the [service startup contract](../../docs/lab/autonomous-root/CAPABILITIES.md#native-service-acquisition-and-held-startup).

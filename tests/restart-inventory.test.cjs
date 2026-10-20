@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{inventoryRestart,providerId}=require('../research/autonomous-root/service/restart-inventory');
+const {SelectionJournal}=require('../agent/service/worker-selection'),{inventoryRestart,providerId}=require('../agent/service/restart-inventory');
 const managed={implementation:'managed',manifest_sha256:'a'.repeat(64)},native={implementation:'native-prototype',manifest_sha256:'b'.repeat(64)},d=c=>c.repeat(64);
 function fixture(fn){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'restart-inventory-'));fs.chmodSync(dir,0o700);const file=dir+'/worker-selection.json',journal=new SelectionJournal(file);journal.initialize(managed);
@@ -71,7 +71,7 @@ test('malformed records, writer markers and invalid journals stay pending with d
  f.write('managed-launch.pending','x');assert(f.state().markers.includes('managed-launch.pending'));
  assert(f.state().diagnostics.length<=12&&f.state().diagnostics.every(x=>x.length<=200));
 }));
-const {abandonUnsubmitted}=require('../research/autonomous-root/service/restart-inventory');
+const {abandonUnsubmitted}=require('../agent/service/restart-inventory');
 test('startup abandonment requires proof that nothing remote was submitted and is idempotent',()=>fixture(f=>{
  const id=f.journal.begin(1,native,d('c')).pending.id;
  const r=abandonUnsubmitted(f.file);assert.equal(r.abandoned,true);assert.equal(r.transaction_id,id);
@@ -99,7 +99,7 @@ test('any evidence of submission, later phase or return direction refuses abando
  });
 });
 test('journal validation accepts abandonment only without state or readiness evidence',()=>fixture(f=>{
- const {validate}=require('../research/autonomous-root/service/worker-selection');
+ const {validate}=require('../agent/service/worker-selection');
  const id=f.journal.begin(1,native,d('c')).pending.id;f.journal.advance(2,id,'state-ready',d('d'));assert.throws(()=>f.journal.abandon(3,id));
  const s=f.journal.read(),entry={id,from:managed,to:native,quiescence_sha256:d('c'),state_sha256:d('d'),readiness_sha256:null,outcome:'abandoned'};
  assert.throws(()=>validate({...s,pending:null,history:[entry]}));assert.doesNotThrow(()=>validate({...s,pending:null,history:[{...entry,state_sha256:null}]}));
@@ -108,5 +108,5 @@ test('journal validation accepts abandonment only without state or readiness evi
 
 test('an uncertain bootstrap prevents settled inventory and abandonment without replay',()=>fixture(f=>{
  const id='e'.repeat(32);f.write('bootstrap-launch.pending',id+'\n');const r=f.state();assert.equal(r.action,'pending-reconciliation');assert(r.markers.includes('bootstrap-launch.pending'));
- const {abandonUnsubmitted}=require('../research/autonomous-root/service/restart-inventory');f.journal.begin(1,native,d('c'));const before=f.listing();assert.equal(abandonUnsubmitted(f.file).abandoned,false);assert.deepEqual(f.listing(),before);
+ const {abandonUnsubmitted}=require('../agent/service/restart-inventory');f.journal.begin(1,native,d('c'));const before=f.listing();assert.equal(abandonUnsubmitted(f.file).abandoned,false);assert.deepEqual(f.listing(),before);
 }));

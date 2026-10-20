@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),crypto=require('node:crypto'),{EventEmitter}=require('node:events'),{createRequire}=require('node:module');
-const file=path.resolve(__dirname,'../research/autonomous-root/service/retirement-session.js'),real=createRequire(file);
+const file=path.resolve(__dirname,'../agent/service/retirement-session.js'),real=createRequire(file);
 async function fixture(mode,run){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'retirement-session-'));
  let reconcileRecord={id:'a'.repeat(32),phase:'shutdown-acknowledged'},reconcileCalls=0,instance,launches=0,readiness=0,launchOptions,closed=0,lifecycle=[];const provider={identity:'verified'};

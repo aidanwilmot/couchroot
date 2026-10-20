@@ -17,7 +17,7 @@ class ObserverTests(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.root = Path(cls.tmp.name)
-        native = Path(__file__).resolve().parents[1]/'research/autonomous-root/native-worker'
+        native = Path(__file__).resolve().parents[1]/'agent/native-worker'
         source = cls.root/'fixture.c'
         source.write_text(r'''
 #include "common.h"

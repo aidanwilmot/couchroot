@@ -59,7 +59,7 @@ milestones, not releases or blanket hardware acceptance. The former `dev0` and
 ## Validation and versioning
 
 Historical measurements and their limits remain in the [documentation index](docs/README.md),
-[WebView record](native/webview/README.md) and [agent capabilities](research/autonomous-root/CAPABILITIES.md).
+[WebView record](native/webview/README.md) and [agent capabilities](docs/lab/autonomous-root/CAPABILITIES.md).
 See [release readiness](docs/project/release-readiness.md) for current acceptance gates.
 Old device results do not qualify every later source revision.
 

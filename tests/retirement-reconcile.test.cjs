@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const {reconcileRetirement,remainderCommand}=require('../research/autonomous-root/service/retirement-reconcile');
+const {reconcileRetirement,remainderCommand}=require('../agent/service/retirement-reconcile');
 const state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state',boot='00000000-0000-0000-0000-000000000001',sha='b'.repeat(64),id='f'.repeat(32);
 const source={boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}};
 function record(){return {schema:1,id,phase:'shutdown-acknowledged',device:'s90d',manifest_sha256:sha,worker_sha256:sha,launcher_sha256:sha,observer_sha256:sha,boot_id:boot,source,unit:'couchroot-retirement-'+id+'.service',directory:'/opt/couchroot-retirement-'+id,scope:'/opt/couchroot-retirement-'+id+'/state',token_file:state+'/retirement-ABC123/token',token_sha256:sha,port:12345,provider_identity:{boot_id:boot,worker_id:'d'.repeat(32),processes:{worker:{pid:77,start_ticks:'200'},guardian:{pid:76,start_ticks:'199'}}},unit_started_monotonic:'123'};}

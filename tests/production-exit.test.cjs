@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {prepareProductionExit}=require('../research/autonomous-root/service/production-exit');
+const {prepareProductionExit}=require('../agent/service/production-exit');
 const boot='00000000-0000-0000-0000-000000000001',id='a'.repeat(32),sha='b'.repeat(64);
 function record(){return {schema:1,id,phase:'ready',device:'s90d',manifest_sha256:sha,state_receipt_sha256:sha,worker_sha256:sha,launcher_sha256:sha,source:{boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}},boot_id:boot,unit:'couchroot-worker-'+id+'.service',directory:'/opt/couchroot-worker-'+id,scope:'/opt/couchroot-worker-'+id+'/state',port:12345,token_file:'/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/production-ABC123/token',token_sha256:sha,worker_identity:{boot_id:boot,worker_id:'d'.repeat(32),processes:{worker:{pid:87,start_ticks:'300'},guardian:{pid:86,start_ticks:'299'}}},unit_started_monotonic:'123'};}
 const stat=(pid,ticks)=>Buffer.from(pid+' (worker (with)\nspaces) S '+Array(18).fill('0').join(' ')+' '+ticks+' 0').toString('base64');
@@ -31,7 +31,7 @@ test('binding rejects absent or reused workers, malformed output and changed uni
 test('post-shutdown drift or stalled guardian refuses completion and replay',async()=>{
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{createRequire}=require('node:module');
  for(const mode of ['unit','failure','deadline']){
-  const f=fixture(),file=path.resolve(__dirname,'../research/autonomous-root/service/production-exit.js'),module={exports:{}};let now=0;
+  const f=fixture(),file=path.resolve(__dirname,'../agent/service/production-exit.js'),module={exports:{}};let now=0;
   vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,Buffer,require:createRequire(file),setTimeout:fn=>{now+=11000;fn();},process:{hrtime:previous=>{const value=[Math.floor(now/1000),0];return previous?[value[0]-previous[0],0]:value;}}});
   const observer=await module.exports.prepareProductionExit({record:f.r,execute:f.execute});
   if(mode==='unit')f.setStart('999');if(mode==='failure')f.setUnit('failed');if(mode==='deadline')f.states.worker='absent';

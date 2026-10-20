@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const {activateProduction,providerAbsentCommand}=require('../research/autonomous-root/service/production-activation');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+const {activateProduction,providerAbsentCommand}=require('../agent/service/production-activation');
+const {SelectionJournal}=require('../agent/service/worker-selection');
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex'),sha='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
 const linux={skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||process.geteuid()!==0};
@@ -41,7 +41,7 @@ test('provider absence command binds boot, process start identities and staging 
 }));
 
 test('lost activation publication keeps reconciliation intent after token cleanup',linux,()=>fixture(async f=>{
- const vm=require('node:vm'),{createRequire}=require('node:module'),source=path.resolve(__dirname,'../research/autonomous-root/service/production-activation.js'),real=createRequire(source),module={exports:{}};
+ const vm=require('node:vm'),{createRequire}=require('node:module'),source=path.resolve(__dirname,'../agent/service/production-activation.js'),real=createRequire(source),module={exports:{}};
  vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process,require:name=>name==='./policy'?{...real(name),atomic:(file,value)=>{real(name).atomic(file,value);throw Error('publication acknowledgement lost');}}:real(name)});
  await assert.rejects(module.exports.activateProduction(f.options),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(f.file)).phase,'active');assert.equal(fs.existsSync(f.intent),true);assert.equal(fs.existsSync(f.record.token_file),false);assert.equal(fs.existsSync(f.dir+'/production-launch.pending'),false);
  await assert.rejects(activateProduction(f.options));
@@ -49,7 +49,7 @@ test('lost activation publication keeps reconciliation intent after token cleanu
 
 test('explicit activation resume handles each ordered cleanup window without restarting work',linux,async()=>{
  for(const boundary of ['token','directory','state-marker','launch-marker','publication','intent'])await fixture(async f=>{
-  const vm=require('node:vm'),{createRequire}=require('node:module'),source=path.resolve(__dirname,'../research/autonomous-root/service/production-activation.js'),real=createRequire(source),module={exports:{}};let interrupted=false;
+  const vm=require('node:vm'),{createRequire}=require('node:module'),source=path.resolve(__dirname,'../agent/service/production-activation.js'),real=createRequire(source),module={exports:{}};let interrupted=false;
   const target=boundary==='token'?f.record.token_file:boundary==='directory'?path.dirname(f.record.token_file):boundary==='state-marker'?f.dir+'/state-install.pending':boundary==='launch-marker'?f.dir+'/production-launch.pending':f.intent;
   const wrapped={...fs,unlinkSync:p=>{fs.unlinkSync(p);if(!interrupted&&boundary!=='directory'&&boundary!=='publication'&&p===target){interrupted=true;throw Error('interrupted after unlink');}},rmdirSync:p=>{fs.rmdirSync(p);if(!interrupted&&boundary==='directory'&&p===target){interrupted=true;throw Error('interrupted after rmdir');}}};
   vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process,require:name=>name==='fs'?wrapped:name==='./policy'?{...real(name),atomic:(file,value)=>{real(name).atomic(file,value);if(!interrupted&&boundary==='publication'){interrupted=true;throw Error('interrupted publication');}}}:real(name)});

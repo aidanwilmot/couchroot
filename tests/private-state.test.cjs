@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {privateDirectory,privateRead}=require('../research/autonomous-root/service/private-state');
+const {privateDirectory,privateRead}=require('../agent/service/private-state');
 test('private directory accepts only owner-only access and optional inherited setgid',()=>{
  const stat=mode=>({isDirectory:()=>true,isSymbolicLink:()=>false,uid:process.geteuid(),mode});
  assert(privateDirectory(stat(0o700)));assert(privateDirectory(stat(0o2700)));

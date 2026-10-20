@@ -4,7 +4,7 @@ import re
 from .common import REPO, Refused
 
 IMAGE = 'samsung-native-collector:bullseye'
-SOURCE = REPO/'research/autonomous-root/native-launcher'
+SOURCE = REPO/'agent/native-launcher'
 
 
 def build(folder, command):

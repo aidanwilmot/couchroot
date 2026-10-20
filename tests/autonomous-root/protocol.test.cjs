@@ -1,9 +1,9 @@
-// Adapted from Vetro 9319cb0, MIT; see research/autonomous-root/service/vendor/LICENSE.
+// Adapted from Vetro 9319cb0, MIT; see agent/service/vendor/LICENSE.
 'use strict';
 const assert = require('assert').strict;
 const EventEmitter = require('events');
 const crypto = require('crypto');
-const {RootAgentServer} = require('../../research/autonomous-root/service/root-agent.js');
+const {RootAgentServer} = require('../../agent/service/root-agent.js');
 class Socket extends EventEmitter {
   constructor() { super(); this.writes = []; this.destroyed = false; }
   write(data) { this.writes.push(data); }

@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),https=require('https'),crypto=require('crypto'),{execFileSync,execFile}=require('child_process');
-const {Journal,config,validateRequest,hash,sdkRuntimeGuard}=require('../research/autonomous-root/service/policy');
-const {createApi}=require('../research/autonomous-root/service/api');
-const {createAgent,launchRequest}=require('../research/autonomous-root/service/agent');
+const {Journal,config,validateRequest,hash,sdkRuntimeGuard}=require('../agent/service/policy');
+const {createApi}=require('../agent/service/api');
+const {createAgent,launchRequest}=require('../agent/service/agent');
 const tmp=()=>fs.mkdtempSync(path.join(os.tmpdir(),'tv-agent-test-'));
 const command=id=>({id:id||crypto.randomUUID(),command:'id',timeout_ms:2000});
 test('SDK launch uses a staged script within the transport limit',()=>{
@@ -63,7 +63,7 @@ with api.Session(c) as session:
  assert api.operation(c,dict(op='file.read',offset=7,length=5),session=session)==bytes([0,10,13,128,255])
  assert api.request(c,'GET','/v1/status',session=session)['connected']
 `;
-  await new Promise((resolve,reject)=>execFile('python3',['-c',script,path.resolve(__dirname,'../research/autonomous-root/client.py'),dir+'/client.json'],{timeout:10000},(err,out,stderr)=>err?reject(Error(stderr||err.message)):resolve(out)));
+  await new Promise((resolve,reject)=>execFile('python3',['-c',script,path.resolve(__dirname,'../agent/client.py'),dir+'/client.json'],{timeout:10000},(err,out,stderr)=>err?reject(Error(stderr||err.message)):resolve(out)));
   assert.equal(connections,1,'Python JSON and binary requests must share one pinned TLS socket');
   let prior;
   for(let i=1;i<=129;i++){

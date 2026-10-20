@@ -53,4 +53,4 @@ The .NET entry bridge, worker fallback and independent rescue remain available.
 The focused tests cover planning refusal, identity/package/unit/resource failures,
 connection replacement, unchanged retained snapshots, and held selection evidence.
 Actual target results are recorded with the interrupted-job milestone in
-[`../native-worker/MIGRATION.md`](../native-worker/MIGRATION.md).
+[`../native-worker/MIGRATION.md`](../../docs/lab/autonomous-root/native-worker/MIGRATION.md).

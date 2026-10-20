@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),crypto=require('node:crypto'),{spawn,spawnSync}=require('node:child_process'),{once}=require('node:events');
-const {hash}=require('../research/autonomous-root/service/policy');
-const {fenceCommand,recoveryCommand}=require('../research/autonomous-root/service/bootstrap-recovery');
+const {hash}=require('../agent/service/policy');
+const {fenceCommand,recoveryCommand}=require('../agent/service/bootstrap-recovery');
 const enabled=process.platform==='linux'&&process.env.COUCHROOT_REHEARSAL==='1'&&process.getuid()===0;
 const pause=()=>new Promise(r=>setTimeout(r,20));
 function fixture(){

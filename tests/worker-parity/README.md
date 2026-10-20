@@ -55,7 +55,7 @@ Compile and run inside it:
 cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wno-unused-function \
   -DNATIVE_WORKER_TEST -DNATIVE_WORKER_FAULT_TEST \
   -fsanitize=address,undefined -fno-omit-frame-pointer \
-  /repo/research/autonomous-root/native-worker/worker.c -ldl -pthread -o /out/worker-test-arm64
+  /repo/agent/native-worker/worker.c -ldl -pthread -o /out/worker-test-arm64
 export ASAN_OPTIONS=detect_leaks=0
 export NATIVE_WORKER=/out/worker-test-arm64
 export MANAGED_PARITY=/out/managed/Harness.dll
@@ -119,7 +119,7 @@ Inside the isolated container described above, build and run:
 
 ```sh
 cc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function \
-  -DNATIVE_WORKER_TEST /repo/research/autonomous-root/native-worker/worker.c \
+  -DNATIVE_WORKER_TEST /repo/agent/native-worker/worker.c \
   -ldl -pthread -o /out/worker-io
 cc -std=c99 -O2 -Wall -Wextra -Werror -shared -fPIC \
   /repo/tests/native-io/delay.c -ldl -o /out/delay.so

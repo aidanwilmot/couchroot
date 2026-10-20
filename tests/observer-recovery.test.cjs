@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawnSync}=require('node:child_process');
-const {recoverObserver,remotePlan}=require('../research/autonomous-root/service/observer-recovery');
-const {hash}=require('../research/autonomous-root/service/policy');
+const {recoverObserver,remotePlan}=require('../agent/service/observer-recovery');
+const {hash}=require('../agent/service/policy');
 const boot='00000000-0000-0000-0000-000000000001',id='a'.repeat(32),obs='b'.repeat(32),digest='c'.repeat(64);
 async function fixture(fn){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'observer-recovery-')),nested=dir+'/observer-launches',scope=dir+'/observer-ABC123';fs.mkdirSync(nested,{mode:0o700});fs.mkdirSync(scope,{mode:0o700});

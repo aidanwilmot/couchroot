@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const {readyRetirement}=require('../research/autonomous-root/service/retirement-readiness');
-const {inspectRetirementUnit}=require('../research/autonomous-root/service/observer-unit');
+const {readyRetirement}=require('../agent/service/retirement-readiness');
+const {inspectRetirementUnit}=require('../agent/service/observer-unit');
 const boot='00000000-0000-0000-0000-000000000001',id='a'.repeat(32),sha='b'.repeat(64);
 const source={boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}};
 function info(){return {implementation:'native-prototype',boot_id:boot,worker_id:'d'.repeat(32),lifetime_mode:'bounded',lifetime_seconds:300,guardian_pid:76,processes:{worker:{pid:77,start_ticks:'200'},guardian:{pid:76,start_ticks:'199'}},capabilities:['prototype-scoped-files-v1','worker-process-identity-v1','guardian-parent-identity-v1','resource-inventory-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1'],app_launcher:{sha256:sha,independently_staged:true},resources:{schema:1,scope:'worker-owned',jobs:[],transfers:[],helpers:[]}};}
@@ -44,7 +44,7 @@ test('retirement unit inspector rejects observer namespace without executing',as
  let calls=0;await assert.rejects(inspectRetirementUnit({unit:'couchroot-observer-'+id+'.service',bootId:boot,execute:()=>{calls++;}}));assert.equal(calls,0);
 });
 test('failed readiness publication never returns a usable provider',()=>fixture(async f=>{
- const vm=require('node:vm'),{createRequire}=require('node:module'),file=path.resolve(__dirname,'../research/autonomous-root/service/retirement-readiness.js'),real=createRequire(file),module={exports:{}};
+ const vm=require('node:vm'),{createRequire}=require('node:module'),file=path.resolve(__dirname,'../agent/service/retirement-readiness.js'),real=createRequire(file),module={exports:{}};
  vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:name=>name==='./policy'?{atomic:()=>{throw Error('publication failed');}}:real(name)});
  await assert.rejects(module.exports.readyRetirement(f.options),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(f.file)).phase,'submitted');assert.equal(fs.existsSync(f.intent),true);
 }));

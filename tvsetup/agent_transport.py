@@ -19,7 +19,7 @@ class AgentTransport(Transport):
         self.credentials = json.loads(Path(credentials).read_text())
         if self.credentials.get('device') != profile['id'] or self.credentials.get('host') != profile['host']:
             raise Refused('Agent enrollment differs from selected device')
-        spec = importlib.util.spec_from_file_location('enrolled_agent_client', REPO/'research/autonomous-root/client.py')
+        spec = importlib.util.spec_from_file_location('enrolled_agent_client', REPO/'agent/client.py')
         self.api = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.api)
         status = self.api.request(self.credentials, 'GET', '/v1/status')
         if status.get('device') != profile['id'] or not status.get('connected') or status.get('worker_ready') is False or status.get('identity', {}).get('uid') != 0:

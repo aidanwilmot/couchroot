@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
   return 0;
 }
 ''')
-        worker = Path(__file__).resolve().parents[1] / 'research/autonomous-root/native-worker'
+        worker = Path(__file__).resolve().parents[1] / 'agent/native-worker'
         subprocess.run(['gcc', '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
                         '-Wno-unused-function', '-I', str(worker), str(source),
                         '-ldl', '-pthread', '-o', str(cls.binary)], check=True)

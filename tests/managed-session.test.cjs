@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),crypto=require('node:crypto'),{EventEmitter}=require('node:events'),{createRequire}=require('node:module');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
-const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-session.js'),real=createRequire(file),hash=s=>crypto.createHash('sha256').update(s).digest('hex'),sha='b'.repeat(64);
+const {SelectionJournal}=require('../agent/service/worker-selection');
+const file=path.resolve(__dirname,'../agent/service/managed-session.js'),real=createRequire(file),hash=s=>crypto.createHash('sha256').update(s).digest('hex'),sha='b'.repeat(64);
 async function fixture(mode,run){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'managed-session-')),selectionFile=directory+'/selection.json',journal=new SelectionJournal(selectionFile);journal.initialize({implementation:'managed',manifest_sha256:'a'.repeat(64)});let transition=journal.begin(1,{implementation:'native-prototype',manifest_sha256:sha},'c'.repeat(64)),id=transition.pending.id;
  if(mode==='return'){journal.advance(2,id,'state-ready',sha);journal.advance(3,id,'trial-ready',sha);journal.commit(4,id);transition=journal.begin(5,{implementation:'managed',manifest_sha256:'a'.repeat(64)},'c'.repeat(64));id=transition.pending.id;journal.advance(6,id,'state-ready','d'.repeat(64));}

@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const {snapshotNativeJobs,snapshotNativeRestartJobs,planNativeSnapshot}=require('../research/autonomous-root/service/native-retained-state');
+const {snapshotNativeJobs,snapshotNativeRestartJobs,planNativeSnapshot}=require('../agent/service/native-retained-state');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex'),sha='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
 const linux={skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||process.geteuid()!==0};
 async function fixture(fn,count=2){
@@ -132,7 +132,7 @@ test('unaccepted startup checkpoints refuse foreign tokens, old sources, success
  });
 });
 
-const {planManagedRestore}=require('../research/autonomous-root/service/managed-restore-plan');
+const {planManagedRestore}=require('../agent/service/managed-restore-plan');
 async function restoreFixture(f){
  const baselineBody={schema:1,implementation:'managed',source:f.options.record.source,records:f.records.map(r=>({name:r.name,size:r.bytes.length,sha256:hash(r.bytes),base64:r.bytes.toString('base64')}))};
  const baseline={...baselineBody,sha256:hash(JSON.stringify(baselineBody))};
@@ -179,8 +179,8 @@ test('managed restore supports empty and full inventories and rejects altered sn
  },count);
 });
 
-const {restoreManagedJobs}=require('../research/autonomous-root/service/managed-restore');
-const {SelectionJournal,selectionStatus}=require('../research/autonomous-root/service/worker-selection');
+const {restoreManagedJobs}=require('../agent/service/managed-restore');
+const {SelectionJournal,selectionStatus}=require('../agent/service/worker-selection');
 async function durableRestoreFixture(f,committed=false){
  const r=await restoreFixture(f),journalDirectory=f.root+'/journal';fs.mkdirSync(journalDirectory,{mode:0o700});
  const selectionFile=journalDirectory+'/selection.json',j=new SelectionJournal(selectionFile);let s=j.initialize({implementation:'managed',manifest_sha256:'e'.repeat(64)});
@@ -222,7 +222,7 @@ test('durable restore refuses changed native state, local ownership and selectio
  });
 });
 
-const {acceptManagedRestore}=require('../research/autonomous-root/service/managed-restore');
+const {acceptManagedRestore}=require('../agent/service/managed-restore');
 async function restoredForAcceptance(f,committed=false){
  const r=await durableRestoreFixture(f,committed),receipt=await restoreManagedJobs(r.options);
  return {...r,receipt,accept:{transitionId:receipt.transition_id,receiptSha256:receipt.receipt_sha256,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,execute:r.execute}};
@@ -265,14 +265,14 @@ async function managedLaunchFixture(f,committed=false){
  fs.mkdirSync(payloadLocal,{recursive:true,mode:0o755});const manifest={};
  for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const ext of ['dll','runtimeconfig.json','deps.json']){const n=name+'.'+ext,bytes=Buffer.from(n);manifest[n]=hash(bytes);fs.writeFileSync(payloadLocal+'/'+n,bytes,{mode:0o644});fs.chownSync(payloadLocal+'/'+n,201,201);}
  fs.writeFileSync(payloadLocal+'/manifest.json',JSON.stringify(manifest));
- const selectionModule=require('../research/autonomous-root/service/worker-selection'),version=selectionModule.managedVersion(payloadLocal);
+ const selectionModule=require('../agent/service/worker-selection'),version=selectionModule.managedVersion(payloadLocal);
  fs.writeFileSync(r.options.selectionFile,fs.readFileSync(r.options.selectionFile,'utf8').replaceAll('e'.repeat(64),version));
  await acceptManagedRestore(r.accept);
  const tokenFile='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/managed-ABC123/token',tokenLocal=tokenFile.replace('/opt/usr',f.root+'/package-root');
  fs.mkdirSync(path.dirname(tokenLocal),{recursive:true,mode:0o700});fs.chownSync(path.dirname(tokenLocal),5001,100);const token=Buffer.from('a'.repeat(32)).toString('base64');fs.writeFileSync(tokenLocal,token,{mode:0o600});fs.chownSync(tokenLocal,5001,100);
  const runtime=f.root+'/dotnet';fs.writeFileSync(runtime,'fixture runtime',{mode:0o755});fs.mkdirSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools',{recursive:true,mode:0o755});fs.symlinkSync('package-root/home',f.root+'/home');
  const bin=f.root+'/bin';fs.mkdirSync(bin);fs.writeFileSync(bin+'/systemctl','#!/bin/sh\necho LoadState=not-found\n',{mode:0o755});fs.writeFileSync(bin+'/systemd-run','#!/bin/sh\nprintf "%s\\n" "$@" > '+f.root+'/launched\n',{mode:0o755});
- const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-launch.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ const file=path.resolve(__dirname,'../agent/service/managed-launch.js'),real=require('node:module').createRequire(file),module={exports:{}};
  require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./worker-selection'?{...real(n),managedVersion:p=>real(n).managedVersion(p.replace(payload,payloadLocal))}:n==='./policy'?{...real(n),read:(p,l)=>real(n).read(p.replace(payload,payloadLocal),l)}:real(n)});
  const execute=c=>r.execute(c.replaceAll('/opt/usr',f.root+'/package-root').replaceAll('/opt/couchroot-managed-',f.root+'/launch-').replaceAll("'/home","'"+f.root+'/home').replaceAll('/usr/bin/dotnet',runtime).replaceAll('PATH=/usr/bin:/bin','PATH='+bin+':/usr/bin:/bin'));
  const options={transitionId:r.receipt.transition_id,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,receiptSha256:r.receipt.receipt_sha256,payload,managedSha256:version,runtimeSha256:hash('fixture runtime'),port:12345,tokenFile,tokenSha256:hash(token),execute};
@@ -338,7 +338,7 @@ test('managed launch plan handles full retention and rejects malformed callback 
  for(const patch of [{port:0},{tokenFile:'/tmp/token'},{tokenFile:o.tokenFile.replace('ABC123','ABC123\n')},{managedSha256:'f'.repeat(64)},{runtimeSha256:'invalid'},{transitionId:o.transitionId+'\n'},{payload:'/tmp/payload'}])assert.throws(()=>r.api.managedLaunchPlan({...o,...patch}));
 },64));
 
-const {readyManaged,managedRuntimeCommand}=require('../research/autonomous-root/service/managed-readiness');
+const {readyManaged,managedRuntimeCommand}=require('../agent/service/managed-readiness');
 async function managedReadyFixture(f,committed=false){
  const r=await managedLaunchFixture(f,committed),record=await r.api.submitManaged(r.launchOptions),worker='9'.repeat(32),launcherBytes=Buffer.from('fixture launcher'),providerIdentity={boot_id:boot,worker_id:'8'.repeat(32),processes:{worker:{pid:77,start_ticks:'700'},guardian:{pid:76,start_ticks:'699'}}};
  const info={implementation:'managed',boot_id:boot,worker_id:worker,uptime_seconds:1,processes:{worker:{pid:73,start_ticks:'500'},guardian:null},capabilities:['worker-process-identity-v1','resource-inventory-v1','file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1'],app_launcher:{implementation:'native',sha256:hash(launcherBytes)},resources:{schema:1,scope:'worker-owned',jobs:[],helpers:[],transfers:[]}};
@@ -370,7 +370,7 @@ test('managed readiness rejects identity, inventory, retained results and remote
  });
 });
 test('managed readiness keeps uncertain published receipt and refuses another readiness attempt',linux,()=>fixture(async f=>{
- const r=await managedReadyFixture(f),file=path.resolve(__dirname,'../research/autonomous-root/service/managed-readiness.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ const r=await managedReadyFixture(f),file=path.resolve(__dirname,'../agent/service/managed-readiness.js'),real=require('node:module').createRequire(file),module={exports:{}};
  require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./policy'?{...real(n),atomic:(p,v)=>{real(n).atomic(p,v);throw Error('lost publication reply');}}:real(n)});
  await assert.rejects(module.exports.readyManaged(r.readyOptions),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(r.launchFile)).phase,'ready');assert(fs.existsSync(r.intent));await assert.rejects(readyManaged(r.readyOptions));
 }));
@@ -385,10 +385,10 @@ test('managed readiness rejects unit changes and local ownership changes across 
   r.readyOptions.execute=async c=>{const result=await r.execute(c);if(c.includes('--property=Id,')){count++;if(mode==='unit'&&count>1)result.stdout=result.stdout.replace('Monotonic=123','Monotonic=124');if(mode==='marker')fs.writeFileSync(r.options.journalDirectory+'/managed-launch.pending','foreign');}return result;};
   await assert.rejects(readyManaged(r.readyOptions),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(r.launchFile)).phase,'submitted');assert(fs.existsSync(r.intent));
  });
- let calls=0;await assert.rejects(require('../research/autonomous-root/service/observer-unit').inspectManagedUnit({unit:'couchroot-worker-'+'a'.repeat(32)+'.service',bootId:boot,execute:()=>{calls++;}}));assert.equal(calls,0);
+ let calls=0;await assert.rejects(require('../agent/service/observer-unit').inspectManagedUnit({unit:'couchroot-worker-'+'a'.repeat(32)+'.service',bootId:boot,execute:()=>{calls++;}}));assert.equal(calls,0);
 });
 
-const {productionRetirementPlan,retireProduction}=require('../research/autonomous-root/service/production-retirement');
+const {productionRetirementPlan,retireProduction}=require('../agent/service/production-retirement');
 async function productionRetirementFixture(f,committed=false){
  f.options.record.worker_sha256=hash('native worker');f.options.record.launcher_sha256=hash('native launcher');fs.mkdirSync(f.root+'/native/code',{mode:0o700});fs.writeFileSync(f.root+'/native/code/worker','native worker',{mode:0o500});fs.writeFileSync(f.root+'/native/state/launcher','native launcher',{mode:0o400});
  const r=await managedReadyFixture(f,committed),ready=await readyManaged(r.readyOptions),selection=new SelectionJournal(r.options.selectionFile);
@@ -437,7 +437,7 @@ test('production retirement resume refuses incomplete cleanup and changed owners
  });
 });
 test('production retirement resumes an uncertain receipt publication without deleting staging again',linux,()=>fixture(async f=>{
- const r=await productionRetirementFixture(f),file=path.resolve(__dirname,'../research/autonomous-root/service/production-retirement.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ const r=await productionRetirementFixture(f),file=path.resolve(__dirname,'../agent/service/production-retirement.js'),real=require('node:module').createRequire(file),module={exports:{}};
  require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./policy'?{...real(n),atomic:(p,v)=>{real(n).atomic(p,v);throw Error('lost publication acknowledgement');}}:real(n)});
  await assert.rejects(module.exports.retireProduction(r.retireOptions),e=>e.outcome==='unknown');assert(fs.existsSync(r.retireFile));assert(fs.existsSync(r.retireFile+'.pending'));
  const before=fs.readFileSync(r.retireFile,'utf8'),result=await retireProduction({...r.retireOptions,resume:true});assert.equal(result.phase,'staging-retired');assert.equal(fs.readFileSync(r.retireFile,'utf8'),before);assert(!fs.existsSync(r.retireFile+'.pending'));
@@ -472,7 +472,7 @@ test('partial retirement refuses unexpected files, links, changed bytes, units a
  });
 });
 
-const {verifyManagedCompletion}=require('../research/autonomous-root/service/managed-completion');
+const {verifyManagedCompletion}=require('../agent/service/managed-completion');
 async function completionFixture(fn,committed=false){return require('./retirement-test-state.cjs').withRetirementState(()=>fixture(async f=>{
  f.options.record.token_sha256=hash(Buffer.from('a'.repeat(32)).toString('base64'));
  const r=await productionRetirementFixture(f,committed),dir='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state';fs.mkdirSync(path.dirname(dir),{recursive:true,mode:0o700});fs.renameSync(r.options.journalDirectory,dir);
@@ -503,7 +503,7 @@ test('managed completion refuses unresolved provider or changed live evidence',l
  });
 });
 
-const {activateManaged}=require('../research/autonomous-root/service/managed-activation');
+const {activateManaged}=require('../agent/service/managed-activation');
 function activationTokens(f){
  const bytes=Buffer.from('a'.repeat(32)).toString('base64');
  for(const record of [f.f.options.record,f.options.managed]){fs.mkdirSync(path.dirname(record.token_file),{mode:0o700});fs.writeFileSync(record.token_file,bytes,{mode:0o600});assert.equal(hash(bytes),record.token_sha256);}
@@ -529,7 +529,7 @@ test('managed activation refuses unmatched local tokens and unresolved native ac
 });
 test('interrupted local activation retains intent and refuses implicit replay',linux,async()=>{
  for(const boundary of ['token','marker','publication','directory','managed-token','final-marker'])await completionFixture(async f=>{
-  activationTokens(f);const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};let injected=false;
+  activationTokens(f);const file=path.resolve(__dirname,'../agent/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};let injected=false;
   const fsProxy={...fs,unlinkSync:p=>{fs.unlinkSync(p);if(!injected&&(boundary==='token'&&p===f.f.options.record.token_file||boundary==='marker'&&p===f.dir+'/managed-restore.pending'||boundary==='managed-token'&&p===f.options.managed.token_file||boundary==='final-marker'&&p===f.dir+'/managed-launch.pending')){injected=true;throw Error('lost local cleanup acknowledgement');}},rmdirSync:p=>{fs.rmdirSync(p);if(boundary==='directory'&&!injected){injected=true;throw Error('lost directory acknowledgement');}}};
   require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='fs'?fsProxy:n==='./policy'?{...real(n),atomic:(p,v)=>{real(n).atomic(p,v);if(boundary==='publication'){injected=true;throw Error('lost publication acknowledgement');}}}:real(n)});
   await assert.rejects(module.exports.activateManaged(f.options),e=>e.outcome==='unknown');assert(injected);assert(fs.existsSync(f.dir+'/'+f.options.managed.id+'.managed-activation.json.pending'));await assert.rejects(activateManaged(f.options));
@@ -540,7 +540,7 @@ test('managed activation accepts previously retired native tokens only with comm
  activationTokens(f);const native=f.f.options.record;
  fs.unlinkSync(native.token_file);fs.rmdirSync(path.dirname(native.token_file));fs.unlinkSync(f.dir+'/state-install.pending');fs.unlinkSync(f.dir+'/production-launch.pending');
  fs.writeFileSync(f.dir+'/'+native.id+'.activation.json',JSON.stringify({schema:1,id:native.id,phase:'active',boot_id:native.boot_id,manifest_sha256:native.manifest_sha256,readiness_sha256:hash(JSON.stringify(native)),retirement_sha256:sha,worker_identity:native.worker_identity}),{mode:0o600});
- const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};
+ const file=path.resolve(__dirname,'../agent/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};
  require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='fs'?{...fs,unlinkSync:p=>{fs.unlinkSync(p);throw Error('interrupted managed token cleanup');}}:real(n)});
  await assert.rejects(module.exports.activateManaged(f.options));
  const result=await activateManaged({...f.options,resume:true});assert.equal(result.phase,'active');assert.equal(result.id,f.options.managed.id);assert.notEqual(result.id,native.id);
@@ -549,7 +549,7 @@ test('managed activation accepts previously retired native tokens only with comm
 
 test('managed activation recovery rejects missing intents, out-of-order cleanup and changed evidence',linux,async()=>{
  for(const mode of ['missing-intent','order','token','extra','intent','runtime','receipt'])await completionFixture(async f=>{
-  activationTokens(f);const file=path.resolve(__dirname,'../research/autonomous-root/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};
+  activationTokens(f);const file=path.resolve(__dirname,'../agent/service/managed-activation.js'),real=require('node:module').createRequire(file),module={exports:{}};
   const fsProxy={...fs,unlinkSync:p=>{fs.unlinkSync(p);throw Error('interrupt first cleanup');}};
   require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,require:n=>n==='fs'?fsProxy:real(n)});
   await assert.rejects(module.exports.activateManaged(f.options));const intent=f.dir+'/'+f.options.managed.id+'.managed-activation.json.pending';

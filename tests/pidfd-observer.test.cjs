@@ -1,10 +1,10 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {spawn}=require('node:child_process'),{once}=require('node:events');
-const {preparePidfdExit:prepare,probeExecutable}=require('../research/autonomous-root/service/pidfd-observer');
+const {preparePidfdExit:prepare,probeExecutable}=require('../agent/service/pidfd-observer');
 const digest=file=>require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const preparePidfdExit=options=>prepare({sha256:digest(options.binary),...options});
-const {startTicks}=require('../research/autonomous-root/service/worker-processes');
+const {startTicks}=require('../agent/service/worker-processes');
 const binary=process.env.PROCESS_OBSERVER;
 const enabled=process.platform==='linux'&&!!binary&&process.env.COUCHROOT_PARITY_CONTAINER==='1';
 test('executable probe runs the exact native artifact without a target PID',{skip:!enabled},async()=>{

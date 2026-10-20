@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{spawnSync}=require('node:child_process');
-const {inspectObserverUnit,retireObserverUnit}=require('../research/autonomous-root/service/observer-unit');
+const {inspectObserverUnit,retireObserverUnit}=require('../agent/service/observer-unit');
 const unit='couchroot-observer-'+'a'.repeat(32)+'.service',bootId='00000000-0000-0000-0000-000000000001';
 const text=()=>`Id=${unit}\nLoadState=loaded\nActiveState=active\nSubState=exited\nMainPID=0\nExecMainCode=1\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n`;
 const response=stdout=>({exit_code:0,timed_out:false,stdout,stderr:''});

@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-SOURCE = Path(__file__).resolve().parents[1] / 'research/autonomous-root/native-worker/observer-transfer.py'
+SOURCE = Path(__file__).resolve().parents[1] / 'agent/native-worker/observer-transfer.py'
 spec = importlib.util.spec_from_file_location('observer_transfer', SOURCE)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
