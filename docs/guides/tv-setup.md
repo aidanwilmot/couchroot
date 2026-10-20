@@ -399,3 +399,24 @@ HTTP(S) origin. Setup renders that origin into the dashboard server default and
 Netdata link, and hashes the rendered files for drift detection and recovery.
 Omitting it retains the generic container default. Keep the site file used for
 each recovery run: changing NAS settings changes the recovery binding.
+
+### Root staging and reboot contract
+
+The setup engine and autonomous agent share the firmware launcher's fixed
+`/home/owner/share/tmp/sdk_tools/on-demand` archive directory. It is a persistent
+container: neither removes it. Each owns only its named archive and signature;
+setup refuses occupied archive slots, symlinks and non-directory parents. Agent
+archives are left untouched. Model-specific setup prefixes remain exclusive and
+are removed on failure as well as success, including partial staging failures.
+
+Upload directories use ordinary `mkdir`, as on the working pre-Phase-2 path,
+so the SDB/WRT writer can traverse them. Result/read files are protected with
+`0600` after upload; known payloads and credentials are removed by the remote
+trap and final cleanup. Downloaded results are unlinked in a local `finally`.
+These changes address the QN90A firmware 2301.1 session findings but require
+a fresh acceptance run on **both TVs** before deployment.
+
+Reboot verification submits one 15-second systemd timer that calls deviced's
+`Reboot` method through `busctl`. It does not use `systemctl reboot` or a shell
+background child, which the native worker correctly kills at EXEC completion.
+A lost submission reply remains uncertain and is never automatically retried.

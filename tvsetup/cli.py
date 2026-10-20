@@ -260,7 +260,7 @@ def reboot_verify(profile_value, tv, evidence, seconds, nas=None):
     atomic_json(path, record)
     # Submitted once. No postboot launcher, service start, key or settings operation.
     tv.root(
-        "nohup /bin/sh -c 'sleep 15; busctl --timeout=5 --system call org.tizen.system.deviced /Org/Tizen/System/DeviceD/Power org.tizen.system.deviced.power Reboot s \"Owner-authorized tv-setup reboot verification\"' >/tmp/tv-setup-reboot.log 2>&1 </dev/null &\n"
+        "systemd-run --no-block --unit=tv-setup-reboot --on-active=15s /bin/sh -c 'busctl --timeout=5 --system call org.tizen.system.deviced /Org/Tizen/System/DeviceD/Power org.tizen.system.deviced.power Reboot s \"Owner-authorized tv-setup reboot verification\"'\n"
     )
     record["phase"] = "observing"
     atomic_json(path, record)

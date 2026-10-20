@@ -152,6 +152,26 @@ def prepare_artifacts(
     return artifacts
 
 
+def staging_script(prefix, archives, native=False):
+    """Share the launcher's fixed archive directory; own only our named files."""
+    on_demand = BASE + "on-demand"
+    slots = "".join(f"test ! -e {Q(p)}\ntest ! -L {Q(p)}\n" for p in archives)
+    return (
+        f"test ! -e {Q(prefix)}\ntest ! -L {Q(prefix)}\n"
+        + slots
+        + "made_prefix=0\n"
+        + "stage_rollback() {\n"
+        + f'if test "$made_prefix" = 1; then rmdir {Q(prefix + "/code")} 2>/dev/null || :; rmdir {Q(prefix)} 2>/dev/null || :; fi\n'
+        + "}\ntrap 'status=$?; stage_rollback; exit \"$status\"' EXIT\n"
+        # SDB/WRT uploads need directory traversal from a different UID. Protect
+        # credential-bearing files individually after upload, not the directory.
+        + f"mkdir {Q(prefix)}\nmade_prefix=1\n"
+        + f"if mkdir {Q(on_demand)} 2>/dev/null; then :; else test -d {Q(on_demand)}; test ! -L {Q(on_demand)}; fi\n"
+        + (f"mkdir {Q(prefix + '/code')}\n" if native else "")
+        + "trap - EXIT\n"
+    )
+
+
 def execute(
     profile,
     script,
@@ -241,15 +261,21 @@ def execute(
         stage = (
             guards
             + originals
-            + f"test ! -e {prefix} && test ! -L {prefix}\ntest ! -e {BASE}on-demand && test ! -L {BASE}on-demand\nmkdir -m 700 {prefix} {BASE}on-demand\n"
+            + staging_script(
+                prefix,
+                [
+                    BASE + target
+                    for target in artifacts.values()
+                    if target.startswith("on-demand/")
+                ],
+                native_bundle is not None,
+            )
         )
-        if native_bundle is not None:
-            stage += f"mkdir {prefix}/code\n"
         toolkit.capture(cfg, callback, stage, 20, "setup-root-stage")
         cleanup = "\n".join("rm -f " + Q(BASE + v) for v in artifacts.values())
         if native_bundle is not None:
             cleanup += f"\nif test -d {prefix}/code; then rmdir {prefix}/code; fi\n"
-        cleanup += f'\nrm -f {prefix}/passwd-view\nfor d in {prefix} {BASE}on-demand; do if test -d "$d"; then rmdir "$d"; fi; done\n'
+        cleanup += f"\nrm -f {prefix}/passwd-view\nif test -d {prefix}; then rmdir {prefix}; fi\n"
         result = folder / "downloaded-result.txt"
         captured = None
         try:
@@ -270,7 +296,7 @@ def execute(
                 )
                 if native_bundle is not None:
                     completed += f"\nrmdir {prefix}/code\n"
-                completed += f"\nrm -f {prefix}/passwd-view\nif test -d {BASE}on-demand; then rmdir {BASE}on-demand || :; fi\n"
+                completed += f"\nrm -f {prefix}/passwd-view\n"
                 command += (
                     "completed() {\n"
                     + completed
@@ -312,10 +338,7 @@ def execute(
                 toolkit.capture(
                     cfg,
                     callback,
-                    "set -eu\n"
-                    + cleanup
-                    + originals
-                    + f"test ! -e {prefix}\ntest ! -e {BASE}on-demand\n"
+                    "set -eu\n" + cleanup + originals + f"test ! -e {prefix}\n"
                     'if ps -eo args | grep -E "[N]amespaceRootProbe.dll|[R]ootIdentity.dll|[N]ativeEntry.dll"; then exit 1; fi\n',
                     20,
                     "setup-root-cleanup",

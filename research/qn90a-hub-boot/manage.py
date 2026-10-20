@@ -52,7 +52,7 @@ def main():
  if args.action=='reboot':
   # Delayed once so the temporary root transport can restore its private mounts.
   # This has no postboot command and is never retried automatically.
-  root("cat /proc/sys/kernel/random/boot_id /proc/uptime\nnohup /bin/sh -c 'sleep 15; busctl --timeout=5 --system call org.tizen.system.deviced /Org/Tizen/System/DeviceD/Power org.tizen.system.deviced.power Reboot s \"Owner-authorized Minimal Hub full reboot validation\"' >/tmp/minimal-hub-reboot-request.log 2>&1 </dev/null &\necho Native-reboot-scheduled\n")
+  root("cat /proc/sys/kernel/random/boot_id /proc/uptime\nsystemd-run --no-block --unit=minimal-hub-reboot --on-active=15s /bin/sh -c 'busctl --timeout=5 --system call org.tizen.system.deviced /Org/Tizen/System/DeviceD/Power org.tizen.system.deviced.power Reboot s \"Owner-authorized Minimal Hub full reboot validation\"'\necho Native-reboot-scheduled\n")
   return
  manifest=STATE/'installed.json'
  if args.action=='install':
