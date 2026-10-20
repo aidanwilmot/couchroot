@@ -49,7 +49,7 @@ def run(home_mode=None, telemetry_project=None, telemetry_config=None):
             artifacts = {}
             for assembly in ('NamespaceRootProbe', 'RootIdentity'):
                 out = folder / assembly
-                project = 'research/qn90a-home-route' if home_mode and assembly == 'RootIdentity' else 'agent/qn90a-root-probe'
+                project = 'setup/qn90a-home-route' if home_mode and assembly == 'RootIdentity' else 'agent/qn90a-root-probe'
                 if home_mode and home_mode.startswith('cleanup-') and assembly == 'RootIdentity':
                     project = 'setup/qn90a-app-cleanup'
                 if home_mode and home_mode.startswith('saver-') and assembly == 'RootIdentity':
