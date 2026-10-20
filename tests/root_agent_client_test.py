@@ -107,7 +107,7 @@ if __name__=='__main__':unittest.main()
 class OperationDeadlineTests(unittest.TestCase):
     def test_client_budgets_match_contract_and_are_passed_per_operation(self):
         import json
-        contract=json.loads((SOURCE.parent.parent.parent/'tests/worker-parity/contract.json').read_text())
+        contract=json.loads((SOURCE.parent.parent/'tests/worker-parity/contract.json').read_text())
         deadlines=contract['response_deadlines']
         for op in contract['operations']:
             expected=(deadlines['operation_ms'].get(op,deadlines['default_ms'])+deadlines['client_margin_ms'])/1000
