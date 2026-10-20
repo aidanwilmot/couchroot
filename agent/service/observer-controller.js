@@ -13,6 +13,8 @@ function privateRead(file,limit=16384){
  }finally{fs.closeSync(fd);}
 }
 function terminationEvidence(value,record){
+ // Preserve the original logical grouping for the AST identity check.
+ // prettier-ignore
  if(!value||Object.keys(value).sort().join('|')!=='active_state|boot_id|exec_code|exec_status|main_pid|started_monotonic|sub_state|unit'||value.unit!==record.unit||value.boot_id!==record.boot_id||(value.active_state!=='active'||value.sub_state!=='exited')||value.main_pid!==0||value.exec_code!==1||value.exec_status!==0||typeof value.started_monotonic!=='string'||value.started_monotonic.trim()!==value.started_monotonic||!/^[1-9][0-9]{0,19}$/.test(value.started_monotonic))throw Error('Supervisor unit termination not established');
  return {...value};
 }
