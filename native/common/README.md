@@ -13,7 +13,9 @@ only over the signed Hub. Another app/source cancels. The early background path
 keeps its 46-second guard. The bounded wait and app-launch behavior still require
 hardware acceptance for native-hub.
 
-WebView and the signed web Hub permit the explicit TV Plus exception.
+TV Plus is permitted by every caller: WebView, the signed web Hub, and the archived
+pure-native source. The shared filter still takes that policy explicitly, and its
+matrix covers both settings.
 
 Linux channels use pipe2(O_CLOEXEC) / SOCK_CLOEXEC atomically. macOS host tests
 use a checked fcntl fallback because those Linux APIs are unavailable there.

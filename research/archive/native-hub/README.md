@@ -131,8 +131,8 @@ valid catalog and saved shortcuts. Successful refreshes preserve picker focus by
 app identity. The 128-app bound rejects overflow instead of silently truncating.
 
 The consumer filter follows the web bridge's package-ID boundary and explicit
-Netflix/Prime/browser exceptions, excluding hidden/service apps and TV Plus for
-this no-Live-TV trial. Samsung exposes internal tools as visible applications, so
+Netflix/Prime/browser/TV Plus exceptions, excluding hidden/service apps. TV Plus
+discovery is now aligned across all three launchers; this change still needs TV acceptance. Samsung exposes internal tools as visible applications, so
 `nodisplay` alone is insufficient. This is a curated consumer boundary, not a
 promise to enumerate every installed package or detect every unusable shortcut.
 
