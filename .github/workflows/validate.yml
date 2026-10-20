@@ -11,6 +11,11 @@ concurrency:
   cancel-in-progress: true
 jobs:
   web-and-offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+        python: ["3.12", "3.14"]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -18,15 +23,15 @@ jobs:
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
       PYTHONWARNINGS: default
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v4
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node }}
       # Hosted runners may have .NET preinstalled. Fail if this job invokes it.
       - name: Block managed tooling in the SDK-free checks
         run: |
@@ -61,10 +66,10 @@ jobs:
       SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
       - run: python -m pip install -r tvsetup/requirements.txt
@@ -78,13 +83,13 @@ jobs:
       SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
       - run: python scripts/check-dependencies.py --component managed
@@ -97,13 +102,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
-      - run: docker build -t samsung-native-collector:bullseye telemetry/native-collector
+      - run: docker build --platform linux/amd64 -t samsung-native-collector:bullseye telemetry/native-collector
       - run: python3 scripts/check-root-launcher.py
       - name: Native collector host checks
         run: |
@@ -118,28 +123,53 @@ jobs:
             gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function -DNATIVE_WORKER_TEST -DNATIVE_WORKER_FAULT_TEST agent/native-worker/worker.c -ldl -pthread -o /out/worker
             gcc -std=c99 -O2 -Wall -Wextra -Werror -Wno-unused-function agent/native-worker/accept.c -ldl -pthread -o /out/accept
             gcc -shared -fPIC -Wall -Wextra -Werror tests/native-io/delay.c -ldl -o /out/io-delay.so
-            # Mount-dependent and extended lifetime checks need separate local runs.
+            # ARM64 parity covers mounts; extended lifetime remains a local opt-in.
             NATIVE_WORKER=/out/worker NATIVE_WORKER_FAULT_TEST=1 COUCHROOT_PARITY_CONTAINER=1 NATIVE_ACCEPT=/out/accept NATIVE_IO_DELAY=/out/io-delay.so python3 -m unittest discover -s tests -p "native_*_test.py"
           '
       - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release
-      - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble dotnet /app/Harness.dll
+      - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble@sha256:ea8bde36c11b6e7eec2656d0e59101d4462f6bd630730f2c8201ed0572b295d5 dotnet /app/Harness.dll
   native-launcher-builds:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - run: docker build -t samsung-native-collector:bullseye telemetry/native-collector
+      - run: docker build --platform linux/amd64 -t samsung-native-collector:bullseye telemetry/native-collector
       - run: NATIVE_HUB_OUTPUT_DIR="$RUNNER_TEMP/native-hub" sh native-hub/build.sh
       - run: WEBVIEW_OUTPUT_DIR="$RUNNER_TEMP/native-webview" sh native/webview/build.sh
       - run: sh native-hub/test.sh
+  arm64-parity:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+      - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release -o "$RUNNER_TEMP/parity/managed"
+      - run: docker build --platform linux/arm64 -t couchroot-parity-test:ci tests/worker-parity
+      - name: ARM64 managed/native and process-observer parity
+        run: |
+          docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+            -v "$PWD:/repo:ro" -v "$RUNNER_TEMP/parity:/out" -w /repo couchroot-parity-test:ci sh tests/worker-parity/run-ci.sh
+      - name: ARM64 rehearsal and restart recovery (fresh containers)
+        run: |
+          for suite in native-rehearsal-integration native-restart-integration bootstrap-recovery-integration held-bootstrap-integration native-startup-fence; do
+            docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+              -v "$PWD:/repo:ro" -v "$RUNNER_TEMP/parity:/out:ro" -w /repo \
+              -e COUCHROOT_PARITY_CONTAINER=1 -e COUCHROOT_REHEARSAL=1 -e COUCHROOT_STARTUP_FAULT=1 \
+              -e NATIVE_WORKER=/out/worker -e MANAGED_PARITY=/out/managed/Harness.dll \
+              couchroot-parity-test:ci node --test --test-concurrency=1 "tests/$suite.test.cjs"
+          done
   qn90a-web-saver:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    container: emscripten/emsdk:3.1.64
+    container: emscripten/emsdk:3.1.64@sha256:8847dad4171ebc8a53d9ae5cda86a2546ef5b2e68834c14dc1ba2b2962e125cc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - run: python3 scripts/check-web-reproducible.py

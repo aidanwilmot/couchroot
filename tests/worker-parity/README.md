@@ -47,7 +47,7 @@ docker build --platform linux/arm64 -t couchroot-parity-test:arm64 tests/worker-
 
 Mount the checkout read-only at `/repo`, that private output directory at `/out`,
 and run with `--network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN
---security-opt seccomp=unconfined`. Do not mount host `/opt` or device credentials.
+--security-opt seccomp=unconfined --security-opt apparmor=unconfined`. Do not mount host `/opt` or device credentials.
 The root job tests use `/opt/couchroot-agent/jobs` inside the disposable container.
 Compile and run inside it:
 
@@ -162,3 +162,40 @@ staging-directory validator without starting a worker. The generated managed
 fallback launch tests use this entry to check actual runtime arguments separately
 from canonical filesystem staging. Set `MANAGED_PARITY` to the rebuilt harness
 when running `tests/native-retained-state.test.cjs` to include this contract check.
+
+## CI coverage
+
+The `arm64-parity` job uses `ubuntu-24.04-arm`, Node 22 and a digest-pinned test
+image. `run-ci.sh` builds the host worker, acceptance controller, I/O delay fixture
+and observer, then enables `COUCHROOT_PARITY_CONTAINER`, `MANAGED_PARITY`,
+`PROCESS_OBSERVER`, fault controls and mount-based storage tests. The disposable container disables
+Docker's AppArmor mount restriction as well as seccomp; a tiny tmpfs preflight
+fails early if the requested mount capability is still unavailable. It runs native,
+worker-parity and observer Python suites plus the JavaScript files using those
+three integration gates, sequentially to protect process-global test state.
+
+A second CI step enables `COUCHROOT_REHEARSAL=1` and `COUCHROOT_STARTUP_FAULT=1`
+for the 43 rehearsal/restart cases plus bootstrap recovery, held-bootstrap and
+startup-fence suites. Each file runs in a fresh `docker run --init` container with
+its own disposable `/opt`; only the checkout and built fixtures are mounted,
+read-only. The reaping init preserves the production process-absence checks. Return recovery
+also uses a private mount namespace, so these containers need `SYS_ADMIN`,
+`seccomp=unconfined` and `apparmor=unconfined`, just like the storage fixtures.
+Without the mount capability, `unshare -m` reproducibly returns `Operation not
+permitted`; the recovery guard correctly holds the transition.
+The worker includes host substitutions and test-only fault controls; no TV
+payload, firmware checks or recovery guard is weakened.
+
+These suites remain explicitly opt-in, not hardware acceptance:
+
+- `NATIVE_WORKER_LIFETIME_TEST`: two extended production-lifetime cases; the
+  bounded CI run covers ordinary lifetime behavior but not the long soak.
+- `COUCHROOT_DEADLINE_TEST`: the slower operation-deadline integration scenario
+  in `tests/root-operation-deadlines.test.cjs`; ordinary deadline unit cases run
+  in the npm suite. Enable it explicitly for the additional timing run.
+- `NATIVE_CANDIDATE_BUILD`: ordinary packaged-candidate and observer-stage cases
+  need the separately assembled ARM package and manifest, not the host-test worker.
+
+These remaining gates can run locally with their documented fixtures. Firmware,
+SMACK, physical Home/standby and TV runtime acceptance cannot be established by
+host CI. No job has device credentials, deployment or publishing access.

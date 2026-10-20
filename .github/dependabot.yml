@@ -1,0 +1,35 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /tvsetup
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directories:
+      - /tests
+      - /tests/worker-parity
+    schedule:
+      interval: weekly
+    ignore:
+      # Runtime/toolchain major changes require deliberate compatibility review.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Keep this Python minor/tag deliberate too (couchroot-native-tests:py312).
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor"]
+  - package-ecosystem: docker
+    directory: /telemetry/native-collector
+    schedule:
+      interval: weekly
+    ignore:
+      # Bullseye is the reproducible ARM toolchain. Any base/digest bump requires
+      # a byte-identity review, never an automatic version update.
+      - dependency-name: "debian"

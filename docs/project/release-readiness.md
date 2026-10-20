@@ -336,31 +336,34 @@ pinned SDK for full setup. `--component prepare` checks Python/platform only;
 native source compilation and preference conversion additionally need Docker
 and Node respectively. These checks do not validate device enrollment.
 
-CI runs four jobs on Ubuntu 24.04, with Python 3.12 and Node 22 where needed,
-plus one focused macOS host check:
+CI has seven job definitions (ten checks after expanding the Linux matrix):
 
-- `web-and-offline`: dependency/privacy checks, Python setup and recovery tests,
-  telemetry receiver and WebView tests, Node/Chromium tests, and unsigned web
-  packaging reproducibility. It blocks `dotnet` calls so these paths stay SDK-free.
-- `managed`: the four C# harnesses and managed cross-path builds using the pinned
-  .NET SDK. This covers the settings adapter, small bridges and retained recovery
-  fallback; native operation does not make those checks obsolete.
-- `root-native-launcher`: ARM launcher builds, native collector tests, native
-  worker protocol/fault/recovery tests, and the Linux managed launcher harness.
-- `qn90a-web-saver`: the pinned Emscripten reproducibility check.
-- `macos-setup`: macOS 14 ARM64/Python 3.12 setup, installer and UI-deploy tests.
+- `web-and-offline`: Node 22/24 × Python 3.12/3.14 on Ubuntu 24.04. Dependency,
+  privacy, setup/recovery, telemetry receiver, WebView and Node/Chromium tests,
+  plus unsigned web reproducibility. `dotnet` calls are blocked in this job.
+- `managed`: four C# harnesses and managed cross-path builds with the pinned SDK.
+- `root-native-launcher`: ARM launcher builds, native collector checks, native
+  protocol/fault/recovery and slow-I/O tests, plus the managed launcher harness.
+- `native-launcher-builds`: both ARM graphical launchers and native Hub host tests.
+- `arm64-parity`: real managed/native workers, process observer and storage cases
+  in disposable ARM64 containers on `ubuntu-24.04-arm`. Tmpfs tests run with the
+  explicit mount capability; a preflight checks the container policy. Rehearsal,
+  restart-fault and bootstrap suites each get a fresh container with a reaping init.
+- `qn90a-web-saver`: pinned Emscripten reproducibility checks.
+- `macos-setup`: macOS 14 ARM64/Python 3.12 setup, installer and UI-deploy tests,
+  including the zombie-group `EPERM` deadline regression.
 
-The native job discovers `native_*_test.py` with the host worker, fault hooks,
-acceptance controller and I/O-delay interposer enabled in an isolated Linux
-container. Mount-dependent storage cases and extended lifetime cases remain
-separate local checks; CI is not endurance or hardware acceptance.
+All Actions have full commit pins and exact version comments; CI-pulled container
+bases/images have digest pins. Weekly Dependabot covers Actions, npm, tvsetup pip
+requirements and Dockerfiles. It does not update image references embedded in
+`validate.yml`; those need manual review. Docker major upgrades, the test image's
+Python minor and the collector Bullseye base require deliberate review. A collector
+base change requires byte-identity evidence.
 
-Pull requests and pushes to `main` run the suite. Feature-branch pushes do not
-repeat the PR run; use the manual workflow trigger for a branch without a PR.
-New commits cancel outdated runs for the same PR or branch. There is no broad OS
-or Python-version matrix: broader macOS and newer-Python compatibility remain
-local release checks. The focused macOS job covers the supervisor regression
-where a zombie-group `EPERM` masked the observation deadline.
+Pull requests, pushes to `main` and manual dispatch run the suite. Superseded runs
+are cancelled. The focused macOS job supplements the Linux version matrix; neither
+CI nor a successful local build qualifies TV firmware, SMACK, boot or standby.
+See the [parity coverage and remaining opt-ins](../../tests/worker-parity/README.md#ci-coverage).
 
 Build manifests include only declared outputs, excluding stale DLLs from other
 research builds. Reports are `dist/reproducibility-web.json` and
