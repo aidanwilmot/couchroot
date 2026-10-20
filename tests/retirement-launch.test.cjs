@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),{createRequire}=require('node:module'),{spawnSync}=require('node:child_process');
-const source=path.resolve(__dirname,'../research/autonomous-root/service/retirement-launch.js'),real=createRequire(source);
+const source=path.resolve(__dirname,'../agent/service/retirement-launch.js'),real=createRequire(source);
 const manifest='a'.repeat(64),worker='b'.repeat(64),launcher='c'.repeat(64),observer='d'.repeat(64),token='e'.repeat(64);
 function load(candidate={manifest_sha256:manifest,artifacts:{'native-worker':{sha256:worker},'native-app-launcher':{sha256:launcher},'native-process-observer':{sha256:observer}}}){
  const module={exports:{}};vm.runInNewContext(fs.readFileSync(source,'utf8'),{module,process,require:name=>name==='./native-candidate'?{loadCandidate:()=>candidate}:real(name)});return module.exports;

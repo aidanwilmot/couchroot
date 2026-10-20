@@ -67,12 +67,12 @@ verified managed package transition: independent signed-worker readiness and SDK
 retirement checks preceded selection commit, with the original history archived.
 Automatic digest replacement remains prohibited by the existing startup guard.
 See [interrupted-job evidence](native-worker/interrupted-forget-results.json) and
-[managed-upgrade maintenance](maintenance/README.md).
+[managed-upgrade maintenance](../../../agent/maintenance/README.md).
 
 All examples use the existing enrolled, certificate-pinned client:
 
 ```sh
-python3 research/autonomous-root/client.py --config /private/client.json status
+python3 agent/client.py --config /private/client.json status
 ```
 
 
@@ -234,7 +234,7 @@ confirmation; QN90A uses proc-stat and checks executable launch separately. Neit
 path submits worker shutdown or selects native.
 
 ```sh
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   observer-probe --manifest-sha256 CANDIDATE_MANIFEST_SHA256 \
   --request-id UNIQUE_REQUEST_ID
 ```
@@ -316,7 +316,7 @@ last identity/boot observation is not readiness.
 After recording the current boot ID and separately requesting an authorized reboot:
 
 ```sh
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   wait-ready --previous-boot-id OLD_BOOT_ID --wait-seconds 240
 ```
 
@@ -350,11 +350,11 @@ HTTPS reuse does not change the .NET worker or native app-user launcher.
 ## File transfer
 
 ```sh
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   download --source /usr/lib/example.so --target ./example.so
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   upload --source ./helper --target /opt/couchroot-agent/files/helper
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   upload --source ./helper-new --target /opt/couchroot-agent/files/helper \
   --expected-sha256 CURRENT_TARGET_SHA256
 ```
@@ -420,16 +420,16 @@ returns the next offset. Mutations retain request-ID replay protection.
 ## Background jobs
 
 ```sh
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   job-start --job-id stress-example-0001 --command-file ./stress.sh \
   --timeout-ms 300000 --profile app
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   job-status --job-id stress-example-0001
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   job-tail --job-id stress-example-0001 --stdout-cursor 0 --stderr-cursor 0
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   job-cancel --job-id stress-example-0001
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   job-forget --job-id stress-example-0001
 ```
 
@@ -461,12 +461,12 @@ identity before signaling. No job is automatically rerun after reconnect or rebo
 ## App-user execution and unsigned helpers
 
 ```sh
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   app-exec --command-file ./app-check.sh --timeout-ms 20000
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   helper-prepare --source /opt/couchroot-agent/files/helper --sha256 HELPER_SHA256
 # Put the returned helper path in the app-exec or job-start command file.
-python3 research/autonomous-root/client.py --config /private/client.json \
+python3 agent/client.py --config /private/client.json \
   helper-release --helper-id RETURNED_HELPER_ID
 ```
 
@@ -516,7 +516,7 @@ IDs can be released automatically; unknown directories are not recursively delet
 python3 -m unittest discover -s tests -p '*_test.py'
 node --test tests/autonomous-root/protocol.test.cjs
 npm test
-dotnet build research/autonomous-root/payload/SamsungTvRootAgent.csproj
+dotnet build agent/payload/SamsungTvRootAgent.csproj
 dotnet run --project tests/root-agent-harness/Harness.csproj
 ```
 
@@ -575,7 +575,7 @@ after S90D rejected the generic systemd reboot target.
 The large-file check used an 8 MiB payload, not the 88 MiB Chromium library.
 No power-loss, firmware-upgrade or long-duration stress acceptance is claimed.
 
-The [native app-user launcher measurements](native-launcher/README.md)
+The [native app-user launcher measurements](../../../agent/native-launcher/README.md)
 compares measured command startup, worker memory, reacquisition and transfer costs
 on both TVs motivated this implementation. The public app APIs remain unchanged.
 
@@ -862,7 +862,7 @@ identities, signed artifacts and raw evidence remain outside the repository.
 
 ## Native worker experiment
 
-The [C worker prototype](native-worker/README.md) began as a sidecar experiment.
+The [C worker prototype](../../../agent/native-worker/README.md) began as a sidecar experiment.
 Signed 0.7.28 now packages it for explicit migration, public operation and same-boot
 recovery trials on both TVs. Managed remains the selected fallback after acceptance.
 Earlier sidecar performance measurements do not establish production performance
@@ -966,7 +966,7 @@ wrong replacement condition, and then replaced the file under the correct digest
 Job checks covered output-ring truncation, bounded tails, explicit cancellation,
 forgetting completed records and retained outcomes after return to managed.
 See [aggregate evidence](native-worker/public-parity-results.json) and the
-[differential contract](../../tests/worker-parity/contract.json).
+[differential contract](../../../tests/worker-parity/contract.json).
 
 A running job prevents return before a selection transaction begins. Native stays
 ready with its existing identity. The caller must wait for completion or explicitly
@@ -1003,7 +1003,7 @@ standby/resume or native-default qualification. .NET remains required and deploy
 
 ## Independent native SDK rescue
 
-The [standalone native recovery utility](recovery/native/README.md) can restore
+The [standalone native recovery utility](../../../agent/recovery/native/README.md) can restore
 `db/sdk/develop/ip` through system libvconf with no managed runtime or active
 Couchroot worker. It supports immediate conditional `set` and delayed `watch`,
 refuses drift and verifies readback. The caller still owns root acquisition,
@@ -1022,7 +1022,7 @@ private rescue callers. Reboot and standby remain outside this qualification.
 
 ## Native setup acquisition pilot
 
-The [native acquisition pilot](../native-root-acquisition/README.md) implements
+The [native acquisition pilot](../../../research/native-root-acquisition/README.md) implements
 private namespace/archive orchestration and bounded commands in C. It is selected
 explicitly through `root.execute(native_bundle=...)`; default setup and service
 acquisition remain managed. `NativeEntry.dll` still supplies trusted capability
@@ -1040,7 +1040,7 @@ Intentional native limits include a NUL-free script below 64 KiB, a 64 KiB merge
 output stream, exact owner UID 5001/GID 100 checks, full root credential checks,
 and exclusive passwd-view creation. Allowlisted app cleanup remains managed.
 No HTTP API, persistent capability, platform policy, package version, reboot or
-standby behavior changed. See the [aggregate evidence](../native-root-acquisition/results.json).
+standby behavior changed. See the [aggregate evidence](../../../research/native-root-acquisition/results.json).
 
 ## Native service acquisition and held startup
 
@@ -1143,8 +1143,8 @@ therefore this path is not qualified to replace the managed bridge. The fixed
 bundle codec passed byte-identical round trips through both target libraries.
 All owned trial resources were cleaned and managed readiness restored without
 replaying either invocation. The .NET fallback and independent rescue remain
-unchanged. See [probe contract](../native-root-acquisition/entry/README.md) and
-[hardware evidence](../native-root-acquisition/entry/results.json).
+unchanged. See [probe contract](../../../research/native-root-acquisition/entry/README.md) and
+[hardware evidence](../../../research/native-root-acquisition/entry/results.json).
 
 
 ## Live forward-failure recovery

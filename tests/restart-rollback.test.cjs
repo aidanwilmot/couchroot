@@ -1,10 +1,10 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{providerId,inventoryRestart}=require('../research/autonomous-root/service/restart-inventory');
-const {restartRollbackCandidate,reconcileRestartRollback}=require('../research/autonomous-root/service/restart-rollback');
-const {snapshotManagedJobs}=require('../research/autonomous-root/service/retained-state');
-const {cleanupRestartRollback,cleanupPlan}=require('../research/autonomous-root/service/restart-cleanup');
-const {loadEvidence}=require('../research/autonomous-root/service/restart-rollback');
+const {SelectionJournal}=require('../agent/service/worker-selection'),{providerId,inventoryRestart}=require('../agent/service/restart-inventory');
+const {restartRollbackCandidate,reconcileRestartRollback}=require('../agent/service/restart-rollback');
+const {snapshotManagedJobs}=require('../agent/service/retained-state');
+const {cleanupRestartRollback,cleanupPlan}=require('../agent/service/restart-cleanup');
+const {loadEvidence}=require('../agent/service/restart-rollback');
 const sha=v=>crypto.createHash('sha256').update(v).digest('hex'),d=c=>c.repeat(64);
 const managed={implementation:'managed',manifest_sha256:d('a')},native={implementation:'native-prototype',manifest_sha256:d('b')};
 const boot='00000000-0000-0000-0000-000000000001',source={boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:4100,start_ticks:'900'},guardian:null}};

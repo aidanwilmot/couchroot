@@ -38,7 +38,7 @@ function historicalBootstrap(state,record){
 function historicalReturn(state,id,returnId,{cutover=false}={}){
  const historical=historicalBoot(state,id),record=historical.record,boot=record.boot_id;
  const read=name=>JSON.parse(fs.readFileSync(state+'/'+name)),write=(name,value)=>fs.writeFileSync(state+'/'+name,JSON.stringify(value),{mode:0o600});
- const rid=require('../research/autonomous-root/service/restart-inventory').providerId(returnId),providerFile=rid+'.retirement.json';
+ const rid=require('../agent/service/restart-inventory').providerId(returnId),providerFile=rid+'.retirement.json';
  if(fs.existsSync(state+'/'+providerFile)){
   const p=read(providerFile);p.boot_id=boot;p.source=record.worker_identity;
   if(p.provider_identity)p.provider_identity.boot_id=boot;write(providerFile,p);
@@ -49,7 +49,7 @@ function historicalReturn(state,id,returnId,{cutover=false}={}){
  if(fs.existsSync(state+'/'+inputFile)){
   const inputs=read(inputFile);inputs.record=record;inputs.installation=read(id+'.state-install.json');inputs.baseline=read(id+'.retained-snapshot.json');
   inputs.snapshot.source=record.worker_identity;inputs.snapshot.origin.installation_sha256=record.state_receipt_sha256;delete inputs.snapshot.sha256;inputs.snapshot.sha256=hash(JSON.stringify(inputs.snapshot));write(inputFile,inputs);
-  const receipt=read(returnId+'.managed-restore.json'),plan=require('../research/autonomous-root/service/managed-restore-plan').planManagedRestore(inputs);
+  const receipt=read(returnId+'.managed-restore.json'),plan=require('../agent/service/managed-restore-plan').planManagedRestore(inputs);
   Object.assign(receipt,plan.receipt,{phase:cutover?'pending':receipt.phase,input_sha256:hash(JSON.stringify(inputs))});write(returnId+'.managed-restore.json',receipt);if(selection.pending.phase!=='prepared')selection.pending.state_sha256=hash(JSON.stringify(receipt));
   fs.writeFileSync(plan.receipt.directory+'/manifest',JSON.stringify(plan.receipt));
   const launchFile=returnId+'.managed-launch.json';if(fs.existsSync(state+'/'+launchFile)){

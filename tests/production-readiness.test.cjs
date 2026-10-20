@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const {readyProduction,runtimeCommand}=require('../research/autonomous-root/service/production-readiness');
-const {planInstallation}=require('../research/autonomous-root/service/retained-install');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
-const {inspectProductionUnit}=require('../research/autonomous-root/service/observer-unit');
+const {readyProduction,runtimeCommand}=require('../agent/service/production-readiness');
+const {planInstallation}=require('../agent/service/retained-install');
+const {SelectionJournal}=require('../agent/service/worker-selection');
+const {inspectProductionUnit}=require('../agent/service/observer-unit');
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex'),sha='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
 const source={boot_id:boot,worker_id:'a'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}},provider={boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:77,start_ticks:'200'},guardian:{pid:76,start_ticks:'199'}}};
 function info(){return {implementation:'native-prototype',boot_id:boot,worker_id:'d'.repeat(32),uptime_seconds:1,lifetime_mode:'production',lifetime_seconds:0,guardian_pid:86,processes:{worker:{pid:87,start_ticks:'300'},guardian:{pid:86,start_ticks:'299'}},capabilities:['worker-process-identity-v1','guardian-parent-identity-v1','resource-inventory-v1','prototype-production-files-v1','binary-upload-v1','binary-download-v1','prototype-app-exec-v1','prototype-jobs-v1','prototype-helper-lifecycle-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1','prototype-command-fault-diagnostics-v1'],app_launcher:{sha256:sha,independently_staged:true},resources:{schema:1,scope:'worker-owned',jobs:[],transfers:[],helpers:[]}};}
@@ -43,7 +43,7 @@ test('unfinished readiness and wrong unit namespaces refuse work',()=>fixture(as
 }));
 
 test('uncertain ready-record publication keeps the transition and readiness intent',()=>fixture(async f=>{
- const vm=require('node:vm'),{createRequire}=require('node:module'),sourceFile=path.resolve(__dirname,'../research/autonomous-root/service/production-readiness.js'),real=createRequire(sourceFile),module={exports:{}};
+ const vm=require('node:vm'),{createRequire}=require('node:module'),sourceFile=path.resolve(__dirname,'../agent/service/production-readiness.js'),real=createRequire(sourceFile),module={exports:{}};
  vm.runInNewContext(fs.readFileSync(sourceFile,'utf8'),{module,process,Buffer,require:name=>name==='./policy'?{atomic:(file,value)=>{real(name).atomic(file,value);throw Error('lost publication acknowledgement');}}:real(name)});
  await assert.rejects(module.exports.readyProduction(f.options),e=>e.outcome==='unknown');assert.equal(JSON.parse(fs.readFileSync(f.file)).phase,'ready');assert.equal(f.journal.read().pending.phase,'state-ready');assert.equal(fs.existsSync(f.intent),true);
  await assert.rejects(readyProduction(f.options));

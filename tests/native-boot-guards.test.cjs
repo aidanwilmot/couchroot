@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawnSync}=require('node:child_process');
-const {bootGuard,processAbsenceGuard}=require('../research/autonomous-root/service/worker-processes');
-const {eligible}=require('../research/autonomous-root/service/native-startup-journal');
+const {bootGuard,processAbsenceGuard}=require('../agent/service/worker-processes');
+const {eligible}=require('../agent/service/native-startup-journal');
 const old='00000000-0000-0000-0000-000000000001',current='00000000-0000-0000-0000-000000000002';
 test('old PID collision is excluded only by an explicit matching current boot',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'boot-guard-'));
@@ -26,7 +26,7 @@ test('cross-boot checkpoint attempts bind the last accepted runtime and the new 
 });
 
 test('managed return excludes current source PIDs but permits a historical source PID collision',()=>{
- const {managedIdentity}=require('../research/autonomous-root/service/managed-readiness');
+ const {managedIdentity}=require('../agent/service/managed-readiness');
  const info={boot_id:current,worker_id:'a'.repeat(32),uptime_seconds:1,capabilities:['file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1','worker-process-identity-v1','resource-inventory-v1'],app_launcher:{implementation:'native',sha256:'f'.repeat(64)},processes:{worker:{pid:42,start_ticks:'100'},guardian:null},resources:{schema:1,scope:'worker-owned',jobs:[],transfers:[],helpers:[]}};
  const peer={identity:{uid:0,euid:0,gid:0,egid:0,smack:'User',pid:42}},native={boot_id:current,worker_id:'b'.repeat(32),processes:{worker:{pid:52,start_ticks:'200'},guardian:{pid:51,start_ticks:'199'}}};
  const provider={boot_id:current,worker_id:'c'.repeat(32),processes:{worker:{pid:62,start_ticks:'300'},guardian:{pid:61,start_ticks:'299'}}};

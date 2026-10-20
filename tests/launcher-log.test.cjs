@@ -1,8 +1,8 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const sdb=require('../research/autonomous-root/service/vendor/sdb');
-const {launchSdk}=require('../research/autonomous-root/service/agent');
+const sdb=require('../agent/service/vendor/sdb');
+const {launchSdk}=require('../agent/service/agent');
 test('SDK diagnostics are captured by the app into an exclusive owner-only log',async()=>{
  const stage=fs.mkdtempSync(path.join(os.tmpdir(),'launcher-log-')), original=sdb.exec;
  let calls=0;

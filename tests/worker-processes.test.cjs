@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{spawn}=require('node:child_process'),{once}=require('node:events');
-const {processIdentities,observeProcesses,waitForProcessExit,startTicks}=require('../research/autonomous-root/service/worker-processes');
+const {processIdentities,observeProcesses,waitForProcessExit,startTicks}=require('../agent/service/worker-processes');
 const BOOT='00000000-0000-0000-0000-000000000001';
 const stat=(pid,ticks,state='S')=>pid+' (name ) with\n spaces) '+[state,...Array(18).fill('0'),ticks,'0'].join(' ');
 function info(){return {boot_id:BOOT,worker_id:'b'.repeat(32),capabilities:['worker-process-identity-v1'],processes:{worker:{pid:42,start_ticks:'123'},guardian:null}};}

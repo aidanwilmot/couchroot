@@ -2,7 +2,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{EventEmitter}=require('node:events');
 const {createRequire}=require('node:module');
-const {validateReadiness,validateResourceInventory}=require('../research/autonomous-root/service/worker-readiness');
+const {validateReadiness,validateResourceInventory}=require('../agent/service/worker-readiness');
 const BOOT='00000000-0000-0000-0000-000000000001',DIGEST='a'.repeat(64);
 function managed(){return {boot_id:BOOT,uptime_seconds:3,worker_id:'b'.repeat(32),capabilities:['file-transfer-v1','binary-download-v1','binary-upload-v1','jobs-v1','app-profile-v1','helper-view-v1','native-app-launcher-v1'],app_launcher:{implementation:'native',sha256:DIGEST}};}
 function native(){return {...managed(),implementation:'native-prototype',lifetime_mode:'production',lifetime_seconds:0,guardian_pid:42,capabilities:['prototype-production-files-v1','binary-upload-v1','binary-download-v1','prototype-app-exec-v1','prototype-jobs-v1','prototype-helper-lifecycle-v1','prototype-independent-launcher-v1','prototype-crash-guardian-v1','prototype-command-fault-diagnostics-v1'],app_launcher:{sha256:DIGEST,independently_staged:true}};}
@@ -28,7 +28,7 @@ test('native readiness requires pinned launcher and production lifetime',()=>{
  assert.throws(()=>validateReadiness(managed(),expected));
 });
 function fixture(options={},modules={},device='qn90a',config={}){
- const source=path.resolve(__dirname,'../research/autonomous-root/service/agent.js');
+ const source=path.resolve(__dirname,'../agent/service/agent.js');
  const realRequire=createRequire(source),channels=[],timers=[];
  class Channel {
   constructor(options){this.options=options;this._conn=null;this._server=new EventEmitter();this.executions=0;channels.push(this);}
@@ -156,7 +156,7 @@ test('late rejection from a closed peer cannot overwrite its replacement readine
 });
 
 test('a newly pending selection blocks admission without silently killing active work',async()=>{
- const os=require('node:os'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const os=require('node:os'),{SelectionJournal}=require('../agent/service/worker-selection');
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'selection-admission-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
  const managedVersion='a'.repeat(64);journal.initialize({implementation:'managed',manifest_sha256:managedVersion});
  const {agent,channels}=fixture({selectionFile:file,managedVersion:()=>managedVersion});agent.start();const pending=channels[0].connect();
@@ -169,7 +169,7 @@ test('a newly pending selection blocks admission without silently killing active
 });
 
 test('handoff shutdown binds durable inventory, observes exit, and suppresses reacquisition',async()=>{
- const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../agent/service/worker-selection');
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handoff-stop-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
  journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,stops=0;
  const readProcessFile=p=>{if(p.endsWith('boot_id'))return BOOT;if(!live)throw Object.assign(Error('gone'),{code:'ENOENT'});return '42 (worker) S '+Array(18).fill('0').join(' ')+' 123 0';};
@@ -196,7 +196,7 @@ test('handoff shutdown binds durable inventory, observes exit, and suppresses re
 });
 
 test('shutdown refuses active resources changed inventory and unreadable process identity',async()=>{
- const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../agent/service/worker-selection');
  for(const mode of ['transfer','helper','running','unknown','not-monitored','changed-inventory','denied','reused']){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handoff-refuse-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
   journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let stops=0;
@@ -217,7 +217,7 @@ test('shutdown refuses active resources changed inventory and unreadable process
  }
 });
 test('packaged observer staging binds target transaction and never retries uncertainty',async()=>{
- const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../agent/service/worker-selection');
  for(const mode of ['success','lost','changed','target']){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'observer-stage-hold-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
   journal.initialize({implementation:'managed',manifest_sha256:DIGEST});const events=[];
@@ -318,7 +318,7 @@ test('unqualified service child-process transport rejects before staging or shut
 
 test('external service probe confirms fresh status and cleans up while retaining shutdown guard',async()=>{
  for(const failure of [false,'submission','cleanup','missing-id']){
-  const events=[],runtime=require('../research/autonomous-root/service/observer-runtime');
+  const events=[],runtime=require('../agent/service/observer-runtime');
   const modules={
    './observer-stage':{stageObserver:async input=>{events.push('stage');await input.execute('stage',25000);return {manifest_sha256:DIGEST,sha256:'d'.repeat(64)};}},
    './pidfd-observer':{probeExecutable:async()=>{throw Error('Forbidden child launch');},preparePidfdExit:async()=>{throw Error('Forbidden child launch');}},
@@ -350,7 +350,7 @@ test('external service probe confirms fresh status and cleans up while retaining
 });
 
 test('external handoff uses independent cleanup after disconnect and retains pending ownership',async()=>{
- const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../agent/service/worker-selection');
  for(const failure of [false,'cleanup','drift']){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'external-handoff-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);
   journal.initialize({implementation:'managed',manifest_sha256:DIGEST});
@@ -386,7 +386,7 @@ test('external handoff uses independent cleanup after disconnect and retains pen
 
 test('service provider probe uses independent observer retirement then tears down without stopping source',async()=>{
  for(const device of ['qn90a','s90d'])for(const failure of [false,'launch','observer','retire','missing-id']){
-  const events=[],runtime=require('../research/autonomous-root/service/observer-runtime'),provider={inspectUnit(){},retireUnit(){}};
+  const events=[],runtime=require('../agent/service/observer-runtime'),provider={inspectUnit(){},retireUnit(){}};
   const modules={
    './observer-stage':{stageObserver:async input=>{events.push('stage');await input.execute('stage',1000);return {manifest_sha256:DIGEST,sha256:'d'.repeat(64)};}},
    './pidfd-observer':{probeExecutable:()=>{throw Error('Forbidden WRT launch');},preparePidfdExit:()=>{throw Error('Forbidden WRT launch');}},
@@ -417,7 +417,7 @@ test('service provider probe uses independent observer retirement then tears dow
 });
 
 test('stopped handoff adopts matching native channel while retaining admission and ignoring stale callbacks',async()=>{
- const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../agent/service/worker-selection');
  const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
  for(const mode of ['ok','activation-failure','retirement-failure','identity-drift','selection-drift']){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'handoff-adoption-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});let live=true,taken=0,closed=0;
@@ -452,7 +452,7 @@ test('stopped handoff adopts matching native channel while retaining admission a
 });
 
 test('native preparation binds held inventory and prevents shutdown during provider startup',async()=>{
- const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{observerTransactionId}=require('../research/autonomous-root/service/observer-runtime');
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../agent/service/worker-selection'),{observerTransactionId}=require('../agent/service/observer-runtime');
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'held-provider-')),file=path.join(dir,'selection.json'),journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});
  let release,launchOptions;const waiting=new Promise(resolve=>{release=resolve;}),session={provider:{},retire:async()=>{}};
  const modules={'./retirement-session':{openRetirementSession:async options=>{launchOptions=options;await options.execute('stage provider',1000);assert.equal((await options.confirmSource()).worker_id,managed().worker_id);await waiting;return session;}}};
@@ -466,7 +466,7 @@ test('native preparation binds held inventory and prevents shutdown during provi
 });
 
 test('held handoff adopts managed rollback with admission closed and stale callbacks invalidated',async()=>{
- const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+ const os=require('node:os'),crypto=require('node:crypto'),{SelectionJournal}=require('../agent/service/worker-selection');
  const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
  for(const mode of ['ok','after-native-adoption','identity-drift','profile-drift','selection-drift','receipt-drift','cleanup-failure','provider-failure','activation-failure','final-drift','native-stop-identity','native-stop-selection','native-stop-shutdown','native-stop-both','native-stop-exit','native-stop-journal','native-stop-publish','native-stop-renamed']){
   const nativeReturn=mode==='after-native-adoption'||mode.startsWith('native-stop-');
@@ -479,7 +479,7 @@ test('held handoff adopts managed rollback with admission closed and stale callb
   };
   // Fail the first stopped-receipt publication either before or after its rename.
   let publishFailures=['native-stop-publish','native-stop-renamed'].includes(mode)?1:0;
-  if(publishFailures){const policy=require('../research/autonomous-root/service/policy');modules['./policy']={...policy,atomic:(target,value)=>{if(target.endsWith('.native-stop.json')&&publishFailures){publishFailures--;if(mode==='native-stop-renamed')policy.atomic(target,value);throw Error('stopped receipt publication failed');}return policy.atomic(target,value);}};}
+  if(publishFailures){const policy=require('../agent/service/policy');modules['./policy']={...policy,atomic:(target,value)=>{if(target.endsWith('.native-stop.json')&&publishFailures){publishFailures--;if(mode==='native-stop-renamed')policy.atomic(target,value);throw Error('stopped receipt publication failed');}return policy.atomic(target,value);}};}
   const {agent,channels,timers}=fixture({selectionFile:file,managedVersion:()=>DIGEST,readProcessFile},modules);agent.start();const old=channels[0],ready=old.connect();
   try{
    ready.resolve(managed());await flush();old.operation=async()=>inventoried();const hold=agent.holdAdmission(),inventory=await hold.snapshot(),source={boot_id:BOOT,worker_id:inventory.worker_id,processes:inventory.processes};
@@ -579,7 +579,7 @@ test('live fallback verification must succeed on the same ready worker before mi
 });
 
 test('restart abandons only a provably unsubmitted transition before acquiring managed',async()=>{
- const os=require('node:os'),{SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{providerId}=require('../research/autonomous-root/service/restart-inventory');
+ const os=require('node:os'),{SelectionJournal}=require('../agent/service/worker-selection'),{providerId}=require('../agent/service/restart-inventory');
  for(const mode of ['unsubmitted','provider-submitted']){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'restart-abandon-'));fs.chmodSync(dir,0o700);const file=dir+'/selection.json',journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:DIGEST});
   const id=journal.begin(1,{implementation:'native-prototype',manifest_sha256:'c'.repeat(64)},'d'.repeat(64)).pending.id;

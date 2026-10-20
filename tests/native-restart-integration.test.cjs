@@ -5,7 +5,7 @@
 // by closing every listener of the first agent and starting a second agent with
 // fresh module instances; TV signing, systemd and SDK acquisition are fixtures.
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events'),{createRequire}=require('node:module');
-const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
+const {RootAgentServer}=require('../agent/service/root-agent');
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
@@ -54,7 +54,7 @@ done
    if(command.includes('NATIVE-RESTART-SUBMITTED')){
     const filename=fs.readdirSync(state).find(n=>n.endsWith('.startup.json')),a=JSON.parse(fs.readFileSync(state+'/'+filename)),r=JSON.parse(fs.readFileSync(state+'/'+a.origin_id+'.production.json'));
     assert.equal(a.phase,'submitted');assert.equal(sha(fs.readFileSync(a.token_file)),a.token_sha256);
-    if(a.schema===2){const command=require('../research/autonomous-root/service/launch-fence').fenceCommand(a,'printf FENCED\n',{kind:'startup'});const fenced=await super.execute(command,5000);assert.equal(fenced.exit_code,0,fenced.stderr);roots.push(a.fence);}
+    if(a.schema===2){const command=require('../agent/service/launch-fence').fenceCommand(a,'printf FENCED\n',{kind:'startup'});const fenced=await super.execute(command,5000);assert.equal(fenced.exit_code,0,fenced.stderr);roots.push(a.fence);}
     fs.copyFileSync(a.token_file,r.scope+'/token');fs.chmodSync(r.scope+'/token',0o600);
     const startupEnv=startupStage&&!startupFaulted?{COUCHROOT_NATIVE_STARTUP_FAULT:startupStage}:{};startupFaulted=true;
     start(r.directory+'/code/worker',['127.0.0.1',String(a.port),r.scope+'/token',r.scope,r.scope+'/launcher',launcherSha,'--production'],r.unit,startupEnv);
@@ -64,7 +64,7 @@ done
    if(command.includes('MANAGED-VERIFIED')){
     // As in the rehearsal fixture: substitute only the TV runtime/mount gate.
     const names=fs.readdirSync(state).filter(n=>n.endsWith('.managed-launch.json'));assert.equal(names.length,1);const r=JSON.parse(fs.readFileSync(state+'/'+names[0]));
-    const inputs=JSON.parse(fs.readFileSync(state+'/'+r.id+'.managed-restore-input.json'));command=require('../research/autonomous-root/service/managed-restore-plan').planManagedRestore(inputs).verify+'printf "MANAGED-VERIFIED\\n"\n';
+    const inputs=JSON.parse(fs.readFileSync(state+'/'+r.id+'.managed-restore-input.json'));command=require('../agent/service/managed-restore-plan').planManagedRestore(inputs).verify+'printf "MANAGED-VERIFIED\\n"\n';
    }
    const result=await super.execute(command.replaceAll('systemctl ',systemctl+' '),timeout);
    if(command.includes('--reconcile-state')){recoveryExecutions++;if(['return-reboot-recovery-ack','return-reboot-provider-ack'].includes(mode)&&!recoveryAcknowledgementLost){assert.equal(result.exit_code,0,result.stderr);recoveryAcknowledgementLost=true;throw Error('offline recovery acknowledgement lost');}}
@@ -84,7 +84,7 @@ done
    const r={schema:1,id,phase:'submitted',implementation:'managed',manifest_sha256:o.managedSha256,runtime_sha256:o.runtimeSha256,state_receipt_sha256:o.receiptSha256,origin_id:inputs.record.id,source:inputs.record.worker_identity,boot_id:boot,unit,directory,stage,files:{'SamsungTvRootAgent.dll':managed,'SamsungTvRootAgent.runtimeconfig.json':managed,'SamsungTvRootAgent.deps.json':managed},port:o.port,token_file:o.tokenFile,token_sha256:o.tokenSha256};write('managed-launch.pending',id+'\n');write(id+'.managed-launch.json',r);start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(o.port),stage],unit);return r;}},
   'production-launch':{submitProduction:async o=>{const installation=JSON.parse(fs.readFileSync(state+'/'+o.id+'.state-install.json')),{directory,scope}=nativeStage(o.id,'worker',o),unit='couchroot-worker-'+o.id+'.service',r={schema:1,id:o.id,phase:'submitted',device:o.device,manifest_sha256:o.manifestSha256,state_receipt_sha256:o.receiptSha256,worker_sha256:workerSha,launcher_sha256:launcherSha,source:installation.source,boot_id:boot,unit,directory,scope,token_file:o.tokenFile,token_sha256:o.tokenSha256,port:o.port};write('production-launch.pending',o.id+'\n');write(o.id+'.production.json',r);start(directory+'/code/worker',['127.0.0.1',String(o.port),scope+'/token',scope,scope+'/launcher',launcherSha,'--production'],unit);return r;}}
  };
- const base=path.resolve(__dirname,'../research/autonomous-root/service');
+ const base=path.resolve(__dirname,'../agent/service');
  // Each agent gets its own module instances, as a restarted service process would.
  function loader(modules,inject){
   return function load(name){if(modules.has(name))return modules.get(name).exports;if(launchers[name])return launchers[name];if(name==='root-agent')return {RootAgentServer:HostServer};if(name==='vendor/sdb')return {connect:()=>new Promise(()=>{}),close:()=>{}};
@@ -306,7 +306,7 @@ done
   assert.equal((await second.operation({op:'job.status',id:'retained-keep-0001'})).record.exit_code,7);assert.deepEqual(fs.readFileSync('/opt/couchroot-agent/jobs/retained-keep-0001.json'),saved);
   if(mode!=='abandon-prepared'){
    await assert.rejects(second.migrateNative(native,runtimeSha),e=>e.outcome==='rejected'&&/Existing native transition requires reconciliation/.test(e.cause&&e.cause.message));
-   const obs=require('../research/autonomous-root/service/restart-inventory').providerId(id);
+   const obs=require('../agent/service/restart-inventory').providerId(id);
    if(mode==='live-observer-ack-lost'){await assert.rejects(second.cleanupRestart(id),e=>e.outcome==='unknown');assert.equal(second.status().worker_ready,true);assert.equal(JSON.parse(fs.readFileSync(state+'/observer-launches/'+obs+'.recovery.json')).phase,'prepared');assert(fs.existsSync(state+'/observer-Abc123/result'));}
    const cleaned=await second.cleanupRestart(id);
    if(observerLoss){assert(!fs.existsSync('/opt/couchroot-observer-'+obs));assert(!fs.existsSync(state+'/observer-Abc123'));assert(!fs.existsSync(state+'/observer-launches/observer-launch.pending'));assert.equal(JSON.parse(fs.readFileSync(state+'/observer-launches/'+obs+'.recovery.json')).phase,'complete');}

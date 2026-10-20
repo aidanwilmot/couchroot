@@ -1,9 +1,9 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {hash}=require('../research/autonomous-root/service/policy');
-const {loadAcquisition,stageAcquisition,FILES}=require('../research/autonomous-root/service/service-acquisition');
-const {validateBootstrap}=require('../research/autonomous-root/service/held-bootstrap');
-const {validateReadiness}=require('../research/autonomous-root/service/worker-readiness');
+const {hash}=require('../agent/service/policy');
+const {loadAcquisition,stageAcquisition,FILES}=require('../agent/service/service-acquisition');
+const {validateBootstrap}=require('../agent/service/held-bootstrap');
+const {validateReadiness}=require('../agent/service/worker-readiness');
 function fixture(run){const d=fs.mkdtempSync(path.join(os.tmpdir(),'service-acquire-'));try{
  const artifacts={},manifest={};for(const n of FILES){const b=Buffer.from(n);fs.writeFileSync(d+'/'+n,b);artifacts[n]={sha256:hash(b),size:b.length};manifest[n]=hash(b);}
  const value={schema:1,kind:'native-service-acquisition',model:'qn90a',framework:'netcoreapp3.1',runtime:'3.1.3',reproducible_builds:2,artifacts};
@@ -29,7 +29,7 @@ test('held readiness pins boot, guardian, launcher, lifetime and empty resources
  for(const implementation of ['managed','native-prototype'])assert.throws(()=>validateReadiness(status(),{...expected,implementation}));
 });
 test('bootstrap retirement keeps intent on uncertainty and removes only confirmed owned state',async()=>{
- const {retireBootstrap,cleanupCommand}=require('../research/autonomous-root/service/held-bootstrap');
+ const {retireBootstrap,cleanupCommand}=require('../agent/service/held-bootstrap');
  for(const failure of ['none','shutdown','cleanup']){
   const d=fs.mkdtempSync(path.join(os.tmpdir(),'bootstrap-retire-')),id='e'.repeat(32),scope='/opt/couchroot-bootstrap-'+id;
   const record={schema:1,id,phase:'ready',boot_id:boot,directory:scope,scope:scope+'/state',unit:'couchroot-bootstrap-'+id+'.service',worker_sha256:sha,launcher_sha256:sha,worker_identity:{boot_id:boot,worker_id:'b'.repeat(32),processes:status().processes},unit_started_monotonic:'123',file:d+'/'+id+'.bootstrap.json'};

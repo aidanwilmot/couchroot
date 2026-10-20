@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawnSync}=require('node:child_process');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection'),{hash}=require('../research/autonomous-root/service/policy');
-const {startupCandidate,launchCommand}=require('../research/autonomous-root/service/native-startup'),{readRuntime}=require('../research/autonomous-root/service/native-runtime');
+const {SelectionJournal}=require('../agent/service/worker-selection'),{hash}=require('../agent/service/policy');
+const {startupCandidate,launchCommand}=require('../agent/service/native-startup'),{readRuntime}=require('../agent/service/native-runtime');
 function fixture(run){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-startup-')),file=dir+'/selection.json',j=new SelectionJournal(file),sha='b'.repeat(64),boot='00000000-0000-0000-0000-000000000001';
  j.initialize({implementation:'managed',manifest_sha256:'a'.repeat(64)});const id=j.begin(1,{implementation:'native-prototype',manifest_sha256:sha},sha).pending.id;
  const source={boot_id:boot,worker_id:'d'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}},identity={boot_id:boot,worker_id:'e'.repeat(32),processes:{worker:{pid:87,start_ticks:'300'},guardian:{pid:86,start_ticks:'299'}}},installation={phase:'ready'};
@@ -44,5 +44,5 @@ test('cross-boot runtime retains original commitment and activation without rela
   f.write(f.id+'.runtime.json',invalid);assert.throws(()=>startupCandidate(f.file));
  }
  const {worker_identity,unit_started_monotonic,...launch}=next;
- assert.throws(()=>require('../research/autonomous-root/service/production-readiness').validateLaunch({...launch,phase:'submitted'}));
+ assert.throws(()=>require('../agent/service/production-readiness').validateLaunch({...launch,phase:'submitted'}));
 }));

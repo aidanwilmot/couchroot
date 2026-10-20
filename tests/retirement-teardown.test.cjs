@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),{spawnSync}=require('node:child_process');
-const {shutdownRetirement,cleanupRetirement,cleanupCommand,finishRetirement}=require('../research/autonomous-root/service/retirement-teardown');
+const {shutdownRetirement,cleanupRetirement,cleanupCommand,finishRetirement}=require('../agent/service/retirement-teardown');
 const boot='00000000-0000-0000-0000-000000000001',id='a'.repeat(32),sha='b'.repeat(64),state='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state';
 const source={boot_id:boot,worker_id:'c'.repeat(32),processes:{worker:{pid:42,start_ticks:'100'},guardian:null}};
 const identity={boot_id:boot,worker_id:'d'.repeat(32),processes:{worker:{pid:77,start_ticks:'200'},guardian:{pid:76,start_ticks:'199'}}};

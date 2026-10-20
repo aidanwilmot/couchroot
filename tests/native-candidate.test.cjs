@@ -1,9 +1,9 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('fs'),os=require('os'),path=require('path');
-const {hash}=require('../research/autonomous-root/service/policy');
-const {loadCandidate,candidateStatus}=require('../research/autonomous-root/service/native-candidate');
-const {createAgent}=require('../research/autonomous-root/service/agent');
+const {hash}=require('../agent/service/policy');
+const {loadCandidate,candidateStatus}=require('../agent/service/native-candidate');
+const {createAgent}=require('../agent/service/agent');
 const names=['native-worker','native-app-launcher'];
 function artifact(){const b=Buffer.alloc(64);Buffer.from([127,69,76,70,1,1,1]).copy(b);b.writeUInt16LE(3,16);b.writeUInt16LE(40,18);b.writeUInt32LE(0x05000200,36);return b;}
 function fixture(schema=1){

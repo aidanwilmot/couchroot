@@ -16,12 +16,12 @@ arm/retire commands for future callers, with boot/code binding, private read-onl
 mapping and race-aware disarm. Hardware adoption and existing private callers
 remain paused; this is not a claim that their .NET dependency is removed.
 
-Follow-up: the [native SDK recovery utility](../recovery/native/README.md) now
+Follow-up: the [native SDK recovery utility](../../../../agent/recovery/native/README.md) now
 implements the conditional setting contract and has independent-rescue acceptance
 on both TVs. The .NET recovery bytes remain unchanged; older private deployment
 kits still use them until their callers explicitly adopt the native unit launch.
 
-The [native acquisition pilot](../../native-root-acquisition/README.md) now ports
+The [native acquisition pilot](../../../../research/native-root-acquisition/README.md) now ports
 the bounded setup probe and command runner to C behind an explicit
 `root.execute(..., native_bundle=...)` selection. Its small `NativeEntry.dll`
 still uses the trusted host to create a private read-only code bind and load the
@@ -55,10 +55,10 @@ these are distinct from the host SDK. Framework, firmware, host and optional
 
 ## NamespaceRootProbe and the generated operation
 
-**Callers and build.** [`tvsetup/root.py`](../../../tvsetup/root.py) builds both
+**Callers and build.** [`tvsetup/root.py`](../../../../tvsetup/root.py) builds both
 `NamespaceRootProbe` and `RootIdentity` for each bounded root request.
-[`Transport.root`](../../../tvsetup/transport.py) runs that module through
-[`tvsetup.worker`](../../../tvsetup/worker.py) in a private subprocess and saves
+[`Transport.root`](../../../../tvsetup/transport.py) runs that module through
+[`tvsetup.worker`](../../../../tvsetup/worker.py) in a private subprocess and saves
 its output. Setup `Driver` operations, inspection/backup, rollback, autonomous-root
 package installation/readback and research trial transports inherit this path.
 `namespace=True` wraps the requested operation in a PID-1 mount-namespace entry
@@ -67,7 +67,7 @@ uses private mounts. QN90A optional-app cleanup substitutes the build-time
 allowlisted cleanup source for `RootIdentity`; it is not the generic shell path.
 
 **Responsibilities.** The current probe source is
-[`research/namespace-root-probe/Program.cs`](../../namespace-root-probe/Program.cs),
+[`research/namespace-root-probe/Program.cs`](../../../../research/namespace-root-probe/Program.cs),
 compiled with `QN90A` for that model. It requires the fixed staging path and a
 32-bit process, creates a passwd view with exactly one owner UID/GID adjustment,
 creates a private mount namespace, makes propagation recursively private and
@@ -84,13 +84,13 @@ pinned SDK transport. Device: Samsung's trusted dotnet host, matching framework,
 libc namespace/mount calls, `/proc`, stock `sdbd-tarlauncher`, tar and shell.
 Crucially, the trusted runtime makes inherited mount/group capabilities effective;
 an arbitrary unsigned C executable is not automatically an equivalent acquisition
-entry point. The historical [chain evidence](../../../docs/lab/research/exploit-chain.md)
+entry point. The historical [chain evidence](../../research/exploit-chain.md)
 explains this dependency. A native port needs both equivalent orchestration and a
 separately qualified way to enter the required capability context on each firmware.
 Do not solve that by relaxing SMACK, changing system passwd/key files or granting
 new persistent capabilities as an incidental part of the port.
 
-An enrolled [`AgentTransport`](../../../tvsetup/agent_transport.py) already avoids
+An enrolled [`AgentTransport`](../../../../tvsetup/agent_transport.py) already avoids
 this probe for supported operations while a ready worker exists. It cannot replace
 first install or recovery when the worker is unavailable, and it refuses namespace
 and allowlisted cleanup operations. A small native probe/command runner can replace
@@ -100,8 +100,8 @@ semantics; retain the existing path until both-model acceptance passes.
 
 ## Recovery.dll
 
-**Callers and build.** [`recovery/Program.cs`](../recovery/Program.cs) and
-[`Recovery.csproj`](../recovery/Recovery.csproj) provide the two-framework utility.
+**Callers and build.** [`recovery/Program.cs`](../../../../agent/recovery/Program.cs) and
+[`Recovery.csproj`](../../../../agent/recovery/Recovery.csproj) provide the two-framework utility.
 The current per-TV installed copies are used by private deployment/acceptance kits,
 including the 300-second SDK rescue timers and explicit loopback/external-host
 switches. There is no tracked service or tvsetup invocation of `Recovery.dll`,
@@ -131,17 +131,17 @@ the native rescue independently restores access with the service unavailable.
 
 ## SamsungTvArchiveRoot and service bootstrap
 
-**Callers and build.** [`tvsetup/autonomous_root.py`](../../../tvsetup/autonomous_root.py)
+**Callers and build.** [`tvsetup/autonomous_root.py`](../../../../tvsetup/autonomous_root.py)
 always builds and packages `SamsungTvArchiveRoot` and `SamsungTvRootAgent` DLLs,
 deps and runtimeconfig files, including when `native_candidate=True`.
-[`agent.js`](../service/agent.js) copies their manifest-verified bytes into unique
+[`agent.js`](../../../../agent/service/agent.js) copies their manifest-verified bytes into unique
 SDK staging, writes a one-use secret and passwd view, and signs an archive whose
 shell payload starts the managed worker on loopback. SDK launch uses a staged
-script and a create-once gate; [`policy.js`](../service/policy.js) checks the pinned
+script and a create-once gate; [`policy.js`](../../../../agent/service/policy.js) checks the pinned
 runtime/launcher hashes in SDK context before execution. This placement matters
 on S90D, whose app label cannot stat all guarded binaries.
 
-**Responsibilities.** [`SamsungTvArchiveRoot.cs`](../payload/SamsungTvArchiveRoot.cs)
+**Responsibilities.** [`SamsungTvArchiveRoot.cs`](../../../../agent/payload/SamsungTvArchiveRoot.cs)
 accepts only the `archive-root-` package name with 16 lowercase hex digits,
 requires effective CAP_SYS_ADMIN and CAP_SETGID, unshares mounts, makes propagation
 private, binds the staged key and passwd view, then runs stock `sdbd-tarlauncher`
@@ -230,7 +230,7 @@ models, but metadata alone is not a runtime capability receipt.
 
 Both captured `libbundle` implementations agree on string and string-array
 records wrapped in ASCII MD5 and Base64. The original bounded host encoder and
-[read-only entry probe](../../native-root-acquisition/entry/README.md) implement
+[read-only entry probe](../../../../research/native-root-acquisition/entry/README.md) implement
 only a fixed Couchroot preload. The constructor records SDK credentials and
 capabilities and exits before the normal vendor event loop. Its caller must
 verify code/loader hashes and an absent exact socket, and guard failed preload
@@ -243,7 +243,7 @@ The signed 0.7.33 trials produced no constructor receipt on either TV, although
 both installed bundle libraries decoded and re-encoded the fixed bundle exactly.
 The ordinary WGT code location did not establish entry; previous signed-TPK
 experiments also show that package signing alone does not solve native executable
-verification on writable VDFS. See [entry results](../../native-root-acquisition/entry/results.json).
+verification on writable VDFS. See [entry results](../../../../research/native-root-acquisition/entry/results.json).
 Replacing the managed bridge still needs successful SDK code mapping and runtime
 receipts on both TVs, then a native identity child and independent qualification
 of the full namespace/archive operation. A read-only receipt alone cannot remove

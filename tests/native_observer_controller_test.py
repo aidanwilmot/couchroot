@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import unittest
 
-SOURCE=Path(__file__).resolve().parents[1]/'research/autonomous-root/native-worker/observer-series-controller.py'
+SOURCE=Path(__file__).resolve().parents[1]/'agent/native-worker/observer-series-controller.py'
 spec=importlib.util.spec_from_file_location('observer_controller',SOURCE)
 m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m;spec.loader.exec_module(m)
 

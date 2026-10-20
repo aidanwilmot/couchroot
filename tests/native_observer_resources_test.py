@@ -9,7 +9,7 @@ import unittest
 
 import native_observer_series_test as fixtures
 
-SOURCE = Path(__file__).resolve().parents[1] / 'research/autonomous-root/native-worker/analyze-observer-resources.py'
+SOURCE = Path(__file__).resolve().parents[1] / 'agent/native-worker/analyze-observer-resources.py'
 spec = importlib.util.spec_from_file_location('resources', SOURCE)
 resources = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(resources)

@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {spawn}=require('node:child_process'),{once}=require('node:events');
-const {prepareSupervisedExit,terminationEvidence}=require('../research/autonomous-root/service/observer-controller');
-const {startTicks}=require('../research/autonomous-root/service/worker-processes');
+const {prepareSupervisedExit,terminationEvidence}=require('../agent/service/observer-controller');
+const {startTicks}=require('../agent/service/worker-processes');
 const BOOT='00000000-0000-0000-0000-000000000001';
 const unitEvidence=(unit,boot)=>({unit,boot_id:boot,active_state:'active',sub_state:'exited',main_pid:0,exec_code:1,exec_status:0,started_monotonic:'123'});
 test('supervisor completion evidence must bind exact unit boot and successful execution',()=>{

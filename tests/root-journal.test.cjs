@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),os=require('os'),path=require('path'),crypto=require('crypto');
-const {Journal,hash}=require('../research/autonomous-root/service/policy');
+const {Journal,hash}=require('../agent/service/policy');
 const req=id=>({id:id||crypto.randomUUID(),command:'id',timeout_ms:1000});
 const rows=n=>Array.from({length:n},(_,i)=>({id:crypto.randomUUID(),sha256:hash('id'),state:'completed',at:i,exit_code:0,timed_out:false}));
 function fixture(n,fn){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'tv-journal-'));try{const file=dir+'/requests.json',seed=rows(n);fs.writeFileSync(file,JSON.stringify(seed));fn({dir,file,seed});}finally{fs.rmSync(dir,{recursive:true,force:true});}}

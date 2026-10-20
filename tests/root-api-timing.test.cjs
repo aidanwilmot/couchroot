@@ -2,8 +2,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm');
 const {createRequire}=require('node:module');
-const {Journal,hash}=require('../research/autonomous-root/service/policy');
-const source=path.resolve(__dirname,'../research/autonomous-root/service/api.js');
+const {Journal,hash}=require('../agent/service/policy');
+const source=path.resolve(__dirname,'../agent/service/api.js');
 const localRequire=createRequire(source);
 async function fixture(run){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'api-timing-'));

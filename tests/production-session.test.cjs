@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),crypto=require('node:crypto'),{EventEmitter}=require('node:events'),{createRequire}=require('node:module');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
-const file=path.resolve(__dirname,'../research/autonomous-root/service/production-session.js'),real=createRequire(file),hash=s=>crypto.createHash('sha256').update(s).digest('hex'),sha='b'.repeat(64);
+const {SelectionJournal}=require('../agent/service/worker-selection');
+const file=path.resolve(__dirname,'../agent/service/production-session.js'),real=createRequire(file),hash=s=>crypto.createHash('sha256').update(s).digest('hex'),sha='b'.repeat(64);
 async function fixture(mode,run){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'production-session-')),selectionFile=directory+'/selection.json',journal=new SelectionJournal(selectionFile);journal.initialize({implementation:'managed',manifest_sha256:'a'.repeat(64)});const id=journal.begin(1,{implementation:'native-prototype',manifest_sha256:sha},'c'.repeat(64)).pending.id;journal.advance(2,id,'state-ready','d'.repeat(64));
  let instance,launches=0,readiness=0,launchOptions,closed=0;const identity={worker_id:'e'.repeat(32)};

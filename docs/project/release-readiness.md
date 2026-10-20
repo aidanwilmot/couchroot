@@ -92,7 +92,7 @@ Review the final combined diff and obtain hosted CI on the exact proposed commit
 Keep experimental labeling and outstanding hardware limits in the release notes.
 Hardware acceptance requires a separately authorized session using the existing
 [telemetry guide](../guides/native-telemetry.md),
-[agent recovery procedure](../../research/autonomous-root/README.md) and
+[agent recovery procedure](../lab/autonomous-root/README.md) and
 [hardware checklist](../guides/hardware-acceptance.md). Do not rebuild or delete
 artifacts referenced by existing recovery journals. Full .NET removal, new boot
 architectures and S90D native telemetry/graphical ports are outside this release.

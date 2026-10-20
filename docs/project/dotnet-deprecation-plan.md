@@ -90,7 +90,7 @@ These observations explain the scope decision; they are not unfinished tasks.
    inspector collection and integrated the existing settings adapter locally.
 4. Managed code handled both brief privileged acquisition and a resident
    authenticated worker. Replacing either would be separate work; see
-   [root-agent research](../../research/autonomous-root/README.md).
+   [root-agent research](../lab/autonomous-root/README.md).
 5. SDK and runtime checks were broader than necessary. Component prerequisites
    and separate identity/managed guards subsequently narrowed that coupling.
 6. Older bootstrap research and later native-Hub results described different

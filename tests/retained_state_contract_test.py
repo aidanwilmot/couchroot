@@ -42,7 +42,7 @@ class RetainedStateContractTests(unittest.TestCase):
                 expected.append(True)
             except (ValueError, UnicodeError):
                 expected.append(False)
-        program = """const fs=require('fs'),{validateRecord}=require('./research/autonomous-root/service/retained-state');
+        program = """const fs=require('fs'),{validateRecord}=require('./agent/service/retained-state');
 const cases=JSON.parse(fs.readFileSync(0));process.stdout.write(JSON.stringify(cases.map(([name,bytes])=>{try{validateRecord(name,Buffer.from(bytes,'base64'));return true;}catch(_){return false;}})));"""
         result = subprocess.run(['node', '-e', program], cwd=ROOT, check=True,
                                 input=json.dumps([(n,base64.b64encode(b).decode()) for n,b in cases]),

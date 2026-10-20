@@ -39,7 +39,7 @@ def build_component(model, kind, destination, command=run):
     if kind not in ('setup-acquisition', 'service-acquisition', 'sdk-recovery'):
         raise Refused('Unknown native component')
     recovery = kind == 'sdk-recovery'
-    source = REPO / ('research/autonomous-root/recovery/native' if recovery
+    source = REPO / ('agent/recovery/native' if recovery
                      else 'research/native-root-acquisition')
     artifact = 'sdk-host-recovery' if recovery else 'libacquire.so'
     inputs = ('recovery.c' if recovery else 'acquire.c', 'build.sh')

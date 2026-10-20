@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const {prepareWorkerState}=require('../research/autonomous-root/service/worker-state');
-const {SelectionJournal,selectionStatus}=require('../research/autonomous-root/service/worker-selection');
+const {prepareWorkerState}=require('../agent/service/worker-state');
+const {SelectionJournal,selectionStatus}=require('../agent/service/worker-selection');
 function fixture(fn){
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'worker-state-')));
  const data=path.join(root,'data');fs.mkdirSync(data,{mode:0o755});fs.chmodSync(data,0o2755);
@@ -73,7 +73,7 @@ test('service startup passes private selection path and refuses legacy state bef
    './agent':{createAgent:(_c,options)=>{calls.push(options.selectionFile);return agent;}},
    './api':{createApi:()=>server}
   };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../research/autonomous-root/service/main.js'),'utf8'),{require:n=>{assert.ok(modules[n]);return modules[n];},process:proc,console:{error:()=>calls.push('error')},setInterval,clearInterval});
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../agent/service/main.js'),'utf8'),{require:n=>{assert.ok(modules[n]);return modules[n];},process:proc,console:{error:()=>calls.push('error')},setInterval,clearInterval});
   if(legacy){assert.deepEqual(calls,['error']);assert.equal(proc.exitCode,1);}
   else assert.deepEqual(calls,[path.join(data,'worker-state','worker-selection.json'),'listen','start']);
  });

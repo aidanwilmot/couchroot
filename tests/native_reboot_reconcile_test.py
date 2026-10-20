@@ -91,7 +91,7 @@ class RebootKernelGuardTests(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.root = Path(cls.tmp.name)
-        native = Path(__file__).resolve().parents[1]/'research/autonomous-root/native-worker'
+        native = Path(__file__).resolve().parents[1]/'agent/native-worker'
         source = cls.root/'fixture.c'
         # Only paths are redirected. Compile the production freezer and namespace
         # checks, without NATIVE_WORKER_TEST's kernel-resource substitutions.

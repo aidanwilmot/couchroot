@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events'),{createRequire}=require('node:module');
-const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
+const {RootAgentServer}=require('../agent/service/root-agent');
+const {SelectionJournal}=require('../agent/service/worker-selection');
 const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
 for(const mode of ['proc','pidfd','pidfd-bad-digest','probe-qn90a','probe-s90d'])test('managed handoff with '+mode+' preserves retained records and admission ownership',{
  skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.MANAGED_PARITY||(mode!=='proc'&&!process.env.PROCESS_OBSERVER),
@@ -9,7 +9,7 @@ for(const mode of ['proc','pidfd','pidfd-bad-digest','probe-qn90a','probe-s90d']
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'managed-handoff-'));fs.chmodSync(root,0o700);
  const file=path.join(root,'selection.json'),journal=new SelectionJournal(file),version='a'.repeat(64);
  journal.initialize({implementation:'managed',manifest_sha256:version});
- const source=path.resolve(__dirname,'../research/autonomous-root/service/agent.js'),realRequire=createRequire(source),channels=[];
+ const source=path.resolve(__dirname,'../agent/service/agent.js'),realRequire=createRequire(source),channels=[];
  class Channel extends RootAgentServer{constructor(options){super(options);channels.push(this);}}
  const module={exports:{}};let probeStages=0;
  // Package permission staging is tested separately on ARM package bytes. Here

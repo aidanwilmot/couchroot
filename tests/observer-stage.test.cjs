@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {spawnSync}=require('node:child_process');
-const {stageObserver,stageCommand}=require('../research/autonomous-root/service/observer-stage');
+const {stageObserver,stageCommand}=require('../agent/service/observer-stage');
 const ROOT='/opt/usr/apps/MiniRoot01',PAYLOAD=ROOT+'/res/wgt/payload';
 const enabled=process.platform==='linux'&&process.geteuid()===0&&process.env.COUCHROOT_PARITY_CONTAINER==='1'&&!!process.env.NATIVE_CANDIDATE_BUILD;
 test('staging command accepts only fixed package members and canonical identities',()=>{

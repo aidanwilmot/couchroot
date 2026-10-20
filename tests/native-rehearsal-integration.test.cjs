@@ -2,10 +2,10 @@
 // Run separately in an otherwise idle disposable container: this fixture owns
 // the real managed job directory. TV signing, systemd and mount setup are fixtures.
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events'),{createRequire}=require('node:module');
-const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
+const {RootAgentServer}=require('../agent/service/root-agent');
 const {withRetirementState}=require('./retirement-test-state.cjs');
-const {observeProcesses}=require('../research/autonomous-root/service/worker-processes');
-const {providerId}=require('../research/autonomous-root/service/restart-inventory');
+const {observeProcesses}=require('../agent/service/worker-processes');
+const {providerId}=require('../agent/service/restart-inventory');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 for(const mode of ['normal','activation-recovery','shutdown-response-lost','exit-observation-recovery','guardian-stopped-exit-recovery','native-active'])test('real managed/native/managed rehearsal preserves state and cleanup ('+mode+')',{
  skip:process.platform!=='linux'||process.env.COUCHROOT_REHEARSAL!=='1'||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:60000
@@ -51,7 +51,7 @@ fi
     // actual identity, retained-state and wire checks; substitute only this gate.
     runtimeChecks++;const names=fs.readdirSync(state).filter(n=>n.endsWith('.managed-launch.json'));assert.equal(names.length,1);const r=JSON.parse(fs.readFileSync(state+'/'+names[0]));const managedChannel=servers.find(s=>s._conn&&s._conn.identity.pid===units.get(r.unit).child.pid);assert(managedChannel);const info=await managedChannel.operation({op:'status'});
     const identity={boot_id:info.boot_id,worker_id:info.worker_id,processes:info.processes};assert(Object.values(observeProcesses(identity).processes).every(p=>!p||p.observation==='present'));assert.equal(fs.readlinkSync('/proc/'+info.processes.worker.pid+'/exe'),'/opt/dotnet/bin/dotnet');
-    const inputs=JSON.parse(fs.readFileSync(state+'/'+r.id+'.managed-restore-input.json'));command=require('../research/autonomous-root/service/managed-restore-plan').planManagedRestore(inputs).verify+'printf "MANAGED-VERIFIED\\n"\n';
+    const inputs=JSON.parse(fs.readFileSync(state+'/'+r.id+'.managed-restore-input.json'));command=require('../agent/service/managed-restore-plan').planManagedRestore(inputs).verify+'printf "MANAGED-VERIFIED\\n"\n';
    }
    return super.execute(command.replaceAll('systemctl ',systemctl+' '),timeout);
   }
@@ -69,7 +69,7 @@ fi
   'managed-launch':{submitManaged:async o=>{const inputs=JSON.parse(fs.readFileSync(state+'/'+o.transitionId+'.managed-restore-input.json')),id=o.transitionId,directory='/opt/couchroot-managed-'+id,stage='/opt/usr/home/owner/share/tmp/sdk_tools/managed-'+id,unit='couchroot-managed-'+id+'.service';for(const p of [directory,stage]){assert(!fs.existsSync(p));roots.push(p);fs.mkdirSync(p,{recursive:true,mode:0o700});}fs.copyFileSync(o.tokenFile,stage+'/token');fs.chmodSync(stage+'/token',0o600);
    const r={schema:1,id,phase:'submitted',implementation:'managed',manifest_sha256:o.managedSha256,runtime_sha256:o.runtimeSha256,state_receipt_sha256:o.receiptSha256,origin_id:inputs.record.id,source:inputs.record.worker_identity,boot_id:boot,unit,directory,stage,files:{'SamsungTvRootAgent.dll':managed,'SamsungTvRootAgent.runtimeconfig.json':managed,'SamsungTvRootAgent.deps.json':managed},port:o.port,token_file:o.tokenFile,token_sha256:o.tokenSha256};write('managed-launch.pending',id+'\n');write(id+'.managed-launch.json',r);start('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(o.port),stage],unit);return r;}}
  };
- const base=path.resolve(__dirname,'../research/autonomous-root/service');
+ const base=path.resolve(__dirname,'../agent/service');
  function load(name){if(modules.has(name))return modules.get(name).exports;if(launchers[name])return launchers[name];if(name==='root-agent')return {RootAgentServer:HostServer};if(name==='vendor/sdb')return {connect:()=>new Promise(()=>{}),close:()=>{}};
   if(name==='worker-selection')return {...require(base+'/'+name),managedVersion:()=>managed};if(name==='native-candidate')return {candidateStatus:()=>({state:'verified'}),loadCandidate:()=>({manifest_sha256:native})};
   const file=base+'/'+name+'.js',real=createRequire(file),module={exports:{}};modules.set(name,module);vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,exports:module.exports,__dirname:path.dirname(file),__filename:file,process,Buffer,URL,setTimeout,clearTimeout,setInterval,clearInterval,setImmediate,clearImmediate,require:n=>n.startsWith('./')&&fs.existsSync(path.resolve(path.dirname(file),n)+'.js')?load(path.relative(base,path.resolve(path.dirname(file),n))):real(n)});if(name==='managed-activation'&&recoverActivation){const activate=module.exports.activateManaged;module.exports.activateManaged=async options=>{const result=await activate(options);if(!activationInterrupted){activationInterrupted=true;throw Error('lost activation acknowledgement');}return result;};}return module.exports;

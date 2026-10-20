@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),crypto=require('node:crypto'),{createRequire}=require('node:module'),{spawnSync}=require('node:child_process');
-const {SelectionJournal}=require('../research/autonomous-root/service/worker-selection');
-const {planInstallation,installRetainedState,acceptRetainedState}=require('../research/autonomous-root/service/retained-install');
-const file=path.resolve(__dirname,'../research/autonomous-root/service/production-launch.js'),real=createRequire(file),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const {SelectionJournal}=require('../agent/service/worker-selection');
+const {planInstallation,installRetainedState,acceptRetainedState}=require('../agent/service/retained-install');
+const file=path.resolve(__dirname,'../agent/service/production-launch.js'),real=createRequire(file),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const manifest='a'.repeat(64),worker=Buffer.from('worker fixture'),launcher=Buffer.from('launcher fixture'),token=Buffer.alloc(32,7).toString('base64');
 const source={boot_id:'00000000-0000-0000-0000-000000000001',worker_id:'2'.repeat(32),processes:{worker:{pid:42,start_ticks:'123'},guardian:null}};
 function snapshot(count=1){const records=Array.from({length:count},(_,i)=>{const id=('retained-'+String(i).padStart(4,'0')).padEnd(64,'x'),bytes=Buffer.from(JSON.stringify({id,boot_id:source.boot_id,state:'completed',pid:0,exit_code:7}));return {name:id+'.json',size:bytes.length,sha256:hash(bytes),base64:bytes.toString('base64')};});const value={schema:1,implementation:'managed',source,records};return {...value,sha256:hash(JSON.stringify(value))};}

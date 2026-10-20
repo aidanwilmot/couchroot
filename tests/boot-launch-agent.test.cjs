@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createBootLaunch}=require('../research/autonomous-root/service/policy');
-const {config}=require('../research/autonomous-root/service/policy');
+const {createBootLaunch}=require('../agent/service/policy');
+const {config}=require('../agent/service/policy');
 function output(fg='',uptime=40,claimed=false){return {exit_code:0,stdout:`UPTIME:${uptime}\nmemory/appfw/current_fullscreen_appid, value = ${fg} (String)\n${claimed?'CLAIMED\n':''}`};}
 function fixture(responses,enabled=true){const calls=[];const a={status:()=>({connected:true}),execute:async command=>{calls.push(command);const r=responses.shift();if(r instanceof Error)throw r;return r;}};return {calls,b:createBootLaunch(a,enabled)};}
 test('disabled by default performs no command',async()=>{const {calls,b}=fixture([],false);await b.tick();assert.equal(calls.length,0);});

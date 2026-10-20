@@ -5,14 +5,14 @@ Attribution is welcome but is not required for that original work.
 
 Bundled third-party code retains its own license:
 
-- `research/autonomous-root/service/vendor/`: Vetro modules, MIT. Preserve the
-  [copyright and license notice](research/autonomous-root/service/vendor/LICENSE).
-- `research/autonomous-root/payload/`: Samsung TV root C# payloads, Unlicense;
-  see the [included license](research/autonomous-root/payload/LICENSE).
+- `agent/service/vendor/`: Vetro modules, MIT. Preserve the
+  [copyright and license notice](agent/service/vendor/LICENSE).
+- `agent/payload/`: Samsung TV root C# payloads, Unlicense;
+  see the [included license](agent/payload/LICENSE).
 - `tests/autonomous-root/protocol.test.cjs`: adapted from Vetro, MIT; its
   source header points to the retained Vetro license.
 - Exact upstream revisions and file hashes are in
-  [UPSTREAM.json](research/autonomous-root/UPSTREAM.json).
+  [UPSTREAM.json](agent/UPSTREAM.json).
 
 [Sources & Credits](CREDITS.md) distinguishes bundled code from research references.
 Dependencies are fetched from their maintainers and retain their own licenses.

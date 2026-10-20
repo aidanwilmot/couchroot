@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),crypto=require('crypto'),{EventEmitter}=require('events');
-const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
+const {RootAgentServer}=require('../agent/service/root-agent');
 class Socket extends EventEmitter {
  constructor(){super();this.writes=[];this.destroyed=false;}
  write(data){this.writes.push(data);}

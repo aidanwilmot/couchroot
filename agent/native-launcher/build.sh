@@ -10,7 +10,7 @@ mkdir -p "$1"
 targets="app-launcher bench"
 if test "$#" -eq 2; then targets=app-launcher; fi
 for name in $targets; do
-    "${CC:-arm-linux-gnueabi-gcc}" -std=c99 -O2 -Wall -Wextra -Werror \
+    "${CC:-arm-linux-gnueabi-gcc}" -ffile-prefix-map="$src"=/src/research/autonomous-root/native-launcher -std=c99 -O2 -Wall -Wextra -Werror \
         -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wl,-z,relro,-z,now \
         -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp \
         "$src/$name.c" -o "$1/$name"

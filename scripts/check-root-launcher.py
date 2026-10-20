@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory(prefix='couchroot-launcher-') as tmp:
         for device in ('qn90a','s90d'):
             builder.profile=profile(device)
             output=folder/device
-            builder.build_managed(ROOT/'research/autonomous-root/payload/SamsungTvRootAgent.csproj',output,native_app_launcher=native)
+            builder.build_managed(ROOT/'agent/payload/SamsungTvRootAgent.csproj',output,native_app_launcher=native)
             record[device]=hashlib.sha256((output/'SamsungTvRootAgent.dll').read_bytes()).hexdigest()
         result=subprocess.check_output(['dotnet','run','--project',str(ROOT/'tests/root-agent-harness/Harness.csproj'),
             '-p:NativeAppLauncher='+str(native),'--','--native-resource'],cwd=ROOT,text=True)

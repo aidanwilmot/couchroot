@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SOURCE=Path(__file__).resolve().parents[1]/'research/autonomous-root/client.py'
+SOURCE=Path(__file__).resolve().parents[1]/'agent/client.py'
 spec=importlib.util.spec_from_file_location('root_agent_client_tests', SOURCE)
 client=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)
@@ -107,7 +107,7 @@ if __name__=='__main__':unittest.main()
 class OperationDeadlineTests(unittest.TestCase):
     def test_client_budgets_match_contract_and_are_passed_per_operation(self):
         import json
-        contract=json.loads((SOURCE.parent.parent.parent/'tests/worker-parity/contract.json').read_text())
+        contract=json.loads((SOURCE.parent.parent/'tests/worker-parity/contract.json').read_text())
         deadlines=contract['response_deadlines']
         for op in contract['operations']:
             expected=(deadlines['operation_ms'].get(op,deadlines['default_ms'])+deadlines['client_margin_ms'])/1000

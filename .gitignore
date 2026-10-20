@@ -58,3 +58,7 @@ trust.json
 # Product telemetry build intermediates.
 telemetry/**/bin/
 telemetry/**/obj/
+
+# Agent build intermediates.
+agent/**/bin/
+agent/**/obj/

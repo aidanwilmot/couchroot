@@ -17,7 +17,7 @@ from .engine import run_id
 from .root import LAUNCHER
 from .site import load_site, configured_profile, binding
 
-SOURCE=REPO/'research/autonomous-root'
+SOURCE=REPO/'agent'
 PACKAGE='MiniRoot01'
 
 

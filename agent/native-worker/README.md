@@ -2,7 +2,7 @@
 
 This directory began as a C measurement sidecar and now supplies the signed native
 agent candidate. The service can explicitly select it and recover it on the same
-boot; managed remains the deployed fallback. See [MIGRATION.md](MIGRATION.md) for
+boot; managed remains the deployed fallback. See [MIGRATION.md](../../docs/lab/autonomous-root/native-worker/MIGRATION.md) for
 current integration and device qualification. Historical experiments below retain
 their original limits. Standalone comparisons keep the installed managed worker
 active and use separate owned scopes.
@@ -48,7 +48,7 @@ root commands, bounded output and process-group timeouts, app commands through a
 independently staged, digest-verified native launcher, and file begin/write/status/read/commit/close with
 per-chunk/full-file hashes and conditional replacement. Default experiment file
 access is restricted to direct children of a private, root-owned directory;
-production mode uses the broader policy described in [PARITY.md](PARITY.md).
+production mode uses the broader policy described in [PARITY.md](../../docs/lab/autonomous-root/native-worker/PARITY.md).
 It loads the TV's libcrypto and json-c APIs, rather than implementing cryptography
 or a complete JSON parser itself. This is still experimental C with a substantially
 smaller test history than the managed worker.
@@ -97,7 +97,7 @@ controller and deployed .NET worker retain their original namespace.
 
 Native-only capability entry remains unqualified: acquisition and recovery still
 retain a small .NET entry bridge. The broader production file policy and offline
-managed-record migration are opt-in, as described in [PARITY.md](PARITY.md). Legacy READFILE/WRITEFILE frames remain omitted: neither the
+managed-record migration are opt-in, as described in [PARITY.md](../../docs/lab/autonomous-root/native-worker/PARITY.md). Legacy READFILE/WRITEFILE frames remain omitted: neither the
 current HTTPS API, enrolled client nor loopback service exposes them. JSON
 `file.write` is supported on the worker protocol for older service compatibility,
 using canonical base64 and the same 1 MiB chunk, digest, offset and commit checks
@@ -258,13 +258,13 @@ worker build or signed package. Use only a separately staged, verified read-only
 library in the owned diagnostic process tree; do not inject it into the installed
 service. Raw paths/PIDs and logs stay private. Its own overhead means the results
 are attribution evidence, not replacement ordinary-build performance numbers.
-Both-TV observations are recorded in [sync timing results](job-sync-timing-results.json).
+Both-TV observations are recorded in [sync timing results](../../docs/lab/autonomous-root/native-worker/job-sync-timing-results.json).
 
 Build outside the source checkout with the project's cached ARMv7 soft-float
 Bullseye toolchain:
 
 ```sh
-sh research/autonomous-root/native-worker/build.sh /private/native-worker-build
+sh agent/native-worker/build.sh /private/native-worker-build
 ```
 
 On Linux, compile `worker.c` with `-DNATIVE_WORKER_TEST` only for the host tests,
@@ -393,7 +393,7 @@ framework process. Its mount table had no owned native execution views. Correcte
 reconciliation recovered the old resources while preserving that unrelated process.
 The suite also simulates this case on both TVs and retains its namespace descriptor
 and bind-pin refusal tests. Earlier fixture failures and their verified cleanup
-are recorded in [storage-recovery-results.json](storage-recovery-results.json).
+are recorded in [storage-recovery-results.json](../../docs/lab/autonomous-root/native-worker/storage-recovery-results.json).
 
 All 35 native host tests passed under AddressSanitizer and
 UndefinedBehaviorSanitizer on Linux ARM64; the repository suite passed 226 tests
@@ -428,7 +428,7 @@ runtime/freezer resources and acquiring the scope lock. Final checks preserved
 both original .NET worker identities, boot IDs, protected file hashes, launcher
 hashes, execution mounts and cgroup memberships. Neither observed kernel window
 contained crash-collector waits or worker executable dumps. No TV was rebooted.
-[Sanitized evidence](endurance-results.json) records both the successful exercise
+[Sanitized evidence](../../docs/lab/autonomous-root/native-worker/endurance-results.json) records both the successful exercise
 and the failed S90D gate. Later startup/orphan-intent checks and focused
 diagnostic/JSON checks passed separately on both TVs; they do not extend this
 one-hour result to the newer revision.
@@ -452,7 +452,7 @@ crash-collector wait or worker executable dump lines. Final cleanup verified the
 original .NET workers, boot identities, protected files, mounts and cgroup
 memberships unchanged, with all owned test resources removed. Neither TV was
 rebooted. Sanitized evidence is in
-[startup-recovery-results.json](startup-recovery-results.json).
+[startup-recovery-results.json](../../docs/lab/autonomous-root/native-worker/startup-recovery-results.json).
 
 This covers durable checkpoints and complete interrupted journal updates.
 Creation-before-binding windows and truncated journals still require inspection;
@@ -467,7 +467,7 @@ Each TV completed the normal suite with 22 distinct checks (25 result rows) and
 the extended memory-fault/progress-watchdog suite with 27 distinct checks
 (31 result rows), all passing with exit code zero. Repeated rows exercise both
 running and frozen guardian-loss scenarios. Sanitized build hashes, check names
-and cleanup evidence are in [guardian-loss-results.json](guardian-loss-results.json).
+and cleanup evidence are in [guardian-loss-results.json](../../docs/lab/autonomous-root/native-worker/guardian-loss-results.json).
 
 The controller killed its own guardian child while root and app jobs were active,
 including a detached delayed writer. EXITKILL prevented that writer from running;
@@ -501,7 +501,7 @@ memory or startup comparison, and .NET remains the deployed implementation.
 
 Revision `76a9649` passed **17 normal acceptance checks and 23 distinct extended
 checks on each TV**, including a ten-minute soak. All controller exits were zero.
-[progress-results.json](progress-results.json) records the build hashes, individual
+[progress-results.json](../../docs/lab/autonomous-root/native-worker/progress-results.json) records the build hashes, individual
 recovery observations, soak measurements and final invariants. Local validation
 passed 226 repository tests plus 27 native tests under address/undefined-behavior
 sanitizers on native ARM64 Linux.
@@ -573,8 +573,8 @@ All 47 native tests passed under ASAN/UBSAN, including sparse inherited descript
 zero/one/three/five free slots, unchanged descriptor sets after rejection, no
 command execution and restart reconciliation. The repository runner passed 226
 tests and skipped those 47 native tests. See
-[focused validation evidence](descriptor-recovery-results.json). The earlier
-[failure evidence](resource-failure-results.json) remains as a historical record.
+[focused validation evidence](../../docs/lab/autonomous-root/native-worker/descriptor-recovery-results.json). The earlier
+[failure evidence](../../docs/lab/autonomous-root/native-worker/resource-failure-results.json) remains as a historical record.
 
 For ordinary production-binary qualification, use the separate controller mode
 `COUCHROOT_NATIVE_PRODUCTION_RESOURCES=1`. It requires `--production` status,
@@ -596,7 +596,7 @@ app job succeeds and ordinary restart reconciles the refused intent without
 replay. It uses the same 32-slot startup budget and 240-second controller alarm,
 and refuses combined experiment modes. Both TVs passed this round on unchanged
 0.7.41 worker bytes; allocation-site and fork failure injection remain local-only
-tests. See [launch-pressure evidence](launch-pressure-results.json).
+tests. See [launch-pressure evidence](../../docs/lab/autonomous-root/native-worker/launch-pressure-results.json).
 
 ## Event-driven waits and lifecycle cleanup — 2026-10-13
 
@@ -656,7 +656,7 @@ process/worker identities, boot IDs, launcher and protected-file hashes, mounts
 and cgroups. All temporary helpers, jobs and files were removed. Neither TV was
 rebooted. Local validation passed 48 native tests under ASAN/UBSAN in three
 runs. The repository runner passed 274 tests, skipping the 48 native tests.
-See [cleanup-results.json](cleanup-results.json).
+See [cleanup-results.json](../../docs/lab/autonomous-root/native-worker/cleanup-results.json).
 
 ## Descriptor admission for every protocol allocation — 2026-10-14
 
@@ -721,16 +721,16 @@ log covered the final 353 s and had no collector waits, worker dumps,
 file-open-checker events or suspend. Kernel log time does not advance during
 suspend, so the window start was corrected for the earlier suspend. Final checks
 preserved S90D's current .NET worker, PID, boot, launcher, mounts, cgroups and
-protected files. Neither TV was rebooted. See [admission-results.json](admission-results.json).
+protected files. Neither TV was rebooted. See [admission-results.json](../../docs/lab/autonomous-root/native-worker/admission-results.json).
 
 ## Remaining production work
 
 The first migration implementation adds an opt-in production file policy,
 offline managed-job import/rollback snapshots, and differential tests. See
-[phase-one behavior and validation](PARITY.md). The installed service still
+[phase-one behavior and validation](../../docs/lab/autonomous-root/native-worker/PARITY.md). The installed service still
 selects .NET; the default experiment mode retains its narrow file scope.
 
-The [native agent parity and .NET retirement plan](MIGRATION.md) maps the
+The [native agent parity and .NET retirement plan](../../docs/lab/autonomous-root/native-worker/MIGRATION.md) maps the
 remaining contracts, managed dependencies, implementation order, rollback and
 release gates. It distinguishes a native worker default from a fully native
 agent installation and recovery path.
@@ -767,7 +767,7 @@ finished within the suite's two-second limit, removed detached descendants and
 owned execution views, preserved interrupted records without replay, and allowed
 app-user execution after restart. Local validation passed 226 repository tests
 and 24 native tests under address/undefined-behavior sanitizers on native ARM64 Linux.
-[crash-delay-results.json](crash-delay-results.json) retains the build identities,
+[crash-delay-results.json](../../docs/lab/autonomous-root/native-worker/crash-delay-results.json) retains the build identities,
 individual observations and cleanup checks.
 
 | Recovery observation | QN90A | S90D |
@@ -810,7 +810,7 @@ root acquisition and service recovery remain outside the prototype.
 ## Historical independent launcher and crash recovery validation — 2026-10-13
 
 Revision `d6fe00e` passed **16 acceptance groups on each TV**, with zero controller
-exit codes. [recovery-results.json](recovery-results.json) records the sanitized
+exit codes. [recovery-results.json](../../docs/lab/autonomous-root/native-worker/recovery-results.json) records the sanitized
 build hashes, checks, timings and cleanup verification. Local validation passed
 226 repository tests and 22 native tests under address/undefined-behavior sanitizers.
 
@@ -852,7 +852,7 @@ failure recovery remain outside this validation; keep .NET deployed.
 ## Historical lifecycle validation before independent staging — 2026-10-13
 
 The extended worker at `ffe97f3` passed **12 acceptance groups on QN90A and S90D**.
-Each controller exited zero. [lifecycle-results.json](lifecycle-results.json)
+Each controller exited zero. [lifecycle-results.json](../../docs/lab/autonomous-root/native-worker/lifecycle-results.json)
 contains the source revision, worker digest and sanitized per-device results.
 
 - A 27-second background job completed while other requests ran and the connection
@@ -900,7 +900,7 @@ two warmup pairs. The follow-up harness `fb5bcc4` used the **identical native wo
 bytes**, two measured pairs per TV, a 20-second idle window and three subsequent
 transfers per process. The production .NET 0.7.0 worker remained running; temporary
 managed workers used that TV's installed DLL. All samples finished successfully.
-Aggregate metrics, ranges and sample counts are in [results.json](results.json).
+Aggregate metrics, ranges and sample counts are in [results.json](../../docs/lab/autonomous-root/native-worker/results.json).
 The native worker executable was 37,788 bytes, unstripped, excluding shared libraries.
 
 | Median metric | QN90A .NET | QN90A C | S90D .NET | S90D C |
@@ -1041,7 +1041,7 @@ Both TVs passed six focused checks and five inventory phases using the ordinary
 worker from `cced593`. QN90A used proc-stat observations; S90D used pidfds after two
 known-failed, fully cleaned diagnostic trials. One final shutdown sample per TV
 was 112 ms and 32 ms respectively, not a timing distribution or an endurance gate.
-See [handoff results](handoff-results.json) for scope and evidence limitations.
+See [handoff results](../../docs/lab/autonomous-root/native-worker/handoff-results.json) for scope and evidence limitations.
 
 ## Single durable job publication
 
@@ -1065,7 +1065,7 @@ pre-fork metadata refusal, failed allocation/pipe/fork/identity acquisition,
 slow and failed syncs, watchdog expiry, terminal records and managed return.
 Worker loss before any publication cannot execute the command; the guardian
 retires its child. An explicit later request may use that unrecorded ID after
-reconciliation. See [qualification results](single-publication-results.json) and
+reconciliation. See [qualification results](../../docs/lab/autonomous-root/native-worker/single-publication-results.json) and
 the dated migration entry for device evidence and performance limits.
 
 ## Continuous kernel observation and complete job timings
@@ -1263,7 +1263,7 @@ source-manifest digest. Never overwrite or shorten the endurance coverage intent
 or present acceptance of the shorter interval as acceptance of the planned run.
 The CLI's success means the descriptive analysis completed, not that performance,
 resource stability or endurance qualification passed. Reports remain private;
-commit only sanitized summaries. See [resource evidence](observer-resource-analysis-results.json).
+commit only sanitized summaries. See [resource evidence](../../docs/lab/autonomous-root/native-worker/observer-resource-analysis-results.json).
 
 ### Rolling controller
 

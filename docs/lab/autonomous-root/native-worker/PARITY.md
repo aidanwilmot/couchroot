@@ -1,13 +1,13 @@
 # Production files and retained job compatibility
 
 This document records the original file/record parity phase. Later service
-selection and recovery work is summarized in the [current release status](../../../docs/project/release-readiness.md)
+selection and recovery work is summarized in the [current release status](../../../project/release-readiness.md)
 and [qualification snapshot](MIGRATION.md#current-qualification-snapshot).
 Statements below about future integration apply to that earlier phase.
 
 This phase implements the file-access and retained-record portions of the
-[migration plan](MIGRATION.md), with a [machine-readable contract](../../../tests/worker-parity/contract.json)
-and [differential harness](../../../tests/worker-parity/README.md). It does not
+[migration plan](MIGRATION.md), with a [machine-readable contract](../../../../tests/worker-parity/contract.json)
+and [differential harness](../../../../tests/worker-parity/README.md). It does not
 select native in the installed service or remove .NET. Subsequent work adds the
 explicit `--production` mode described in the README. Short ordinary-sidecar
 handoff trials exercised that mode on both TVs; they do not qualify production

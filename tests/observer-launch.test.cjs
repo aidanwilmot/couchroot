@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
-const {launchPlan,submitObserver}=require('../research/autonomous-root/service/observer-launch');
+const {launchPlan,submitObserver}=require('../agent/service/observer-launch');
 const root='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/observer-ABC123';
 const options=()=>({device:'s90d',id:'a'.repeat(32),binary:'/opt/usr/apps/MiniRoot01/res/wgt/payload/native-process-observer',sha256:'b'.repeat(64),manifestSha256:'c'.repeat(64),launch:{socketPath:root+'/control',tokenFile:root+'/token',bootId:'00000000-0000-0000-0000-000000000001',pids:[42,43]},credentials:{uid:5001,gid:100,groups:[201,100,29],label:'User::Pkg::MiniRoot01'}});
 async function fixture(fn){const journalDirectory=fs.mkdtempSync('/tmp/cr-launch-');try{await fn(journalDirectory);}finally{fs.rmSync(journalDirectory,{recursive:true,force:true});}}

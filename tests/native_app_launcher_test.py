@@ -7,7 +7,7 @@ import unittest
 
 class NativeAppLauncherTests(unittest.TestCase):
     def test_failed_transition_never_executes_a_command(self):
-        source = Path(__file__).resolve().parents[1] / 'research/autonomous-root/native-launcher/test-launcher.c'
+        source = Path(__file__).resolve().parents[1] / 'agent/native-launcher/test-launcher.c'
         with tempfile.TemporaryDirectory() as folder:
             binary = Path(folder) / 'launcher-test'
             subprocess.run(['cc', '-std=c99', '-Wall', '-Wextra', '-Werror',
