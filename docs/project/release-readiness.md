@@ -1,3 +1,8 @@
+> Phase 4 removes the managed root worker. Historical managed-return acceptance
+> rows below require the retained previous package. The native-only package must
+> be accepted on both TVs, including restart/job recovery, bounded native bootstrap
+> recovery, foreign-certificate rejection and independent SDK rescue.
+
 # Current acceptance gates: merged Phase 2
 
 PRs #10, #11 and #12 are merged into main, but **have not been tested on either
@@ -425,14 +430,13 @@ CI has seven job definitions (ten checks after expanding the Linux matrix):
 - `web-and-offline`: Node 22/24 × Python 3.12/3.14 on Ubuntu 24.04. Dependency,
   privacy, setup/recovery, telemetry receiver, WebView and Node/Chromium tests,
   plus unsigned web reproducibility. `dotnet` calls are blocked in this job.
-- `managed`: four C# harnesses and managed cross-path builds with the pinned SDK.
+- `managed`: three retained C# adapter/relay harnesses and managed cross-path builds with the pinned SDK.
 - `root-native-launcher`: ARM launcher builds, native collector checks, native
-  protocol/fault/recovery and slow-I/O tests, plus the managed launcher harness.
+  protocol/fault/recovery and slow-I/O tests.
 - `native-launcher-builds`: both ARM graphical launchers and native Hub host tests.
-- `arm64-parity`: real managed/native workers, process observer and storage cases
+- `arm64-parity`: real native workers, process observer and storage cases
   in disposable ARM64 containers on `ubuntu-24.04-arm`. Tmpfs tests run with the
-  explicit mount capability; a preflight checks the container policy. Rehearsal,
-  restart-fault and bootstrap suites each get a fresh container with a reaping init.
+  explicit mount capability; a preflight checks the container policy. Native restart-fault and bootstrap suites each get a fresh container with a reaping init.
 - `qn90a-web-saver`: pinned Emscripten reproducibility checks.
 - `macos-setup`: macOS 14 ARM64/Python 3.12 setup, installer and UI-deploy tests,
   including the zombie-group `EPERM` deadline regression.

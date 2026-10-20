@@ -3,7 +3,7 @@ const {RootAgentServer}=require('../agent/service/root-agent');
 const {processIdentities}=require('../agent/service/worker-processes');
 const {withRetirementState}=require('./retirement-test-state.cjs');
 for (const bom of [false,true]) test('native retirement channel migrates retained records after managed exit (BOM='+bom+')',{
- skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.NATIVE_WORKER||!process.env.MANAGED_PARITY,timeout:20000
+ skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.NATIVE_WORKER,timeout:20000
 },async()=>withRetirementState(async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'independent-retirement-')),children=[],servers=[];
  async function start(name,native,existing,production=false,binary=process.env.NATIVE_WORKER){
@@ -11,17 +11,20 @@ for (const bom of [false,true]) test('native retirement channel migrates retaine
   let accept;const ready=new Promise(resolve=>{accept=resolve;}),server=new RootAgentServer({secret,onConnect:accept});servers.push(server);await new Promise(resolve=>server.start(resolve));
   let command,args,sha;
   if(native){const launcher=path.join(dir,'launcher');fs.copyFileSync('/bin/true',launcher);fs.chmodSync(launcher,production?0o400:0o600);sha=crypto.createHash('sha256').update(fs.readFileSync(launcher)).digest('hex');command=binary;args=['127.0.0.1',String(server.listeningPort()),token,dir,launcher,sha];if(production)args.push('--production');}
-  else{command='dotnet';args=[process.env.MANAGED_PARITY,'--parity-wire',String(server.listeningPort()),dir];}
+  else throw Error('Native worker required');
   const child=spawn(command,args,{stdio:['ignore','ignore','pipe']}),ended=once(child,'exit');let stderr='';child.stderr.on('data',data=>{stderr=(stderr+data).slice(-8192);});children.push({child,ended});
   const peer=await Promise.race([ready,ended.then(()=>{throw Error(name+' exited early: '+stderr);})]);
   return {server,peer,child,ended,sha,dir,stderr:()=>stderr};
  }
  try{
-  const managed=await start('managed',false),native=await start('native',true);
+  const managed=await start('source',true),native=await start('native',true);
   // This host build stubs Smack and mount setup. Only that credential field is
   // normalized here; firmware profile/staging qualification is separate.
   assert.equal(native.peer.identity.smack,'host-test-without-Smack');native.peer.identity.smack='System';
-  const source=processIdentities(await managed.server.operation({op:'status'}),managed.peer.identity.pid);
+  // The legacy source record is a fixture; both live executors are native.
+ // Keep its old single-process shape while observing a real exited worker PID.
+ const sourceStatus=async()=>{const v=await managed.server.operation({op:'status'});return {...v,implementation:'managed',capabilities:['worker-process-identity-v1'],processes:{worker:v.processes.worker,guardian:null}};};
+ const source=processIdentities(await sourceStatus(),managed.peer.identity.pid);
   const unit='couchroot-observer-'+'a'.repeat(32)+'.service',bound={unit,bootId:source.boot_id,sha256:'b'.repeat(64)};
   const installed=path.join(root,'installed'),retained=path.join(root,'retained'),jobs=path.join(retained,'jobs');fs.mkdirSync(retained,{mode:0o755});fs.mkdirSync(jobs,{mode:0o700});
   const saved=Buffer.from((bom?'\uFEFF':'')+JSON.stringify({id:'retained-job-0001',boot_id:source.boot_id,state:'completed',pid:0,exit_code:7}));fs.writeFileSync(path.join(jobs,'retained-job-0001.json'),saved,{mode:0o600});
@@ -37,7 +40,7 @@ for (const bom of [false,true]) test('native retirement channel migrates retaine
   fs.writeFileSync(path.join(journalDirectory,id+'.retirement.json'),JSON.stringify(record),{mode:0o600});fs.writeFileSync(path.join(journalDirectory,'retirement-launch.pending'),id+'\n',{mode:0o600});
   const readinessFile=path.resolve(__dirname,'../agent/service/retirement-readiness.js'),readinessRequire=createRequire(readinessFile),readinessModule={exports:{}};
   vm.runInNewContext(fs.readFileSync(readinessFile,'utf8'),{module:readinessModule,process,Buffer,require:name=>name==='./observer-retirement'?{...readinessRequire(name),createObserverRetirement:module.exports.createObserverRetirement}:readinessRequire(name)});
-  const {provider,record:readyRecord}=await readinessModule.exports.readyRetirement({record,journalDirectory,channel:native.server,confirmSource:()=>managed.server.operation({op:'status'}),execute:async()=>({exit_code:0,stdout:`Id=${record.unit}\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=${native.child.pid}\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n`})});
+  const {provider,record:readyRecord}=await readinessModule.exports.readyRetirement({record,journalDirectory,channel:native.server,confirmSource:sourceStatus,execute:async()=>({exit_code:0,stdout:`Id=${record.unit}\nLoadState=loaded\nActiveState=active\nSubState=running\nMainPID=${native.child.pid}\nExecMainCode=0\nExecMainStatus=0\nExecMainStartTimestampMonotonic=123\n`})});
   assert.equal(JSON.parse(fs.readFileSync(path.join(journalDirectory,id+'.retirement.json'))).phase,'ready');
   assert.notEqual(provider.identity.worker_id,source.worker_id);
   assert.deepEqual(await managed.server.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await managed.ended,[0,null],managed.stderr());

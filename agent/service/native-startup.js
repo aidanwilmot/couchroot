@@ -247,16 +247,11 @@ async function startSelectedNative({ selectionFile, executor }) {
     const info = await executor.status();
     const observedBoot = bootId === null ? info.boot_id : bootId;
     bootGuard(observedBoot);
-    if (executor.implementation === 'native-bootstrap')
-      validateBootstrap(info, {
-        bootId: observedBoot,
-        launcherSha256: executor.launcherSha256,
-      });
-    else
-      validateReadiness(info, {
-        implementation: 'managed',
-        bootId: observedBoot,
-      });
+    check(executor.implementation === 'native-bootstrap');
+    validateBootstrap(info, {
+      bootId: observedBoot,
+      launcherSha256: executor.launcherSha256,
+    });
     const r = validateResourceInventory(info);
     check(!r.jobs.length && !r.transfers.length && !r.helpers.length);
     return processIdentities(info, executor.pid);

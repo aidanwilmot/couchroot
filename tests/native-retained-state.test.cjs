@@ -294,17 +294,7 @@ test('managed launch uses canonical staging when home is the TV compatibility sy
  assert.deepEqual(args.slice(-2),[f.root+'/home/owner/share/tmp/sdk_tools/managed-'+result.id+'/token',f.root+'/home/owner/share/tmp/sdk_tools/managed-'+result.id]);
  assert(fs.existsSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools/managed-'+result.id+'/token'));
 }));
-test('generated managed launch arguments pass the unchanged production staging validator',{
- skip:linux.skip||!process.env.MANAGED_PARITY
-},()=>fixture(async f=>{
- const r=await managedLaunchFixture(f),result=await r.api.submitManaged(r.launchOptions);
- const args=fs.readFileSync(f.root+'/launched','utf8').trimEnd().split('\n');
- const runtimeStage=args[args.length-1].replace(f.root+'/home','/home');
- const validate=stage=>spawnSync('dotnet',[process.env.MANAGED_PARITY,'--validate-staging',stage],{encoding:'utf8',timeout:10000});
- const accepted=validate(runtimeStage);assert.equal(accepted.status,0,accepted.stderr);assert.equal(accepted.stdout,runtimeStage+'/\n');
- assert.equal(validate(result.stage).status,64);
- assert.equal(validate('/home/owner/share/tmp/sdk_tools/../foreign').status,64);
-}));
+
 test('managed launch refuses a compatibility home alias to a different directory',linux,()=>fixture(async f=>{
  const r=await managedLaunchFixture(f);
  fs.unlinkSync(f.root+'/home');fs.mkdirSync(f.root+'/foreign-home');fs.symlinkSync('foreign-home',f.root+'/home');

@@ -28,18 +28,6 @@
       "upstream": "rooting/service/tar.js",
       "sha256": "063955310af7c98d2d8b25f212dbe36e695a02c97ec7d80b45d79d0ed8d344c8",
       "upstream_sha256": "063955310af7c98d2d8b25f212dbe36e695a02c97ec7d80b45d79d0ed8d344c8"
-    },
-    {
-      "path": "payload/SamsungTvRootAgent.cs",
-      "upstream": "rooting/tools/samsung-tv-root-master/payloads/common/SamsungTvRootAgent.cs",
-      "sha256": "d9668fbc5518f8265631f210ddfd35c64781f8086166892e04b969fd0f2b982a",
-      "upstream_sha256": "3b53e8c9de66331ca5336f57bc8eba33adf66ca2860a29daedbbeb3a98ea8405",
-      "modified": true
-    },
-    {
-      "path": "payload/SamsungTvArchiveRoot.cs",
-      "upstream": "rooting/tools/samsung-tv-root-master/payloads/common/SamsungTvArchiveRoot.cs",
-      "sha256": "868ce8957a421931dc191bc9289dbbb31073a68b7cf02e53104a6a150ae1371e"
     }
   ]
 }

@@ -1,3 +1,14 @@
+# Native worker and retained-state validation
+
+The managed worker and differential harness were retired in Phase 4. The retained
+contract describes compatibility with historical records; it does not ship a C#
+worker. CI runs native protocol, file/job recovery, storage and process-observer
+suites. Fresh containers also run native-only restart, bootstrap recovery and
+startup fence tests. TV runtime, SMACK and firmware acquisition remain hardware
+acceptance requirements.
+
+The text below records the earlier parity experiment for recovery context.
+
 # Worker parity contract and differential tests
 
 `contract.json` freezes the public operation families, limits, result fields,

@@ -98,7 +98,6 @@ jobs:
       - run: python scripts/check-dependencies.py --component managed
       - run: python tests/telemetry_service_test.py
       - run: python tests/inspector_collector_test.py
-      - run: python tests/root_agent_worker_test.py
       - run: python tests/qn90a_boot_relay_test.py
       - run: python scripts/check-reproducible.py --component managed
   root-native-launcher:
@@ -129,8 +128,6 @@ jobs:
             # ARM64 parity covers mounts; extended lifetime remains a local opt-in.
             NATIVE_WORKER=/out/worker NATIVE_WORKER_FAULT_TEST=1 COUCHROOT_PARITY_CONTAINER=1 NATIVE_ACCEPT=/out/accept NATIVE_IO_DELAY=/out/io-delay.so python3 -m unittest discover -s tests -p "native_*_test.py"
           '
-      - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release
-      - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble@sha256:ea8bde36c11b6e7eec2656d0e59101d4462f6bd630730f2c8201ed0572b295d5 dotnet /app/Harness.dll
   native-launcher-builds:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -149,22 +146,19 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
-        with:
-          global-json-file: global.json
-      - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release -o "$RUNNER_TEMP/parity/managed"
+      - run: mkdir -p "$RUNNER_TEMP/parity"
       - run: docker build --platform linux/arm64 -t couchroot-parity-test:ci tests/worker-parity
-      - name: ARM64 managed/native and process-observer parity
+      - name: ARM64 native worker and process-observer checks
         run: |
           docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
             -v "$PWD:/repo:ro" -v "$RUNNER_TEMP/parity:/out" -w /repo couchroot-parity-test:ci sh tests/worker-parity/run-ci.sh
-      - name: ARM64 rehearsal and restart recovery (fresh containers)
+      - name: ARM64 native restart and bootstrap recovery (fresh containers)
         run: |
-          for suite in native-rehearsal-integration native-restart-integration bootstrap-recovery-integration held-bootstrap-integration native-startup-fence; do
+          for suite in native-restart-integration bootstrap-recovery-integration held-bootstrap-integration native-startup-fence; do
             docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
               -v "$PWD:/repo:ro" -v "$RUNNER_TEMP/parity:/out:ro" -w /repo \
               -e COUCHROOT_PARITY_CONTAINER=1 -e COUCHROOT_REHEARSAL=1 -e COUCHROOT_STARTUP_FAULT=1 \
-              -e NATIVE_WORKER=/out/worker -e MANAGED_PARITY=/out/managed/Harness.dll \
+              -e NATIVE_WORKER=/out/worker \
               couchroot-parity-test:ci node --test --test-concurrency=1 "tests/$suite.test.cjs"
           done
   qn90a-web-saver:

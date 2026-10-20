@@ -1,5 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><StartupObject>Harness</StartupObject><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
-  <ItemGroup><Compile Include="../../agent/payload/SamsungTvRootAgent.cs"/><Compile Include="../../agent/payload/AgentOperations.cs"/><Compile Include="../../agent/payload/AgentJobs.cs"/><Compile Include="../../agent/payload/AgentHelpers.cs"/><Compile Include="../../agent/payload/AgentLauncher.cs"/><Compile Include="Harness.cs"/><Compile Include="ProtocolReaderTests.cs"/><Compile Include="ProtocolVectors.cs"/><Content Include="../fixtures/root-protocol.json" Link="root-protocol.json" CopyToOutputDirectory="PreserveNewest"/><Compile Include="JobIdentityTests.cs"/><Compile Include="ParityBridge.cs"/></ItemGroup>
-<ItemGroup Condition="'$(NativeAppLauncher)' != ''"><EmbeddedResource Include="$(NativeAppLauncher)" LogicalName="Couchroot.AppLauncher" /></ItemGroup>
-</Project>

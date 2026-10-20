@@ -1,5 +1,5 @@
 'use strict';
-// Explicit signed-package opt-in. A malformed opt-in never falls back silently.
+// Signed native acquisition bundle. Callers must refuse absent or malformed metadata.
 const fs = require('fs'),
   path = require('path');
 const { read, hash } = require('./policy');

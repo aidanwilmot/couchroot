@@ -17,13 +17,13 @@ function fixture(schema=1){
  const seal=()=>{const raw=JSON.stringify(m);fs.writeFileSync(path.join(dir,'native-manifest.json'),raw);fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({'native-manifest.json':hash(raw),...Object.fromEntries(names.map(n=>[n,m.artifacts[n].sha256]))}));};
  seal();return {dir,m,seal,close:()=>fs.rmSync(dir,{recursive:true,force:true})};
 }
-test('legacy packages have no candidate and remain managed',()=>{
+test('legacy packages have no candidate and require enrollment',()=>{
  const f=fixture();try{
   for(const name of [...names,'native-manifest.json'])fs.unlinkSync(path.join(f.dir,name));
   fs.writeFileSync(path.join(f.dir,'manifest.json'),'{}');
   assert.equal(loadCandidate(f.dir,'qn90a'),null);
   const status=createAgent({device:'qn90a'},{payload:f.dir}).status();
-  assert.equal(status.selected_implementation,'managed');assert.equal(status.native_candidate.state,'absent');assert.equal(status.worker_ready,false);
+  assert.equal(status.selected_implementation,null);assert.equal(status.native_candidate.state,'absent');assert.equal(status.worker_ready,false);
  }finally{f.close();}
 });
 test('both profiles validate candidate bytes without promoting readiness or selecting native',()=>{
@@ -32,7 +32,7 @@ test('both profiles validate candidate bytes without promoting readiness or sele
    const c=loadCandidate(f.dir,device);assert.equal(c.manifest_sha256,hash(fs.readFileSync(path.join(f.dir,'native-manifest.json'))));
    assert.equal(c.artifacts['native-worker'].sha256,f.m.artifacts['native-worker'].sha256);
    const status=createAgent({device},{payload:f.dir}).status();
-   assert.equal(status.selected_implementation,'managed');assert.equal(status.native_candidate.state,'verified');
+   assert.equal(status.selected_implementation,null);assert.equal(status.native_candidate.state,'verified');
    assert.equal(status.native_candidate.device_qualified,false);assert.equal(status.worker_ready,false);assert.equal(status.connected,false);
   }
  }finally{f.close();}
@@ -56,7 +56,7 @@ test('digest mismatches missing files symlinks and oversized metadata are not va
    if(kind==='symlink'){fs.renameSync(path.join(f.dir,'native-worker'),path.join(f.dir,'other'));fs.symlinkSync('other',path.join(f.dir,'native-worker'));}
    if(kind==='oversized')fs.writeFileSync(path.join(f.dir,'native-manifest.json'),' '.repeat(65537));
    assert.throws(()=>loadCandidate(f.dir,'qn90a'));
-   const status=createAgent({device:'qn90a'},{payload:f.dir}).status();assert.equal(status.selected_implementation,'managed');assert.equal(status.native_candidate.state,'invalid');
+   const status=createAgent({device:'qn90a'},{payload:f.dir}).status();assert.equal(status.selected_implementation,null);assert.equal(status.native_candidate.state,'invalid');
    assert.ok(!JSON.stringify(status.native_candidate).includes(f.dir));
   }finally{f.close();}
  }
@@ -70,16 +70,7 @@ test('rehashed wrong-ABI and test-controlled binaries are still rejected',()=>{
   }finally{f.close();}
  }
 });
-test('candidate diagnostics refresh before an acquisition attempt without blocking managed fallback',async()=>{
- const f=fixture();let checked=0;
- const agent=createAgent({device:'qn90a'},{payload:f.dir,verifyFirmware:()=>{checked++;throw Error('fixture-stop-before-device-access');}});
- try{
-  assert.equal(agent.status().native_candidate.state,'verified');fs.appendFileSync(path.join(f.dir,'native-worker'),'changed');
-  agent.start();await new Promise(r=>setImmediate(r));
-  assert.equal(checked,1);assert.equal(agent.status().selected_implementation,'managed');assert.equal(agent.status().native_candidate.state,'invalid');
-  assert.match(agent.status().last_error,/fixture-stop-before-device-access/);
- }finally{agent.stop();f.close();}
-});
+
 test('ordinary source-built candidate is accepted for both profile declarations',{skip:!process.env.NATIVE_CANDIDATE_BUILD},()=>{
  const f=fixture();try{
   const manifest=JSON.parse(fs.readFileSync(path.join(process.env.NATIVE_CANDIDATE_BUILD,'native-manifest.json')));
@@ -94,7 +85,7 @@ test('schema two binds observer bytes and provenance while preserving managed de
   for(const device of ['qn90a','s90d']){
    const c=loadCandidate(f.dir,device);
    assert.equal(c.artifacts['native-process-observer'].sha256,f.m.artifacts['native-process-observer'].sha256);
-   assert.equal(createAgent({device},{payload:f.dir}).status().selected_implementation,'managed');
+   assert.equal(createAgent({device},{payload:f.dir}).status().selected_implementation,null);
   }
  }finally{f.close();}
 });

@@ -12,8 +12,6 @@ import xml.etree.ElementTree as ET
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root))
 projects = [
-    "agent/payload/SamsungTvRootAgent.csproj",
-    "agent/payload/SamsungTvArchiveRoot.csproj",
     "tvsetup/native/Control.csproj",
     "agent/namespace-root-probe/NamespaceRootProbe.csproj",
     "agent/qn90a-root-probe/NamespaceRootProbe.csproj",
