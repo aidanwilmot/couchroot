@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 root=Path(__file__).resolve().parent
 private=Path.home()/'.local/share/samsung-tv-research'
-files={'Telemetry.dll':root/'collector/bin/Release/net6.0/Telemetry.dll','Boot.telemetry.dll':root/'bin/helper/bin/Release/net6.0/Boot.dll','telemetry-config.json':private/'telemetry/config.json'}
+files={'Telemetry.dll':root.parent/'s90d-collector/bin/Release/net6.0/Telemetry.dll','Boot.telemetry.dll':root/'bin/helper/bin/Release/net6.0/Boot.dll','telemetry-config.json':private/'telemetry/config.json'}
 sha=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
 expected='4a6fdb3d979ab13ed8d38b2bc6e1b9b94e5a04294312d0f9b50cc7f1f0a6c987'
 for name,path in files.items():
