@@ -8,8 +8,8 @@
 typedef struct { uint32_t magic, kind, size, status; } PlatformHeader;
 typedef struct { int safe, source_rearm; char foreground[257]; } PlatformSnapshot;
 static int (*platform_id)(void*,char**),(*platform_label)(void*,char**),(*platform_package)(void*,char**),(*platform_hidden)(void*,bool*),(*platform_component)(void*,int*);
-/* Preserve this launcher's no-Live-TV policy pending owner review. */
-static int consumer_app(const char *id,const char *pkg){return platform_consumer(id,pkg,0);}
+/* Match the web and WebView consumer allowlists, including TV Plus. */
+static int consumer_app(const char *id,const char *pkg){return platform_consumer(id,pkg,1);}
 static HubApp discovered[HUB_MAX];static int discovered_count,discovered_overflow;
 static bool discover_app(void *app,void *unused){
  (void)unused;bool hidden=true;int component=-1;char *id=0,*name=0;

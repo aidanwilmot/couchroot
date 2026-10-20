@@ -57,28 +57,23 @@ require the common baseline.
 
 ## Owner decisions currently expressed by defaults
 
-These are review questions, not behavior changes in Phase 3:
+The owner has selected these policies. They do not authorize deployment:
 
-- **TV Plus allowlists:** `native-hub/hub-platform.h` passes `0` to
-  `platform_consumer`; WebView's `bridge.h` passes `1`. Pure native excludes TV Plus
-  while WebView permits its explicit exception. Decide whether to align them;
-  shared code does not currently imply identical policy.
-- **Normal-mode native boot:** the shared core and native binary can handle a
-  normal-mode handoff, but `tvsetup/native_hook.py` still requires the background
-  marker in both dispatch and watchdog. Decide whether a future installer change
-  should admit normal mode. Current public installation must not be described as
-  enabling it. The separate QN90A WebView boot path has its own normal-mode dispatch.
-- **Invalid native favorites import:** WebView refuses the entire malformed
-  native file (`skipped=format`); it does not salvage individual entries. A missing
-  file logs `skipped=missing`. It leaves the source file on disk and retains existing
-  WebView preferences; the shim drops an invalid import fragment. Decide whether a
-  future explicit recovery/import UI is wanted. Do not describe this as deletion
-  of the native file or as the web model's per-entry filtering.
-- **Signing trust:** `scripts/sign.py` requires a loadable private site config and
-  independently enrolled trust, even when `--site` is omitted. Omission selects
-  `TV_SETUP_SITE` or the standard site.json location; it does not permit trust-free
-  signing from a named SDK certificate profile. Decide whether to keep that policy;
-  this checklist does not weaken it.
+- **TV Plus allowlists:** pure native, WebView and the signed web Hub permit the
+  explicit TV Plus consumer exception. The pure-native change needs acceptance
+  on hardware before deployment; `platform_consumer` itself is unchanged.
+- **Normal-mode native boot:** pure-native installation remains background-only.
+  Its shared core can handle normal-mode handoff, but the public dispatch and
+  watchdog require the background marker. WebView retains its separate normal-mode
+  dispatch. Do not describe the pure-native installer as enabling normal mode.
+- **Invalid native favorites import:** WebView rejects the entire malformed file
+  (`skipped=format`); a missing file logs `skipped=missing`. The source file and
+  existing preferences are retained. This differs intentionally from the web
+  model's per-entry filtering; no salvage or migration UI is planned.
+- **Signing trust:** `scripts/sign.py` continues to require a loadable private
+  site.json and independently enrolled trust. Omitting `--site` selects
+  `TV_SETUP_SITE` or the standard location; an SDK certificate profile alone is
+  insufficient.
 
 ---
 
