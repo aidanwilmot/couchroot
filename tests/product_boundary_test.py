@@ -17,7 +17,7 @@ EVIDENCE = {'telemetry/byte-identity.json', 'telemetry/agent-byte-identity.json'
 
 def violations(root):
     files = [p for tree in TREES for p in (root/tree).rglob('*')]
-    files += [p for p in root.iterdir() if p.is_file() and not p.name.startswith('.') and (p.suffix == '.sh' or not p.suffix)]
+    files += [p for p in root.iterdir() if p.is_file() and not p.name.startswith('.') and (p.suffix in ('.py', '.sh', '.js', '.cjs') or not p.suffix)]
     result = []
     for path in files:
         relative = path.relative_to(root)
@@ -72,8 +72,11 @@ class ProductBoundaryTests(unittest.TestCase):
                             path.write_text(mutation)
                             self.assertEqual(violations(root), [f'{tree}/entry{extension}:1'])
                     path.unlink()
-            (root/'entry').write_text("Path('research')")
-            self.assertEqual(violations(root), ['entry:1'])
+            for extension in ('.py', '.sh', '.js', '.cjs', ''):
+                path = root/('entry'+extension)
+                path.write_text("Path('research')")
+                self.assertEqual(violations(root), [f'entry{extension}:1'])
+                path.unlink()
 
     def test_revision_set_mutations_are_detected(self):
         bad = ROOT/'research/accidental.c'
