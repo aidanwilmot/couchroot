@@ -142,6 +142,9 @@ class Driver:
     def snapshot(self):
         return self.tv.snapshot(privileged=True)
 
+    def package_identity_ok(self, row):
+        return managed_package_ok(row)
+
     def prepare(self, action):
         """Local builds and signature verification happen before any target mutation."""
         info = {}
@@ -600,7 +603,7 @@ class Driver:
         elif action.kind == "package":
             pkg = action.options["package"]
             rows = [r for r in state["packages"] if r[0] == pkg]
-            if len(rows) != 1 or not managed_package_ok(rows[0]):
+            if len(rows) != 1 or not self.package_identity_ok(rows[0]):
                 raise Refused(
                     "Managed package identity/protection changed before rollback"
                 )
@@ -615,13 +618,14 @@ class Driver:
         else:
             raise Refused("Unsupported rollback")
 
-    def reinstall_recovery(self, action, info):
-        if action.options["package"] in ("MiniHubBoot", "MiniTelemetry"):
-            self.tv.sdk(managed_guard(self.profile))
+    def recovery_members(self, action, info):
+        """Derive the only permitted recovery content from retained signed inputs."""
         source = Path(info["recovery_package"])
         if sha(source.read_bytes()) != info["recovery_sha256"]:
             raise Refused("Recovery archive changed")
         members, _ = verify_package(source, self.profile, action.options["package"])
+        if sha(Path(info["artifact"]).read_bytes()) != info["sha256"]:
+            raise Refused("Prepared package changed")
         _, installed_version = verify_package(
             Path(info["artifact"]), self.profile, action.options["package"]
         )
@@ -632,8 +636,20 @@ class Driver:
         xml = ET.fromstring(members[name])
         xml.set("version", next_version(installed_version, xml.get("version")))
         members[name] = manifest_bytes(xml)
+        return members, xml.get("version")
+
+    def prepare_recovery(self, action, info):
+        """Sign locally; Engine persists this record before submitting an install."""
+        members, version = self.recovery_members(action, info)
+        web = "config.xml" in members
         folder = self.folder / (action.id + "-forward-recovery")
-        folder.mkdir(exist_ok=True)
+        # Never reuse partial or unjournaled signer output.
+        try:
+            folder.mkdir()
+        except FileExistsError:
+            raise Refused(
+                "Recovery build directory exists; inspect partial output"
+            ) from None
         if web:
             for n, data in members.items():
                 if n in ("author-signature.xml", "signature1.xml"):
@@ -680,7 +696,74 @@ class Driver:
                     path,
                 ]
             )
-        verify_package(path, self.profile, action.options["package"])
+        record = dict(
+            artifact=str(path), sha256=sha(path.read_bytes()), version=version
+        )
+        record["files"] = self.recovery_target(
+            action, {**info, "forward_recovery": record}
+        )
+        return record
+
+    def recovery_target(self, action, info):
+        """Re-derive expected readback; a journal edit cannot authorize new content."""
+        expected, version = self.recovery_members(action, info)
+        record = info["forward_recovery"]
+        path = Path(record["artifact"])
+        if sha(path.read_bytes()) != record["sha256"]:
+            raise Refused("Recovery archive changed")
+        members, signed_version = verify_package(
+            path, self.profile, action.options["package"]
+        )
+        signatures = {"author-signature.xml", "signature1.xml"}
+        if (
+            set(members) != set(expected)
+            or signed_version != version
+            or any(
+                members[n] != data
+                for n, data in expected.items()
+                if n not in signatures
+            )
+        ):
+            raise Refused("Recovery content differs from retained package")
+        files = {}
+        prefix = "/opt/usr/apps/" + action.options["package"] + "/"
+        for remote in action.after:
+            if not remote.startswith(prefix):
+                raise Refused("Recovery inventory contains a foreign path")
+            name = remote[len(prefix) :].removeprefix("res/wgt/")
+            # Preserve the caller's consumed distributor-signature convention.
+            consumed = (
+                name == "signature1.xml"
+                and action.before.get(remote) is None
+                and action.after[remote] is None
+            )
+            files[remote] = (
+                sha(members[name]) if name in members and not consumed else None
+            )
+        if record["version"] != version or (
+            "files" in record and record["files"] != files
+        ):
+            raise Refused("Recovery record differs from verified archive")
+        return files
+
+    def verify_recovery(self, action, info, state):
+        rows = [r for r in state["packages"] if r[0] == action.options["package"]]
+        if (
+            len(rows) != 1
+            or not self.package_identity_ok(rows[0])
+            or rows[0][3] != info["forward_recovery"]["version"]
+        ):
+            raise Refused("Recovery registration mismatch")
+
+    def reinstall_recovery(self, action, info):
+        if action.options["package"] in ("MiniHubBoot", "MiniTelemetry"):
+            self.tv.sdk(managed_guard(self.profile))
+        if "forward_recovery" not in info:
+            raise Refused(
+                "Recovery package must be prepared and journaled before install"
+            )
+        self.recovery_target(action, info)
+        path = Path(info["forward_recovery"]["artifact"])
         try:
             output = run(
                 [

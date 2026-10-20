@@ -268,6 +268,7 @@ class Engine:
                     continue
                 a = Action(**row["action"])
                 state = self.driver.snapshot()
+                target = a.before
                 if a.kind == "uninstall" and self.value(a, state) != a.before:
                     manual.append(a.options["package"])
                     row["phase"] = "manual-recovery"
@@ -289,6 +290,33 @@ class Engine:
                     row["phase"] = "manual-recovery"
                     self.save()
                     continue
+                if (
+                    a.kind == "package"
+                    and a.before is not None
+                    and row["info"].get("recovery_package")
+                    and self.value(a, state) != a.before
+                ):
+                    record = row["info"].get("forward_recovery")
+                    if record:
+                        target = self.driver.recovery_target(a, row["info"])
+                        if self.value(a, state) == target:
+                            self.driver.verify_recovery(a, row["info"], state)
+                            row["phase"] = "rolled-back"
+                            self.save()
+                            continue
+                    if self.value(a, state) != a.after:
+                        raise Refused("Package drift blocks recovery: " + a.id)
+                    if row["phase"] == "rolling-back":
+                        raise Refused(
+                            "Recovery install outcome unconfirmed; inspect without replay: "
+                            + a.id
+                        )
+                    if not record:
+                        row["info"]["forward_recovery"] = self.driver.prepare_recovery(
+                            a, row["info"]
+                        )
+                        self.save()
+                    target = self.driver.recovery_target(a, row["info"])
                 row["phase"] = "rolling-back"
                 self.save()
                 if a.kind == "nas":
@@ -296,8 +324,10 @@ class Engine:
                 else:
                     self.driver.rollback(a, row["info"], state)
                 after = self.driver.snapshot()
-                if self.value(a, after) != a.before:
+                if self.value(a, after) != target:
                     raise Refused("Rollback readback failed: " + a.id)
+                if target != a.before:
+                    self.driver.verify_recovery(a, row["info"], after)
                 row["phase"] = "rolled-back"
                 self.save()
             self.restore_local_state()

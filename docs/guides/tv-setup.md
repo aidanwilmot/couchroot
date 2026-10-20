@@ -327,6 +327,17 @@ match. Missing, malformed, changed, or enabled local records are refused before
 device access. On failure, retain the journal and use the trial recovery path;
 do not automatically retry an uncertain install.
 
+Package rollback restores the retained code using a newly signed, forward-versioned
+package (for example, a 0.7.53 update can recover the 0.7.52 code as version 0.7.54).
+Before installing, the journal records that recovery archive's digest, version,
+and expected installed-file hashes separately from the original snapshot. The
+signed recovery content must match the retained package except for the manifest
+version and regenerated signatures; removed files must still be absent. Readback
+checks the recovery hashes and registered version. A lost reply can be reconciled
+against this exact record without re-signing or reinstalling. An unchanged or
+drifted result remains unconfirmed and is not automatically replayed. Keep the
+original checkout, journal, and both signed packages until recovery is accepted.
+
 ### Inspecting setup
 
 `plan`, `status` and ordinary `verify` use read-only SDK/NAS inspection. Private

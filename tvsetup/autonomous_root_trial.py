@@ -158,6 +158,14 @@ class PilotTransport(Transport):
 
 
 class PilotDriver(Driver):
+    def package_identity_ok(self, row):
+        return row[0:3] == [PACKAGE, PACKAGE + ".App", "wgt"] and row[4:] == [
+            "true",
+            "false",
+            "false",
+            "false",
+        ]
+
     def prepare(self, action):
         if action.component != "autonomous-root":
             raise Refused("Unexpected pilot component")
@@ -195,11 +203,7 @@ class PilotDriver(Driver):
             raise Refused("Pilot readback mismatch")
         if action.kind == "package":
             rows = [r for r in after["packages"] if r[0] == PACKAGE]
-            if (
-                len(rows) != 1
-                or rows[0][1:3] != [PACKAGE + ".App", "wgt"]
-                or rows[0][4:] != ["true", "false", "false", "false"]
-            ):
+            if len(rows) != 1 or not self.package_identity_ok(rows[0]):
                 raise Refused("Pilot registration mismatch")
         for field in ("key_filter", "task_filter", "managed_app"):
             if before.get(field) != after.get(field):
