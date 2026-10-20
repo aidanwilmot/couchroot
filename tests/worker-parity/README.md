@@ -178,7 +178,11 @@ A second CI step enables `COUCHROOT_REHEARSAL=1` and `COUCHROOT_STARTUP_FAULT=1`
 for the 43 rehearsal/restart cases plus bootstrap recovery, held-bootstrap and
 startup-fence suites. Each file runs in a fresh `docker run --init` container with
 its own disposable `/opt`; only the checkout and built fixtures are mounted,
-read-only. The reaping init preserves the production process-absence checks.
+read-only. The reaping init preserves the production process-absence checks. Return recovery
+also uses a private mount namespace, so these containers need `SYS_ADMIN`,
+`seccomp=unconfined` and `apparmor=unconfined`, just like the storage fixtures.
+Without the mount capability, `unshare -m` reproducibly returns `Operation not
+permitted`; the recovery guard correctly holds the transition.
 The worker includes host substitutions and test-only fault controls; no TV
 payload, firmware checks or recovery guard is weakened.
 

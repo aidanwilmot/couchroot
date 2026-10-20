@@ -158,7 +158,7 @@ jobs:
       - name: ARM64 rehearsal and restart recovery (fresh containers)
         run: |
           for suite in native-rehearsal-integration native-restart-integration bootstrap-recovery-integration held-bootstrap-integration native-startup-fence; do
-            docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --security-opt seccomp=unconfined \
+            docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
               -v "$PWD:/repo:ro" -v "$RUNNER_TEMP/parity:/out:ro" -w /repo \
               -e COUCHROOT_PARITY_CONTAINER=1 -e COUCHROOT_REHEARSAL=1 -e COUCHROOT_STARTUP_FAULT=1 \
               -e NATIVE_WORKER=/out/worker -e MANAGED_PARITY=/out/managed/Harness.dll \
