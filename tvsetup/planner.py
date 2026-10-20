@@ -221,6 +221,8 @@ def plan(profile, choices, state, ledger=None):
             else:p.add('telemetry','file',state['files'].get(legacy),None,path=legacy,artifact='legacy-disable')
         package('telemetry','service','MiniTelemetry',{'/opt/usr/apps/MiniTelemetry/bin/'+n:compiled('service',h) for n,h in profile['service_artifacts'].items()})
         config_path = '/opt/usr/home/owner/apps_rw/MiniTelemetry/data/config.json'
+        if any(isinstance(state.get(key),dict) and state[key].get('unsupported') for key in ('pairing_config','legacy_pairing_config')):
+            p.unsupported('telemetry','Malformed private pairing configuration')
         if state['files'].get(config_path) in ('UNREADABLE','SYMLINK'): p.unsupported('telemetry','Private pairing is inaccessible; use --privileged-inspection for a bounded read through the existing root transport')
         if state['files'].get(config_path) is None: p.add('telemetry','pairing',None,'paired',path=config_path)
         enabled=config_path.rsplit('/',1)[0]+'/enabled'

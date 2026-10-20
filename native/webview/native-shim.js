@@ -1,4 +1,4 @@
-/* Native WebView adapter for the shipped Hub UI. Loaded after bridge.js only in
+/* Native WebView adapter for the shipped Hub UI. Loaded after model.js only in
  * the native bundle. It supplies HubBridge with the two platform calls it uses
  * (application.getAppsInfo and application.launch) over the native host's
  * channel: requests via document.title, replies via HubNativePlatform.receive.
@@ -25,13 +25,9 @@
       var data = JSON.parse(decodeURIComponent(match[1])), store = root.localStorage;
       var id = /^[A-Za-z0-9_.-]{1,256}$/, apps = data && data.shortcuts && data.shortcuts.apps;
       var valid = store && store.getItem('minimal-hub.shortcuts.v1') === null && data.shortcuts.version === 1 &&
-        Object.prototype.toString.call(apps) === '[object Array]' && apps.length <= 128 &&
-        apps.every(function (app) {
-          return app && id.test(app.id) && typeof app.name === 'string' && app.name.length && app.name.length <= 120 &&
-            !/[\x00-\x1f\x7f]/.test(app.name);
-        }) &&
+        root.HubModel && root.HubModel.nativeApps(apps) &&
         ['comfortable', 'compact'].indexOf(data.layout) >= 0 && ['off', '12h', '24h'].indexOf(data.clock) >= 0 &&
-        ['first', 'last'].indexOf(data.start) >= 0 && (data.selection === undefined || id.test(data.selection));
+        ['first', 'last'].indexOf(data.start) >= 0 && (data.selection === undefined || (!apps.length && data.selection === '') || id.test(data.selection));
       if (valid) {
         store.setItem('minimal-hub.shortcuts.v1', JSON.stringify({ version: 1, apps: apps.map(function (app) { return { id: app.id, name: app.name }; }) }));
         store.setItem('minimal-hub.layout.v1', data.layout);

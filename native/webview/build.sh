@@ -22,10 +22,10 @@ for program in host:minimal-hub-webview procsample:minimal-hub-procsample; do
 threads=
 [ "${program%%:*}" = host ] && threads="-Wl,--no-as-needed -lpthread -Wl,--as-needed"
 docker run --rm --platform linux/amd64 --network none \
-  -v "$source_dir:/src:ro" -v "$WEBVIEW_OUTPUT_DIR:/out" samsung-native-collector:bullseye \
+  -v "$source_dir/..:/src:ro" -v "$WEBVIEW_OUTPUT_DIR:/out" samsung-native-collector:bullseye \
   arm-linux-gnueabi-gcc -std=c99 -O2 -Wall -Wextra -Werror \
   -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp \
-  "/src/${program%%:*}.c" -ldl $threads -o "/out/${program#*:}"
+  "/src/webview/${program%%:*}.c" -ldl $threads -o "/out/${program#*:}"
 docker run --rm --platform linux/amd64 --network none \
   -v "$WEBVIEW_OUTPUT_DIR:/out:ro" samsung-native-collector:bullseye \
   arm-linux-gnueabi-readelf -V "/out/${program#*:}" | python3 -c '
@@ -49,7 +49,7 @@ done
 rm -rf "$WEBVIEW_OUTPUT_DIR/diagnostic" "$WEBVIEW_OUTPUT_DIR/hub"
 cp -R "$source_dir/diagnostic" "$WEBVIEW_OUTPUT_DIR/"
 # Native bundle: the shared unconfigured Hub sources minus the manifest, plus
-# the native adapter loaded directly after bridge.js. web/ is not modified.
+# the native adapter loaded directly after model.js. web/ is not modified.
 python3 - "$repo_dir" "$source_dir" "$WEBVIEW_OUTPUT_DIR/hub" <<'PY'
 import shutil, sys
 from pathlib import Path
@@ -69,9 +69,9 @@ if page.count('<link rel="stylesheet" href="style.css">') != 1:
     raise SystemExit('index.html no longer has exactly one style.css link')
 with open(out / 'style.css', 'a') as css:
     css.write('\n' + (source / 'native-shim.css').read_text())
-anchor = '<script src="bridge.js" defer></script>'
+anchor = '<script src="model.js" defer></script>'
 if page.count(anchor) != 1:
-    raise SystemExit('index.html no longer has exactly one bridge.js script tag')
+    raise SystemExit('index.html no longer has exactly one model.js script tag')
 (out / 'index.html').write_text(page.replace(anchor, anchor + '\n  <script src="native-shim.js" defer></script>'))
 print('Native Hub bundle:', ', '.join(sorted(p.name for p in out.iterdir())))
 PY

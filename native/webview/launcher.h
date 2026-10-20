@@ -583,40 +583,25 @@ static void launcher_shutdown(void) { if (launcher_mode) lw_close(); }
 /* Page failures in the boot role end the process so the supervisor restarts it. */
 static double failed_at;
 
+#include "../common/preferences.h"
+
 /* ---- One-time preference import: native file -> page fragment ----
  * The page applies it only when it has no saved shortcuts (native-shim.js). */
 static char *launcher_import_fragment(void) {
     const char *path = getenv("COUCHROOT_NATIVE_STATE");
     if (!path || !*path) return NULL;
-    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
-    if (fd < 0) return NULL;
-    static char raw[50001]; struct stat st; ssize_t n = -1;
-    if (!fstat(fd, &st) && S_ISREG(st.st_mode) && st.st_size < (off_t)sizeof raw) n = read(fd, raw, sizeof raw - 1);
-    close(fd);
-    if (n <= 0) { puts("preferences-import skipped=unreadable"); return NULL; }
-    raw[n] = 0;
-    int compact, clock, first, selected, used = 0;
-    if (sscanf(raw, "COUCHROOT1 %d %d %d %d%n", &compact, &clock, &first, &selected, &used) != 4 || raw[used] != '\n' ||
-        compact < 0 || compact > 1 || clock < 0 || clock > 2 || first < 0 || first > 1 || selected < 0) {
-        puts("preferences-import skipped=format"); return NULL;
-    }
+    struct stat prefs_stat;
+    if (lstat(path,&prefs_stat)<0 && errno==ENOENT) { puts("preferences-import skipped=missing"); return NULL; }
+    HubSaved saved;
+    if (!hub_load(&saved, path)) { puts("preferences-import skipped=format"); return NULL; }
+    int compact=saved.compact, clock=saved.clock, first=saved.first, selected=saved.selected;
     static char json[BRIDGE_OUTPUT_MAX];
     Text t = { json, 0, sizeof json, 0 }; json[0] = 0;
     char selection[257] = "";
     int count = 0;
     text_put(&t, "{\"shortcuts\":{\"version\":1,\"apps\":[");
-    for (char *line = raw + used + 1, *next; *line; line = next) {
-        next = strchr(line, '\n');
-        if (!next) { puts("preferences-import skipped=format"); return NULL; }
-        *next++ = 0;
-        char *tab = strchr(line, '\t');
-        if (!tab) { puts("preferences-import skipped=format"); return NULL; }
-        *tab = 0;
-        const char *name = tab + 1;
-        size_t length = strlen(name);
-        int clean = length && length <= 120;
-        for (const char *p = name; *p; p++) if ((unsigned char)*p < 0x20 || *p == 0x7f) clean = 0;
-        if (!bridge_app_id(line) || !clean || count >= 128) { puts("preferences-import skipped=entry"); return NULL; }
+    for (int i=0;i<saved.count;i++) {
+        const char *line=saved.apps[i].id, *name=saved.apps[i].name;
         if (count == selected) snprintf(selection, sizeof selection, "%s", line);
         text_put(&t, count++ ? ",{\"id\":" : "{\"id\":"); text_json(&t, line);
         text_put(&t, ",\"name\":"); text_json(&t, name); text_put(&t, "}");

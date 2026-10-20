@@ -35,7 +35,8 @@ def main():
     from .transport import Transport
     from .nas import NAS
     from .cli import verification
-    p=data['profile'];state=Transport(p,request.parent).snapshot(privileged=True)
+    p=data['profile']
+    with Transport(p,request.parent) as tv:state=tv.snapshot(privileged=True)
     result=verification(p,state)
     if data['nas'] is not None:
         result.update(NAS(request.parent,data['nas']).verify(p['id'],state['boot'],(state.get('preferences') or {}).get('enabled',True)))

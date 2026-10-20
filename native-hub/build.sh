@@ -7,7 +7,7 @@ mkdir -p "$NATIVE_HUB_OUTPUT_DIR"
 native_source=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 # Stream the source so host/container shared-filesystem caching cannot expose a
 # partially refreshed source file. Only the output directory is mounted.
-(cat "$native_source/native-guard.h"; cat "$native_source/hub-model.h"
+(cat "$native_source/native-guard.h"; cat "$native_source/../native/common/preferences.h"; sed '/include "..\/native\/common\/preferences.h"/d' "$native_source/hub-model.h"
  python3 - "$native_source" <<'PYBUILD'
 import pathlib,sys
 p=pathlib.Path(sys.argv[1])

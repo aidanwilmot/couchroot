@@ -26,6 +26,7 @@ function load({ search = '?host=native-webview', tizen, hash = '', storage = {},
   window.window = window;
   const context = vm.createContext(Object.assign(window, { Object, Error, Array, String, JSON }));
   if (HubBridge) { vm.runInContext(bridgeSource, context); }
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../../../web/model.js'), 'utf8'), context);
   vm.runInContext(shimSource, context);
   const fire = () => { const [id, timer] = [...timers][0]; timers.delete(id); timer.fn(); };
   return { window, titles, timers, fire, storage, replaced, classes };
@@ -200,3 +201,10 @@ for (const options of [{ tizen: { application: {} } }, { search: '' }, { HubBrid
   assert.deepEqual([...load(options).classes], ['native-hub-rendered']);
 }
 console.log('Native shim: rendered-Home reveal, presented-paint confirmation and fallbacks passed');
+
+// The same entry fixture also drives native storage, import and web-model tests.
+for (const vector of require('../../../tests/fixtures/preferences.json')) {
+  const data={shortcuts:{version:1,apps:vector.apps},layout:'comfortable',clock:'off',start:'last',selection:vector.apps.length?vector.apps[0].id:''};
+  const {storage}=load({hash:'#import='+encodeURIComponent(JSON.stringify(data))});
+  assert.equal(Object.hasOwn(storage,'minimal-hub.shortcuts.v1'),vector.native,vector.name);
+}

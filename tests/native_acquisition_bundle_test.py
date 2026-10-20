@@ -101,7 +101,7 @@ class NativeBundleTests(unittest.TestCase):
         def dispatch(argv, **kwargs):
             self.assertEqual(kwargs['timeout'],360)
             # Execute the real subprocess argument parser; stop at the root executor.
-            with patch.object(worker,'execute') as execute:
+            with patch.object(worker,'execute',return_value='done') as execute:
                 worker.main(argv[3:])
             p,script,index=execute.call_args.args
             self.assertIsNone(index)
@@ -110,7 +110,8 @@ class NativeBundleTests(unittest.TestCase):
             bundle=execute.call_args.kwargs['native_bundle']
             native_root.prepare(p,bundle,self.out,script)
             self.assertEqual((self.out/'libacquire.so').read_bytes(),b'fixture libacquire.so')
-            return 'done'
+            self.assertTrue(execute.call_args.kwargs['capture_result'])
+            return 'toolkit metadata'
         with patch('tvsetup.transport.run',side_effect=dispatch) as command:
             self.assertEqual(tv.root('echo once'),'done')
         self.assertEqual(command.call_count,1)
@@ -151,10 +152,11 @@ class NativeBundleTests(unittest.TestCase):
         self.assertEqual(tv.root_acquisition,dict(kind='managed'))
         def dispatch(argv, **kwargs):
             self.assertNotIn('--native-bundle',argv)
-            with patch.object(worker,'execute') as execute:worker.main(argv[3:])
+            with patch.object(worker,'execute',return_value='done') as execute:worker.main(argv[3:])
             self.assertEqual(execute.call_args.args[2],3)
             self.assertIn('nsenter -t 1 -m -- sh -c',execute.call_args.args[1])
             self.assertIsNone(execute.call_args.kwargs['native_bundle'])
+            self.assertFalse(execute.call_args.kwargs['capture_result'])
             return 'done'
         with patch('tvsetup.transport.run',side_effect=dispatch):
             self.assertEqual(tv.root('echo managed',namespace=True,cleanup_index=3),'done')
