@@ -12,8 +12,12 @@ CI runs web/setup checks on Node 22/24 and Python 3.12/3.14 on Linux, alongside
 managed fallback, native worker, ARM launcher builds and QN90A saver checks.
 A focused macOS 14/Python 3.12 job covers setup, installer and UI deployment.
 ARM64 parity runs the real managed/native workers and process observer in an
-isolated container. Actions and pulled images are pinned; Dependabot proposes
-weekly updates. CI runs on pull requests and `main`; use the manual workflow
+isolated container. Actions and pulled images are pinned. Dependabot proposes weekly Actions,
+npm, pip and Dockerfile updates; it does not update the Emscripten container or
+.NET SDK `docker run` image embedded in `validate.yml`. Review those manually.
+Docker runtime major updates and the test image's Python minor are deliberate.
+The collector's Bullseye base is excluded from automatic updates: changing its
+version or digest requires a fresh byte-identity review. CI runs on pull requests and `main`; use the manual workflow
 trigger for a branch without a PR. See the [remaining opt-in suites](tests/worker-parity/README.md#ci-coverage)
 and [validation details](docs/project/release-readiness.md#validation-and-reproducibility).
 

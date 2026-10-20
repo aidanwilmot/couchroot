@@ -174,14 +174,21 @@ fails early if the requested mount capability is still unavailable. It runs nati
 worker-parity and observer Python suites plus the JavaScript files using those
 three integration gates, sequentially to protect process-global test state.
 
+A second CI step enables `COUCHROOT_REHEARSAL=1` and `COUCHROOT_STARTUP_FAULT=1`
+for the 43 rehearsal/restart cases plus bootstrap recovery, held-bootstrap and
+startup-fence suites. Each file runs in a fresh `docker run --init` container with
+its own disposable `/opt`; only the checkout and built fixtures are mounted,
+read-only. The reaping init preserves the production process-absence checks.
+The worker includes host substitutions and test-only fault controls; no TV
+payload, firmware checks or recovery guard is weakened.
+
 These suites remain explicitly opt-in, not hardware acceptance:
 
 - `NATIVE_WORKER_LIFETIME_TEST`: two extended production-lifetime cases; the
   bounded CI run covers ordinary lifetime behavior but not the long soak.
-- `COUCHROOT_REHEARSAL` / `COUCHROOT_STARTUP_FAULT`: bootstrap recovery, held
-  bootstrap, startup fence, managed/native rehearsal and restart-fault integration.
-  They need separate fresh containers and distinct production/fault workers as
-  described above; the parity job does not supply that rehearsal orchestration.
+- `COUCHROOT_DEADLINE_TEST`: the slower operation-deadline integration scenario
+  in `tests/root-operation-deadlines.test.cjs`; ordinary deadline unit cases run
+  in the npm suite. Enable it explicitly for the additional timing run.
 - `NATIVE_CANDIDATE_BUILD`: ordinary packaged-candidate and observer-stage cases
   need the separately assembled ARM package and manifest, not the host-test worker.
 
