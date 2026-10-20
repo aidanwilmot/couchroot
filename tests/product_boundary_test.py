@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TREES = ('tvsetup', 'scripts', '.github', 'agent', 'telemetry', 'tools', 'native',
          'native-hub', 'launchers', 'setup')
 TYPES = ('.py', '.sh', '.yml', '.yaml', '.json', '.cs', '.csproj', '.cjs', '.js', '.c', '.h')
-RESEARCH = re.compile(r'''(?<![\w-])research/|['"](?:\.\./)*research['"]''')
+RESEARCH = re.compile(r'''(?<![\w-])research/|\.\./research(?=['"])|['"]research['"]''')
 EVIDENCE = {'telemetry/byte-identity.json', 'telemetry/agent-byte-identity.json',
             'telemetry/product-byte-identity.json'}
 
@@ -59,7 +59,8 @@ class ProductBoundaryTests(unittest.TestCase):
     def test_mutated_paths_and_segments_are_detected(self):
         mutations = ["REPO/'research'/name", "REPO.joinpath('research', name)",
                      "Path(REPO, 'research', name)", "os.path.join(root, 'research', name)",
-                     "require('../research/module')", 'sh research/build.sh']
+                     "require('../research/module')", 'sh research/build.sh',
+                     "Path('prefix/../research')"]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for tree in TREES:
