@@ -113,6 +113,8 @@ class RootSessionTests(unittest.TestCase):
                 self.assertNotIn('test-private.pem',uploads)
                 self.assertEqual([label for label,_ in calls], ['setup-root-stage','setup-root-operation','setup-root-cleanup']*3)
                 for label,script in calls:
+                    if label=='setup-root-stage':
+                        self.assertIn("stat -c '%U:%G:%a'",script)
                     if label=='setup-root-operation':
                         self.assertIn('trap ',script)
                         self.assertIn('chmod 600 ',script)

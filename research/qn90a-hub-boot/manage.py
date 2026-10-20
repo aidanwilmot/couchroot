@@ -5,6 +5,8 @@ from datetime import datetime,timezone
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 REPO=HERE.parents[1]
+sys.path.insert(0,str(REPO))
+from tvsetup.reboot import reboot_command
 PRIVATE=Path.home()/'.local/share/samsung-tv-research'
 STATE=PRIVATE/'qn90a/hub-boot'
 REMOTE='/opt/minimal-hub-boot'
@@ -52,7 +54,7 @@ def main():
  if args.action=='reboot':
   # Delayed once so the temporary root transport can restore its private mounts.
   # This has no postboot command and is never retried automatically.
-  root("cat /proc/sys/kernel/random/boot_id /proc/uptime\nnohup /bin/sh -c 'sleep 15; busctl --timeout=5 --system call org.tizen.system.deviced /Org/Tizen/System/DeviceD/Power org.tizen.system.deviced.power Reboot s \"Owner-authorized Minimal Hub full reboot validation\"' >/tmp/minimal-hub-reboot-request.log 2>&1 </dev/null &\necho Native-reboot-scheduled\n")
+  root("cat /proc/sys/kernel/random/boot_id /proc/uptime\n" + reboot_command("minimal-hub-reboot", "Owner-authorized Minimal Hub full reboot validation") + "echo Native-reboot-scheduled\n")
   return
  manifest=STATE/'installed.json'
  if args.action=='install':

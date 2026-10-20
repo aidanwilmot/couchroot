@@ -223,9 +223,8 @@ function createAgent(config, options = {}) {
       fs.rmdirSync(stage);
       stage = null;
     } catch (_) {}
-    try {
-      fs.rmdirSync(BASE + '/on-demand');
-    } catch (_) {}
+    // The shared archive directory persists; remove only this attempt's files.
+    // Removing an empty parent can race another setup/agent upload.
   }
   function schedule() {
     if (!running || timer || connected) return;

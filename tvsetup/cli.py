@@ -25,6 +25,7 @@ from .planner import plan, order_actions, Action
 from .transport import Transport
 from .site import load_site, configured_profile, binding
 from .observation import observe
+from .reboot import reboot_command
 
 
 def parser():
@@ -260,7 +261,9 @@ def reboot_verify(profile_value, tv, evidence, seconds, nas=None):
     atomic_json(path, record)
     # Submitted once. No postboot launcher, service start, key or settings operation.
     tv.root(
-        "nohup /bin/sh -c 'sleep 15; busctl --timeout=5 --system call org.tizen.system.deviced /Org/Tizen/System/DeviceD/Power org.tizen.system.deviced.power Reboot s \"Owner-authorized tv-setup reboot verification\"' >/tmp/tv-setup-reboot.log 2>&1 </dev/null &\n"
+        reboot_command(
+            "tv-setup-reboot", "Owner-authorized tv-setup reboot verification"
+        )
     )
     record["phase"] = "observing"
     atomic_json(path, record)
