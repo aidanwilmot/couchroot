@@ -18,7 +18,9 @@ class NativeEntry {
         // Identity children inherit the parent's private read-only code bind.
         if (args[0] == "identity") return native_entry(1);
         if (args[0] != "probe") return 2;
-        bool mounted = false;
+        bool mounted = false, archivesMounted = false, sharedMounted = false;
+        string stage = Path.GetDirectoryName(Code);
+        const string shared = "/home/owner/share/tmp/sdk_tools/on-demand";
         int result = 1;
         try {
             // Writable SDK mappings are refused on QN90A. Establish only the
@@ -32,9 +34,18 @@ class NativeEntry {
             mounted = true;
             if (mount(null,Code,null,new UIntPtr(4096|32|1),null) != 0)
                 throw new Exception("Read-only code remount failed");
+            if (mount(shared,stage+"/shared-on-demand",null,new UIntPtr(4096),null) != 0)
+                throw new Exception("Original archive directory bind failed");
+            sharedMounted = true;
+            if (mount(stage+"/archives",shared,null,new UIntPtr(4096),null) != 0)
+                throw new Exception("Private setup archive bind failed");
+            archivesMounted = true;
             result = native_entry(0);
         } catch (Exception e) { Console.Error.WriteLine("Native entry unconfirmed: "+e.Message); }
-        finally { if (mounted && umount2(Code,2) != 0) result = 1; }
+        finally {
+            if (archivesMounted && umount2(shared,2) != 0) result = 1;
+            if (sharedMounted && umount2(stage+"/shared-on-demand",2) != 0) result = 1;
+            if (mounted && umount2(Code,2) != 0) result = 1; }
         return result;
     }
 }

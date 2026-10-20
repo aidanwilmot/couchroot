@@ -3,7 +3,7 @@ import contextlib
 import io
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import subprocess
 import tempfile
 from types import SimpleNamespace
@@ -75,17 +75,17 @@ class RootSessionTests(unittest.TestCase):
                     def connect(self):pass
                     def require_device(self):pass
                     def capture(self,*args,**kwargs):
+                        if 'private/result.txt' in args[0]:
+                            self_outer.assertEqual(kwargs['callback_host'],'192.0.2.30')
+                            return SimpleNamespace(transport_returncode=0,output=payload+'\n[exit:0]\n')
                         return SimpleNamespace(transport_returncode=0,output='a'*64+'  /etc/passwd\n'+'b'*64+'  /usr/share/sdbd/public.pem\n[exit:0]\n')
                     def push(self,source,target):
                         uploads.append(source.name)
                         if source.name=='operation.sh':scripts.append(source.read_text())
                         if source.name in ('result.txt','read.tmp'):
                             self_outer.assertEqual(source.stat().st_mode & 0o777, 0o600)
-                    def pull(self,remote,local):
-                        self_outer.assertIsInstance(remote,PurePosixPath)
-                        self_outer.assertEqual(remote.name,'result.txt')
-                        self_outer.assertEqual(local.name,'downloaded-result.txt')
-                        local.write_text(payload)
+                    def pull(self,*args):
+                        raise AssertionError('owner-scoped pull cannot read SDK-private results')
                     def run(self,*args,**kwargs):
                         raise AssertionError('unscoped SDB run bypasses serial and pull error checks')
                 self_outer=self
@@ -117,19 +117,19 @@ class RootSessionTests(unittest.TestCase):
                         self.assertIn("stat -c '%U:%G:%a'",script)
                     if label=='setup-root-operation':
                         self.assertIn('trap ',script)
-                        self.assertIn('chmod 600 ',script)
+                        self.assertNotIn('chmod 600 ',script)
                         completed=script.split('completed() {',1)[1].split('}\ntrap',1)[0]
                         self.assertIn('RootIdentity.dll',completed)
-                        self.assertNotIn('result.txt',completed)
+                        self.assertNotIn('/private/result.txt',completed)
                         # Execute the actual generated trap locally, with all paths
                         # redirected into a temporary tree and rmdir forced to fail.
                         from tvsetup.root import BASE
-                        trap=script[script.index('cleanup() {'):script.index('\n',script.index("trap '"))]
+                        trap=script[script.index('completed() {'):script.index('\n',script.index("trap '"))]
                         for status in (0,7):
                             with tempfile.TemporaryDirectory() as local:
                                 base=Path(local);(base/'on-demand').mkdir()
-                                result=base/('codex-qn90a-root-proof' if device=='qn90a' else 'codex-namespace-proof')/'result.txt'
-                                result.parent.mkdir();result.write_text('failure output')
+                                result=base/('codex-qn90a-root-proof' if device=='qn90a' else 'codex-namespace-proof')/'private/result.txt'
+                                result.parent.mkdir(parents=True);result.write_text('failure output')
                                 command='set -eu\nrmdir() { return 1; }\n'+trap.replace(BASE,local+'/')+'\nexit '+str(status)
                                 finished=subprocess.run(['sh','-c',command],capture_output=True)
                                 self.assertEqual(finished.returncode,status,finished.stderr)
@@ -270,20 +270,16 @@ class RecoveryHygieneTests(unittest.TestCase):
             finally:os.umask(old)
             self.assertEqual(Path(result['artifact']).stat().st_mode & 0o777,0o600)
 
-    def test_download_is_unlinked_before_temp_cleanup_when_pull_is_interrupted(self):
+    def test_result_callback_interrupt_still_cleans_without_a_download(self):
         from tvsetup import root
         with tempfile.TemporaryDirectory() as tmp:
-            folder=Path(tmp);operation=folder/'operation';operation.mkdir()
+            folder=Path(tmp)
             p={**profile('qn90a'),'host':'192.0.2.11','device_id':'fixture-device'}
             client=Mock()
-            client.capture.return_value=SimpleNamespace(transport_returncode=0,output='a'*64+'  /etc/passwd\n'+'b'*64+'  /usr/share/sdbd/public.pem\n[exit:0]\n')
-            def pull(remote,local):
-                local.write_text('sensitive downloaded bytes');raise KeyboardInterrupt()
-            client.pull.side_effect=pull
+            client.capture.side_effect=[SimpleNamespace(transport_returncode=0,output='a'*64+'  /etc/passwd\n'+'b'*64+'  /usr/share/sdbd/public.pem\n[exit:0]\n'),KeyboardInterrupt()]
             toolkit=SimpleNamespace(device=lambda cfg:'192.0.2.30',SdbClient=lambda *a:client,capture=Mock())
             with patch.object(root,'PRIVATE',folder),patch.object(root,'load',return_value=toolkit), \
-                 patch.object(root,'prepare_artifacts',return_value={}), \
-                 patch.object(root.tempfile,'TemporaryDirectory',return_value=contextlib.nullcontext(str(operation))):
+                 patch.object(root,'prepare_artifacts',return_value={}):
                 with self.assertRaises(KeyboardInterrupt):root.execute(p,'false',capture_result=True)
-            self.assertFalse((operation/'downloaded-result.txt').exists())
+            client.pull.assert_not_called()
             self.assertEqual(toolkit.capture.call_args.args[-1],'setup-root-cleanup')
