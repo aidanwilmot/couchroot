@@ -18,5 +18,11 @@ with tempfile.TemporaryDirectory(prefix="couchroot-launcher-") as tmp:
     if first != second:
         raise SystemExit("Native launcher builds differ across output paths")
     for device in ("qn90a", "s90d"):
-        build_acquisition(profile(device), Path(tmp) / device, run, service=True)
+        for service in (False, True):
+            build_acquisition(
+                profile(device),
+                Path(tmp) / (device + ("-service" if service else "-setup")),
+                run,
+                service=service,
+            )
 print("PASS ARM launcher and both native acquisition bridges are reproducible")

@@ -7,6 +7,7 @@ This orchestration requires physical validation on each supported firmware.
 
 import base64
 import io
+import re
 from pathlib import Path, PurePosixPath
 import tarfile
 import tempfile
@@ -145,32 +146,119 @@ def prepare_artifacts(
     artifacts.update(
         {
             public: probe + "/public.pem",
-            archive: "on-demand/" + archive.name,
-            signature: "on-demand/" + signature.name,
+            archive: probe + "/archives/" + archive.name,
+            signature: probe + "/archives/" + signature.name,
         }
     )
     return artifacts
 
 
-def staging_script(prefix, archives, native=False):
-    """Share the launcher's fixed archive directory; own only our named files."""
-    on_demand = BASE + "on-demand"
-    slots = "".join(f"test ! -e {Q(p)}\ntest ! -L {Q(p)}\n" for p in archives)
+# Only setup-owned names; never enumerate/delete the agent's shared directory.
+STAGE_FILES = (
+    "NamespaceRootProbe.dll",
+    "RootIdentity.dll",
+    "NativeEntry.dll",
+    "NativeEntry.deps.json",
+    "NativeEntry.runtimeconfig.json",
+    "public.pem",
+    "operation.sh",
+    "passwd-view",
+    "result.txt",
+    "read.tmp",
+    "code/libacquire.so",
+    "private/result.txt",
+    "private/read.tmp",
+)
+
+
+def cleanup_script(prefix, probe, keep_result=False):
+    # Each removal is independent: a failure must not skip later cleanup.
+    files = (
+        *STAGE_FILES,
+        "archives/" + probe + ".tar.gz",
+        "archives/" + probe + ".tar.gz.signature",
+    )
+    if keep_result:
+        files = tuple(name for name in files if not name.startswith("private/"))
+    removals = ""
+    for name in files:
+        parent = name.rsplit("/", 1)[0] if "/" in name else ""
+        if parent:
+            removals += (
+                f"if test -L {Q(prefix + '/' + parent)}; then cleanup_failed=1; else\n"
+            )
+        removals += f"rm -f {Q(prefix + '/' + name)} || cleanup_failed=1\n"
+        if parent:
+            removals += "fi\n"
     return (
-        f"test ! -e {Q(prefix)}\ntest ! -L {Q(prefix)}\n"
-        + slots
+        "(\n"
+        + f"if test -L {Q(prefix)}; then exit 1; fi\n"
+        + f'if test -e {Q(prefix)} && test "$(stat -c %u {Q(prefix)})" != "$(id -u)"; then exit 1; fi\n'
+        + "cleanup_failed=0\n"
+        + removals
+        + "".join(
+            f"if test -d {Q(prefix + suffix)}; then rmdir {Q(prefix + suffix)} || cleanup_failed=1; fi\n"
+            for suffix in (
+                ("/code", "/archives", "/shared-on-demand")
+                if keep_result
+                else ("/private", "/code", "/archives", "/shared-on-demand", "")
+            )
+        )
+        + 'test "$cleanup_failed" = 0\n)\n'
+    )
+
+
+def staging_script(prefix, native=False):
+    """SDK owns disposable directories; uploads never enter shared on-demand."""
+    probe = prefix.rsplit("/", 1)[1]
+    on_demand = BASE + "on-demand"
+    # Refuse substituted directories, but discard our known stale files. No old
+    # executable or archive is reused: every upload is freshly hash-checked.
+    safe = "".join(
+        f"test ! -L {Q(prefix + suffix)}\n"
+        for suffix in ("", "/private", "/code", "/archives", "/shared-on-demand")
+    )
+    return (
+        safe
+        + f'if test -e {Q(prefix)}; then test "$(stat -c %u {Q(prefix)})" = "$(id -u)";\n'
+        + cleanup_script(prefix, probe)
+        + "fi\n"
         + "made_prefix=0\n"
         + "stage_rollback() {\n"
-        + f'if test "$made_prefix" = 1; then rmdir {Q(prefix + "/code")} 2>/dev/null || :; rmdir {Q(prefix)} 2>/dev/null || :; fi\n'
-        + "}\ntrap 'status=$?; stage_rollback; exit \"$status\"' EXIT\n"
-        # SDB/WRT uploads need directory traversal from a different UID. Protect
-        # credential-bearing files individually after upload, not the directory.
+        + 'if test "$made_prefix" = 1; then\n'
+        + cleanup_script(prefix, probe)
+        + "fi\n}\n"
+        + "trap 'status=$?; stage_rollback || :; exit \"$status\"' EXIT\n"
         + f"mkdir {Q(prefix)}\nmade_prefix=1\n"
         + f"if mkdir {Q(on_demand)} 2>/dev/null; then :; else test -d {Q(on_demand)}; test ! -L {Q(on_demand)}; fi\n"
+        + f"mkdir {Q(prefix + '/archives')} {Q(prefix + '/shared-on-demand')}\n"
         + (f"mkdir {Q(prefix + '/code')}\n" if native else "")
+        # Never upload/chmod a result file. Exclusive creation in an SDK-private
+        # directory protects it before the first credential byte is written.
+        + f"(umask 077; mkdir {Q(prefix + '/private')}; set -C; : >{Q(prefix + '/private/result.txt')}; : >{Q(prefix + '/private/read.tmp')})\n"
         + f"stat -c '%U:%G:%a' {Q(prefix)}\n"
         + "trap - EXIT\n"
     )
+
+
+def read_result(client, prefix, callback):
+    # SDB pull runs as owner; the SDK-created 0600 result intentionally denies
+    # that account. Use the existing serial-scoped SDK callback, without a raw
+    # result preview or a second credential-bearing download on the host.
+    path = Q(prefix + "/private/result.txt")
+    result = client.capture(
+        f'(set -eu; test ! -L {path}; test "$(wc -c <{path})" -le 16777216; cat {path})',
+        callback_host=callback,
+        bind_host=callback,
+        timeout=20,
+    )
+    match = re.search(r"\n\[exit:0\]\s*\Z", result.output)
+    if result.transport_returncode not in (0, 1) or not match:
+        raise Refused("Private root result retrieval failed")
+    output = result.output[: match.start()]
+    if len(output.encode()) > 16 * 1024 * 1024:
+        raise Refused("Oversized root result")
+    return output
 
 
 def execute(
@@ -211,13 +299,25 @@ def execute(
         if capture_result:
             script = (
                 "export TV_SETUP_READ_TMP="
-                + Q(prefix + "/read.tmp")
+                + Q(prefix + "/private/read.tmp")
                 + "\n(\n"
                 + script
                 + "\n) >"
-                + Q(prefix + "/result.txt")
+                + Q(prefix + "/private/result.txt")
                 + " 2>&1\n"
             )
+        legacy = "\n".join(
+            "rm -f "
+            + Q(prefix + "/shared-on-demand/" + probe + suffix)
+            + " || legacy_cleanup_failed=1"
+            for suffix in (".tar.gz", ".tar.gz.signature")
+        )
+        script = (
+            "legacy_cleanup_failed=0\n"
+            + legacy
+            + '\ntest "$legacy_cleanup_failed" = 0\n'
+            + script
+        )
         if session is not None and cleanup_index is None and native_bundle is None:
             from .root_session import prepared
 
@@ -229,12 +329,6 @@ def execute(
             artifacts = prepare_artifacts(
                 profile, folder, guards + script, probe, cleanup_index, native_bundle
             )
-        if capture_result:
-            for name in ("result.txt", "read.tmp"):
-                path = folder / name
-                path.write_bytes(b"")
-                path.chmod(0o600)
-                artifacts[path] = probe + "/" + name
         callback = toolkit.device(cfg)
         client = toolkit.SdbClient(PRIVATE / "bin/sdb", profile["host"])
         client.connect()
@@ -246,8 +340,6 @@ def execute(
             bind_host=callback,
             timeout=15,
         )
-        import re
-
         hashes = {
             m[2]: m[1]
             for m in re.finditer(r"(?m)^([a-f0-9]{64})  (/\S+)$", original.output)
@@ -262,54 +354,25 @@ def execute(
         stage = (
             guards
             + originals
-            + staging_script(
-                prefix,
-                [
-                    BASE + target
-                    for target in artifacts.values()
-                    if target.startswith("on-demand/")
-                ],
-                native_bundle is not None,
-            )
+            + staging_script(prefix, native=native_bundle is not None)
         )
-        toolkit.capture(cfg, callback, stage, 20, "setup-root-stage")
-        cleanup = "\n".join("rm -f " + Q(BASE + v) for v in artifacts.values())
-        if native_bundle is not None:
-            cleanup += f"\nif test -d {prefix}/code; then rmdir {prefix}/code; fi\n"
-        cleanup += f"\nrm -f {prefix}/passwd-view\nif test -d {prefix}; then rmdir {prefix}; fi\n"
-        result = folder / "downloaded-result.txt"
+        cleanup = cleanup_script(prefix, probe)
         captured = None
         try:
+            toolkit.capture(cfg, callback, stage, 20, "setup-root-stage")
             for source, target in artifacts.items():
                 client.push(source, PurePosixPath(BASE + target))
             check = "".join(
                 hash_guard(BASE + target, sha(source.read_bytes()))
                 for source, target in artifacts.items()
             )
-            command = guards + originals + "cleanup() {\n" + cleanup + "}\n"
-            if capture_result:
-                # Keep only the private result until retrieval; the remote trap
-                # still removes executable payloads even if the callback is lost.
-                completed = "\n".join(
-                    "rm -f " + Q(BASE + v)
-                    for v in artifacts.values()
-                    if v != probe + "/result.txt"
-                )
-                if native_bundle is not None:
-                    completed += f"\nrmdir {prefix}/code\n"
-                completed += f"\nrm -f {prefix}/passwd-view\n"
-                command += (
-                    "completed() {\n"
-                    + completed
-                    + "}\ntrap 'status=$?; completed || :; exit \"$status\"' EXIT\n"
-                )
-            else:
-                command += "trap cleanup EXIT\n"
-            command += check
-            if capture_result:
-                command += f"chmod 600 {prefix}/result.txt {prefix}/read.tmp\n"
+            completed = cleanup_script(prefix, probe, keep_result=True)
+            command = guards + originals + "completed() {\n" + completed + "}\n"
+            command += (
+                "trap 'status=$?; completed || :; exit \"$status\"' EXIT\n" + check
+            )
             if native_bundle is None:
-                command += f"/usr/bin/dotnet {prefix}/NamespaceRootProbe.dll {prefix}\n"
+                command += f"/usr/bin/dotnet {prefix}/NamespaceRootProbe.dll {prefix} --setup-archives\n"
             else:
                 command += f"env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus /usr/bin/dotnet {prefix}/NativeEntry.dll probe\n"
             failure = None
@@ -319,10 +382,7 @@ def execute(
                 failure = error
             if capture_result:
                 try:
-                    client.pull(PurePosixPath(prefix + "/result.txt"), result)
-                    if not result.is_file() or result.stat().st_size > 16 * 1024 * 1024:
-                        raise Refused("Missing or oversized root result")
-                    captured = result.read_text()
+                    captured = read_result(client, prefix, callback)
                 except Exception:
                     if failure is None:
                         raise
@@ -333,14 +393,19 @@ def execute(
             return captured
         finally:
             # Only known temporary files; never retry an uncertain operation.
-            # Unlink the downloaded credential-bearing bytes even if cleanup is
-            # interrupted or fails. Only the worker's sanitized result persists.
             try:
                 toolkit.capture(
                     cfg,
                     callback,
-                    "set -eu\n" + cleanup + originals + f"test ! -e {prefix}\n"
-                    'if ps -eo args | grep -E "[N]amespaceRootProbe.dll|[R]ootIdentity.dll|[N]ativeEntry.dll"; then exit 1; fi\n',
+                    "set -u\n"
+                    + cleanup
+                    + "cleanup_status=$?\n"
+                    + "".join(
+                        line + " || cleanup_status=1\n"
+                        for line in originals.splitlines()
+                    )
+                    + f"test ! -e {prefix} || cleanup_status=1\n"
+                    'if ps -eo args | grep -E "[N]amespaceRootProbe.dll|[R]ootIdentity.dll|[N]ativeEntry.dll"; then cleanup_status=1; fi\nexit "$cleanup_status"\n',
                     20,
                     "setup-root-cleanup",
                 )
@@ -348,5 +413,3 @@ def execute(
                 if captured is not None:
                     error.output = captured
                 raise
-            finally:
-                result.unlink(missing_ok=True)

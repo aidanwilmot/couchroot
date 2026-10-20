@@ -297,6 +297,27 @@ files may be inaccessible; this is unsupported inspection, not an absent file.
 private namespace and checks cleanup. Apply uses it for preparation. These are
 privileged staging operations even when the inspected state is read-only.
 
+Setup uploads into its own SDK-owned stage, not the agent-owned `on-demand`
+directory. The namespace probe temporarily binds the setup archives at the
+launcher's expected path; the agent's directory remains unchanged outside that
+namespace. Results and read scratch files are created by SDK with mode `0600`
+inside a `0700` subdirectory **before** any credentials are written. They are
+retrieved through the SDK callback, never uploaded or made owner/world-readable.
+
+Cleanup attempts each known setup file independently. On a later invocation,
+known stale stage files are discarded and all new uploads are hash-checked;
+unknown files and substituted directories cause refusal. Once root is established,
+only the model-specific legacy setup archive and signature in the original
+`on-demand` directory are removed. Agent archives are never enumerated or deleted.
+A lost connection can still leave cleanup unconfirmed: consult the private
+inspection evidence, and do not replay an uncertain operation automatically.
+
+Hardware acceptance for this staging change remains pending: the owner should
+repeat step 6 (`./tv-setup plan --device qn90a --privileged-inspection`), confirm the
+two leftover setup files are cleared and the agent's files remain intact, then
+repeat on S90D. Check the effective stage/result modes, complete privileged reads,
+original resource hashes and absence of setup leftovers on both models.
+
 Apply never implicitly reboots. `--activate` explicitly refreshes QN90A Hub or
 S90D's AT-HUB helper and records a manual launch. It is not autonomous boot proof.
 
