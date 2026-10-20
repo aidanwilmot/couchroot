@@ -123,6 +123,17 @@ jobs:
           '
       - run: dotnet build tests/root-agent-harness/Harness.csproj -c Release
       - run: docker run --rm --network none -v "$PWD/tests/root-agent-harness/bin/Release/net10.0:/app:ro" mcr.microsoft.com/dotnet/sdk:10.0.301-noble dotnet /app/Harness.dll
+  native-launcher-builds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: docker build -t samsung-native-collector:bullseye telemetry/native-collector
+      - run: NATIVE_HUB_OUTPUT_DIR="$RUNNER_TEMP/native-hub" sh native-hub/build.sh
+      - run: WEBVIEW_OUTPUT_DIR="$RUNNER_TEMP/native-webview" sh native/webview/build.sh
+      - run: sh native-hub/test.sh
   qn90a-web-saver:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

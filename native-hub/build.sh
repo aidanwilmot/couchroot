@@ -7,10 +7,14 @@ mkdir -p "$NATIVE_HUB_OUTPUT_DIR"
 native_source=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 # Stream the source so host/container shared-filesystem caching cannot expose a
 # partially refreshed source file. Only the output directory is mounted.
-(cat "$native_source/native-guard.h"; cat "$native_source/../native/common/preferences.h"; sed '/include "..\/native\/common\/preferences.h"/d' "$native_source/hub-model.h"
- python3 - "$native_source" <<'PYBUILD'
+(python3 - "$native_source" <<'PYBUILD'
 import pathlib,sys
 p=pathlib.Path(sys.argv[1])
+print('#define PLATFORM_TRACE_READS 1')
+print((p.parent/'native/common/platform-core.h').read_text())
+print((p/'native-guard.h').read_text().replace('#include "../native/common/platform-core.h"',''))
+print((p.parent/'native/common/preferences.h').read_text())
+print((p/'hub-model.h').read_text().replace('#include "../native/common/preferences.h"',''))
 s=(p/'prototype.c').read_text().replace('#include "hub-ui.h"', (p/'hub-ui.h').read_text().replace('#include "hub-model.h"','').replace('#include "hub-art.h"',(p/'hub-art.h').read_text().replace('#include "hub-cards.h"',(p/'hub-cards.h').read_text())))
 s=s.replace('#include "hub-profile.h"',(p/'hub-profile.h').read_text())
 s=s.replace('#include "hub-platform.h"',(p/'hub-platform.h').read_text()).replace('#include "hub-lifecycle.h"',(p/'hub-lifecycle.h').read_text())
@@ -32,4 +36,13 @@ assert versions, "No GLIBC version information found"
 bad=sorted(v for v in versions if tuple(map(int,v)) > (2,17))
 if bad: raise SystemExit("Unsupported GLIBC requirements: " + repr(bad))
 print("ARM build: GLIBC requirements <= 2.17")
+'
+
+# The UI/profiler needs libpthread present before loading the platform libraries.
+docker run --rm --platform linux/amd64 --network none \
+ -v "$NATIVE_HUB_OUTPUT_DIR:/out:ro" samsung-native-collector:bullseye \
+ arm-linux-gnueabi-readelf -d /out/native-hub | python3 -c '
+import sys
+if "[libpthread.so.0]" not in sys.stdin.read(): raise SystemExit("Missing startup libpthread dependency")
+print("ARM build: libpthread loaded at startup")
 '

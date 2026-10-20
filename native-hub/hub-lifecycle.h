@@ -102,7 +102,7 @@ static void platform_close(void){
  platform_pending=0;platform_used=0;lifecycle.empty=0;home_checking=0;home_requested=0;
 }
 static int platform_start(void){
- int pair[2];if(socketpair(AF_UNIX,SOCK_STREAM,0,pair))return 0;
+ int pair[2];if(platform_socketpair(pair))return 0;
  fcntl(pair[0],F_SETFD,FD_CLOEXEC);fcntl(pair[1],F_SETFD,FD_CLOEXEC);
  platform_pid=fork();
  if(platform_pid==0){

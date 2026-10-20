@@ -16,6 +16,10 @@
  * enumeration and /usr/bin/app_launcher with the AMD quiet-launch hint. */
 #include <fcntl.h>
 #include <spawn.h>
+#ifdef APP_LAUNCHER
+#define PLATFORM_APP_LAUNCHER APP_LAUNCHER
+#endif
+#include "../common/platform-core.h"
 /* Bullseye's ARM fcntl default symbol is GLIBC_2.28. QN90A needs the legacy
  * interface (as in native-hub/); only integer flags are used here. */
 #if defined(__linux__) && defined(__arm__) && defined(__GLIBC__)
@@ -179,7 +183,7 @@ static void bridge_start(int kind, const char *request, const char *app_id) {
     BridgeJob *job = &bridge_jobs[kind];
     if (job->pid > 0) { bridge_error(request, "UnknownError", "Another request is still running."); return; }
     int fds[2];
-    if (pipe(fds)) { bridge_error(request, "UnknownError", "Platform worker unavailable."); return; }
+    if (platform_pipe(fds)) { bridge_error(request, "UnknownError", "Platform worker unavailable."); return; }
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_adddup2(&actions, fds[1], 1);
@@ -191,7 +195,7 @@ static void bridge_start(int kind, const char *request, const char *app_id) {
     posix_spawn_file_actions_destroy(&actions);
     close(fds[1]);
     if (result) { close(fds[0]); bridge_error(request, "UnknownError", "Platform worker unavailable."); return; }
-    fcntl(fds[0], F_SETFL, O_NONBLOCK); fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+    fcntl(fds[0], F_SETFL, O_NONBLOCK);
     job->pid = pid; job->fd = fds[0]; job->length = 0; job->output[0] = 0;
     job->deadline = now() + (kind == 0 ? 7 : 9); /* Inside the page's 8 s / 10 s guards. */
     snprintf(job->request, sizeof job->request, "%s", request);
@@ -255,12 +259,7 @@ static int worker_write(const char *s) {
 }
 /* Same consumer boundary as web/bridge.js eligible(); bridge.js re-applies it. */
 static int worker_consumer(const char *id, const char *package) {
-    static const char *native[] = { "org.tizen.netflix-app", "org.tizen.primevideo", "org.tizen.browser", "com.samsung.tv.tvplus" };
-    for (size_t i = 0; i < sizeof native / sizeof *native; i++) if (!strcmp(id, native[i])) return 1;
-    if (!package || strlen(package) != 10) return 0;
-    for (const char *p = package; *p; p++)
-        if (!((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z'))) return 0;
-    return 1;
+    return platform_consumer(id, package, 1);
 }
 static void worker_clean(char *s, size_t limit) { /* No tabs/newlines/control bytes; bounded. */
     size_t n = 0;
@@ -282,7 +281,8 @@ static bool worker_app(void *app, void *unused) {
     if (worker_count == BRIDGE_MAX_APPS) { worker_overflow = 1; goto done; }
     worker_clean(name, 120); if (icon) worker_clean(icon, 512);
     char line[1024];
-    snprintf(line, sizeof line, "A\t%s\t%s\t%s\t%s\n", id, name, icon ? icon : "", package ? package : "");
+    int length = snprintf(line, sizeof line, "A\t%s\t%s\t%s\t%s\n", id, name, icon ? icon : "", package ? package : "");
+    if (length < 0 || (size_t)length >= sizeof line) { worker_overflow = 1; goto done; }
     if (worker_write(line)) worker_count++;
 done:
     free(id); free(name); free(package); free(icon);
@@ -309,18 +309,8 @@ static int worker_launch(const char *id) {
     if (!bridge_app_id(id)) return 20;
     alarm(8);
     char uid[16]; snprintf(uid, sizeof uid, "%u", (unsigned)getuid());
-    /* Verified on S90D/QN90A: AMD skips its spinner for this hint. Samsung Home
-     * keeps the ordinary launch, as in web/bridge.js. */
-    char *quiet[] = { "app_launcher", "-s", (char *)id, "-u", uid, "__NO_LOADING_LAUNCH", "enable", NULL };
-    char *plain[] = { "app_launcher", "-s", (char *)id, "-u", uid, NULL };
     pid_t pid; int status = 0;
-    /* stdout is the result pipe: app_launcher's own messages must not reach it. */
-    posix_spawn_file_actions_t actions;
-    posix_spawn_file_actions_init(&actions);
-    posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY, 0);
-    posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0);
-    int spawned = posix_spawn(&pid, APP_LAUNCHER, &actions, NULL, strcmp(id, BRIDGE_HOME_APP) ? quiet : plain, environ);
-    posix_spawn_file_actions_destroy(&actions);
+    int spawned = platform_spawn_app(&pid, APP_LAUNCHER, id, uid, strcmp(id, BRIDGE_HOME_APP) != 0, 1);
     if (spawned) return 21;
     while (waitpid(pid, &status, 0) < 0) if (errno != EINTR) return 22;
     if (!WIFEXITED(status) || WEXITSTATUS(status)) return 23;

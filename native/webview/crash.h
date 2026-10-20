@@ -41,7 +41,7 @@ static int crash_stat(const char *path, char *comm, size_t size, char *state, un
     if (!f) return 0;
     size_t n = fread(line, 1, sizeof line - 1, f); fclose(f); line[n] = 0;
     char *open = strchr(line, '('), *close = strrchr(line, ')');
-    if (!open || !close || close < open) return 0;
+    if (!size || !open || !close || close <= open || close[1] != ' ' || !close[2]) return 0;
     size_t length = (size_t)(close - open - 1) < size - 1 ? (size_t)(close - open - 1) : size - 1;
     memcpy(comm, open + 1, length); comm[length] = 0;
     for (char *c = comm; *c; c++) if (*c < 0x20 || *c == 0x7f) *c = '?';
