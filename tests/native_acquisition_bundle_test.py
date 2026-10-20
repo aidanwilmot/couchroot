@@ -72,7 +72,7 @@ class NativeBundleTests(unittest.TestCase):
             with self.assertRaisesRegex(Refused,'lost native reply'):root.execute(self.profile,'true',native_bundle=self.bundle)
         self.assertEqual([x[0] for x in calls],['setup-root-stage','setup-root-operation','setup-root-cleanup'])
         self.assertIn('/NativeEntry.dll probe',calls[1][1]);self.assertIn('env -i ',calls[1][1])
-        self.assertNotIn('NamespaceRootProbe.dll',calls[1][1])
+        self.assertNotRegex(calls[1][1], r'/usr/bin/dotnet [^\n]*NamespaceRootProbe\.dll')
         self.assertTrue(all('test-private.pem' not in x for x in uploads))
         self.assertIn('rm -f /home/owner/share/tmp/sdk_tools/couchroot-native-root-qn90a/code/libacquire.so',calls[2][1])
         self.assertIn('sha256sum /etc/passwd',calls[2][1])

@@ -10,6 +10,9 @@ from unittest.mock import patch
 
 from tvsetup import root
 
+STAT_ADAPTER = ('stat() { if test "$2" = %u; then /usr/bin/stat -f %u "$3"; '
+                'else /usr/bin/stat -f "%Su:%Sg:%Lp" "$3"; fi; }\n') if sys.platform == 'darwin' else ''
+
 
 class StagingTests(unittest.TestCase):
     def stage(self, base, native=False):
@@ -20,8 +23,7 @@ class StagingTests(unittest.TestCase):
         self.assertIn("(umask 077; mkdir " + root.Q(str(base/'probe/private')),script)
         self.assertIn("stat -c '%U:%G:%a' " + root.Q(str(base/'probe')), script)
         # macOS uses -f; only adapt stat for this local shell fixture.
-        adapter = 'stat() { if test "$2" = %u; then /usr/bin/stat -f %u "$3"; else /usr/bin/stat -f "%Su:%Sg:%Lp" "$3"; fi; }\n' if sys.platform == 'darwin' else ''
-        return subprocess.run(['sh', '-c', 'set -eu\n' + adapter + script], capture_output=True)
+        return subprocess.run(['sh', '-c', 'set -eu\n' + STAT_ADAPTER + script], capture_output=True)
 
     def test_upload_traverses_stage_and_keeps_agent_archives(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -48,7 +50,7 @@ class StagingTests(unittest.TestCase):
                         script=root.staging_script(str(base/'probe'), True)
                     # Fail the final mkdir after both top-level mkdirs succeeded.
                     script=script.replace("mkdir "+root.Q(str(base/'probe/code')), 'false')
-                    result=subprocess.run(['sh','-c','set -eu\n'+script],capture_output=True)
+                    result=subprocess.run(['sh','-c','set -eu\n'+STAT_ADAPTER+script],capture_output=True)
                 else: result=self.stage(base)
                 self.assertNotEqual(result.returncode, 0, result.stderr)
                 if kind != 'prefix': self.assertFalse((base/'probe').exists())
