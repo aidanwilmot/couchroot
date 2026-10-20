@@ -97,7 +97,7 @@ class IdentityTests(unittest.TestCase):
         import importlib.util
         import sys
         from tvsetup.common import REPO
-        toolkit_dir = REPO / 'research/toolkit'
+        toolkit_dir = REPO / 'tools/toolkit'
         class UpstreamClient:
             def __init__(self, executable, host):
                 self.serial = f'{host}:26101'
@@ -132,9 +132,9 @@ class IdentityTests(unittest.TestCase):
             def connect(self): pass
         upstream=SimpleNamespace(SdbClient=UpstreamClient,route_callback_host=lambda host:(_ for _ in ()).throw(AssertionError('routed before identity check')))
         package=SimpleNamespace(sdb=upstream)
-        with patch.object(sys, 'path', [str(REPO/'research/toolkit'), *sys.path]), \
+        with patch.object(sys, 'path', [str(REPO/'tools/toolkit'), *sys.path]), \
              patch.dict(sys.modules,{'samsung_tv_root':package,'samsung_tv_root.sdb':upstream}):
-            spec=importlib.util.spec_from_file_location('identity_fixture',REPO/'research/toolkit/samsung_tv.py')
+            spec=importlib.util.spec_from_file_location('identity_fixture',REPO/'tools/toolkit/samsung_tv.py')
             module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         for name in ('qn90a','s90d'):
             p=profile(name)

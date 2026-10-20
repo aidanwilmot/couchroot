@@ -41,13 +41,13 @@ def build(profile, folder, script, cleanup_index=None):
     for name in ('NamespaceRootProbe', 'RootIdentity'):
         project = folder / name; project.mkdir()
         if name == 'NamespaceRootProbe':
-            source = (REPO / 'research/namespace-root-probe/Program.cs').read_text()
+            source = (REPO / 'agent/namespace-root-probe/Program.cs').read_text()
         elif cleanup_index is None:
             source = operation_source(script)
         else:
             if profile['id'] != 'qn90a' or type(cleanup_index) is not int or not 0 <= cleanup_index < 10:
                 raise Refused('Invalid reviewed QN90A cleanup target')
-            source = (REPO / 'research/qn90a-app-cleanup/Program.cs').read_text()
+            source = (REPO / 'setup/qn90a-app-cleanup/Program.cs').read_text()
             defines = 'HOME_CLEANUP_' + str(cleanup_index)
         (project / 'Program.cs').write_text(source)
         csproj = project / (name + '.csproj')

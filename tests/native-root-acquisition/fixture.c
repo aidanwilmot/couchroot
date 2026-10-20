@@ -21,7 +21,7 @@ static int fake_execv(const char *, char *const []);
 #ifndef SERVICE_ACQUISITION
 #define PROBE_NAME "couchroot-native-root-qn90a"
 #endif
-#include "../../research/native-root-acquisition/acquire.c"
+#include "../../agent/native-acquisition/acquire.c"
 #undef open
 #undef unshare
 #undef mount

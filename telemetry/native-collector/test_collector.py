@@ -14,7 +14,7 @@ import threading
 import time
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'research/s90d-telemetry/nas'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'telemetry/s90d/nas'))
 from metrics import validate, calculate
 
 BINARY = os.environ.get('COLLECTOR_BINARY', '/out/collector-host')

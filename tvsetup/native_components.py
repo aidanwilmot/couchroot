@@ -40,7 +40,7 @@ def build_component(model, kind, destination, command=run):
         raise Refused('Unknown native component')
     recovery = kind == 'sdk-recovery'
     source = REPO / ('agent/recovery/native' if recovery
-                     else 'research/native-root-acquisition')
+                     else 'agent/native-acquisition')
     artifact = 'sdk-host-recovery' if recovery else 'libacquire.so'
     inputs = ('recovery.c' if recovery else 'acquire.c', 'build.sh')
     folder = new_directory(destination)

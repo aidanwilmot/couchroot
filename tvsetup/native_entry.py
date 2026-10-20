@@ -14,7 +14,7 @@ from .common import REPO, Refused, atomic_json, sha
 from .native_root import inspect_library
 from .root_launcher import IMAGE
 
-SOURCE = REPO / 'research/native-root-acquisition/entry'
+SOURCE = REPO / 'agent/native-acquisition/entry'
 ARTIFACT = 'libentry-receipt.so'
 CODE_PATH = '/opt/usr/apps/MiniRoot01/res/wgt/payload/' + ARTIFACT
 LOADERS = {'qn90a': '/usr/bin/launchpad-loader', 's90d': '/usr/bin/app-defined-loader'}

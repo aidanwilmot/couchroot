@@ -7,13 +7,13 @@ subprocess.run(['dotnet','build',str(root.parents[1]/'telemetry/s90d-collector')
 artifact=root.parents[1]/'telemetry/s90d-collector/bin/Release/net6.0/Telemetry.dll'
 digest=hashlib.sha256(artifact.read_bytes()).hexdigest()
 out=root/'bin/helper';out.mkdir(parents=True,exist_ok=True)
-base=root.parent/'system-screensaver/boot'
+base=root.parents[1]/'native/system-screensaver/boot'
 source=(base/'Program.cs').read_text()
 assert source.count('static int Main() {')==1 and source.count('return diagnosticStatus;')==1
 source=source.replace('static int Main() {','static int Main() {\n        Splash.Start();')
 source=source.replace('return diagnosticStatus;','Splash.Finish();\n        TelemetryBoot.Start();\n        return diagnosticStatus;')
 (out/'Program.cs').write_text(source)
-(out/'Splash.cs').write_text((root.parent/'s90d-splash/Splash.cs').read_text())
+(out/'Splash.cs').write_text((root.parents[1]/'native/s90d-splash/Splash.cs').read_text())
 (out/'Boot.csproj').write_text((base/'Boot.csproj').read_text())
 (out/'TelemetryBoot.cs').write_text('''using System;
 using System.IO;

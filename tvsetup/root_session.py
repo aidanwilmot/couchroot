@@ -7,7 +7,7 @@ def prepared(profile, folder, probe):
     from .root import prepare_artifacts, operation_source
     folder.mkdir(parents=True,exist_ok=True,mode=0o700)
     key=sha(json.dumps(profile,sort_keys=True).encode()+operation_source(None).encode()+
-            (REPO/'research/namespace-root-probe/Program.cs').read_bytes())
+            (REPO/'agent/namespace-root-probe/Program.cs').read_bytes())
     manifest=folder/'manifest.json'
     if manifest.exists():
         data=json.loads(manifest.read_text())

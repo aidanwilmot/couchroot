@@ -16,7 +16,7 @@ from .nas import NAS
 from .site import binding, configured_profile, load_site
 from .transport import Transport, hash_guard
 
-SOURCE = REPO/'research/native-telemetry/netdata'
+SOURCE = REPO/'tools/netdata-trial'
 
 
 def configuration(code, ram):

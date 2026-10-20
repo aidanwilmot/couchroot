@@ -50,7 +50,7 @@ entry and further runtime rewrites are deferred, not release prerequisites.
 native-only agent. Signed packages still require managed builds. Installation
 and updates accept `--native-bundle` for setup acquisition through the existing
 engine; uncertain native requests are never replayed through managed fallback.
-See [usage](../../../../research/native-root-acquisition/README.md#build-and-use).
+See [usage](../../../../agent/native-acquisition/README.md#build-and-use).
 
 ## Historical qualification and implementation notes
 
@@ -356,11 +356,11 @@ readiness, plus provider loss followed by coordinator restart; see
 The 0.7.33 package adds an opt-in read-only SDK entry probe. Both direct vendor-loader
 trials returned without a capability receipt; native-only entry remains unqualified.
 Both target codec checks passed and cleanup/restoration is verified; see
-[entry investigation](../../../../research/native-root-acquisition/entry/results.json).
+[entry investigation](../../../../agent/native-acquisition/entry/results.json).
 Subsequent managed diagnostics on 0.7.36 establish that the receipt cannot map
 from writable VDFS or tmpfs on either TV, but executes from a private read-only
 bind. This narrows the native-entry prerequisite without qualifying SDK entry;
-see [mapping evidence](../../../../research/native-root-acquisition/entry/mapping-results.json).
+see [mapping evidence](../../../../agent/native-acquisition/entry/mapping-results.json).
 Each passed native disable/enable, worker transport loss and coordinator restart,
 then automatic recovery after coordinator interruption at both the submitted and
 ready native-bootstrap phases. Recovery retired the original receipt without
@@ -421,7 +421,7 @@ now restores external SDK access independently of a suspended coordinator and
 disabled worker on both TVs, then restores loopback. The original .NET utility
 remains installed and unchanged.
 
-The [native setup acquisition pilot](../../../../research/native-root-acquisition/README.md)
+The [native setup acquisition pilot](../../../../agent/native-acquisition/README.md)
 also passes independent SDK acquisition and bounded failure cleanup on both TVs
 with the worker disabled. Namespace/archive and command logic now run in C under
 an explicit opt-in. A small managed capability-entry/read-only-code-mount bridge
@@ -2601,8 +2601,8 @@ with 127 platform/environment skips, and Node passed 360 with 125 skips. The
 next adapter work is service acquisition and held-bootstrap integration with
 the existing transaction-recovery model. Fully native capability entry, broader
 lifecycle qualification and removal of the managed fallback remain open.
-See [contract](../../../../research/native-root-acquisition/README.md) and
-[aggregate results](../../../../research/native-root-acquisition/results.json).
+See [contract](../../../../agent/native-acquisition/README.md) and
+[aggregate results](../../../../agent/native-acquisition/results.json).
 
 ### Native service acquisition and held bootstrap — 2026-10-15
 
@@ -2803,7 +2803,7 @@ Validation: 263 macOS Python tests passed with 136 platform skips; all ten focus
 Linux tests passed. Node passed 377 tests with 135 skips. Rebuilt native/managed
 fixtures passed six rehearsal and eleven restart cases in fresh containers. One
 initial macOS process-group deadline test errored; focused and full reruns passed.
-See [entry evidence](../../../../research/native-root-acquisition/entry/results.json). This is
+See [entry evidence](../../../../agent/native-acquisition/entry/results.json). This is
 an implemented and tested diagnostic with unsuccessful native-entry qualification,
 not .NET-free acquisition or native-default completion.
 
@@ -3027,7 +3027,7 @@ reboot or standby behavior changed. Raw evidence, vendor binaries and diagnostic
 builds remain private. `npm test` passed 404 tests with 143 skips. No Python,
 client, setup or production source changed, so the previously passing fresh
 container suites were not repeated for this evidence-only milestone. See
-[mapping results](../../../../research/native-root-acquisition/entry/mapping-results.json).
+[mapping results](../../../../agent/native-acquisition/entry/mapping-results.json).
 
 Next: inspect a native vendor namespace-preparation path before another SDK
 loader trial. That path must prove code mapping and actual SDK capabilities
@@ -3558,7 +3558,7 @@ required capabilities. QN90A's corresponding overlay path remains unestablished.
 Both `launchpad-starter` binaries were also inspected without invocation. Their
 shared-state initialization and fixed process-pool execution make them unsuitable
 as isolated caller-code hosts. No new entry was qualified, and the original
-preload trial was not repeated. See the [entry findings and provenance](../../../../research/native-root-acquisition/entry/vendor-preparation-results.json).
+preload trial was not repeated. See the [entry findings and provenance](../../../../agent/native-acquisition/entry/vendor-preparation-results.json).
 
 Keep the managed entry, worker fallback and independent rescue. Further native
 entry work needs an earlier isolated mapping mechanism. Production performance

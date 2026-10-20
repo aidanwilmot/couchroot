@@ -36,7 +36,7 @@ def accepted(device):
         for id in ('MiniSave01','MiniHubBoot'):pkg(id)
         state.update(key_filter=[HOME_DESIRED],managed_app=[[HUB,None,None],['MiniHubBoot.Start',None,None]],task_filter=AIRPLAY_RULES+[BOOT_RULE])
         from tvsetup.common import REPO
-        state['files'].update({'/opt/usr/apps/MiniSave01/res/wgt/'+n:sha((REPO/'research/qn90a-screensaver/web'/n).read_bytes()) for n in ('index.html','saver.js','icon.png')})
+        state['files'].update({'/opt/usr/apps/MiniSave01/res/wgt/'+n:sha((REPO/'native/qn90a-screensaver/web'/n).read_bytes()) for n in ('index.html','saver.js','icon.png')})
         state['files'].update({'/opt/usr/apps/MiniSave01/res/wgt/'+n:h for n,h in p['saver_generated'].items()})
         state['files'].update({'/opt/usr/apps/MiniHubBoot/bin/'+n:h for n,h in p['boot_artifacts'].items()})
         root='/opt/usr/home/owner/apps_rw/MiniTelemetry/data'

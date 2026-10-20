@@ -3,7 +3,7 @@
 Dashboard: **http://192.0.2.20:20491/**. Netdata remains the existing NAS node at
 **http://192.0.2.20:20489/**. The TrueNAS custom app keeps its historical
 `s90d-telemetry` name; renaming it would add migration risk without changing its
-function. Source remains in `research/s90d-telemetry/` so existing references work.
+function. Source remains in `telemetry/s90d/` so existing references work.
 
 ## Current QN90A scope — 2026-10-17
 
@@ -59,7 +59,7 @@ signing identity and runtime (.NET 6 for S90D, .NET Core 3.1 for QN90A).
 
 The no-window relay is required because Samsung disallows direct cross-package
 service launches. Source lives in the historical
-`telemetry/qn90a-startup` and `research/qn90a-telemetry-startup/bootstrap` directories and is shared by
+`telemetry/qn90a-startup` and `telemetry/qn90a-bootstrap` directories and is shared by
 both builds. The service does not launch at boot by itself: it starts when Hub
 first opens. Existing model-specific Hub startup remains independent.
 
@@ -216,8 +216,8 @@ native reboot do not establish those behaviors.
 
 ## Historical validation before service unification
 
-Automated: `python3 -m unittest discover -s research/s90d-telemetry/tests -v`,
-`npm test`, `python3 research/s90d-telemetry/build.py`, and
+Automated: `python3 -m unittest discover -s telemetry/s90d/tests -v`,
+`npm test`, `python3 telemetry/s90d/build.py`, and
 `node research/archive/s90d-telemetry/dashboard/verify.cjs`.
 
 Deployed and verified on 2026-09-20:

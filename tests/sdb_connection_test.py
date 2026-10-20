@@ -4,7 +4,7 @@ import tempfile
 import time
 import unittest
 
-from research.toolkit.sdb_connection import connect_if_needed
+from tools.toolkit.sdb_connection import connect_if_needed
 
 
 class Result:

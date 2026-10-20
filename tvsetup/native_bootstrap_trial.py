@@ -100,7 +100,7 @@ def serve(identity):
     if doc['target_binding'] != binding(site, doc['device']): raise Refused('Pilot binding changed')
     token = read_json(folder/'payload/config.json')['token']
     peer = configured_profile(doc['device'], site)['host']
-    spec = importlib.util.spec_from_file_location('pilot_metrics', REPO/'research/s90d-telemetry/nas/metrics.py')
+    spec = importlib.util.spec_from_file_location('pilot_metrics', REPO/'telemetry/s90d/nas/metrics.py')
     metrics = importlib.util.module_from_spec(spec); spec.loader.exec_module(metrics)
     write_lock = threading.Lock()
 

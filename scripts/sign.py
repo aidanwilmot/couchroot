@@ -43,7 +43,7 @@ source.mkdir()
 for name, data in hub_sources(device, device_id=args.device_id).items():
     (source / name).write_bytes(data)
 if args.boot_trace:
-    trace = (root / 'research/s90d-boot-inventory/dashboard-trace.js').read_text()
+    trace = (root / 'web/boot-trace.js').read_text()
     (source / 'boot-trace.js').write_text('window.HUB_BOOT_TRACE_MS = ' + str(args.boot_trace_ms) + ';\n' + trace)
     index = source / 'index.html'
     index.write_text(index.read_text().replace('<title>', '<script src="boot-trace.js"></script>\n  <title>', 1))

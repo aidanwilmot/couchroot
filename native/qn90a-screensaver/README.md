@@ -88,11 +88,11 @@ sessions. Enable/disable requests were never patched.
 With Emscripten installed (tested with Debian Bookworm's package):
 
 ```sh
-sh research/qn90a-screensaver/build-web.sh
+sh native/qn90a-screensaver/build-web.sh
 node --test research/archive/qn90a-screensaver/verify-web.cjs
-~/.local/share/samsung-tv-research/.venv/bin/python research/qn90a-screensaver/verify-timeout.py
+~/.local/share/samsung-tv-research/.venv/bin/python native/qn90a-screensaver/verify-timeout.py
 node research/archive/system-screensaver/verify-shader.cjs
-python3 research/qn90a-screensaver/package.py
+python3 native/qn90a-screensaver/package.py
 ```
 
 Generated `core.js` and `shaders.js` are ignored. Signing uses the existing private

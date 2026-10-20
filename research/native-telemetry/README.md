@@ -57,7 +57,7 @@ of this initial test.
 
 ## Netdata comparison
 
-[`netdata/`](netdata/README.md) contains the pinned upstream ARM preparation and
+[`netdata/`](../../tools/netdata-trial/README.md) contains the pinned upstream ARM preparation and
 minimal trial configuration. It uses the same guarded transport with a separate
 journal and a hard runtime deadline, while normal telemetry continues. It is a
 feasibility benchmark, not a production installation or a replacement for the

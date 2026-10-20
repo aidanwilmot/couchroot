@@ -139,7 +139,7 @@ normal display environment. Samsung creates the window and sends its own
 visibility acknowledgement; no synthetic readiness marker or timeout patch is
 used.
 
-`research/s90d-splash/build-helper.py` creates a separate variant of the existing
+`native/s90d-splash/build-helper.py` creates a separate variant of the existing
 AT-HUB/screensaver helper. The normal helper source remains unchanged. It calls
 `Splash.Start` before existing diagnostic/renderer work and `Splash.Finish` before
 exit. At this stage AT-HUB remained Type=simple and this splash addition did not

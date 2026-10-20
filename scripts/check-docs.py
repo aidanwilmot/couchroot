@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # These are build outputs, deliberately absent from a source checkout. Their
 # producing build and byte reproducibility are checked by qn90a-web-saver CI.
 GENERATED = {
-    'research/qn90a-screensaver/web/core.js': 'research/qn90a-screensaver/build-web.sh',
-    'research/qn90a-screensaver/web/shaders.js': 'research/qn90a-screensaver/build-web.sh',
+    'native/qn90a-screensaver/web/core.js': 'native/qn90a-screensaver/build-web.sh',
+    'native/qn90a-screensaver/web/shaders.js': 'native/qn90a-screensaver/build-web.sh',
 }
 
 

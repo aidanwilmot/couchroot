@@ -84,9 +84,9 @@ def hub_sources(device, *, device_id=None):
 
 
 def source_revision():
-    roots = [REPO/'research/toolkit', REPO/'tvsetup', REPO/'web',REPO/'research/s90d-telemetry',REPO/'telemetry/s90d-collector',REPO/'research/system-screensaver',
-             REPO/'research/s90d-splash',REPO/'research/namespace-root-probe',REPO/'research/qn90a-app-cleanup',REPO/'research/qn90a-screensaver',REPO/'research/qn90a-hub-boot/relay',
-             REPO/'telemetry/qn90a-startup', REPO/'research/qn90a-telemetry-startup/bootstrap']
+    roots = [REPO/'tools/toolkit', REPO/'tvsetup', REPO/'web',REPO/'telemetry/s90d',REPO/'telemetry/s90d-collector',REPO/'native/system-screensaver',
+             REPO/'native/s90d-splash',REPO/'agent/namespace-root-probe',REPO/'setup/qn90a-app-cleanup',REPO/'native/qn90a-screensaver',REPO/'native/qn90a-boot-relay',
+             REPO/'telemetry/qn90a-startup', REPO/'telemetry/qn90a-bootstrap']
     files = sorted({p for root in roots for p in root.rglob('*') if p.is_file() and p.suffix in ('.py','.json','.cs','.c','.h','.js','.css','.html','.xml','.csproj','.glsl') and not {'bin','obj'} & set(p.relative_to(root).parts) and p.name not in ('core.js','shaders.js')})
     files=sorted(set(files)|{REPO/'tools/qn90a/root-check.py',REPO/'global.json',REPO/'Directory.Build.props'})
     return sha(b''.join(str(p.relative_to(REPO)).encode()+b'\0'+p.read_bytes() for p in files))
@@ -102,10 +102,10 @@ def artifact_group(path):
 
 def component_revision(kind):
     groups = {
-        'boot': ['research/qn90a-hub-boot/relay'],
-        'service': ['telemetry/qn90a-startup','research/qn90a-telemetry-startup/bootstrap','telemetry/s90d-collector'],
-        'helper': ['research/system-screensaver/boot','research/s90d-splash/Splash.cs','telemetry/s90d-collector','research/s90d-telemetry/build.py'],
-        'saver': ['research/qn90a-screensaver/core.c','research/qn90a-screensaver/fragment.glsl','research/qn90a-screensaver/build-web.sh','research/system-screensaver/renderer.c','research/system-screensaver/simulation.h','research/system-screensaver/mesh.h']}
+        'boot': ['native/qn90a-boot-relay'],
+        'service': ['telemetry/qn90a-startup','telemetry/qn90a-bootstrap','telemetry/s90d-collector'],
+        'helper': ['native/system-screensaver/boot','native/s90d-splash/Splash.cs','telemetry/s90d-collector','telemetry/s90d/build.py'],
+        'saver': ['native/qn90a-screensaver/core.c','native/qn90a-screensaver/fragment.glsl','native/qn90a-screensaver/build-web.sh','native/system-screensaver/renderer.c','native/system-screensaver/simulation.h','native/system-screensaver/mesh.h']}
     files=[]
     for name in groups[kind]:
         path=REPO/name
@@ -159,7 +159,7 @@ def plan(profile, choices, state, ledger=None):
         package('hub','hub','MiniHub001',expected)
     if device=='qn90a':
         if 'screensaver' in want:
-            expected = {'/opt/usr/apps/MiniSave01/res/wgt/'+n:sha((REPO/'research/qn90a-screensaver/web'/n).read_bytes()) for n in ('index.html','saver.js','icon.png')}
+            expected = {'/opt/usr/apps/MiniSave01/res/wgt/'+n:sha((REPO/'native/qn90a-screensaver/web'/n).read_bytes()) for n in ('index.html','saver.js','icon.png')}
             expected.update({'/opt/usr/apps/MiniSave01/res/wgt/'+n:h for n,h in {n:compiled('saver',h) for n,h in profile['saver_generated'].items()}.items()})
             package('screensaver','saver','MiniSave01',expected)
         if 'home' in want:

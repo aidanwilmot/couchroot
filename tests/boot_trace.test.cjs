@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const source = fs.readFileSync('research/s90d-boot-inventory/dashboard-trace.js', 'utf8');
+const source = fs.readFileSync('web/boot-trace.js', 'utf8');
 function fixture(storage, entries) {
   let ms = 10, finish;
   const events = {};

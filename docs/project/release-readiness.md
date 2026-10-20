@@ -317,7 +317,7 @@ explicitly; importing them during Python discovery does not execute their tests.
 python3 scripts/check-dependencies.py --component offline
 python3 scripts/check-dependencies.py --component web
 python3 -m unittest discover -s tests -p '*_test.py'
-python3 -m unittest discover -s research/s90d-telemetry/tests
+python3 -m unittest discover -s telemetry/s90d/tests
 npm ci
 npx playwright install chromium
 npm test

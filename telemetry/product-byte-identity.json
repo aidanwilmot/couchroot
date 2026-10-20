@@ -1,0 +1,408 @@
+{
+  "baseline": "140e2b24d8d1b4d79a86465543d20bf4795ad950",
+  "scope": "Local builds only; no signing, deployment or hardware acceptance",
+  "sdk": "10.0.301",
+  "managed": [
+    {
+      "before": "research/autonomous-root/payload/bin/Release/netcoreapp3.1/SamsungTvRootAgent.dll",
+      "after": "agent/payload/bin/Release/netcoreapp3.1/SamsungTvRootAgent.dll",
+      "sha256": "d72564a5a142428d7933b63cab58681c80baa3d1cfad6e1c1de087d803a2864f"
+    },
+    {
+      "before": "research/autonomous-root/payload/bin/Release/net6.0/SamsungTvRootAgent.dll",
+      "after": "agent/payload/bin/Release/net6.0/SamsungTvRootAgent.dll",
+      "sha256": "6476653d3ad1eaa78d8f569100220fc66028d95da9dcde00535f8fb51586e9fb"
+    },
+    {
+      "before": "research/autonomous-root/payload/bin/Release/netcoreapp3.1/SamsungTvArchiveRoot.dll",
+      "after": "agent/payload/bin/Release/netcoreapp3.1/SamsungTvArchiveRoot.dll",
+      "sha256": "61a1b850a307de4175f065865ea69adb3a770e06a6554843feb0119fa5b1d4c3"
+    },
+    {
+      "before": "research/autonomous-root/payload/bin/Release/net6.0/SamsungTvArchiveRoot.dll",
+      "after": "agent/payload/bin/Release/net6.0/SamsungTvArchiveRoot.dll",
+      "sha256": "9c4bca0ce5c6fe23e5821ec35c46d40f65c1bfb885bb65d30287d31dbb3e8214"
+    },
+    {
+      "before": "tvsetup/native/bin/Release/netcoreapp3.1/Control.dll",
+      "after": "tvsetup/native/bin/Release/netcoreapp3.1/Control.dll",
+      "sha256": "f076d90ca1c366708ed90d3de2d12a36400467f4fb69c6c82c1171ab4bcc9805"
+    },
+    {
+      "before": "tvsetup/native/bin/Release/net6.0/Control.dll",
+      "after": "tvsetup/native/bin/Release/net6.0/Control.dll",
+      "sha256": "b2e43b9f69da22d295a87c3e74b66062e03b40b5c95fd138cc8bc81529028d2e"
+    },
+    {
+      "before": "research/namespace-root-probe/bin/Release/net6.0/NamespaceRootProbe.dll",
+      "after": "agent/namespace-root-probe/bin/Release/net6.0/NamespaceRootProbe.dll",
+      "sha256": "2ea665e680368c9945cc311d359a552730e83a7620fe595815b43f3f40f02927"
+    },
+    {
+      "before": "research/qn90a-root-probe/bin/Release/netcoreapp3.1/NamespaceRootProbe.dll",
+      "after": "agent/qn90a-root-probe/bin/Release/netcoreapp3.1/NamespaceRootProbe.dll",
+      "sha256": "8980ad6385b197e3def2f98b6dbc4f45893722eb5234fac32443bf00d8b97e88"
+    },
+    {
+      "before": "research/root-identity-probe/bin/Release/net6.0/RootIdentity.dll",
+      "after": "agent/root-identity-probe/bin/Release/net6.0/RootIdentity.dll",
+      "sha256": "ce581848e7b3603301bb604ab5913c25d583fa7798d61bd486f82ba1a1ba0079"
+    },
+    {
+      "before": "research/qn90a-root-probe/bin/Release/netcoreapp3.1/RootIdentity.dll",
+      "after": "agent/qn90a-root-probe/bin/Release/netcoreapp3.1/RootIdentity.dll",
+      "sha256": "29622fdf81c9ce6a0672a2da00445131f83bfcfa853e83a0f95739e8ebe0eb69"
+    },
+    {
+      "before": "research/qn90a-hub-boot/relay/bin/Release/netcoreapp3.1/Boot.dll",
+      "after": "native/qn90a-boot-relay/bin/Release/netcoreapp3.1/Boot.dll",
+      "sha256": "b0d72cd90b3c59c2c72c57ba2207a3ba5843f63d428127aa41008b1fd933a0b0"
+    },
+    {
+      "before": "telemetry/qn90a-startup/bin/Release/netcoreapp3.1/Service.dll",
+      "after": "telemetry/qn90a-startup/bin/Release/netcoreapp3.1/Service.dll",
+      "sha256": "beaedde924454ac1102584fcd455670c445b8e456d7a440c07b8c35f02c1145b"
+    },
+    {
+      "before": "telemetry/qn90a-startup/bin/Release/net6.0/Service.dll",
+      "after": "telemetry/qn90a-startup/bin/Release/net6.0/Service.dll",
+      "sha256": "2e10267cd93fef51f9a230bc40637dab54d1699b2c6e16250753d4bba174e61b"
+    },
+    {
+      "before": "research/qn90a-telemetry-startup/bootstrap/bin/Release/netcoreapp3.1/Bootstrap.dll",
+      "after": "telemetry/qn90a-bootstrap/bin/Release/netcoreapp3.1/Bootstrap.dll",
+      "sha256": "4aa9efa7f6035370270d333c6622f916a36e902b861083082101956ff7f9c101"
+    },
+    {
+      "before": "research/qn90a-telemetry-startup/bootstrap/bin/Release/net6.0/Bootstrap.dll",
+      "after": "telemetry/qn90a-bootstrap/bin/Release/net6.0/Bootstrap.dll",
+      "sha256": "25ce981afa14f0eb73a55ec656c62dd94c83282fbaa3fad414d7f9068868fc59"
+    },
+    {
+      "before": "telemetry/s90d-collector/bin/Release/net6.0/Telemetry.dll",
+      "after": "telemetry/s90d-collector/bin/Release/net6.0/Telemetry.dll",
+      "sha256": "cd9ab4d487f7e375cb5e9f1810532a329b77954edc5dbe9c64368fc565bde445"
+    },
+    {
+      "before": "telemetry/s90d-collector/bin/Release/netcoreapp3.1/Telemetry.dll",
+      "after": "telemetry/s90d-collector/bin/Release/netcoreapp3.1/Telemetry.dll",
+      "sha256": "d26b66db34a3e17b227ed26d59f44bbddf8c4845868a24e2d4259ff03df451fc"
+    },
+    {
+      "before": "research/s90d-telemetry/bin/helper/bin/Release/net6.0/Boot.dll",
+      "after": "telemetry/s90d/bin/helper/bin/Release/net6.0/Boot.dll",
+      "sha256": "183b17fef5291df45a27dd0fcef07d5bbc92decbe0eb169f62b3006da69c1c76"
+    },
+    {
+      "before": "generated/qn90a/NamespaceRootProbe.dll",
+      "after": "generated/qn90a/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/qn90a/RootIdentity.dll",
+      "after": "generated/qn90a/RootIdentity.dll",
+      "sha256": "ca08e4af9ad5dc0385cfab9878f5f6182c231a33cd73db57dde7eec29428ba58"
+    },
+    {
+      "before": "generated/s90d/NamespaceRootProbe.dll",
+      "after": "generated/s90d/NamespaceRootProbe.dll",
+      "sha256": "832060787c2e4c4b0909cb7175fe0dd546a854c621dba98696ce96790ecd892b"
+    },
+    {
+      "before": "generated/s90d/RootIdentity.dll",
+      "after": "generated/s90d/RootIdentity.dll",
+      "sha256": "41f5b34ecf1df3523bb6c20b10dfc49478a2301fedcf17bade184ab1f3750043"
+    },
+    {
+      "before": "generated/cleanup-0/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-0/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-0/RootIdentity.dll",
+      "after": "generated/cleanup-0/RootIdentity.dll",
+      "sha256": "46c8404419143945f4533628c389bd979473ffe7cb5eea02f311cf7cb9a42e85"
+    },
+    {
+      "before": "generated/cleanup-1/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-1/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-1/RootIdentity.dll",
+      "after": "generated/cleanup-1/RootIdentity.dll",
+      "sha256": "583fb5dfc5d05c23af79ba084e4734ac3c70ae95507298a1f8bafda54ba7a03d"
+    },
+    {
+      "before": "generated/cleanup-2/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-2/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-2/RootIdentity.dll",
+      "after": "generated/cleanup-2/RootIdentity.dll",
+      "sha256": "cba775ec9edb25eeb23a32495a955508e075e7b1cef813aa5fbc19eef0b76042"
+    },
+    {
+      "before": "generated/cleanup-3/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-3/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-3/RootIdentity.dll",
+      "after": "generated/cleanup-3/RootIdentity.dll",
+      "sha256": "3849e673412f095e86c82fd91f0155a40a9d062e6d4a61f5b55cf37c9184f468"
+    },
+    {
+      "before": "generated/cleanup-4/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-4/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-4/RootIdentity.dll",
+      "after": "generated/cleanup-4/RootIdentity.dll",
+      "sha256": "967bd335fe7300e0b48ccdb67535c09ff4e1c9f044a92b311359523e487cf468"
+    },
+    {
+      "before": "generated/cleanup-5/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-5/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-5/RootIdentity.dll",
+      "after": "generated/cleanup-5/RootIdentity.dll",
+      "sha256": "7d4e7993a8a01c5c30e8595a5b3290b1c045e7bb20cc85ef35911b0dccb70088"
+    },
+    {
+      "before": "generated/cleanup-6/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-6/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-6/RootIdentity.dll",
+      "after": "generated/cleanup-6/RootIdentity.dll",
+      "sha256": "1dd1ae8c307451664907138f5ab6fdb0030dfb4a011c1e463ca967517ebde955"
+    },
+    {
+      "before": "generated/cleanup-7/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-7/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-7/RootIdentity.dll",
+      "after": "generated/cleanup-7/RootIdentity.dll",
+      "sha256": "1f229dbfd34c57ed17514754fbddb91b36d86d60d61e95d77eff55ad7ab9268a"
+    },
+    {
+      "before": "generated/cleanup-8/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-8/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-8/RootIdentity.dll",
+      "after": "generated/cleanup-8/RootIdentity.dll",
+      "sha256": "0eb72fd7a564f3572ab7e77c3c8315e99d72da0272375bf6fded04ff2b008c2a"
+    },
+    {
+      "before": "generated/cleanup-9/NamespaceRootProbe.dll",
+      "after": "generated/cleanup-9/NamespaceRootProbe.dll",
+      "sha256": "476681b1d5eba10b09e0fd3207cacd4eeac54fd16e9bb9a4052b4a2ca99ec8bc"
+    },
+    {
+      "before": "generated/cleanup-9/RootIdentity.dll",
+      "after": "generated/cleanup-9/RootIdentity.dll",
+      "sha256": "9b9074e35b6d3a0daf89a183a5b06d6e0323a5454170799ab3d855f7fa23546c"
+    }
+  ],
+  "hub_files": {
+    "qn90a": {
+      "index.html": "a45a8bc3a274375dc005ac24d0a535f6f302f40ae2993efd808f30889071aa96",
+      "style.css": "29bc543bce94376e8a65134517075fa0c7553d95ff964bd4ae3b96e068572b13",
+      "bridge.js": "ce65756407d1ccf7a6accd3ea2dad7d58955e89fdf868481ade5268e6112ca16",
+      "presentation.js": "1dd07be303382f36bece658b7722eedf70952c0d1c609b75e5ee4f50759cd192",
+      "model.js": "c99503c673e5d11fba7d85891b4b83a1ec655e756591d0318abf766c6ce01a2e",
+      "feedback.js": "373866501f1dfd96b75d9d330cf68f8a0e215f071ca743ef3134d2cc8d42204d",
+      "telemetry.js": "3aa861a10342b6be0c62a176273b58f346ec68293502443b1b3de3f4e6b5e3a9",
+      "hub.js": "45930ee1886ae8effbc5700ca2ed50eccedabda553759cc5a8076defd34fba5d",
+      "icon.png": "35e84f49b4a1d5f826f5972335530c82de7a7d2d83f90e7181477d0fb49a06a5",
+      "config.xml": "694a200ffc789292148a864968985f725674faa594bf2d44e89ff4b02a9bd22c",
+      "telemetry-service.js": "7273d17a6d57a356f8b6ac158da535edc594f7fe9fea7b615fecebc42e22c19e",
+      "qn90a-idle.js": "5fe904149b4ade5fbf2bc9ce490a535eff59ece9ad6cd4179120a21a6b6ae6e5"
+    },
+    "s90d": {
+      "index.html": "79753ae6410dcf27687de75c713a95c7cbe99db34cd0deb970f7a49e648ea274",
+      "style.css": "29bc543bce94376e8a65134517075fa0c7553d95ff964bd4ae3b96e068572b13",
+      "bridge.js": "ce65756407d1ccf7a6accd3ea2dad7d58955e89fdf868481ade5268e6112ca16",
+      "presentation.js": "1dd07be303382f36bece658b7722eedf70952c0d1c609b75e5ee4f50759cd192",
+      "model.js": "c99503c673e5d11fba7d85891b4b83a1ec655e756591d0318abf766c6ce01a2e",
+      "feedback.js": "373866501f1dfd96b75d9d330cf68f8a0e215f071ca743ef3134d2cc8d42204d",
+      "telemetry.js": "84a12640e6d6c7b7ff5e83576bb57155192bb157d60863ca3e1044733d4c0944",
+      "hub.js": "45930ee1886ae8effbc5700ca2ed50eccedabda553759cc5a8076defd34fba5d",
+      "icon.png": "35e84f49b4a1d5f826f5972335530c82de7a7d2d83f90e7181477d0fb49a06a5",
+      "config.xml": "694a200ffc789292148a864968985f725674faa594bf2d44e89ff4b02a9bd22c",
+      "telemetry-service.js": "7273d17a6d57a356f8b6ac158da535edc594f7fe9fea7b615fecebc42e22c19e"
+    }
+  },
+  "reproducibility": {
+    "native_assemblies": 42,
+    "native_cross_path_match": true,
+    "unsigned_packages": {
+      "s90d": {
+        "sha256": "f47044bd3fbaad12f92ef69cd1a07e0543d965a324f8cd6fe5f32e42b6024f4f",
+        "match": true
+      },
+      "qn90a": {
+        "sha256": "672fc9bc5478894081118deac5afca81b2ec6274fd334d7a33ae55360764f6a1",
+        "match": true
+      }
+    }
+  },
+  "native_outputs": {
+    "hub/native-hub": "14c0aae18c6f54232374358e1695274efbab801e526062bb7e78b2aabee3a9be",
+    "launcher/app-launcher": "4ba756c8b725ba2e375ca02608c9ca7579f6d6275c4ed96348ba93bf5b8a6d55",
+    "launcher/bench": "af04cc51d5199b395127909f1046245c4fb4056b593051ef2f079cf470c63515",
+    "observer/process-observer": "4677bef3f0137b792d6de2dd22fa91d32476db5b48c26213db8699b596e4e574",
+    "recovery/sdk-host-recovery": "09089ed952ca68f963eaea21342d3eb5c577a68e2549dff751d02b6b21d3562d",
+    "webview/diagnostic/index.html": "3e525ac2766043f0c6942423983100a83d3e302fe6dc0591ffb49c0eba247c32",
+    "webview/diagnostic/probe.js": "d1b9fc17029de5407669e72eb38bba004f364099c3797fda26ac5fd527d3d582",
+    "webview/diagnostic/style.css": "18e4809b6b5a84b04b9d30fa8a30792d00134b9c06dbc045e6b899d1b2ce38dd",
+    "webview/hub/bridge.js": "ce65756407d1ccf7a6accd3ea2dad7d58955e89fdf868481ade5268e6112ca16",
+    "webview/hub/feedback.js": "373866501f1dfd96b75d9d330cf68f8a0e215f071ca743ef3134d2cc8d42204d",
+    "webview/hub/hub.js": "45930ee1886ae8effbc5700ca2ed50eccedabda553759cc5a8076defd34fba5d",
+    "webview/hub/icon.png": "35e84f49b4a1d5f826f5972335530c82de7a7d2d83f90e7181477d0fb49a06a5",
+    "webview/hub/index.html": "c8d20d4cd7282b16a27b441484c3cf94428297d8590849ae1acef62fcc0f3996",
+    "webview/hub/model.js": "c99503c673e5d11fba7d85891b4b83a1ec655e756591d0318abf766c6ce01a2e",
+    "webview/hub/native-shim.js": "e20b5e9a8fbd2225afc57f2cd76fcc08cc19ca6a3701fe3500d8bb8f90e24335",
+    "webview/hub/presentation.js": "1dd07be303382f36bece658b7722eedf70952c0d1c609b75e5ee4f50759cd192",
+    "webview/hub/style.css": "972df59b0f33ca5526c96f393f3bf01e08d946d3624c4b940b36f09e7e13f946",
+    "webview/hub/telemetry.js": "497aef83e7168483347d8a8cf1ae0ac012cd9026d03b58958217859f93591d26",
+    "webview/minimal-hub-procsample": "cc6aa440123022e51006f80fdabfcacd3d70edcadb55926d1c47b8b926f5bc46",
+    "webview/minimal-hub-webview": "08f0f635d7518c05e1db861fdedf01bff431d84c234eff132780a602b471f801",
+    "worker/accept": "c33cd223da22be292b0d474fa013695f75972e1f47b711bde5e6b0586c7979ac",
+    "worker/accept-fault-test": "9fae9745f3a742f7d403070c9d45cc7b5f589216570ac77cd2619e726c065194",
+    "worker/app-launcher": "4ba756c8b725ba2e375ca02608c9ca7579f6d6275c4ed96348ba93bf5b8a6d55",
+    "worker/bench": "87d66607f3728141400d879da6ce763ff39d7e34aa3276c8475b59ab8708b625",
+    "worker/observe": "aaf22cfbf18a8ca2761eb7939003682ac00432c40c281bacda420c48425787a0",
+    "worker/worker": "c82a7f37497a69a407e0fa5c99b09c454bb3e0dcc31a45a1c2994fcb68532ca5",
+    "worker/worker-fault-test": "af8da383f9217c0be7f869f307815fb6e1b408b122979687bac8935499e106ce"
+  },
+  "additional_native": {
+    "acquire-qn90a/libacquire.so": "8f4084ec5d3d33b035a6bdc16314b9db578fe0fe1706cac3c09048f4cf034dd9",
+    "acquire-s90d/libacquire.so": "8fd127f2039b8901f92de542625eb1ff9fefcd90f8c0c2758a158a60acea7b91",
+    "acquire-service/libacquire.so": "bdc66898796ee0e86235bbccf87e2761783d6b66b3da758569e3022c3a8f2a09",
+    "entry-qn90a/libentry-receipt.so": "92961a03dc7a68439616073662c1b4903318fab89eaeb9ea3080a2280f7f1c89",
+    "entry-s90d/libentry-receipt.so": "7cf278b040579e0a4422e7af0370256f3a59a981e7445f7027715366f021e41a",
+    "libgl-demo-app.so": "db5656113275e613d9475c09af1c768cd8ad57d60eac31213214684721cc418a"
+  },
+  "bridges": {
+    "qn90aFalse": {
+      "NativeEntry.deps.json": {
+        "sha256": "b16f93050f0640f082ad7219fb972d2b16039f7428f739cfcac88a191d5add4a",
+        "size": 403
+      },
+      "NativeEntry.dll": {
+        "sha256": "b01a1d70d3a9a50743f570b9d46dff11fa6b0329f9041f33a54b1a4502551318",
+        "size": 6144
+      },
+      "NativeEntry.runtimeconfig.json": {
+        "sha256": "4efe04a54651f7451ce2242c8cf9ed3d4c7bcdcdc01678b5a8df7cd80382cfd5",
+        "size": 279
+      },
+      "libacquire.so": {
+        "abi": "armv7-eabi5-softfp",
+        "glibc_max": "2.17.0",
+        "needed": [
+          "ld-linux.so.3",
+          "libc.so.6"
+        ],
+        "sha256": "8f4084ec5d3d33b035a6bdc16314b9db578fe0fe1706cac3c09048f4cf034dd9",
+        "size": 16968
+      }
+    },
+    "qn90aTrue": {
+      "NativeEntry.deps.json": {
+        "sha256": "b16f93050f0640f082ad7219fb972d2b16039f7428f739cfcac88a191d5add4a",
+        "size": 403
+      },
+      "NativeEntry.dll": {
+        "sha256": "9769125442c02c54fd74fa3232856afd189fbbb7c1663ec02ec2fc9f63ef92dd",
+        "size": 7168
+      },
+      "NativeEntry.runtimeconfig.json": {
+        "sha256": "4efe04a54651f7451ce2242c8cf9ed3d4c7bcdcdc01678b5a8df7cd80382cfd5",
+        "size": 279
+      },
+      "libacquire.so": {
+        "abi": "armv7-eabi5-softfp",
+        "glibc_max": "2.17.0",
+        "needed": [
+          "ld-linux.so.3",
+          "libc.so.6"
+        ],
+        "sha256": "bdc66898796ee0e86235bbccf87e2761783d6b66b3da758569e3022c3a8f2a09",
+        "size": 17328
+      }
+    },
+    "s90dFalse": {
+      "NativeEntry.deps.json": {
+        "sha256": "af9013c42a3fa4317c376e5e5216ea9bec338833c75e652f96449a58c89284be",
+        "size": 403
+      },
+      "NativeEntry.dll": {
+        "sha256": "64105b47a216c3f473e5ff0495dd2e306fefa235f871d27ecbf7d4cd57065395",
+        "size": 6144
+      },
+      "NativeEntry.runtimeconfig.json": {
+        "sha256": "537ff2667f51d2fe990dd3e83987f2474d0c27dbc0210ff2a1142c7568f69e22",
+        "size": 272
+      },
+      "libacquire.so": {
+        "abi": "armv7-eabi5-softfp",
+        "glibc_max": "2.17.0",
+        "needed": [
+          "ld-linux.so.3",
+          "libc.so.6"
+        ],
+        "sha256": "8fd127f2039b8901f92de542625eb1ff9fefcd90f8c0c2758a158a60acea7b91",
+        "size": 16968
+      }
+    },
+    "s90dTrue": {
+      "NativeEntry.deps.json": {
+        "sha256": "af9013c42a3fa4317c376e5e5216ea9bec338833c75e652f96449a58c89284be",
+        "size": 403
+      },
+      "NativeEntry.dll": {
+        "sha256": "813b01642537a92ea319efafb9cc2434e27e5eb10c4c91d87daf3c239bd882ff",
+        "size": 7168
+      },
+      "NativeEntry.runtimeconfig.json": {
+        "sha256": "537ff2667f51d2fe990dd3e83987f2474d0c27dbc0210ff2a1142c7568f69e22",
+        "size": 272
+      },
+      "libacquire.so": {
+        "abi": "armv7-eabi5-softfp",
+        "glibc_max": "2.17.0",
+        "needed": [
+          "ld-linux.so.3",
+          "libc.so.6"
+        ],
+        "sha256": "bdc66898796ee0e86235bbccf87e2761783d6b66b3da758569e3022c3a8f2a09",
+        "size": 17328
+      }
+    }
+  },
+  "saver": {
+    "emscripten": "3.1.64",
+    "cross_path_match": true,
+    "files": {
+      "core.js": "680d5f539270c0ce52fc1f393811f43123f5944a5ed5f07daab5bd4e274ec490",
+      "shaders.js": "3a4c2617965b8504cf9f668c618a470130ea722c021f5df5e8fc11cff4815a3a"
+    },
+    "reviewed_digest_matches": {
+      "core.js": false,
+      "shaders.js": true
+    }
+  },
+  "notes": "All before/after bytes match. The pre-existing core.js reviewed profile-pin mismatch occurs on baseline and relocated builds; trusted profile pins remain unchanged."
+}

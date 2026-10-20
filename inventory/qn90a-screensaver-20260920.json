@@ -55,5 +55,5 @@
     "qn90a/final-dashboard-inspect.log",
     "sessions/20260920T185902.495672Z-qn90a-final-screensaver-cleanup-and-routes"
   ],
-  "rollback": "research/qn90a-screensaver/ROLLBACK.md"
+  "rollback": "native/qn90a-screensaver/ROLLBACK.md"
 }
