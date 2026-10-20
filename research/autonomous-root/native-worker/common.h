@@ -32,7 +32,9 @@
 #include "descriptor-budget.h"
 #endif
 #define CHUNK 1048576
-#define FRAME (4 * CHUNK)
+#define FRAME (8 * CHUNK)
+#define PREAUTH_BYTES 512
+static int exec_timeout_valid(int64_t timeout, int bootstrap) { return timeout >= 100 && timeout <= (bootstrap ? 25000 : 300000); }
 #define LIMIT INT64_C(2147483648)
 typedef void J;
 #define JSON_APIS(X)                                                           \
@@ -391,7 +393,7 @@ static void exact(Wire *w, void *v, size_t n) {
     n -= k;
   }
 }
-static char *line(Wire *w) {
+static char *bounded_line(Wire *w, size_t maximum) {
   size_t n = 0, cap = 4096;
   char *p = allocate(cap);
   for (;;) {
@@ -399,7 +401,7 @@ static char *line(Wire *w) {
     exact(w, &c, 1);
     if (c == '\n')
       break;
-    if (!c || n == FRAME)
+    if (!c || n == maximum)
       fatal("invalid frame length");
     if (n + 1 == cap) {
       cap *= 2;
@@ -413,6 +415,7 @@ static char *line(Wire *w) {
   p[n] = 0;
   return p;
 }
+static char *line(Wire *w) { return bounded_line(w, FRAME); }
 static void mac(Wire *w, const char *payload, char out[65]) {
   size_t n = strlen(payload);
   unsigned char *m = allocate(33 + n), d[32];

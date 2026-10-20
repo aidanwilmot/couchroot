@@ -12,7 +12,7 @@ async function fixture(mode,run){
  }
  const module={exports:{}};
  vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,setTimeout,clearTimeout,require:name=>{
-  if(name==='./vendor/root-agent')return {RootAgentServer:Server};
+  if(name==='./root-agent')return {RootAgentServer:Server};
   if(name==='./retirement-launch')return {submitRetirement:async options=>{
    launches++;launchOptions=options;
    const token=fs.readFileSync(options.tokenFile);

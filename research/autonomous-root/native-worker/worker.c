@@ -883,12 +883,15 @@ int main(int argc, char **argv) {
   setsockopt(w.fd, SOL_SOCKET, SO_SNDTIMEO, &limit, sizeof limit);
   if (connect(w.fd, (struct sockaddr *)&addr, sizeof addr))
     fatal("connect");
-  char *hello = line(&w), *f[10];
+  struct timeval handshake = {10, 0};
+  setsockopt(w.fd, SOL_SOCKET, SO_RCVTIMEO, &handshake, sizeof handshake);
+  char *hello = bounded_line(&w, PREAUTH_BYTES), *f[10];
   if (fields(hello, f, 10) != 2 || strcmp(f[0], "SAMSUNG-TV-ROOT/1") ||
       !unhex(f[1], w.nonce, 32))
     fatal("hello");
   free(hello);
-  char smack[128];
+  setsockopt(w.fd, SOL_SOCKET, SO_RCVTIMEO, &limit, sizeof limit);
+  char smack[257];
 #ifdef NATIVE_WORKER_TEST
   strcpy(smack, "host-test-without-Smack");
 #else
@@ -968,7 +971,7 @@ int main(int argc, char **argv) {
       int64_t timeout;
       size_t len;
       unsigned char *command = decode(f[3], &len);
-      if (!decimal(f[2], &timeout) || timeout < 100 || timeout > (bootstrap_mode ? 25000 : 300000) ||
+      if (!decimal(f[2], &timeout) || !exec_timeout_valid(timeout, bootstrap_mode) ||
           !command || !len || len > 65536 || strlen((char *)command) != len)
         fatal("exec input");
       /* Like a managed worker that cannot start a process, end the session

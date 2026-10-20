@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{createRequire}=require('node:module'),{spawn}=require('node:child_process'),{once}=require('node:events');
-const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
+const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
 const {processIdentities}=require('../research/autonomous-root/service/worker-processes');
 const {withRetirementState}=require('./retirement-test-state.cjs');
 for (const bom of [false,true]) test('native retirement channel migrates retained records after managed exit (BOM='+bom+')',{
@@ -64,7 +64,7 @@ for (const bom of [false,true]) test('native retirement channel migrates retaine
   }})};
   const sessionFile=path.resolve(__dirname,'../research/autonomous-root/service/production-session.js'),sessionRequire=createRequire(sessionFile),sessionModule={exports:{}};
   class HostServer extends RootAgentServer{constructor(options){super({...options,onConnect:peer=>{assert.equal(peer.identity.smack,'host-test-without-Smack');peer.identity.smack='System';options.onConnect(peer);}});servers.push(this);}}
-  vm.runInNewContext(fs.readFileSync(sessionFile,'utf8'),{module:sessionModule,process,Buffer,setTimeout,clearTimeout,require:name=>name==='./vendor/root-agent'?{RootAgentServer:HostServer}:sessionRequire(name)});
+  vm.runInNewContext(fs.readFileSync(sessionFile,'utf8'),{module:sessionModule,process,Buffer,setTimeout,clearTimeout,require:name=>name==='./root-agent'?{RootAgentServer:HostServer}:sessionRequire(name)});
   productionSession=await sessionModule.exports.openProductionSession({id:transition.pending.id,journalDirectory,selectionFile,provider:stagedProvider});
   assert.equal(selection.read().pending.phase,'trial-ready');assert.equal(selection.read().selected.implementation,'managed');
   selection.commit(4,transition.pending.id);const productionChannel=await productionSession.takeChannel();

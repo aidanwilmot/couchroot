@@ -1,7 +1,7 @@
 'use strict';
 // Own one private production callback. Transport closure is not worker cleanup.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const {RootAgentServer}=require('./vendor/root-agent');
+const {RootAgentServer}=require('./root-agent');
 const {selectionStatus}=require('./worker-selection');
 const {privateRead,privateDirectory}=require('./private-state');
 const {productionIdentity}=require('./production-readiness');

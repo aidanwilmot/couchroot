@@ -14,11 +14,13 @@ internal static partial class SamsungTvRootAgent
         "/home/owner/share/tmp/sdk_tools/";
     private const string RuntimeRoot = "/run/samsung-tv-root";
     private const int ConnectTimeoutMilliseconds = 5000;
-    private const int MaximumLineBytes = 4 * 1024 * 1024;
+    private const int MaximumLineBytes = 8 * 1024 * 1024;
     private const int MaximumCommandBytes = 64 * 1024;
     private const int MaximumFileBytes = 4 * 1024 * 1024;
     private const int MaximumCommandOutputBytes = 1024 * 1024;
     private const int MaximumCommandTimeoutMilliseconds = 300000;
+    private const int MaximumPreauthBytes = 512;
+    private static bool ValidExecTimeout(int value) { return value >= 100 && value <= MaximumCommandTimeoutMilliseconds; }
     private const int OpenReadWrite = 2;
     private const int SignalKill = 9;
     private static string statusPath;
@@ -131,7 +133,9 @@ internal static partial class SamsungTvRootAgent
             using (NetworkStream stream = client.GetStream())
             {
                 var input = new ProtocolReader(stream);
-                string hello = input.ReadLine();
+                stream.ReadTimeout = 10000;
+                string hello = input.ReadLine(MaximumPreauthBytes);
+                stream.ReadTimeout = System.Threading.Timeout.Infinite;
                 string[] helloFields = hello.Split('\t');
                 if (helloFields.Length != 2
                     || helloFields[0] != ProtocolVersion)
@@ -361,8 +365,7 @@ internal static partial class SamsungTvRootAgent
 
                     int timeout;
                     if (!int.TryParse(fields[2], out timeout)
-                        || timeout < 100
-                        || timeout > MaximumCommandTimeoutMilliseconds)
+                        || !ValidExecTimeout(timeout))
                     {
                         throw new InvalidDataException("invalid command timeout");
                     }
@@ -578,7 +581,7 @@ internal static partial class SamsungTvRootAgent
             return end > 0;
         }
 
-        public string ReadLine()
+        public string ReadLine(int maximumBytes = MaximumLineBytes)
         {
             using (var line = new MemoryStream())
             {
@@ -586,7 +589,7 @@ internal static partial class SamsungTvRootAgent
                 {
                     int newline = Array.IndexOf(bytes, (byte)'\n', offset, end - offset);
                     int count = (newline < 0 ? end : newline) - offset;
-                    if (count > MaximumLineBytes - line.Length)
+                    if (count > maximumBytes - line.Length)
                         throw new InvalidDataException("root-agent frame exceeds size limit");
                     line.Write(bytes, offset, count);
                     offset += count;
