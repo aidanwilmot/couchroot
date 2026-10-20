@@ -32,3 +32,12 @@ and synthetic identities/tokens. Never commit real journals, signing material,
 raw backups, vendor binaries or device/account identifiers. Follow SECURITY.md
 for vulnerability reporting. A change description must distinguish local tests,
 read-only observations and owner-authorized hardware mutations.
+
+## Formatting
+
+Install the pinned tools with `npm ci` and
+`python3 -m pip install --require-hashes -r .github/requirements-format.txt`.
+Run `npx prettier --write "agent/service/**/*.js"` and
+`ruff format tvsetup scripts`. Check with `npm run format:check` and
+`ruff format --check tvsetup scripts`. Vendor JavaScript is excluded; `web/` is
+outside this formatting scope. Use `.git-blame-ignore-revs` when reviewing blame.

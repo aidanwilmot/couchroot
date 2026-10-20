@@ -5,24 +5,29 @@
     {
       "path": "service/vendor/adb.js",
       "upstream": "rooting/service/adb.js",
-      "sha256": "49cafe310596cfba46cf47e1ae63cdb75e4ba94adc63c5e3d81b2e66370db1b3"
+      "sha256": "49cafe310596cfba46cf47e1ae63cdb75e4ba94adc63c5e3d81b2e66370db1b3",
+      "upstream_sha256": "49cafe310596cfba46cf47e1ae63cdb75e4ba94adc63c5e3d81b2e66370db1b3"
     },
     {
       "path": "service/vendor/sdb.js",
       "upstream": "rooting/service/sdb.js",
-      "sha256": "a04918917deebb37f1c9ca4973aae697f4af1ced94761d6d4501646aaf48bf60"
+      "sha256": "a04918917deebb37f1c9ca4973aae697f4af1ced94761d6d4501646aaf48bf60",
+      "upstream_sha256": "a04918917deebb37f1c9ca4973aae697f4af1ced94761d6d4501646aaf48bf60"
     },
     {
       "path": "service/root-agent.js",
       "upstream": "rooting/service/root-agent.js",
-      "sha256": "ba4fba75135e5496704c030606a69bea33abf426f91bba80754c5cfd81f86535",
+      "sha256": "5a9bc67e9e2b808ed6304b0b8a3c36a81d28bfb4838cb659cb43449feaf05cbc",
       "upstream_sha256": "86e114f9805d358ae36c461a06d28fd8bcb58754fafdb1c11b23a25ab9ee6645",
-      "modified": true
+      "modified": true,
+      "pre_format_sha256": "ba4fba75135e5496704c030606a69bea33abf426f91bba80754c5cfd81f86535",
+      "formatting": "Prettier 3.9.10 (first-party only); Acorn AST unchanged"
     },
     {
       "path": "service/vendor/tar.js",
       "upstream": "rooting/service/tar.js",
-      "sha256": "063955310af7c98d2d8b25f212dbe36e695a02c97ec7d80b45d79d0ed8d344c8"
+      "sha256": "063955310af7c98d2d8b25f212dbe36e695a02c97ec7d80b45d79d0ed8d344c8",
+      "upstream_sha256": "063955310af7c98d2d8b25f212dbe36e695a02c97ec7d80b45d79d0ed8d344c8"
     },
     {
       "path": "payload/SamsungTvRootAgent.cs",
