@@ -2,6 +2,10 @@
 > rows below require the retained previous package. The native-only package must
 > be accepted on both TVs, including restart/job recovery, bounded native bootstrap
 > recovery, foreign-certificate rejection and independent SDK rescue.
+>
+> Phase 4 retires the pure-native experiment. Its historical acceptance rows below
+> remain recovery context, not a new installation plan. WebView is the experimental
+> native option and still requires fresh hardware acceptance.
 
 # Current acceptance gates: merged Phase 2
 
@@ -62,28 +66,23 @@ require the common baseline.
 
 ## Owner decisions currently expressed by defaults
 
-These are review questions, not behavior changes in Phase 3:
+The owner has selected these policies. They do not authorize deployment:
 
-- **TV Plus allowlists:** `native-hub/hub-platform.h` passes `0` to
-  `platform_consumer`; WebView's `bridge.h` passes `1`. Pure native excludes TV Plus
-  while WebView permits its explicit exception. Decide whether to align them;
-  shared code does not currently imply identical policy.
-- **Normal-mode native boot:** the shared core and native binary can handle a
-  normal-mode handoff, but `tvsetup/native_hook.py` still requires the background
-  marker in both dispatch and watchdog. Decide whether a future installer change
-  should admit normal mode. Current public installation must not be described as
-  enabling it. The separate QN90A WebView boot path has its own normal-mode dispatch.
-- **Invalid native favorites import:** WebView refuses the entire malformed
-  native file (`skipped=format`); it does not salvage individual entries. A missing
-  file logs `skipped=missing`. It leaves the source file on disk and retains existing
-  WebView preferences; the shim drops an invalid import fragment. Decide whether a
-  future explicit recovery/import UI is wanted. Do not describe this as deletion
-  of the native file or as the web model's per-entry filtering.
-- **Signing trust:** `scripts/sign.py` requires a loadable private site config and
-  independently enrolled trust, even when `--site` is omitted. Omission selects
-  `TV_SETUP_SITE` or the standard site.json location; it does not permit trust-free
-  signing from a named SDK certificate profile. Decide whether to keep that policy;
-  this checklist does not weaken it.
+- **TV Plus allowlists:** pure native, WebView and the signed web Hub permit the
+  explicit TV Plus consumer exception. The pure-native change needs acceptance
+  on hardware before deployment; `platform_consumer` itself is unchanged.
+- **Normal-mode native boot:** pure-native installation remains background-only.
+  Its shared core can handle normal-mode handoff, but the public dispatch and
+  watchdog require the background marker. WebView retains its separate normal-mode
+  dispatch. Do not describe the pure-native installer as enabling normal mode.
+- **Invalid native favorites import:** WebView rejects the entire malformed file
+  (`skipped=format`); a missing file logs `skipped=missing`. The source file and
+  existing preferences are retained. This differs intentionally from the web
+  model's per-entry filtering; no salvage or migration UI is planned.
+- **Signing trust:** `scripts/sign.py` continues to require a loadable private
+  site.json and independently enrolled trust. Omitting `--site` selects
+  `TV_SETUP_SITE` or the standard location; an SDK certificate profile alone is
+  insufficient.
 
 ---
 
@@ -435,6 +434,10 @@ CI has seven job definitions (ten checks after expanding the Linux matrix):
   protocol/fault/recovery and slow-I/O tests.
 - `native-launcher-builds`: both ARM graphical launchers and native Hub host tests.
 - `arm64-parity`: real native workers, process observer and storage cases
+>
+  protocol/fault/recovery and slow-I/O tests, plus the managed launcher harness.
+- `native-launcher-builds`: WebView ARM host/sampler builds with GLIBC and startup libpthread gates.
+- `arm64-parity`: real managed/native workers, process observer and storage cases
   in disposable ARM64 containers on `ubuntu-24.04-arm`. Tmpfs tests run with the
   explicit mount capability; a preflight checks the container policy. Native restart-fault and bootstrap suites each get a fresh container with a reaping init.
 - `qn90a-web-saver`: pinned Emscripten reproducibility checks.

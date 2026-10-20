@@ -35,7 +35,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_offline_commands_and_dry_runs_never_load_site_or_device_engine(self):
         with patch.object(cli, 'main') as engine, patch.object(cli, 'load_site') as site, patch.object(installer, 'local_command') as local, patch.object(installer, 'dependency_checks', return_value=[]):
-            for launcher, device in [('web', 's90d'), ('web', 'qn90a'), ('native', 'qn90a')]:
+            for launcher, device in [('web', 's90d'), ('web', 'qn90a')]:
                 for command in ['plan', 'doctor', 'inspect', 'apply', 'status', 'verify', 'resume', 'rollback']:
                     args = [command, '--device', device, '--launcher', launcher, '--json']
                     if command not in ('plan', 'doctor'):
@@ -51,22 +51,15 @@ class InstallerTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             installer.main(['plan', '--device', 'qn90a'])
 
-    def test_s90d_native_is_never_silently_converted_to_web(self):
-        with patch.object(cli, 'main') as engine:
-            code, _, err = self.invoke(['apply', '--device', 's90d', '--launcher', 'native', '--yes'])
-            self.assertEqual(code, 1)
-            self.assertIn('QN90A', err)
-            engine.assert_not_called()
+    def test_retired_native_cannot_be_prepared_or_installed(self):
+        for command in ('plan', 'doctor', 'prepare', 'inspect', 'apply'):
+            with self.subTest(command=command), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                installer.main([command, '--device', 'qn90a', '--launcher', 'native'])
 
-    def test_native_live_commands_require_explicit_enrollment_before_transport(self):
-        with patch.object(cli, 'main') as engine, patch.object(cli, 'load_site') as site:
-            for command in ['inspect', 'apply', 'status', 'verify', 'resume', 'rollback']:
-                args = [command, '--device', 'qn90a', '--launcher', 'native', '--json']
-                if command in ('resume', 'rollback'):
-                    args += ['--run', 'private-trial']
-                code, out, _ = self.invoke(args)
-                self.assertEqual(code, 1)
-            engine.assert_not_called(); site.assert_not_called()
+    def test_existing_native_journal_recovery_remains_available(self):
+        with patch('tvsetup.native_cli.main', return_value=0) as recover:
+            self.assertEqual(self.invoke(['rollback','--device','qn90a','--launcher','native','--run','saved','--yes'])[0],0)
+            self.assertEqual(recover.call_args.args[0].run,'saved')
 
     def test_web_apply_uses_scoped_shared_engine_and_returns_failure(self):
         with patch.object(cli, 'main', return_value=3) as engine:
@@ -111,33 +104,6 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(*bundles)
             engine.assert_not_called()
 
-    def test_native_bundle_retains_web_fallback_without_web_boot_relay(self):
-        with tempfile.TemporaryDirectory() as tmp, patch.object(cli, 'main') as engine:
-            root = Path(tmp); binary = root/'input'; binary.write_bytes(elf())
-            output = root/'bundle'
-            code, _, err = self.invoke(['prepare', '--device', 'qn90a', '--launcher', 'native', '--native-binary', str(binary), '--output', str(output)])
-            self.assertEqual(code, 0, err)
-            self.assertEqual((output/'native-hub').read_bytes(), binary.read_bytes())
-            self.assertTrue((output/'MinimalHub-unsigned.wgt').is_file())
-            self.assertNotIn('startup', read_json(output/'web-choices.json')['components'])
-            self.assertTrue(read_json(output/'manifest.json')['deployment_available'])
-            self.assertEqual((output.stat().st_mode & 0o777), 0o700)
-            engine.assert_not_called()
-
-    def test_rejects_bad_native_binaries_before_creating_output(self):
-        wrong_arch = bytearray(elf()); struct.pack_into('<H', wrong_arch, 18, 62)
-        hardfloat = bytearray(elf()); struct.pack_into('<I', hardfloat, 36, 0x05000400)
-        bad_segment = bytearray(elf()); struct.pack_into('<I', bad_segment, 68, 10000)
-        bad_entry = bytearray(elf()); struct.pack_into('<I', bad_entry, 24, 0x90000)
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            for data in [b'not ELF', elf()[:60], wrong_arch, hardfloat, bad_segment, bad_entry]:
-                binary = root/'input'; binary.write_bytes(data)
-                output = root/'output'
-                code, _, _ = self.invoke(['prepare', '--device', 'qn90a', '--launcher', 'native', '--native-binary', str(binary), '--output', str(output)])
-                self.assertEqual(code, 1)
-                self.assertFalse(output.exists())
-
     def test_preparation_refuses_overwrite_symlink_and_source_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); existing = root/'existing'; existing.mkdir()
@@ -148,33 +114,6 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(code, 1)
             self.assertEqual((existing/'keep').read_text(), 'unchanged')
             self.assertFalse((root/'absent').exists())
-
-    def test_build_failure_does_not_publish_partial_bundle(self):
-        with tempfile.TemporaryDirectory() as tmp, patch.object(installer, 'local_command', side_effect=Refused('build failed')):
-            output = Path(tmp)/'bundle'
-            code, _, _ = self.invoke(['prepare', '--device', 'qn90a', '--launcher', 'native', '--build-native', '--output', str(output)])
-            self.assertEqual(code, 1)
-            self.assertEqual(list(Path(tmp).iterdir()), [])
-
-    def test_native_requires_payload_and_web_rejects_native_options(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            for launcher, extra in [('native', []), ('web', ['--build-native'])]:
-                code, _, _ = self.invoke(['prepare', '--device', 'qn90a', '--launcher', launcher, '--output', str(Path(tmp)/'bundle')] + extra)
-                self.assertEqual(code, 1)
-
-    def test_export_conversion_is_explicit_and_errors_do_not_leak_input(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); binary = root/'input'; binary.write_bytes(elf())
-            export = root/'export.json'; export.write_text('{}')
-            def convert(argv, **kwargs):
-                self.assertEqual(argv[0], 'node')
-                self.assertEqual(argv[-2], str(export.resolve()))
-                Path(argv[-1]).write_text('COUCHROOT1 0 0 0 0\n')
-            with patch.object(installer, 'local_command', side_effect=convert):
-                code, _, err = self.invoke(['prepare', '--device', 'qn90a', '--launcher', 'native', '--native-binary', str(binary), '--web-state', str(export), '--output', str(root/'bundle')])
-            self.assertEqual(code, 0, err)
-            self.assertIn('native-state', read_json(root/'bundle/manifest.json')['files'])
-            self.assertFalse((root/'bundle/export.json').exists())
 
     def test_launcher_scope_rejects_unrelated_recovery_before_transport(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(cli, 'STATE', Path(tmp)), patch.object(cli, 'load_site', return_value={}), patch.object(cli, 'configured_profile', return_value=profile('s90d')), patch.object(cli, 'binding', return_value='same'), patch.object(cli, 'Transport') as transport:

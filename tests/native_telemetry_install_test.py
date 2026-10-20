@@ -227,7 +227,7 @@ class TransactionTests(unittest.TestCase):
         common=['--device','qn90a','--launcher','native','--json']
         def invoke(args):
             output=io.StringIO()
-            with contextlib.redirect_stdout(output),contextlib.redirect_stderr(io.StringIO()):code=installer.main(args)
+            with contextlib.redirect_stdout(output),contextlib.redirect_stderr(io.StringIO()):code=__import__("native_install_test").invoke_recovery_backend(args)
             self.assertEqual(code,0,output.getvalue())
             return json.loads(output.getvalue())
         with patch.object(native_cli,'STATE',state),patch.object(native_cli,'load_site',return_value={}),patch.object(native_cli,'configured_profile',return_value={}),patch.object(native_cli,'agent_binding',return_value='bound'),patch.object(native_cli,'connect',return_value=self.io) as connect:

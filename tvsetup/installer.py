@@ -39,9 +39,11 @@ def parser():
         c.add_argument("--device", choices=("qn90a", "s90d"), required=True)
         c.add_argument(
             "--launcher",
-            choices=("web", "native"),
+            choices=("web", "native")
+            if name in ("status", "verify", "resume", "rollback")
+            else ("web",),
             required=True,
-            help="Explicit selection; never silently falls back to another launcher",
+            help="Signed web Hub; native is retained only for existing journal recovery",
         )
         c.add_argument("--json", action="store_true")
         if name == "doctor":
@@ -293,18 +295,11 @@ def local_command(argv, *, env=None):
         ) from None
 
 
-def native_source_hashes():
-    return {
-        p.name: sha(p.read_bytes())
-        for p in sorted((REPO / "native-hub").iterdir())
-        if p.suffix in (".c", ".h", ".sh")
-    }
-
-
 def prepare(args):
     result = recipe(args.device, args.launcher)
     native = args.launcher == "native"
-    source_hashes = native_source_hashes() if native else None
+    if native:
+        raise Refused("Pure-native preparation is retired; use the WebView experiment")
     if not native and (
         args.native_binary
         or args.build_native
@@ -357,59 +352,6 @@ def prepare(args):
             "endpoint": None,
             "artifacts": {},
         }
-        if native:
-            choices["components"] = ["hub", "home", "airplay"]
-            if args.build_native:
-                build = staging / "build"
-                local_command(
-                    ["sh", str(REPO / "native-hub/build.sh")],
-                    env={**os.environ, "NATIVE_HUB_OUTPUT_DIR": str(build)},
-                )
-                binary = (build / "native-hub").read_bytes()
-                validate_native_binary(binary)
-                shutil.rmtree(build)
-                if native_source_hashes() != source_hashes:
-                    raise Refused(
-                        "Native source changed during the build; prepare again from a stable checkout"
-                    )
-            (staging / "native-hub").write_bytes(binary)
-            (staging / "native-hub").chmod(0o600)
-            if args.web_state:
-                local_command(
-                    [
-                        "node",
-                        str(REPO / "native-hub/import-web-state.cjs"),
-                        str(export),
-                        str(staging / "native-state"),
-                    ]
-                )
-            result["native"] = {
-                "origin": "local-source-build"
-                if args.build_native
-                else "owner-supplied-binary",
-                "abi_verified_on_tv": False,
-                "binary_matches_checkout": None if args.native_binary else True,
-                "checkout_source_sha256": source_hashes,
-                "preferences": "one-time candidate; preserve an existing native state"
-                if args.web_state
-                else "preserve existing state; initialize defaults only for a fresh installation",
-            }
-            if telemetry is not None:
-                files, metadata = telemetry
-                for name, content in files.items():
-                    (staging / name).write_bytes(content)
-                    (staging / name).chmod(0o600)
-                result["native_telemetry"] = metadata
-                result["deployment_available"] = True
-                result["blockers"] += [
-                    "Native telemetry uses journaled handoff/recovery; hardware lifecycle acceptance remains pending."
-                ]
-                result["notes"] += [
-                    "QN90A basic telemetry is the target; continuous inspector snapshots are intentionally retired."
-                ]
-                result["notes"] += [
-                    "Existing pairing and settings are reused; no secrets are included. The signed managed settings adapter remains required."
-                ]
         atomic_json(staging / "web-choices.json", choices)
         result.update(
             kind="couchroot-preparation",

@@ -1,3 +1,8 @@
+> New pure-native installation and preparation are retired. `--launcher native`
+> remains only for status, verification and recovery of existing journals. Use
+> [the launcher guide](choosing-a-launcher.md) for current choices; historical
+> native preparation examples below do not run on this release.
+
 # Couchroot command-line installer
 
 `./couchroot-install` provides one entry point for choosing, preparing, installing
@@ -76,7 +81,7 @@ EABI, load-segment bounds and executable entry-point checks reject obviously wro
 or malformed inputs. These checks do not establish firmware ABI compatibility or
 binary provenance. An owner-supplied binary is explicitly marked as having unknown
 correspondence to the current checkout. The local build uses
-[native-hub/build.sh](../../native-hub/build.sh), its existing Docker image and
+[native-hub/build.sh](../../research/archive/native-hub/build.sh), its existing Docker image and
 GLIBC baseline check; the installer does not pull images or fetch dependencies.
 
 For a one-time native preference candidate, add:

@@ -97,7 +97,7 @@ int main(int argc,char **argv){
  assert(!lifecycle_observe(&life,&snap,1));assert(lifecycle_observe(&life,&snap,1));assert(!life.away);
  assert(consumer_app("org.tizen.netflix-app","org.tizen.netflix-app"));
  assert(consumer_app("kIciSQlYEM.plex","kIciSQlYEM"));
- assert(!consumer_app("com.samsung.tv.tvplus","com.samsung.tv.tvplus"));
+ assert(consumer_app("com.samsung.tv.tvplus","com.samsung.tv.tvplus"));
  assert(!consumer_app("org.tizen.factory","org.tizen.factory"));
  /* Live discovery retains the focused catalog identity and Home toolbar. */
  hub_init(&hub);go(PICK,1);HubApp reordered[]={hub.catalog[1],hub.catalog[0]};apply_catalog(reordered,2);assert(hub.focus==0&&!strcmp(hub.catalog[0].name,"YouTube"));

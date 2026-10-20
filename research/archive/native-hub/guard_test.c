@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <assert.h>
 #include "native-guard.h"
-#include "../native/common/platform-matrix.h"
+#include "../../../native/common/platform-matrix.h"
 int main(void) {
     platform_matrix();
     const char *valid[]={"isp-service","MiniHub001.Hub","lcdon",""};
