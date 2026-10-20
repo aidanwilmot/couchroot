@@ -5,7 +5,7 @@
 // by closing every listener of the first agent and starting a second agent with
 // fresh module instances; TV signing, systemd and SDK acquisition are fixtures.
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events'),{createRequire}=require('node:module');
-const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
+const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
 const {withRetirementState}=require('./retirement-test-state.cjs');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=()=>new Promise(r=>setTimeout(r,20));
 const MUTATION=/(^|[\s;|&(])(rm|rmdir|mv|mkdir|cp|ln|chmod|chown|kill|pkill|touch|truncate|dd|systemd-run|sqlite3)\s|systemctl (stop|start|kill|restart)|>(?!\s*&)\s*\/|set -C/m;
@@ -87,7 +87,7 @@ done
  const base=path.resolve(__dirname,'../research/autonomous-root/service');
  // Each agent gets its own module instances, as a restarted service process would.
  function loader(modules,inject){
-  return function load(name){if(modules.has(name))return modules.get(name).exports;if(launchers[name])return launchers[name];if(name==='vendor/root-agent')return {RootAgentServer:HostServer};if(name==='vendor/sdb')return {connect:()=>new Promise(()=>{}),close:()=>{}};
+  return function load(name){if(modules.has(name))return modules.get(name).exports;if(launchers[name])return launchers[name];if(name==='root-agent')return {RootAgentServer:HostServer};if(name==='vendor/sdb')return {connect:()=>new Promise(()=>{}),close:()=>{}};
    if(name==='worker-selection'){const selected=require(base+'/'+name);return {...selected,managedVersion:()=>managed,...(['live-trial-ready','live-published-commit','live-ambiguous-commit'].includes(mode)?{SelectionJournal:class extends selected.SelectionJournal{commit(...args){if(!faulted){faulted=true;if(mode==='live-published-commit')super.commit(...args);if(mode==='live-ambiguous-commit')fs.writeFileSync(selectionFile+'.writer','uncertain');throw injected;}return super.commit(...args);}}}:{})};}if(name==='native-candidate')return {candidateStatus:()=>({state:'verified'}),loadCandidate:()=>({manifest_sha256:native})};
    const file=base+'/'+name+'.js',real=createRequire(file),module={exports:{}};modules.set(name,module);vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,exports:module.exports,__dirname:path.dirname(file),__filename:file,process,Buffer,URL,setTimeout,clearTimeout,setInterval,clearInterval,setImmediate,clearImmediate,require:n=>n.startsWith('./')&&fs.existsSync(path.resolve(path.dirname(file),n)+'.js')?load(path.relative(base,path.resolve(path.dirname(file),n))):real(n)});
    if(inject)inject(name,module);return module.exports;

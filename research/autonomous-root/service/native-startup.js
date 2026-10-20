@@ -2,7 +2,7 @@
 // Bootstrap selected native through a held authenticated executor. No public request
 // is replayed. Old processes and the unit must be idle before a new launch.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const {RootAgentServer}=require('./vendor/root-agent');
+const {RootAgentServer}=require('./root-agent');
 const {privateRead,privateDirectory}=require('./private-state');
 const {hash,atomic}=require('./policy');
 const {selectionStatus}=require('./worker-selection');

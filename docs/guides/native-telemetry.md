@@ -136,10 +136,10 @@ the container. The output directory must exist first.
 mkdir -p test-results/native-telemetry
 docker run --rm --pull never --network none --platform linux/amd64 \
   -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out" -e OUTPUT_DIR=/out \
-  samsung-native-collector:bullseye sh research/native-telemetry/collector/build.sh --host-only
+  samsung-native-collector:bullseye sh telemetry/native-collector/build.sh --host-only
 docker run --rm --pull never --network none --platform linux/amd64 \
   -v "$PWD:/src:ro" -v "$PWD/test-results/native-telemetry:/out:ro" \
-  samsung-native-collector:bullseye python3 research/native-telemetry/collector/test_collector.py
+  samsung-native-collector:bullseye python3 telemetry/native-collector/test_collector.py
 ```
 
 `collector-host` bypasses device checks and must never be deployed. The normal ARM

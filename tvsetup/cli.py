@@ -202,6 +202,7 @@ def main(argv=None, *, ui_only=False, launcher_only=False):
                 choices=resolve(args.device,doc['choices'])
                 local_only=(args.command=='apply' and doc.get('phase') in ('configuration-applied','finalizing')) or (args.command=='rollback' and all(row['phase'] in ('planned','prepared','backing-up','backed-up','rolled-back') for row in doc.get('actions',[])))
                 tv=None if local_only else Transport(p,folder/'evidence');nas=NAS(folder,site.get('nas'))
+                if tv is not None:stack.callback(tv.close)
                 driver=None if local_only else Driver(tv,p,choices,folder,nas);engine=Engine(driver,folder,args.device,choices,nas,target_binding=target_binding,state_dir=STATE);engine.load()
                 print(('Rollback' if args.command=='rollback' else 'Reconcile/resume')+' run '+identity+' for '+args.device+'.',file=sys.stderr if args.json else sys.stdout)
                 if any(row['action']['kind']=='nas' for row in doc['actions']):
@@ -227,6 +228,7 @@ def main(argv=None, *, ui_only=False, launcher_only=False):
                                 read_json(args.config) if args.config else None,cli_overrides(args))
             identifier=run_id();folder=STATE/'runs'/identifier if args.command=='apply' else STATE/'inspections'/identifier
             tv=Transport(p,folder/'evidence');nas=NAS(folder,site.get('nas'))
+            stack.callback(tv.close)
             state=tv.snapshot(privileged=args.privileged_inspection or args.command=='apply')
             atomic_json(folder/'snapshot.json',state)
             if ui_only and not any(row[0]=='MiniHub001' for row in state['packages']):

@@ -7,7 +7,7 @@ report. The independent investigator did not access or modify the live TV.
 
 ## Why Home routing is not boot routing
 
-The [2026-09-22 direct-boot investigation](../../docs/devices/qn90a/direct-boot.md)
+The [2026-09-22 direct-boot investigation](../../docs/lab/devices/qn90a/direct-boot.md)
 extends this analysis with live fastboot/viewer scripts, instruction-level
 confirmation of the initial-mode gate, and the exact QN90A Samsung Home
 assembly's cold-boot visibility policy.
@@ -33,7 +33,7 @@ follow the most recently used application, including the screensaver. Treating
 that value as a permanent Hub selection would be incorrect.
 
 The apparently simpler firstscreen preference route was already tested and
-failed on this exact TV: [the QN90A integration report](../../docs/devices/qn90a/README.md)
+failed on this exact TV: [the QN90A integration report](../../docs/lab/devices/qn90a/README.md)
 records `db/first_screen/type=MiniHub001.Hub`, `auto_start=1`, and a real boot-ID
 change from `00000000-0000-4000-8000-000000000006` to
 `00000000-0000-4000-8000-000000000005`. The settings persisted, but native

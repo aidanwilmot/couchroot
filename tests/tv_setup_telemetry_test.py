@@ -36,16 +36,15 @@ class TelemetryMigrationTests(unittest.TestCase):
         def sdk(script,timeout):
             names=re.findall(r'TVSETUP_BEGIN:([A-Za-z0-9_.-]+)',script)
             return ''.join('\nTVSETUP_BEGIN:'+n+'\n'+values.get(n,'')+'\nTVSETUP_END:'+n+'\n' for n in names)
-        def root(script):
-            output=''
-            for number,path in re.findall(r'TV_SETUP_HASH_(\d+)=.*?if test -L ([^;]+);',script):
-                digest=EMPTY if path==LEGACY_MARKER else 'ABSENT'
-                output+='TV_SETUP_HASH_'+number+'='+digest+'\n'
-            for name in re.findall(r'SETUP_([a-z_]+)_BEGIN',script):
-                value=json.dumps({'device_id':'s90d'}) if name=='legacy_pairing_config' else ''
-                output+='\nSETUP_'+name+'_BEGIN\n'+value+'\nSETUP_'+name+'_END\n'
+        def root_reads(queries):
+            output={}
+            for name,script in queries.items():
+                if name.startswith('hash'):output[name]=EMPTY if LEGACY_MARKER in script else 'ABSENT'
+                elif name=='legacy_pairing_config':output[name]={'device_id':'s90d'}
+                elif name=='pairing_config':output[name]=None
+                else:output[name]=''
             return output
-        tv.sdk=sdk;tv.root=root
+        tv.sdk=sdk;tv.root_reads=root_reads
         s=tv.snapshot(privileged=True)
         self.assertEqual(s['files'][LEGACY_MARKER],EMPTY)
         self.assertEqual(s['legacy_pairing_config']['device_id'],'s90d')

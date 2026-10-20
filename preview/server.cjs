@@ -58,7 +58,7 @@ module.exports = { createServer, start };
 if (require.main === module) {
   const port = Number(process.env.PORT || 8766);
   start(port).then(({ server, url }) => {
-    console.log(`Minimal Hub UI workbench: ${url}\nSave web/ files to reload. Ctrl+C to stop.`);
+    console.log(`Couchroot UI workbench: ${url}\nSave web/ files to reload. Ctrl+C to stop.`);
     for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));
   }).catch(error => { console.error(error.message); process.exitCode = 1; });
 }

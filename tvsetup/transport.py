@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shlex
 import sys
+import tempfile
 import uuid
 from .common import PRIVATE, REPO, Refused, run, sha
 
@@ -69,8 +70,8 @@ def decode_rows(text):
 
 
 def paths(device):
-    files = [f'/opt/usr/apps/MiniHub001/res/wgt/{name}' for name in
-             ('config.xml','index.html','style.css','bridge.js','presentation.js','model.js','feedback.js','telemetry.js','hub.js','icon.png','qn90a-idle.js','telemetry-service.js')]
+    from .planner import hub_sources
+    files = [f'/opt/usr/apps/MiniHub001/res/wgt/{name}' for name in hub_sources(device)]
     # WGT layout differs: the observer resolves res/wgt versus the package root.
     files += [PREFS]
     files += [f'/opt/usr/apps/MiniTelemetry/bin/{name}' for name in ('Service.dll','Service.deps.json','Service.runtimeconfig.json','Bootstrap.dll','Bootstrap.deps.json','Bootstrap.runtimeconfig.json','Telemetry.dll')]
@@ -89,6 +90,8 @@ class Transport:
     def __init__(self, profile, evidence, *, native_bundle=None):
         self.profile, self.evidence = profile, evidence
         self.evidence.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self._root_temp = tempfile.TemporaryDirectory(prefix='root-session-',dir=self.evidence)
+        self.root_session = Path(self._root_temp.name)
         self.native_bundle = None
         self.root_acquisition = dict(kind='managed')
         if native_bundle is not None:
@@ -105,6 +108,12 @@ class Transport:
         self.client.connect(); self.client.require_device()
         self.sdk(identity_guard(profile))
 
+    def close(self):
+        self._root_temp.cleanup()
+
+    def __enter__(self):return self
+    def __exit__(self,*args):self.close()
+
     def sdk(self, script, timeout=30):
         result = self.client.capture('(\n'+script+'\n)',callback_host=self.callback,bind_host=self.callback,timeout=timeout)
         path = self.evidence / ('sdk-'+uuid.uuid4().hex+'.log')
@@ -114,7 +123,7 @@ class Transport:
             raise Refused('SDK command incomplete/failed; private evidence: '+str(path))
         return result.output[:match.start()]
 
-    def root(self, script, namespace=False, cleanup_index=None):
+    def root(self, script, namespace=False, cleanup_index=None, *, json_reads=False):
         if self.native_bundle is not None and cleanup_index is not None:
             raise Refused('Allowlisted app cleanup requires an explicit managed transport')
         if namespace:
@@ -125,16 +134,39 @@ class Transport:
         # The worker keeps Python root-transport imports isolated and bounds descendants.
         from .common import atomic_json
         configuration=path.with_suffix('.json');atomic_json(configuration,self.profile)
+        result=path.with_suffix('.result.json')
         argv = [sys.executable, '-m', 'tvsetup.worker', str(configuration), str(path)]
         if cleanup_index is not None:argv.append(str(cleanup_index))
+        if cleanup_index is None:
+            argv.extend(['--session',str(self.root_session),'--result',str(result)])
+            if json_reads:argv.append('--json-reads')
         if self.native_bundle is not None:
             argv.extend(['--native-bundle', str(self.native_bundle)])
         try: output = run(argv, timeout=360, cwd=REPO)
         except Refused as error:
-            path.with_suffix('.log').write_text(getattr(error,'output','Interrupted; completion unknown'))
+            detail=getattr(error,'output','Interrupted; completion unknown')
+            if result.exists():
+                saved=json.loads(result.read_text())
+                if saved.get('failed'):detail+='\n'+saved.get('output','')
+            log=path.with_suffix('.log');log.write_text(detail);log.chmod(0o600)
             raise
         path.with_suffix('.log').write_text(output)
-        return output
+        if cleanup_index is not None:return output
+        try:data=json.loads(result.read_text())
+        except (OSError,ValueError):raise Refused('Root operation did not return a complete result file') from None
+        return data if json_reads else data['output']
+
+    def root_reads(self, queries):
+        script="printf '{'\n"
+        for index,(name,command) in enumerate(queries.items()):
+            if not re.fullmatch('[a-zA-Z0-9_]+',name):raise Refused('Invalid privileged result name')
+            script+='(\n'+command+'\n) >\"$TV_SETUP_READ_TMP\"\n'
+            script+='printf '+Q((',' if index else '')+json.dumps(name)+':\"')+'\n'
+            script+='od -An -v -tx1 <\"$TV_SETUP_READ_TMP\" | tr -d \' \\n\'\nprintf \'\"\'\n'
+        script+="printf '}\\n'\n"
+        data=self.root(script,json_reads=True)
+        if not isinstance(data,dict) or set(data)!=set(queries):raise Refused('Incomplete privileged read results')
+        return data
 
     def push(self, source, target):
         from pathlib import PurePosixPath
@@ -187,26 +219,21 @@ class Transport:
             # A private parent can make SDK test -e falsely report absence.
             unreadable = [p for p,h in state['files'].items() if h=='UNREADABLE'
                           or p.startswith(('/opt/minimal-telemetry/','/opt/usr/home/owner/apps_rw/MiniTelemetry/'))]
-            script=''
+            queries={}
             for number,path in enumerate(unreadable):
-                script+=f'printf "TV_SETUP_HASH_{number}="; if test -L {Q(path)}; then echo SYMLINK; elif test -f {Q(path)}; then sha256sum {Q(path)}; else echo ABSENT; fi\n'
+                queries['hash'+str(number)]=f'if test -L {Q(path)}; then echo SYMLINK; elif test -f {Q(path)}; then sha256sum {Q(path)}; else echo ABSENT; fi'
             protected={name:path for name,path in diagnostics.items() if not state[name]}
             pairing_path='/opt/usr/home/owner/apps_rw/MiniTelemetry/data/config.json'
-            if self.profile['id']=='s90d':
-                protected['legacy_pairing_config']='/opt/minimal-telemetry/config.json'
+            if self.profile['id']=='s90d':protected['legacy_pairing_config']='/opt/minimal-telemetry/config.json'
             protected['pairing_config']=pairing_path
             for name,path in protected.items():
-                script+=f'printf "\\nSETUP_{name}_BEGIN\\n"; test ! -L {Q(path)}; if test -f {Q(path)}; then head -c 4096 {Q(path)}; fi; printf "\\nSETUP_{name}_END\\n"\n'
-            output=self.root(script) if script else ''
+                queries[name]=f'test ! -L {Q(path)}; if test -f {Q(path)}; then head -c 4096 {Q(path)}; fi'
+            values=self.root_reads(queries)
             for number,path in enumerate(unreadable):
-                match=re.search(r'TV_SETUP_HASH_'+str(number)+r'=([a-f0-9]{64}|ABSENT|SYMLINK)',output)
-                if not match:raise Refused('Privileged checksum unavailable: '+path)
-                state['files'][path]=None if match[1]=='ABSENT' else match[1]
-            for name,path in protected.items():
-                match=re.search(r'\nSETUP_'+name+r'_BEGIN\n(.*?)\nSETUP_'+name+r'_END',output,re.S)
-                if not match:raise Refused('Privileged inspection incomplete: '+name)
-                if name in ('pairing_config','legacy_pairing_config'):
-                    try:state[name]=json.loads(match[1]) if match[1].strip() else None
-                    except ValueError:raise Refused('Malformed private pairing file; preserve and inspect it')
-                else:state[name]=match[1].strip()
+                words=values['hash'+str(number)].strip().split()
+                value=words[0] if words else ''
+                if value not in ('ABSENT','SYMLINK') and not re.fullmatch('[a-f0-9]{64}',value):raise Refused('Privileged checksum unavailable: '+path)
+                state['files'][path]=None if value=='ABSENT' else value
+            for name in protected:
+                state[name]=values[name] if name in ('pairing_config','legacy_pairing_config') else values[name].strip()
         return state

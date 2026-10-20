@@ -489,7 +489,7 @@ refuses further staging. No arbitrary external launcher path is accepted.
 
 `native-app-launcher-v1` in the ready worker's capabilities identifies this path.
 The internal worker readiness handshake also returns the embedded launcher's SHA-256.
-Build the toolchain image from `research/native-telemetry/collector/Dockerfile`
+Build the toolchain image from `telemetry/native-collector/Dockerfile`
 before preparing signed autonomous-root packages. The shared builder compiles from
 source and embeds the result in the worker DLL for each TV framework. Ordinary
 standalone .NET builds without the resource are useful for host tests but refuse
@@ -630,8 +630,9 @@ package builds reproduced. Public-source privacy and secret scans passed.
 The .NET worker uses one 64 KiB input buffer per connection for both protocol
 lines and legacy binary payloads. It scans each block for newlines and retains
 read-ahead bytes for the next frame or payload. Responses still write directly
-to the duplex socket. The 4 MiB line limit, authentication, transfer chunk size,
-digest checks and conditional-replacement rules are unchanged.
+to the duplex socket. The authenticated line limit is now 8 MiB, with a separate 512-byte greeting
+limit and a 10-second greeting read timeout; see PROTOCOL.md. Authentication,
+transfer chunk size, digest checks and conditional-replacement rules are unchanged.
 
 The local harness covers single-byte fragmentation, coalesced frames, split UTF-8,
 CRLF, empty lines, exact-limit and oversized lines, truncated input, and binary

@@ -54,3 +54,7 @@ trust.json
 *.zip
 # The reserved-address public template is intentionally redistributable source.
 !examples/site.json
+
+# Product telemetry build intermediates.
+telemetry/**/bin/
+telemetry/**/obj/

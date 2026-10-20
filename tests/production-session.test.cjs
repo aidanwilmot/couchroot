@@ -25,7 +25,7 @@ async function fixture(mode,run){
   const ready={...record,phase:'ready',worker_identity:identity,unit_started_monotonic:'123'},digest=hash(JSON.stringify(ready));fs.writeFileSync(directory+'/'+id+'.production.json',JSON.stringify(ready),{mode:0o600});
   const selection=journal.advance(3,id,'trial-ready',digest);return {record:ready,readiness_sha256:digest,selection};
  }};
- const module={exports:{}};vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,setTimeout:(fn,ms)=>setTimeout(fn,mode==='no-connect'?20:ms),clearTimeout,require:name=>name==='./vendor/root-agent'?{RootAgentServer:Server}:name==='./production-readiness'?{productionIdentity:info=>info}:real(name)});
+ const module={exports:{}};vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,setTimeout:(fn,ms)=>setTimeout(fn,mode==='no-connect'?20:ms),clearTimeout,require:name=>name==='./root-agent'?{RootAgentServer:Server}:name==='./production-readiness'?{productionIdentity:info=>info}:real(name)});
  const open=()=>module.exports.openProductionSession({journalDirectory:directory,selectionFile,id,provider});
  try{await run({open,directory,id,journal,state:()=>({instance,launches,readiness,launchOptions,closed})});}finally{fs.rmSync(directory,{recursive:true,force:true});}
 }

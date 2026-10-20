@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const sdb=require('./vendor/sdb'),{tarGz}=require('./vendor/tar'),{RootAgentServer}=require('./vendor/root-agent');
+const sdb=require('./vendor/sdb'),{tarGz}=require('./vendor/tar'),{RootAgentServer}=require('./root-agent');
 const {read,hash,atomic,verifyFirmware,sdkRuntimeGuard}=require('./policy');
 const {candidateStatus}=require('./native-candidate');
 const {validateReadiness,validateResourceInventory}=require('./worker-readiness');

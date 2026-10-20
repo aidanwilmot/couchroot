@@ -2,7 +2,7 @@
 
 This historical directory now contains the service and no-window relay for **both
 S90D and QN90A**. Build for `net6.0` on S90D and `netcoreapp3.1` on QN90A. The
-collector source remains in `research/s90d-telemetry/collector`.
+collector source remains in `telemetry/s90d-collector`.
 
 Hub sends public enabled/receiver URL preferences after initialization and when it
 returns to the foreground. `MiniTelemetry.Start` accepts only `MiniHub001.Hub`,

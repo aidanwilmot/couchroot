@@ -16,7 +16,7 @@ from .transport import Q, hash_guard, identity_guard
 UNIT = 'couchroot-native-telemetry'
 LABEL = 'User::Pkg::MiniTelemetry'
 RUNTIME = '/tmp/minimal-telemetry-qn90a'
-SOURCE = REPO/'research/native-telemetry/collector'
+SOURCE = REPO/'telemetry/native-collector'
 
 
 def layout(version):
@@ -118,7 +118,7 @@ def prepare(binary):
     sources = {str(path.relative_to(REPO)): sha(path.read_bytes()) for path in
                [*sorted(SOURCE.glob('*.[ch]')), SOURCE/'collector.service.in',
                 SOURCE/'build.sh', SOURCE/'tv-libraries.json', Path(__file__),
-                REPO/'research/qn90a-telemetry-startup/service/Program.cs']}
+                REPO/'telemetry/qn90a-startup/Program.cs']}
     # Code and template changes get a new immutable directory even if the owner
     # supplied the same ELF. This is provenance, not proof the ELF matches source.
     version = sha((sha(binary)+repr(sorted(sources.items()))).encode())

@@ -14,16 +14,8 @@ function convert(storage) {
     apps = saved.apps;
   }
   if (apps.length > 128) throw new Error('Native currently supports 128 favorites; refusing to truncate this export');
-  const seen = new Set();
-  const lines = apps.map(app => {
-    if (!app || typeof app.id !== 'string' || !/^[A-Za-z0-9_.-]{1,256}$/.test(app.id) ||
-        [Model.HOME, Model.SELF].includes(app.id) || seen.has(app.id) ||
-        typeof app.name !== 'string' || !app.name.trim() || /[\x00-\x1f\x7f]/.test(app.name) || Buffer.byteLength(app.name) > 120) {
-      throw new Error('Invalid, duplicate, reserved or oversized shortcut; export was not changed');
-    }
-    seen.add(app.id);
-    return app.id + '\t' + app.name;
-  });
+  if (!Model.nativeApps(apps)) throw new Error('Invalid, duplicate, reserved or oversized shortcut; export was not changed');
+  const lines = apps.map(app => app.id + '\t' + app.name);
   function choice(key, values, fallback) {
     const value = storage['minimal-hub.' + key + '.v1'];
     if (value === undefined) return fallback;

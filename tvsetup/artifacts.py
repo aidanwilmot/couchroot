@@ -175,11 +175,12 @@ class Builder:
             files=hub_sources(self.profile['id']) if key=='hub' else {n:(source/n).read_bytes() for n in ('index.html','saver.js','icon.png')}
             for n,data in files.items():(stage/n).write_bytes(data)
             if key=='saver':self.generated_saver(stage)
-            config=ET.fromstring((source/'config.xml').read_bytes())
+            config_bytes=files['config.xml'] if key=='hub' else (source/'config.xml').read_bytes()
+            config=ET.fromstring(config_bytes)
             version=next_version(action.options['previous_version'],config.get('version'))
             # Preserve namespace declarations exactly; only the widget version changes.
             import re
-            text=(source/'config.xml').read_text()
+            text=config_bytes.decode()
             text=re.sub(r'(<widget\b[^>]*\bversion=")[^"]+',lambda m:m[1]+version,text,count=1)
             (stage/'config.xml').write_text(text)
             self.command([self.cli,'package','-t','wgt','-s',self.profile['signing_profile'],'-o',stage,'--',stage])
@@ -193,12 +194,12 @@ class Builder:
                 output=stage/'compiled';self.build_managed(project/'Boot.csproj',output)
                 sources=[(output/n,'bin/'+n) for n in ('Boot.dll','Boot.deps.json','Boot.runtimeconfig.json')]
             else:
-                project=REPO/'research/qn90a-telemetry-startup/service'
-                for name,proj in [('Service',project),('Bootstrap',project.parent/'bootstrap')]:
+                project=REPO/'telemetry/qn90a-startup'
+                for name,proj in [('Service',project),('Bootstrap',REPO/'research/qn90a-telemetry-startup/bootstrap')]:
                     output=stage/name;self.build_managed(proj/(name+'.csproj'),output)
                     sources += [(p,'bin/'+p.name) for p in output.glob(name+'.*') if p.suffix!='.pdb']
                 output=stage/'collector'
-                self.command(['dotnet','build',REPO/'research/s90d-telemetry/collector/Telemetry.csproj','-c','Release','--nologo','-v','quiet','-f',self.profile['framework'],'-o',output])
+                self.command(['dotnet','build',REPO/'telemetry/s90d-collector/Telemetry.csproj','-c','Release','--nologo','-v','quiet','-f',self.profile['framework'],'-o',output])
                 sources.append((output/'Telemetry.dll','bin/Telemetry.dll'))
             manifest=ET.fromstring((project/'tizen-manifest.xml').read_bytes())
             manifest.set('version',next_version(action.options['previous_version'],manifest.get('version')))
@@ -216,6 +217,6 @@ class Builder:
             path=self.folder/'empty';path.write_bytes(b'');return path
         if not self.helper_built:
             self.command([sys.executable,REPO/'research/s90d-telemetry/build.py']);self.helper_built=True
-        if kind=='collector':return REPO/'research/s90d-telemetry/collector/bin/Release/net6.0/Telemetry.dll'
+        if kind=='collector':return REPO/'telemetry/s90d-collector/bin/Release/net6.0/Telemetry.dll'
         name='Boot.dll' if kind=='helper' else kind
         return REPO/'research/s90d-telemetry/bin/helper/bin/Release/net6.0'/name

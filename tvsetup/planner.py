@@ -69,22 +69,24 @@ class Plan:
         return result
 
 
-def hub_sources(device):
-    names = ('index.html','style.css','bridge.js','presentation.js','model.js','feedback.js','telemetry.js','hub.js','icon.png')
+def hub_sources(device, *, device_id=None):
+    """Exact Hub inputs; None preserves the unconfigured native WebView source."""
+    names = ('index.html','style.css','bridge.js','presentation.js','model.js','feedback.js','telemetry.js','hub.js','icon.png','config.xml')
     result = {name:(REPO/'web'/name).read_bytes() for name in names}
-    result['telemetry.js'] = ('window.HUB_DEVICE_ID = '+json.dumps(device)+';\n').encode()+result['telemetry.js']
+    if device is None:return result
+    result['telemetry.js'] = ('window.HUB_DEVICE_ID = '+json.dumps(device_id or device)+';\n').encode()+result['telemetry.js']
     result['index.html'] = result['index.html'].replace(b'</head>', b'  <script src="telemetry-service.js" defer></script>\n</head>')
     result['telemetry-service.js'] = (REPO/'web/telemetry-service.js').read_bytes()
     if device == 'qn90a':
         result['index.html'] = result['index.html'].replace(b'</head>', b'  <script src="qn90a-idle.js" defer></script>\n</head>')
-        result['qn90a-idle.js'] = (REPO/'research/qn90a-screensaver/hub-idle.js').read_bytes()
+        result['qn90a-idle.js'] = (REPO/'web/qn90a-idle.js').read_bytes()
     return result
 
 
 def source_revision():
-    roots = [REPO/'research/toolkit', REPO/'tvsetup', REPO/'web',REPO/'research/s90d-telemetry',REPO/'research/system-screensaver',
+    roots = [REPO/'research/toolkit', REPO/'tvsetup', REPO/'web',REPO/'research/s90d-telemetry',REPO/'telemetry/s90d-collector',REPO/'research/system-screensaver',
              REPO/'research/s90d-splash',REPO/'research/namespace-root-probe',REPO/'research/qn90a-app-cleanup',REPO/'research/qn90a-screensaver',REPO/'research/qn90a-hub-boot/relay',
-             REPO/'research/qn90a-telemetry-startup/service', REPO/'research/qn90a-telemetry-startup/bootstrap']
+             REPO/'telemetry/qn90a-startup', REPO/'research/qn90a-telemetry-startup/bootstrap']
     files = sorted({p for root in roots for p in root.rglob('*') if p.is_file() and p.suffix in ('.py','.json','.cs','.c','.h','.js','.css','.html','.xml','.csproj','.glsl') and not {'bin','obj'} & set(p.relative_to(root).parts) and p.name not in ('core.js','shaders.js')})
     files=sorted(set(files)|{REPO/'tools/qn90a/root-check.py',REPO/'global.json',REPO/'Directory.Build.props'})
     return sha(b''.join(str(p.relative_to(REPO)).encode()+b'\0'+p.read_bytes() for p in files))
@@ -101,8 +103,8 @@ def artifact_group(path):
 def component_revision(kind):
     groups = {
         'boot': ['research/qn90a-hub-boot/relay'],
-        'service': ['research/qn90a-telemetry-startup/service','research/qn90a-telemetry-startup/bootstrap','research/s90d-telemetry/collector'],
-        'helper': ['research/system-screensaver/boot','research/s90d-splash/Splash.cs','research/s90d-telemetry/collector','research/s90d-telemetry/build.py'],
+        'service': ['telemetry/qn90a-startup','research/qn90a-telemetry-startup/bootstrap','telemetry/s90d-collector'],
+        'helper': ['research/system-screensaver/boot','research/s90d-splash/Splash.cs','telemetry/s90d-collector','research/s90d-telemetry/build.py'],
         'saver': ['research/qn90a-screensaver/core.c','research/qn90a-screensaver/fragment.glsl','research/qn90a-screensaver/build-web.sh','research/system-screensaver/renderer.c','research/system-screensaver/simulation.h','research/system-screensaver/mesh.h']}
     files=[]
     for name in groups[kind]:
@@ -152,7 +154,8 @@ def plan(profile, choices, state, ledger=None):
         if not exists or before != expected:
             p.add(component,'package',before if exists else None,expected,artifact=key,package=pkg,previous_version=exists[0][3] if exists else None)
     if 'hub' in want:
-        expected = {'/opt/usr/apps/MiniHub001/res/wgt/'+n:sha(b) for n,b in hub_sources(device).items()}
+        expected = {'/opt/usr/apps/MiniHub001/res/wgt/'+n:sha(b) for n,b in hub_sources(device).items() if n != 'config.xml'}
+        # The signer advances the widget version; compare runtime content only.
         package('hub','hub','MiniHub001',expected)
     if device=='qn90a':
         if 'screensaver' in want:
@@ -218,6 +221,8 @@ def plan(profile, choices, state, ledger=None):
             else:p.add('telemetry','file',state['files'].get(legacy),None,path=legacy,artifact='legacy-disable')
         package('telemetry','service','MiniTelemetry',{'/opt/usr/apps/MiniTelemetry/bin/'+n:compiled('service',h) for n,h in profile['service_artifacts'].items()})
         config_path = '/opt/usr/home/owner/apps_rw/MiniTelemetry/data/config.json'
+        if any(isinstance(state.get(key),dict) and state[key].get('unsupported') for key in ('pairing_config','legacy_pairing_config')):
+            p.unsupported('telemetry','Malformed private pairing configuration')
         if state['files'].get(config_path) in ('UNREADABLE','SYMLINK'): p.unsupported('telemetry','Private pairing is inaccessible; use --privileged-inspection for a bounded read through the existing root transport')
         if state['files'].get(config_path) is None: p.add('telemetry','pairing',None,'paired',path=config_path)
         enabled=config_path.rsplit('/',1)[0]+'/enabled'

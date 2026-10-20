@@ -320,6 +320,52 @@ unverified startup. TV-side diagnostic cleanup may be unconfirmed after a lost
 connection or forced cutoff: inspect the private evidence before further changes.
 Host process tests do not prove TV-side cleanup or firmware scheduling behavior.
 
+## Temporary root sessions and private evidence
+
+One setup transport invocation reuses its locally compiled managed probe and
+operation runner, plus its signed acquisition archive. Each operation still checks
+the pinned identity, stages and verifies the files, acquires bounded temporary
+root access, and removes staging. No privileged daemon or connection is retained.
+Resume starts a new local session; a partial or altered cache is refused. The
+specialized QN90A app-cleanup runner and opt-in native-acquisition pilot keep their
+existing preparation paths.
+
+Privileged output is downloaded from a private result file, with a 16 MiB host
+acceptance limit, instead of the toolkit's shortened console preview. Snapshot
+reads use a JSON map of hex-encoded values so newlines and quotes cannot confuse
+framing. Pairing `token` becomes `token_sha256` before the worker writes its result,
+snapshot, journal or diagnostic output. Credential changes still trigger pairing
+repair. Malformed pairing records are marked unsupported during planning without
+blocking recovery snapshots. Actual install payloads and recovery copies remain private and may contain
+credentials; hashes are diagnostics, not replacement credentials.
+
+If a reply is lost, the operation is not retried. The device-side exit trap removes
+executables while preserving the result for a serial-scoped download, even on
+non-zero exit. Failure output is saved in private evidence; incomplete snapshot
+frames are omitted to protect credentials. The host then attempts remote cleanup
+and always unlinks the downloaded raw result.
+A lost connection can leave cleanup unconfirmed. Preserve the journal and inspect
+staging before another operation. Host tests do not establish cleanup on firmware.
+
+### Evidence retention
+
+Keep unfinished runs, journals, verified backups, signing/trust pins and the site
+configuration until recovery is resolved. After a successful run, retain the
+recovery set until a subsequent release has been accepted on hardware and its
+rollback window has closed. Do not delete files referenced by a retained journal.
+
+Local `root-session-*` build caches are removed when the transport closes,
+including after Ctrl-C. A forced process kill can leave a cache behind; it may be
+removed once that process is gone. These caches are not recovery backups.
+
+For completed runs whose recovery window has closed, delete diagnostic `evidence/`
+logs and toolkit `sessions/` after 30 days.
+Delete unneeded pairing payloads and backups at the same time; rotate a receiver
+credential if its private copies may have been exposed. Cleanup is manual: setup
+never ages out recovery data automatically. Keep these directories private and
+outside Git, and redact them before sharing. Existing logs are not retroactively
+scrubbed by this change.
+
 ## Errors and automation
 
 | Exit | Meaning |

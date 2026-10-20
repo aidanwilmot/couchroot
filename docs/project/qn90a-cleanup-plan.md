@@ -17,7 +17,7 @@ with its reason. Use this file as the only cleanup tracker.
 
 ### 1. Correct the current documentation
 
-- [x] Update the [collector README](../../research/native-telemetry/collector/README.md):
+- [x] Update the [collector README](../../telemetry/native-collector/README.md):
   journaled installation and bootstrap integration exist locally; hardware
   acceptance and deployment remain outstanding. Remove contradictory statements
   that installation is unavailable or that integration is still unimplemented.

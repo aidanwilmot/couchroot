@@ -5,7 +5,6 @@
   "limits": {
     "transfer_count": 8,
     "file_bytes": 2147483648,
-    "chunk_bytes": 1048576,
     "jobs_memory": 16,
     "job_records": 64,
     "job_min_ms": 100,
@@ -15,10 +14,7 @@
     "tail_bytes": 65536,
     "public_command_bytes": 16384,
     "public_exec_min_ms": 100,
-    "public_exec_max_ms": 25000,
-    "wire_exec_max_ms": 300000,
-    "wire_exec_command_bytes": 65536,
-    "foreground_stream_bytes": 1048576
+    "public_exec_max_ms": 25000
   },
   "generated_fields": [
     "worker_id",
@@ -215,10 +211,27 @@
   },
   "observer_probe": {
     "route": "POST /v1/observer/probe",
-    "fields": ["id", "manifest_sha256"],
+    "fields": [
+      "id",
+      "manifest_sha256"
+    ],
     "admission": "Enrolled client; serialized and journaled before staging; no caller-supplied PID, path or command.",
     "effect": "Enable execution of the exact installed observer package member; verify service-context launch; bind/cancel on S90D or use proc-stat on QN90A; confirm the managed worker remains and release admission on success.",
     "unknown": "Never replay; preserve submitted request and unresolved admission hold.",
-    "not_proven": ["target process exit", "native selection", "resource cleanup parity", "TV qualification from host tests"]
+    "not_proven": [
+      "target process exit",
+      "native selection",
+      "resource cleanup parity",
+      "TV qualification from host tests"
+    ]
+  },
+  "shared_protocol_limits": {
+    "fixture": "../fixtures/root-protocol.json",
+    "keys": {
+      "chunk_bytes": "binary_chunk_bytes",
+      "wire_exec_max_ms": "exec_max_ms",
+      "wire_exec_command_bytes": "command_bytes",
+      "foreground_stream_bytes": "output_bytes"
+    }
   }
 }

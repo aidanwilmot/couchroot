@@ -1,4 +1,4 @@
-# Minimal TV Hub
+# Couchroot owner operations
 
 For current UI updates, use [UI deployment](ui-deployment.md). Full installation
 and recovery use [tv-setup](tv-setup.md). The signing and rollback records below
@@ -18,7 +18,7 @@ telemetry, external font, or network request is required by the hub.
 the remote's Plex tile opens Plex. Uninstall and reinstall of the same package
 passed. Reboot startup, standby/wake, both app tiles, Home-key routing, and
 Samsung Home fallback have passed automated on-TV checks. Details are tracked in
-[integration findings](../devices/s90d/README.md).
+[integration findings](../lab/devices/s90d/README.md).
 
 ## Visual design
 
@@ -77,7 +77,7 @@ npm run dev
 Before preparing a release, run `npm test`, inspect `npm run screenshots`, and
 build the unsigned WGT with `npm run package`. Signing and installation follow
 below. This document's commands target the S90D; use the
-[QN90A record](../devices/qn90a/README.md) for that TV's profile and device procedures.
+[QN90A record](../lab/devices/qn90a/README.md) for that TV's profile and device procedures.
 
 The app IDs are from this TV's package registry, and each target was separately
 launched through app_launcher during the previous investigation:
@@ -90,7 +90,7 @@ launched through app_launcher during the previous investigation:
 
 `bridge.js` requests the verified native no-loading hint through app control for
 app shortcuts, with ordinary launch fallback if unsupported. Samsung Home uses
-the original launch path. See [spinner verification and rollback](../research/launch-spinner.md).
+the original launch path. See [spinner verification and rollback](../lab/research/launch-spinner.md).
 It fails visibly when the runtime or permission is missing.
 The manifest requests `application.launch` plus filesystem read/write for
 monitoring preferences. The launch privilege and remote input worked for Plex. Other hardware checks are recorded in the integration notes.
@@ -143,7 +143,7 @@ It preserves exact prior helper/cache bytes and marker state. See
 [S90D boot recovery](s90d-boot-recovery.md) for commands, failure handling and limits.
 No boot optimization or S90D native Hub port is enabled by that tooling.
 
-The [offline assessment](../devices/s90d/native-boot-assessment.md) recommends
+The [offline assessment](../lab/devices/s90d/native-boot-assessment.md) recommends
 measurement first: the 22-second acknowledgement/resume records do not measure
 when the panel shows the Hub or when the remote first works.
 
@@ -159,7 +159,7 @@ original checkout. The old `enable.py`/`restore.py` commands describe historical
 native-setting experiments with fixed placeholder addressing and no current
 shared journal. Do not run them as today's recovery procedure. Restoring a boot
 checkpoint does not change Home assignment or uninstall the Hub.
-See [historical verification details](../devices/s90d/README.md).
+See [historical verification details](../lab/devices/s90d/README.md).
 
 ## Verification
 
@@ -187,7 +187,7 @@ This also unloads main Samsung Home; reopening it took about nine seconds.
 App launches, Home-key routing, cold Samsung Home, Quick Settings and source
 overlays passed focused TV checks. Run `python3 tools/s90d/trim-home.py --restore` to
 relaunch the full Home family and return to Minimal Hub.
-See [measurements and limitations](../devices/s90d/overhead.md).
+See [measurements and limitations](../lab/devices/s90d/overhead.md).
 
 The background-startup investigation found main Samsung Home already absent in
 two post-reboot samples with the existing hub configuration. Its sidebar helper

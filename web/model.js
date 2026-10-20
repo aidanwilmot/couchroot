@@ -9,6 +9,17 @@
     return app && typeof app.id === 'string' && /^[A-Za-z0-9_.-]{1,256}$/.test(app.id) &&
       app.id !== HOME && app.id !== SELF && typeof app.name === 'string' && app.name.trim().length > 0;
   }
+  // Native text storage is deliberately stricter than web normalization.
+  function nativeApps(apps) {
+    if (!Array.isArray(apps) || apps.length > 128) { return false; }
+    var seen = Object.create(null);
+    return apps.every(function (app) {
+      if (!valid(app) || seen[app.id] || /[\x00-\x1f\x7f]/.test(app.name)) { return false; }
+      try { if (encodeURIComponent(app.name).replace(/%[A-Fa-f0-9]{2}|./g, 'x').length > 120) { return false; } }
+      catch (_) { return false; }
+      seen[app.id] = true; return true;
+    });
+  }
   function clean(apps) {
     var seen = Object.create(null);
     return apps.filter(function (app) {
@@ -45,6 +56,6 @@
     if (key === 'ArrowDown') { row = Math.min(rows.length - 1, row + 1); }
     return [row, Math.min(col, rows[row] - 1)];
   }
-  root.HubModel = { KEY: KEY, HOME: HOME, SELF: SELF, defaults: defaults, clean: clean, load: load, save: save, move: move, navigate: navigate };
+  root.HubModel = { KEY: KEY, HOME: HOME, SELF: SELF, defaults: defaults, valid: valid, nativeApps: nativeApps, clean: clean, load: load, save: save, move: move, navigate: navigate };
   if (typeof module !== 'undefined') { module.exports = root.HubModel; }
 }(typeof window !== 'undefined' ? window : globalThis));

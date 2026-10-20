@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto'),{spawn}=require('node:child_process'),{once}=require('node:events');
-const {RootAgentServer}=require('../research/autonomous-root/service/vendor/root-agent');
+const {RootAgentServer}=require('../research/autonomous-root/service/root-agent');
 const {validateBootstrap}=require('../research/autonomous-root/service/held-bootstrap');
 const enabled=process.platform==='linux'&&process.env.COUCHROOT_REHEARSAL==='1'&&process.env.NATIVE_WORKER;
 for(const close of ['shutdown','disconnect','excessive-timeout'])test('bounded native bootstrap authenticates, rejects public resources and retires on '+close,{skip:!enabled,timeout:20000},async()=>{

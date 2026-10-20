@@ -32,7 +32,18 @@ def certificate(builder, folder, name):
     return sha(ssl.PEM_cert_to_DER_cert(cert.read_text()))
 
 
+def verify_sources():
+    """Verify the recorded local bytes before copying or compiling adaptations."""
+    manifest=json.loads((SOURCE/'UPSTREAM.json').read_text())
+    for entry in manifest['files']:
+        path=SOURCE/entry['path']
+        if path.is_symlink() or not path.is_file() or sha(path.read_bytes())!=entry['sha256']:
+            raise Refused('Autonomous-root source hash mismatch: '+entry['path'])
+    return manifest
+
+
 def prepare(device, site, sign=True, version=None, native_candidate=False, native_acquisition=False):
+    verify_sources()
     profile=configured_profile(device,site)
     if sign:require_trust(profile)
     folder=PRIVATE/'autonomous-root'/device/run_id();folder.mkdir(parents=True,mode=0o700)

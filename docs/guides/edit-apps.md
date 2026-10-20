@@ -1,4 +1,4 @@
-# Edit apps — Minimal Hub 0.3.8
+# Edit apps in Minimal Hub
 
 > **2026-10-12 recovery correction:** direct `tools/s90d/restore.py` commands
 > below are historical Home-settings procedures with placeholder addressing, not
@@ -15,7 +15,7 @@ automatic process cleanup.
 
 The signed hub now requests Samsung’s verified no-loading launch hint through
 app control. Samsung Home keeps its ordinary launch path. See the
-[device evidence, limitations and exact rollback](../research/launch-spinner.md).
+[device evidence, limitations and exact rollback](../lab/research/launch-spinner.md).
 36 focused automated checks pass. The owner confirmed with the physical remote
 that the Samsung spinner is gone. Existing preferences and the mellow tone are
 unchanged.
@@ -71,7 +71,7 @@ rollback was signed from its source, changing only the version to **0.3.97**:
 
 This rollback has not been installed. It preserves shortcut data and ignores the
 new clock/menu keys; subsequent releases must exceed 0.3.97 after using it.
-For the blue Samsung spinner investigation, see [the verified native launch findings](../research/launch-spinner.md).
+For the blue Samsung spinner investigation, see [the verified native launch findings](../lab/research/launch-spinner.md).
 
 ## Page design update — 0.3.6
 

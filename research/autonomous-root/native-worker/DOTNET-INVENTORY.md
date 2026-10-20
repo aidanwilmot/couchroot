@@ -84,7 +84,7 @@ pinned SDK transport. Device: Samsung's trusted dotnet host, matching framework,
 libc namespace/mount calls, `/proc`, stock `sdbd-tarlauncher`, tar and shell.
 Crucially, the trusted runtime makes inherited mount/group capabilities effective;
 an arbitrary unsigned C executable is not automatically an equivalent acquisition
-entry point. The historical [chain evidence](../../../docs/research/exploit-chain.md)
+entry point. The historical [chain evidence](../../../docs/lab/research/exploit-chain.md)
 explains this dependency. A native port needs both equivalent orchestration and a
 separately qualified way to enter the required capability context on each firmware.
 Do not solve that by relaxing SMACK, changing system passwd/key files or granting

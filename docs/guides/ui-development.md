@@ -2,7 +2,7 @@
 
 Minimal Hub has one UI source: `web/`. The browser workbench serves those files
 with simulated Tizen APIs. The unsigned TV package includes only the explicit
-file list in `scripts/package.py`; it contains no preview tooling.
+model-aware manifest in `tvsetup/planner.py::hub_sources`; it contains no preview tooling.
 
 ## Start
 
@@ -77,7 +77,7 @@ a fixed clock and reduced motion. Inspect the images; these are not golden-image
 tests. The older-browser checks exercise selected fallbacks in modern Chromium,
 not a Tizen emulator.
 
-Packaging writes `dist/MinimalHub-unsigned.wgt` and `dist/manifest.json`.
+Packaging writes `dist/MinimalHub-<device>-unsigned.wgt` and `dist/manifest-<device>.json`.
 For an authorized update to an already configured TV, follow
 [UI deployment](ui-deployment.md). It signs current source through the setup
 engine; the unsigned WGT is a local build check, not its deployment input.
@@ -140,14 +140,14 @@ Home retains its tile nodes when order, layout, artwork and availability are
 unchanged. App lookup uses an ID map, and return discovery starts after 150 ms
 instead of during the first restored render. Browser tests check node reuse and
 late-data/focus behavior. This does not establish native standby or screensaver
-return latency; see [the performance record](../devices/qn90a/performance.md).
+return latency; see [the performance record](../lab/devices/qn90a/performance.md).
 
-The [2026-09-22 hardware record](../research/hub-hardware-validation-20260922.md) tracks the
+The [2026-09-22 hardware record](../lab/research/hub-hardware-validation-20260922.md) tracks the
 UI deployment and native-key checks on both TVs, including remaining physical
 remote, playback and startup acceptance.
 
 HDMI is not exposed until source handoff is verified on each model. See the
-[HDMI investigation](../research/hdmi-shortcuts.md) for evidence and the remaining checks.
+[HDMI investigation](../lab/research/hdmi-shortcuts.md) for evidence and the remaining checks.
 
 ## Source boundaries
 
@@ -183,4 +183,15 @@ retries and explicit discovery recovery remain available.
 
 `HubBootTrace` hooks are inert in a normal package. The research recorder adds
 bounded navigation/paint timing when explicitly included in a diagnostic build;
-it is not a production asset. See the [QN90A measurements and limitations](../devices/qn90a/web-startup.md).
+it is not a production asset. See the [QN90A measurements and limitations](../lab/devices/qn90a/web-startup.md).
+
+The model-aware package manifest is `tvsetup.planner.hub_sources`. `python3
+scripts/package.py --device s90d` (the default) or `--device qn90a` builds the
+same unsigned runtime inputs used by the setup builder; QN90A adds its idle
+script. The native WebView bundle uses the unconfigured variant to preserve its
+existing adapter behavior.
+
+Standalone `scripts/sign.py` uses `SAMSUNG_TV_TOOLKIT` and the enrolled signing
+trust from `--site` / `TV_SETUP_SITE`. It verifies both package signatures before
+reporting success. `--boot-trace` increments the patch version read from the
+widget manifest. Signing is local; it does not install or contact a TV.
