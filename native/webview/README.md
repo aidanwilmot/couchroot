@@ -1,5 +1,11 @@
 # Native WebView Hub (experimental)
 
+> Phase 2 remains unaccepted on hardware. WebView permits the TV Plus discovery
+> exception; pure-native Hub does not. Native preference import refuses an invalid
+> file as a whole, leaving the source file and existing WebView preferences intact.
+> Missing files log `skipped=missing`; malformed ones log `skipped=format`.
+> See the [current acceptance gates](../../docs/project/release-readiness.md#current-acceptance-gates-merged-phase-2).
+
 QN90A firmware **T-NKM2AKUC-2301.1 only**. This host runs the existing `web/`
 interface in Chromium/EWK inside an owner-UID EFL window. It starts from the
 native boot hook. Background admission can precede Samsung's signed web-app

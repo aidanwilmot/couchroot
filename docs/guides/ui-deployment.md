@@ -87,3 +87,7 @@ Automated checks validate the selected model and installed package content.
 On the TV, confirm the new screen, arrows/OK/Back, saved favorites, an app launch,
 and the Samsung Home fallback. Browser fixtures and installer completion do not
 establish visual, playback, Home-key or reboot behavior.
+
+Direct use of `scripts/sign.py` has the same site/trust requirement: `--site` is
+optional only because `TV_SETUP_SITE` or the standard site.json location can
+supply it. A named SDK signing profile alone is insufficient.
