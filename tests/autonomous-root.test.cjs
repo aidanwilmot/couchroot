@@ -26,16 +26,10 @@ test('journal rejects replay across restart, including uncertain outcomes',()=>{
 });
 test('request and configuration bounds fail closed',()=>{
  for(const v of [{},command('short'),{...command(),timeout_ms:25001},{...command(),command:'x'.repeat(16385)},{...command(),command:'id\0'},{...command(),extra:true}])assert.throws(()=>validateRequest(v));
- const c={schema:1,device:'qn90a',enabled:false,port:28443,firmware:'test',client_sha256:'a'.repeat(64),hashes:{'/usr/bin/dotnet':'b'.repeat(64),'/usr/sbin/sdbd-tarlauncher':'c'.repeat(64)}};assert.equal(config(c),c);assert.throws(()=>config({...c,hashes:{'/tmp/bad':'d'.repeat(64)}}));assert.throws(()=>config({...c,enabled:'yes'}));
+ const c={schema:1,device:'qn90a',enabled:false,port:28443,firmware:'test',client_sha256:'a'.repeat(64),hashes:{'/usr/bin/dotnet':'b'.repeat(64),'/usr/sbin/sdbd-tarlauncher':'c'.repeat(64)}};assert.equal(config(c),c);assert.equal(config({...c,service_acquisition:"native"}).service_acquisition,"native");assert.throws(()=>config({...c,service_acquisition:"managed"}));assert.throws(()=>config({...c,hashes:{'/tmp/bad':'d'.repeat(64)}}));assert.throws(()=>config({...c,enabled:'yes'}));
 });
-test('firmware failure never reaches SDK; explicit stop cancels retry',async()=>{
- const a=createAgent({device:'qn90a'},{verifyFirmware:()=>{throw Error('firmware drift');}});assert.equal(a.status().enabled,false);a.start();await new Promise(r=>setImmediate(r));assert.equal(a.status().connected,false);assert.equal(a.status().attempts,1);assert.match(a.status().last_error,/firmware drift/);a.stop();assert.equal(a.status().enabled,false);
-});
-test('permission failures retain the acquisition step and file path',async()=>{
- const a=createAgent({device:'s90d'},{verifyFirmware:()=>{throw Object.assign(new Error("EACCES: permission denied, open '/usr/bin/dotnet'"),{code:'EACCES'});}});
- try {a.start();await new Promise(r=>setImmediate(r));assert.match(a.status().last_error,/^firmware verification: EACCES:.*\/usr\/bin\/dotnet/);}
- finally {a.stop();}
-});
+
+
 test('mutual TLS, enrollment pin, request replay, disable and unknown outcomes',async()=>{
  const dir=tmp();let server;const pool=new https.Agent({keepAlive:true,maxSockets:1});
  try{

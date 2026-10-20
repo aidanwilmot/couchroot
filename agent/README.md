@@ -4,10 +4,31 @@
 
 The agent provides enrolled, authenticated administration for the pinned QN90A
 and S90D firmware profiles. It reacquires a temporary namespace root context;
-it does not patch firmware or bypass SMACK. The native worker keeps its small
-.NET entry bridge and managed fallback. Phase 2 is merged but has not yet been
-accepted on either TV; earlier device results do not qualify the current build.
-See [release gates](../docs/project/release-readiness.md).
+it does not patch firmware or bypass SMACK. Native is the only packaged worker and
+acquisition path. The small `agent/native-acquisition/ServiceEntry.cs` .NET bridge still invokes the
+native acquisition library; it contains no worker, EXEC or file-transfer engine.
+The signed web Hub, native worker and telemetry settings adapter are unchanged.
+This retirement requires fresh acceptance on **both TVs** before deployment.
+
+The package deliberately requires an existing, settled native selection and its
+committed activation/state records. It refuses managed selections, missing
+selection and unfinished legacy migrations. Keep the previous signed package,
+checkout and immutable journals to finish those recoveries before upgrading.
+It does not invent a new selection or migrate retained jobs during installation.
+
+Native startup retains its fenced launch, job recovery and readiness checks.
+An interrupted bootstrap is sealed and cleaned by a fresh bounded native
+acquisition operation; only its exact success and unchanged durable receipt clear
+the pending marker. A lost reply leaves the marker for convergent cleanup. Public
+requests stay closed until the selected native worker is independently ready and
+the bootstrap has retired. No managed fallback is attempted.
+
+The old managed worker and archive-root assemblies, embedded launcher wrapper,
+C# protocol/file/EXEC/job/helper implementations and their managed harness are
+removed. Historical migration/rollback validators remain in source for recovery tests but
+are excluded from new packages; records remain readable;
+the running agent no longer exposes managed migration/return methods. Existing
+legacy API routes reject unavailable operations. See [release gates](../docs/project/release-readiness.md).
 
 ## Enrolment
 

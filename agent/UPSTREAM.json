@@ -17,7 +17,7 @@
     {
       "path": "service/root-agent.js",
       "upstream": "rooting/service/root-agent.js",
-      "sha256": "5a9bc67e9e2b808ed6304b0b8a3c36a81d28bfb4838cb659cb43449feaf05cbc",
+      "sha256": "dea96675e6c048fd28d7b05335dfee867a3f4cc7b8f0447f66be309a5ac0fc27",
       "upstream_sha256": "86e114f9805d358ae36c461a06d28fd8bcb58754fafdb1c11b23a25ab9ee6645",
       "modified": true,
       "pre_format_sha256": "ba4fba75135e5496704c030606a69bea33abf426f91bba80754c5cfd81f86535",
@@ -28,18 +28,6 @@
       "upstream": "rooting/service/tar.js",
       "sha256": "063955310af7c98d2d8b25f212dbe36e695a02c97ec7d80b45d79d0ed8d344c8",
       "upstream_sha256": "063955310af7c98d2d8b25f212dbe36e695a02c97ec7d80b45d79d0ed8d344c8"
-    },
-    {
-      "path": "payload/SamsungTvRootAgent.cs",
-      "upstream": "rooting/tools/samsung-tv-root-master/payloads/common/SamsungTvRootAgent.cs",
-      "sha256": "d9668fbc5518f8265631f210ddfd35c64781f8086166892e04b969fd0f2b982a",
-      "upstream_sha256": "3b53e8c9de66331ca5336f57bc8eba33adf66ca2860a29daedbbeb3a98ea8405",
-      "modified": true
-    },
-    {
-      "path": "payload/SamsungTvArchiveRoot.cs",
-      "upstream": "rooting/tools/samsung-tv-root-master/payloads/common/SamsungTvArchiveRoot.cs",
-      "sha256": "868ce8957a421931dc191bc9289dbbb31073a68b7cf02e53104a6a150ae1371e"
     }
   ]
 }

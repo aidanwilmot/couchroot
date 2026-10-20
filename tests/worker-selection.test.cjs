@@ -1,8 +1,9 @@
+const {managedVersion}=require('../agent/maintenance/managed-version');
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
 const {createRequire}=require('node:module');
-const {SelectionJournal,selectionStatus,managedVersion}=require('../agent/service/worker-selection');
+const {SelectionJournal,selectionStatus}=require('../agent/service/worker-selection');
 const {createAgent}=require('../agent/service/agent');
 const M={implementation:'managed',manifest_sha256:'a'.repeat(64)},N={implementation:'native-prototype',manifest_sha256:'b'.repeat(64)},Q='c'.repeat(64),S='d'.repeat(64),R='e'.repeat(64);
 function fixture(){const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'worker-selection-')));const file=path.join(dir,'worker-selection.json');return {dir,file,j:new SelectionJournal(file),close:()=>fs.rmSync(dir,{recursive:true,force:true})};}
@@ -68,7 +69,8 @@ test('history remains bounded and readable after many complete transitions',()=>
   assert.equal(f.j.read().history.length,32);assert.equal(selectionStatus(f.file).phase,'stable');
  }finally{f.close();}
 });
-test('managed artifact version binds the six managed package bytes',()=>{
+test('retired maintenance owns managed versioning, outside the shipped selection module',()=>{
+ assert.equal(require('../agent/service/worker-selection').managedVersion,undefined);
  const f=fixture();try{
   const {hash}=require('../agent/service/policy'),index={};
   for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const suffix of ['dll','runtimeconfig.json','deps.json']){const file=name+'.'+suffix;fs.writeFileSync(path.join(f.dir,file),file);index[file]=hash(file);}
@@ -76,22 +78,7 @@ test('managed artifact version binds the six managed package bytes',()=>{
   fs.appendFileSync(path.join(f.dir,'SamsungTvRootAgent.dll'),'changed');assert.throws(()=>managedVersion(f.dir));
  }finally{f.close();}
 });
-test('service does not acquire through submitted pending native or mismatched selection',async()=>{
- // A restarted service abandons only a prepared transition with no submission
- // evidence; a submitted provider launch keeps acquisition blocked.
- for(const kind of ['pending-submitted','native','mismatch','managed','pending-unsubmitted']){
-  const f=fixture();let agent,calls=0;try{
-   let s=f.j.initialize(M);
-   if(kind.startsWith('pending')||kind==='native'){s=f.j.begin(s.revision,N,Q);if(kind==='native'){s=advance(f.j,s,'state-ready',S);s=advance(f.j,s,'trial-ready',R);s=f.j.commit(s.revision,s.pending.id);}}
-   if(kind==='pending-submitted')fs.writeFileSync(path.dirname(f.file)+'/retirement-launch.pending','submitted\n',{mode:0o600});
-   agent=createAgent({device:'qn90a'},{selectionFile:f.file,managedVersion:()=>kind==='mismatch'?'9'.repeat(64):M.manifest_sha256,verifyFirmware:()=>{calls++;throw Error('fixture-stop');}});
-   const acquires=['managed','pending-unsubmitted'].includes(kind);
-   agent.start();await new Promise(r=>setImmediate(r));assert.equal(calls,acquires?1:0,kind);assert.equal(agent.status().worker_ready,false);
-   if(kind==='pending-unsubmitted'){assert.equal(f.j.read().pending,null);assert.equal(f.j.read().history.at(-1).outcome,'abandoned');}
-   if(!acquires){assert.equal(agent.status().phase,'selection-required');assert.equal(agent.status().attempts,0);await assert.rejects(agent.operation({op:'file.commit'}));}
-  }finally{if(agent)agent.stop();f.close();}
- }
-});
+
 test('retained-record import and rollback exports bind to committed selection receipts',()=>{
  const {execFileSync}=require('node:child_process'),{hash}=require('../agent/service/policy');
  const f=fixture();try{
@@ -117,4 +104,19 @@ test('selection cannot disagree with its retained transition history',()=>{
   s.selected=M;s.last_known_good=M;fs.writeFileSync(f.file,JSON.stringify(s));
   assert.equal(selectionStatus(f.file).launch_allowed,false);assert.equal(selectionStatus(f.file).phase,'inspection-required');
  }finally{f.close();}
+});
+
+test('native-only service refuses missing, managed and unfinished enrollment without changing recovery records',async()=>{
+ const {createAgent}=require('../agent/service/agent');
+ for(const kind of ['missing','managed','pending']){
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-enrollment-')),file=dir+'/selection.json';let calls=0;
+  if(kind!=='missing'){
+   const journal=new SelectionJournal(file);journal.initialize({implementation:'managed',manifest_sha256:'a'.repeat(64)});
+   if(kind==='pending')journal.begin(1,{implementation:'native-prototype',manifest_sha256:'b'.repeat(64)},'c'.repeat(64));
+  }
+  const before=fs.existsSync(file)?fs.readFileSync(file):null;
+  const agent=createAgent({device:'qn90a'},{selectionFile:file,verifyFirmware:()=>{calls++;throw Error('must not acquire');}});
+  try{agent.start();await new Promise(r=>setImmediate(r));assert.equal(calls,0);assert.equal(agent.status().worker_ready,false);await assert.rejects(agent.execute('must not run',1000));assert.match(agent.status().last_error,/settled native enrollment/);assert.deepEqual(fs.existsSync(file)?fs.readFileSync(file):null,before);assert.equal(agent.returnManaged,undefined);assert.equal(agent.migrateNative,undefined);}
+  finally{agent.stop();fs.rmSync(dir,{recursive:true,force:true});}
+ }
 });

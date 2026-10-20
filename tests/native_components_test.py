@@ -71,7 +71,7 @@ class NativeComponentsTests(unittest.TestCase):
                 result = components.build(model, output, compiler)
                 self.assertFalse(result['managed_build_required'])
                 self.assertFalse(result['deployable_agent'])
-                self.assertTrue(result['managed_fallback_required'])
+                self.assertFalse(result['managed_fallback_required'])
                 self.assertEqual(result['capability_entry'], 'unresolved')
                 self.assertEqual(len(result['artifacts']), 6)
                 self.assertEqual(compiler.component_builds, 6)

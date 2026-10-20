@@ -9,9 +9,9 @@ contact or modify someone else's TV or NAS, and do not treat mocked device state
 as hardware validation. Live mutations require the device owner's authorization.
 
 CI runs web/setup checks on Node 22/24 and Python 3.12/3.14 on Linux, alongside
-managed fallback, native worker, ARM launcher builds and QN90A saver checks.
+retained managed adapters, native worker, ARM launcher builds and QN90A saver checks.
 A focused macOS 14/Python 3.12 job covers setup, installer and UI deployment.
-ARM64 parity runs the real managed/native workers and process observer in an
+ARM64 parity runs the real native workers and process observer in an
 isolated container. Actions and pulled images are pinned. Dependabot proposes weekly Actions,
 npm, pip and Dockerfile updates; it does not update the Emscripten container or
 .NET SDK `docker run` image embedded in `validate.yml`. Review those manually.

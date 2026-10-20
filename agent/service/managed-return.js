@@ -1,11 +1,12 @@
 'use strict';
 // Return an adopted native trial to its original managed version under one hold.
+const { managedVersion } = require('../maintenance/managed-version');
 const fs = require('fs'),
   path = require('path');
 const { hash } = require('./policy');
 const { privateRead, privateDirectory } = require('./private-state');
 const { runtimeRead, nativeReadiness } = require('./native-runtime');
-const { SelectionJournal, managedVersion } = require('./worker-selection');
+const { SelectionJournal } = require('./worker-selection');
 const { validateRuntimeLaunch } = require('./production-readiness');
 const { openManagedSession } = require('./managed-session');
 const { planNativeSnapshot } = require('./native-retained-state');

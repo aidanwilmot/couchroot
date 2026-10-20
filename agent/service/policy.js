@@ -44,7 +44,7 @@ function config(data) {
   if (
     data &&
     data.service_acquisition !== undefined &&
-    !['managed', 'native'].includes(data.service_acquisition)
+    data.service_acquisition !== 'native'
   )
     throw Error('Invalid service acquisition selection');
   if (

@@ -72,30 +72,3 @@ test('changed token, restoration input and committed quiescence refuse channel a
   await assert.rejects(session.takeChannel(),e=>e.outcome==='unknown');assert.equal(f.state().closed,1);
  });
 });
-test('managed session authenticates a real managed process and transfers its channel once',{
- skip:process.platform!=='linux'||!process.env.COUCHROOT_PARITY_CONTAINER||!process.env.MANAGED_PARITY,timeout:20000
-},async()=>{
- const directory=fs.mkdtempSync(path.join(os.tmpdir(),'managed-session-wire-')),selectionFile=directory+'/selection.json',journal=new SelectionJournal(selectionFile),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim();
- const original={boot_id:boot,worker_id:'2'.repeat(32),processes:{worker:{pid:2147483000,start_ticks:'1'},guardian:null}},native={boot_id:boot,worker_id:'3'.repeat(32),processes:{worker:{pid:2147483001,start_ticks:'2'},guardian:{pid:2147483002,start_ticks:'3'}}},providerIdentity={boot_id:boot,worker_id:'4'.repeat(32),processes:{worker:{pid:2147483003,start_ticks:'4'},guardian:{pid:2147483004,start_ticks:'5'}}};
- journal.initialize({implementation:'managed',manifest_sha256:'a'.repeat(64)});const id=journal.begin(1,{implementation:'native-prototype',manifest_sha256:sha},sha).pending.id;journal.advance(2,id,'rollback-required',sha);journal.advance(3,id,'rollback-state-ready','d'.repeat(64));
- fs.writeFileSync(directory+'/'+id+'.managed-restore-input.json',JSON.stringify({record:{source:original}}),{mode:0o600});
- const {RootAgentServer}=real('./root-agent'),{managedIdentity}=real('./managed-readiness');let child,ended,session,stderr='';
- class HostServer extends RootAgentServer{constructor(options){super({...options,onConnect:peer=>{peer.identity.smack='User';options.onConnect(peer);}});}}
- let submitted;
- const provider={identity:providerIdentity,launchManaged:async options=>{
-  const stage=directory+'/stage';fs.mkdirSync(stage,{mode:0o700});fs.copyFileSync(options.tokenFile,stage+'/token');
-  submitted={schema:1,id,phase:'submitted',boot_id:boot,source:native,port:options.port,token_file:options.tokenFile,token_sha256:options.tokenSha256,state_receipt_sha256:'d'.repeat(64),manifest_sha256:'a'.repeat(64)};
-  fs.writeFileSync(directory+'/managed-launch.pending',id+'\n',{mode:0o600});
-  child=require('node:child_process').spawn('dotnet',[process.env.MANAGED_PARITY,'--parity-wire',String(options.port),stage],{stdio:['ignore','ignore','pipe']});ended=require('node:events').once(child,'exit');child.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-8192);});return submitted;
- },verifyManaged:async options=>{
-  assert.deepEqual(options.record,submitted);const info=await options.channel.operation({op:'status'}),identity=managedIdentity(info,options.channel._conn,submitted,providerIdentity,original);
-  const record={...submitted,phase:'ready',worker_identity:identity,unit_started_monotonic:'123',launcher_sha256:info.app_launcher.sha256};fs.writeFileSync(directory+'/'+id+'.managed-launch.json',JSON.stringify(record),{mode:0o600});return {record,readiness_sha256:hash(JSON.stringify(record))};
- }};
- const module={exports:{}};vm.runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,setTimeout,clearTimeout,require:n=>n==='./root-agent'?{RootAgentServer:HostServer}:real(n)});
- try{
-  session=await module.exports.openManagedSession({journalDirectory:directory,selectionFile,id,provider});journal.commitRollback(4,id,session.readiness_sha256);
-  const channel=await session.takeChannel();assert.equal((await channel.operation({op:'status'})).worker_id,session.record.worker_identity.worker_id);
-  const result=await channel.execute('printf managed-session-ok',1000);assert.equal(result.exit_code,0);assert.equal(result.stdout,'managed-session-ok');await assert.rejects(session.takeChannel());
-  assert.deepEqual(await channel.shutdown(),{acknowledged:true,disconnected:true});assert.deepEqual(await ended,[0,null],stderr);
- }finally{if(session)session.closeTransport();if(child&&child.exitCode===null&&child.signalCode===null){child.kill('SIGTERM');await ended;}fs.rmSync(directory,{recursive:true,force:true});}
-});

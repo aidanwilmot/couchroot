@@ -12,7 +12,7 @@ class SourceHashes(unittest.TestCase):
     def test_recorded_local_hashes_match(self):
         manifest=autonomous_root.verify_sources()
         adapted=[e for e in manifest['files'] if e.get('modified')]
-        self.assertEqual(len(adapted),2)
+        self.assertEqual(len(adapted),1)
         self.assertTrue(all(e['upstream_sha256']!=e['sha256'] for e in adapted))
         self.assertIn('service/root-agent.js',[e['path'] for e in adapted])
 

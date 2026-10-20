@@ -265,7 +265,7 @@ async function managedLaunchFixture(f,committed=false){
  fs.mkdirSync(payloadLocal,{recursive:true,mode:0o755});const manifest={};
  for(const name of ['SamsungTvArchiveRoot','SamsungTvRootAgent'])for(const ext of ['dll','runtimeconfig.json','deps.json']){const n=name+'.'+ext,bytes=Buffer.from(n);manifest[n]=hash(bytes);fs.writeFileSync(payloadLocal+'/'+n,bytes,{mode:0o644});fs.chownSync(payloadLocal+'/'+n,201,201);}
  fs.writeFileSync(payloadLocal+'/manifest.json',JSON.stringify(manifest));
- const selectionModule=require('../agent/service/worker-selection'),version=selectionModule.managedVersion(payloadLocal);
+ const selectionModule=require('../agent/maintenance/managed-version'),version=selectionModule.managedVersion(payloadLocal);
  fs.writeFileSync(r.options.selectionFile,fs.readFileSync(r.options.selectionFile,'utf8').replaceAll('e'.repeat(64),version));
  await acceptManagedRestore(r.accept);
  const tokenFile='/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state/managed-ABC123/token',tokenLocal=tokenFile.replace('/opt/usr',f.root+'/package-root');
@@ -273,7 +273,7 @@ async function managedLaunchFixture(f,committed=false){
  const runtime=f.root+'/dotnet';fs.writeFileSync(runtime,'fixture runtime',{mode:0o755});fs.mkdirSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools',{recursive:true,mode:0o755});fs.symlinkSync('package-root/home',f.root+'/home');
  const bin=f.root+'/bin';fs.mkdirSync(bin);fs.writeFileSync(bin+'/systemctl','#!/bin/sh\necho LoadState=not-found\n',{mode:0o755});fs.writeFileSync(bin+'/systemd-run','#!/bin/sh\nprintf "%s\\n" "$@" > '+f.root+'/launched\n',{mode:0o755});
  const file=path.resolve(__dirname,'../agent/service/managed-launch.js'),real=require('node:module').createRequire(file),module={exports:{}};
- require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='./worker-selection'?{...real(n),managedVersion:p=>real(n).managedVersion(p.replace(payload,payloadLocal))}:n==='./policy'?{...real(n),read:(p,l)=>real(n).read(p.replace(payload,payloadLocal),l)}:real(n)});
+ require('node:vm').runInNewContext(fs.readFileSync(file,'utf8'),{module,process,Buffer,require:n=>n==='../maintenance/managed-version'?{managedVersion:p=>real(n).managedVersion(p.replace(payload,payloadLocal))}:n==='./policy'?{...real(n),read:(p,l)=>real(n).read(p.replace(payload,payloadLocal),l)}:real(n)});
  const execute=c=>r.execute(c.replaceAll('/opt/usr',f.root+'/package-root').replaceAll('/opt/couchroot-managed-',f.root+'/launch-').replaceAll("'/home","'"+f.root+'/home').replaceAll('/usr/bin/dotnet',runtime).replaceAll('PATH=/usr/bin:/bin','PATH='+bin+':/usr/bin:/bin'));
  const options={transitionId:r.receipt.transition_id,journalDirectory:r.options.journalDirectory,selectionFile:r.options.selectionFile,receiptSha256:r.receipt.receipt_sha256,payload,managedSha256:version,runtimeSha256:hash('fixture runtime'),port:12345,tokenFile,tokenSha256:hash(token),execute};
  return {...r,api:module.exports,launchOptions:options,execute,tokenLocal,payloadLocal,runtime,bin,launchFile:r.options.journalDirectory+'/'+options.transitionId+'.managed-launch.json'};
@@ -294,17 +294,7 @@ test('managed launch uses canonical staging when home is the TV compatibility sy
  assert.deepEqual(args.slice(-2),[f.root+'/home/owner/share/tmp/sdk_tools/managed-'+result.id+'/token',f.root+'/home/owner/share/tmp/sdk_tools/managed-'+result.id]);
  assert(fs.existsSync(f.root+'/package-root/home/owner/share/tmp/sdk_tools/managed-'+result.id+'/token'));
 }));
-test('generated managed launch arguments pass the unchanged production staging validator',{
- skip:linux.skip||!process.env.MANAGED_PARITY
-},()=>fixture(async f=>{
- const r=await managedLaunchFixture(f),result=await r.api.submitManaged(r.launchOptions);
- const args=fs.readFileSync(f.root+'/launched','utf8').trimEnd().split('\n');
- const runtimeStage=args[args.length-1].replace(f.root+'/home','/home');
- const validate=stage=>spawnSync('dotnet',[process.env.MANAGED_PARITY,'--validate-staging',stage],{encoding:'utf8',timeout:10000});
- const accepted=validate(runtimeStage);assert.equal(accepted.status,0,accepted.stderr);assert.equal(accepted.stdout,runtimeStage+'/\n');
- assert.equal(validate(result.stage).status,64);
- assert.equal(validate('/home/owner/share/tmp/sdk_tools/../foreign').status,64);
-}));
+
 test('managed launch refuses a compatibility home alias to a different directory',linux,()=>fixture(async f=>{
  const r=await managedLaunchFixture(f);
  fs.unlinkSync(f.root+'/home');fs.mkdirSync(f.root+'/foreign-home');fs.symlinkSync('foreign-home',f.root+'/home');

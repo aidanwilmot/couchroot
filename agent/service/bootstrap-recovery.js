@@ -287,7 +287,29 @@ async function reconcileBootstrap({ selectionFile, bootId, executor }) {
   clearMarker(record);
   return { id: record.id, phase: 'complete', launch_replayed: false };
 }
+// The native acquisition probe is a bounded root shell, not a public worker.
+// Its output is returned by SDB only after the exact fenced cleanup completes.
+function completeAcquisitionRecovery(selectionFile, record, bootId, output) {
+  check(
+    JSON.stringify(recoveryCandidate(selectionFile, bootId)) ===
+      JSON.stringify(record)
+  );
+  check(
+    typeof output === 'string' &&
+      /^BOOTSTRAP-RECONCILED\r?$/m.test(output) &&
+      !output.includes('BOOTSTRAP-RECOVERY-FAILED')
+  );
+  atomic(record.file, {
+    ...record,
+    phase: 'retired',
+    reconciled: true,
+    reconciled_boot_id: bootId,
+  });
+  clearMarker(record);
+  return { id: record.id, phase: 'complete', launch_replayed: false };
+}
 module.exports = {
+  completeAcquisitionRecovery,
   markerId,
   validateRecord,
   recoveryCandidate,

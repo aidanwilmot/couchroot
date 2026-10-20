@@ -21,6 +21,38 @@ from .site import load_site, configured_profile, binding
 SOURCE = REPO / "agent"
 PACKAGE = "MiniRoot01"
 
+# Retained in the source tree for historical journal/recovery tests, not shipped
+# in a native-only package. Native startup and its reconciliation dependencies stay.
+RETIRED_SERVICE_MODULES = (
+    "native-return-recovery",
+    "retirement-reconcile",
+    "retirement-session",
+    "restart-cleanup",
+    "restart-return",
+    "managed-session",
+    "managed-launch",
+    "retirement-readiness",
+    "native-migration",
+    "managed-activation",
+    "production-activation",
+    "observer-stage",
+    "managed-return",
+    "managed-restore-plan",
+    "observer-retirement",
+    "observer-runtime",
+    "pidfd-observer",
+    "production-session",
+    "retirement-launch",
+    "observer-recovery",
+    "managed-restore",
+    "production-launch",
+    "retirement-teardown",
+    "production-exit",
+    "production-retirement",
+    "managed-readiness",
+    "managed-completion",
+)
+
 
 def certificate(builder, folder, name):
     key, cert = folder / (name + "-key.pem"), folder / (name + ".pem")
@@ -96,41 +128,26 @@ def prepare(
         p.write_text(
             p.read_text().replace('version="0.1.0"', 'version="' + version + '"')
         )
-    shutil.copytree(SOURCE / "service", stage / "service")
+    shutil.copytree(
+        SOURCE / "service",
+        stage / "service",
+        ignore=shutil.ignore_patterns(
+            *(name + ".js" for name in RETIRED_SERVICE_MODULES)
+        ),
+    )
     payload = stage / "payload"
     payload.mkdir(mode=0o700)
-    if native_acquisition and not native_candidate:
-        raise Refused("Native service acquisition requires the native candidate")
-    if native_candidate:
-        from .native_worker import ARTIFACTS, build as build_native
+    from .native_worker import ARTIFACTS, build as build_native
+    from .native_root import build as build_acquisition, FILES
 
-        native = build_native(folder / "native-worker-candidate", builder.command)
-        launcher = native / "native-app-launcher"
-        for name in (*ARTIFACTS, "native-manifest.json"):
-            shutil.copyfile(native / name, payload / name)
-    else:
-        from .root_launcher import build as build_launcher
-
-        launcher = build_launcher(folder / "native-app-launcher", builder.command)
-    for name in ("SamsungTvRootAgent", "SamsungTvArchiveRoot"):
-        output = folder / "compiled" / name
-        builder.build_managed(
-            SOURCE / "payload" / (name + ".csproj"),
-            output,
-            native_app_launcher=launcher if name == "SamsungTvRootAgent" else None,
-        )
-        for suffix in ("dll", "deps.json", "runtimeconfig.json"):
-            shutil.copyfile(
-                output / (name + "." + suffix), payload / (name + "." + suffix)
-            )
-    if native_acquisition:
-        from .native_root import build as build_acquisition, FILES
-
-        bundle = folder / "native-service-acquisition"
-        acquisition = build_acquisition(profile, bundle, builder.command, service=True)
-        for name in FILES:
-            shutil.copyfile(bundle / "artifacts" / name, payload / name)
-        atomic_json(payload / "service-acquisition.json", acquisition)
+    native = build_native(folder / "native-worker-candidate", builder.command)
+    for name in (*ARTIFACTS, "native-manifest.json"):
+        shutil.copyfile(native / name, payload / name)
+    bundle = folder / "native-service-acquisition"
+    acquisition = build_acquisition(profile, bundle, builder.command, service=True)
+    for name in FILES:
+        shutil.copyfile(bundle / "artifacts" / name, payload / name)
+    atomic_json(payload / "service-acquisition.json", acquisition)
     atomic_json(
         payload / "manifest.json",
         {p.name: sha(p.read_bytes()) for p in payload.iterdir()},
@@ -158,6 +175,7 @@ def prepare(
             schema=1,
             device=device,
             enabled=False,
+            service_acquisition="native",
             port=28443,
             firmware=profile["firmware"],
             hashes=hashes,
@@ -238,12 +256,12 @@ def main():
     parser.add_argument(
         "--native-candidate",
         action="store_true",
-        help="Include reproducible native artifacts; managed remains selected",
+        help="Compatibility flag; native artifacts are always included",
     )
     parser.add_argument(
         "--native-acquisition",
         action="store_true",
-        help="Use native service acquisition and held bootstrap; keep managed fallback",
+        help="Compatibility flag; native acquisition is always used",
     )
     parser.add_argument("--version")
     parser.add_argument("--site", type=Path)

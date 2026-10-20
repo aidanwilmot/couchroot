@@ -1,7 +1,7 @@
 """Build native agent components offline, without .NET, signing or TV access.
 
 This is an artifact bundle, not an installable native-only agent. Capability
-entry remains unresolved; ordinary signed packages retain their managed fallback.
+entry still requires the small .NET bridge; ordinary packages use only native acquisition.
 """
 
 import argparse
@@ -181,7 +181,7 @@ def build(model, destination, command=run):
         managed_build_required=False,
         deployable_agent=False,
         capability_entry="unresolved",
-        managed_fallback_required=True,
+        managed_fallback_required=False,
         device_qualified=False,
         components=components,
         artifacts=records,

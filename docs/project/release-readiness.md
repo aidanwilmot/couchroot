@@ -1,3 +1,8 @@
+> Phase 4 removes the managed root worker. Historical managed-return acceptance
+> rows below require the retained previous package. The native-only package must
+> be accepted on both TVs, including restart/job recovery, bounded native bootstrap
+> recovery, foreign-certificate rejection and independent SDK rescue.
+>
 > Phase 4 retires the pure-native experiment. Its historical acceptance rows below
 > remain recovery context, not a new installation plan. WebView is the experimental
 > native option and still requires fresh hardware acceptance.
@@ -8,6 +13,44 @@ PRs #10, #11 and #12 are merged into main, but **have not been tested on either
 TV**. Host tests and the Phase 3 byte comparisons are not hardware acceptance.
 The older results below belong to their recorded revisions. This checklist is
 for a separately authorized owner session; it is not an instruction to deploy now.
+
+## Native-only pre-deploy gate (#30)
+
+Run this read-only check against the **currently installed previous package**,
+using each TV's existing enrolled client credentials, before deploying #30:
+
+```sh
+python3 -m tvsetup.native_gate --device qn90a --credentials PRIVATE_QN90A_RUN/client.json
+python3 -m tvsetup.native_gate --device s90d --credentials PRIVATE_S90D_RUN/client.json
+```
+
+Exit status 0 and `"ok": true` require stable selection, `pending: null`,
+`selected_implementation: "native-prototype"`, and an authenticated ready root
+worker. A list-only root EXEC checks the private `worker-state` directory for
+`retirement-launch.pending`, `production-launch.pending`, `state-install.pending`,
+`managed-restore.pending`, `managed-launch.pending`, and **every**
+`*.activation.json.pending`. Missing/unreadable directories, incomplete replies,
+marker symlinks and a selection change during inspection fail the gate. The tool
+never deletes markers, changes selection, acquires root or retries a request.
+The agent may retain its ordinary request audit record for this read-only EXEC.
+
+**If either gate fails or cannot complete, do not deploy #30. Recover with the
+previous signed package and its matching checkout; preserve all journals and
+rerun the gate afterward.** Keep that package available for rollback. A passing
+gate is a snapshot, not deployment approval: avoid concurrent maintenance and
+rerun it immediately before a separately authorized deployment. After deployment,
+validate acquisition, restart/jobs and recovery on **both TVs**; restore the
+captured previous package if acceptance fails, without clearing pending journals.
+
+Owner-reported evidence from **2026-10-20**: both TVs reported `phase=stable`,
+`pending=null`, `native-prototype`, and candidate verified. **Marker files were
+not checked**, so those observations do not establish that this gate passes.
+No new device inspection was performed for this change.
+
+Remaining #28 hardware checks: inspect the private staging capture's
+`stat -c '%U:%G:%a'` result and an actual SDB upload, credential cleanup, and the
+10-second systemd-run reboot form with explicit root/SMACK/kdbus properties on
+both models. Keep the signed web Hub and independent SDK rescue available.
 
 ## Preconditions and recovery baseline
 
@@ -424,14 +467,17 @@ CI has seven job definitions (ten checks after expanding the Linux matrix):
 - `web-and-offline`: Node 22/24 × Python 3.12/3.14 on Ubuntu 24.04. Dependency,
   privacy, setup/recovery, telemetry receiver, WebView and Node/Chromium tests,
   plus unsigned web reproducibility. `dotnet` calls are blocked in this job.
-- `managed`: four C# harnesses and managed cross-path builds with the pinned SDK.
+- `managed`: three retained C# adapter/relay harnesses and managed cross-path builds with the pinned SDK.
 - `root-native-launcher`: ARM launcher builds, native collector checks, native
+  protocol/fault/recovery and slow-I/O tests.
+- `native-launcher-builds`: both ARM graphical launchers and native Hub host tests.
+- `arm64-parity`: real native workers, process observer and storage cases
+>
   protocol/fault/recovery and slow-I/O tests, plus the managed launcher harness.
 - `native-launcher-builds`: WebView ARM host/sampler builds with GLIBC and startup libpthread gates.
 - `arm64-parity`: real managed/native workers, process observer and storage cases
   in disposable ARM64 containers on `ubuntu-24.04-arm`. Tmpfs tests run with the
-  explicit mount capability; a preflight checks the container policy. Rehearsal,
-  restart-fault and bootstrap suites each get a fresh container with a reaping init.
+  explicit mount capability; a preflight checks the container policy. Native restart-fault and bootstrap suites each get a fresh container with a reaping init.
 - `qn90a-web-saver`: pinned Emscripten reproducibility checks.
 - `macos-setup`: macOS 14 ARM64/Python 3.12 setup, installer and UI-deploy tests,
   including the zombie-group `EPERM` deadline regression.

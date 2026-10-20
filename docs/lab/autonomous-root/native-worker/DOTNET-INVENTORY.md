@@ -141,7 +141,7 @@ script and a create-once gate; [`policy.js`](../../../../agent/service/policy.js
 runtime/launcher hashes in SDK context before execution. This placement matters
 on S90D, whose app label cannot stat all guarded binaries.
 
-**Responsibilities.** [`SamsungTvArchiveRoot.cs`](../../../../agent/payload/SamsungTvArchiveRoot.cs)
+**Responsibilities.** `SamsungTvArchiveRoot.cs` (removed in Phase 4; historical inventory)
 accepts only the `archive-root-` package name with 16 lowercase hex digits,
 requires effective CAP_SYS_ADMIN and CAP_SETGID, unshares mounts, makes propagation
 private, binds the staged key and passwd view, then runs stock `sdbd-tarlauncher`

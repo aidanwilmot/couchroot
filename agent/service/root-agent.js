@@ -1,12 +1,9 @@
 'use strict';
 // Adapted from Vetro 9319cb0 (MIT); see vendor/LICENSE and ../UPSTREAM.json.
 
-// Node port of the SamsungTvRootAgent protocol (server side).
-//
-// SamsungTvRootAgent.dll runs as uid 0 (launched by the archive-root chain),
-// calls setsid() to detach from the launch.sh teardown, then connects back to
-// this server on TCP and replies to authenticated commands. This gives /exec
-// and /debloat a persistent root channel that does not race launch.sh.
+// Authenticated server for the native root worker. Acquisition establishes the
+// worker's lifetime before it connects; this channel carries EXEC and operations.
+// It contains no managed-worker launch or fallback path.
 //
 // Protocol (mirrors samsung_tv_root/root_agent.py):
 //   - server greeting:  "SAMSUNG-TV-ROOT/1\t<nonce hex>\n"

@@ -1,3 +1,7 @@
+> Retired managed-package maintenance, retained for historical recovery evidence
+> and tests. These helpers are not shipped in the native-only package. Recover
+> legacy transitions using the previous signed package and its matching checkout.
+
 # Managed package upgrade evidence
 
 Changing either managed DLL changes the digest pinned by `worker-selection.json`.

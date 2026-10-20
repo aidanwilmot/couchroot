@@ -77,7 +77,7 @@ operation result without losing frame alignment. Legacy file paths remain inside
 the worker's allowed staging/runtime directories; writes are create-new only.
 
 The OP envelope carries the existing file, job, helper, health and shutdown
-operations defined in `payload/AgentOperations.cs` and `native-worker/worker.c`
+operations defined in `native-worker/worker.c`
 (and their included handlers). It retains their admission, path, handle and
 recovery rules. Results contain `ok` and, on failure, `error` and an outcome such
 as `rejected`, `failed` or `unknown`. Response budgets remain those in
@@ -90,10 +90,9 @@ retains its restricted operation surface.
 
 - OP JSON: native permits 20,000 decoded bytes except `file.write`, whose envelope
   may reach `ceil(1 MiB / 3) * 4 + 20,000` bytes. JS permits 1,500,000 JSON bytes.
-  C# has no separate OP JSON cap beyond the authenticated line bound. These are
-  retained compatibility differences, not one common OP maximum.
-- Malformed OP JSON ends the native session. C# returns `ok:false` and continues.
-- JS rejects whitespace-only EXEC commands. Both workers reject empty commands
+  There is no common OP maximum.
+- Malformed OP JSON ends the native session.
+- JS rejects whitespace-only EXEC commands. The native worker rejects empty commands
   but accept nonempty whitespace for the shell to evaluate.
 - JS does not enforce the capability-mask/decoded-SMACK constraints described
   above. Changing those admission rules requires a separate compatibility decision.
@@ -102,8 +101,7 @@ retains its restricted operation surface.
 
 `tests/fixtures/root-protocol.json` pins wire bytes, MACs, valid/invalid AUTH
 admission, line boundaries and EXEC ranges. npm tests run the JS server; the
-managed harness runs the production `RunSession` over loopback TCP; the native
-CI suite drives the compiled worker through its real greeting and dispatch loop.
+native CI suite drives the compiled worker through its real greeting and dispatch loop.
 Oversized greetings omit LF so an unbounded read cannot pass by later rejecting
 invalid syntax. EXEC tests exercise real timeout/command admission and output
 capture. Held-bootstrap limits and session framing divergences are explicit

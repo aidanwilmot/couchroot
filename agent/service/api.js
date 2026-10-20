@@ -200,6 +200,13 @@ function createApi(options) {
           return;
         }
         if (req.url === '/v1/observer/probe') {
+          if (typeof agent.probeObserver !== 'function') {
+            reply(410, {
+              outcome: 'rejected',
+              error: 'Legacy handoff probe retired',
+            });
+            return;
+          }
           if (
             !value ||
             Array.isArray(value) ||

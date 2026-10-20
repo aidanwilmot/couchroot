@@ -65,3 +65,16 @@ test('wrong executor boot refuses before cross-boot cleanup and leaves the pendi
  let calls=0;await assert.rejects(reconcileBootstrap({selectionFile:f.selection,bootId:'00000000-0000-0000-0000-000000000002',executor:{pid:21,status:async()=>info(),execute:async()=>{calls++;}}}));
  assert.equal(calls,0);assert.equal(markerId(f.marker),id);assert.deepEqual(JSON.parse(fs.readFileSync(f.file)),f.record);
 }));
+
+test('native acquisition recovery requires exact success and unchanged receipt before retirement',()=>fixture(f=>{
+ const {completeAcquisitionRecovery}=require('../agent/service/bootstrap-recovery');
+ const before=fs.readFileSync(f.file);
+ for(const output of ['', 'truncated BOOTSTRAP-RECONCILED', 'BOOTSTRAP-RECOVERY-FAILED\n', 'BOOTSTRAP-RECONCILED\nBOOTSTRAP-RECOVERY-FAILED']){
+  assert.throws(()=>completeAcquisitionRecovery(f.selection,f.record,boot,output));
+  assert.deepEqual(fs.readFileSync(f.file),before);assert(fs.existsSync(f.marker));
+ }
+ assert.throws(()=>completeAcquisitionRecovery(f.selection,{...f.record,token_sha256:'f'.repeat(64)},boot,'BOOTSTRAP-RECONCILED\n'));
+ const result=completeAcquisitionRecovery(f.selection,f.record,boot,'probe diagnostic\nBOOTSTRAP-RECONCILED\n');
+ assert.equal(result.launch_replayed,false);assert(!fs.existsSync(f.marker));
+ assert.equal(JSON.parse(fs.readFileSync(f.file)).phase,'retired');
+}));

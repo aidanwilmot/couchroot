@@ -114,7 +114,7 @@ class NativeWorkerBuildTests(unittest.TestCase):
             prepare.assert_not_called()
             load_site.assert_not_called()
 
-    def test_candidate_package_keeps_managed_payload_and_default(self):
+    def test_package_contains_only_native_worker_and_required_entry_bridge(self):
         with tempfile.TemporaryDirectory() as temp:
             compiler=Compiler()
             class Builder:
@@ -126,12 +126,30 @@ class NativeWorkerBuildTests(unittest.TestCase):
             def certificate(builder,folder,name):
                 for suffix in ('-key.pem','.pem'):(folder/(name+suffix)).write_text('fixture')
                 return 'b'*64
+            def acquisition(profile, folder, command, service=False):
+                from tvsetup.native_root import FILES
+                self.assertTrue(service)
+                (folder/'artifacts').mkdir(parents=True)
+                for name in FILES: (folder/'artifacts'/name).write_bytes(b'native acquisition fixture')
+                return {'kind':'native-service-acquisition'}
             profile=dict(framework='net6.0',host_sha256='c'*64,firmware='fixture',host='tv.example.invalid')
-            with patch.object(autonomous_root,'PRIVATE',Path(temp)),patch.object(autonomous_root,'Builder',Builder),patch.object(autonomous_root,'configured_profile',return_value=profile),patch.object(autonomous_root,'binding',return_value={'fixture':True}),patch.object(autonomous_root,'certificate',side_effect=certificate):
+            with patch.object(autonomous_root,'PRIVATE',Path(temp)),patch.object(autonomous_root,'Builder',Builder),patch.object(autonomous_root,'configured_profile',return_value=profile),patch.object(autonomous_root,'binding',return_value={'fixture':True}),patch.object(autonomous_root,'certificate',side_effect=certificate),patch('tvsetup.native_root.build',side_effect=acquisition):
                 result=autonomous_root.prepare('qn90a',{},sign=False,native_candidate=True)
             folder=Path(result['folder']);payload=folder/'package/payload'
-            self.assertTrue((payload/'SamsungTvRootAgent.dll').is_file())
-            self.assertTrue((payload/'SamsungTvArchiveRoot.dll').is_file())
+            service=folder/'package/service'
+            self.assertFalse((service/'managed-return.js').exists())
+            self.assertFalse((service/'managed-launch.js').exists())
+            # Real packaged require graph must remain complete without fallbacks.
+            import re
+            for source in service.rglob('*.js'):
+                for relative in re.findall(r"require\(['\"](\.[^'\"]+)['\"]\)", source.read_text()):
+                    target=(source.parent/relative)
+                    if not target.suffix: target=target.with_suffix('.js')
+                    self.assertTrue(target.is_file(), (source.name, relative))
+
+            self.assertFalse((payload/'SamsungTvRootAgent.dll').exists())
+            self.assertFalse((payload/'SamsungTvArchiveRoot.dll').exists())
+            self.assertTrue((payload/'NativeEntry.dll').is_file())
             manifest=json.loads((payload/'manifest.json').read_text())
             for name in ('native-worker','native-app-launcher','native-process-observer','native-manifest.json'):
                 self.assertEqual(manifest[name],sha((payload/name).read_bytes()))
