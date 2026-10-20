@@ -12,9 +12,10 @@ only over the signed Hub. Another app/source cancels. The early background path
 keeps its 46-second guard. The bounded wait and app-launch behavior still require
 hardware acceptance for native-hub.
 
-**Open owner question:** should TV Plus be offered by native-hub? This PR retains
-its existing exclusion while WebView/web keep their existing inclusion. The
-shared filter takes that policy explicitly; the matrix covers both settings.
+TV Plus is permitted by all three launcher callers. The shared filter still
+takes that policy explicitly, and its matrix covers both settings. The public
+pure-native installer remains background-boot only; shared normal-mode support
+does not enable it in the installer.
 
 Linux channels use pipe2(O_CLOEXEC) / SOCK_CLOEXEC atomically. macOS host tests
 use a checked fcntl fallback because those Linux APIs are unavailable there.
