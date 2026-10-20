@@ -13,13 +13,13 @@ projects=[
  'agent/payload/SamsungTvRootAgent.csproj',
  'agent/payload/SamsungTvArchiveRoot.csproj',
  'tvsetup/native/Control.csproj',
- 'research/namespace-root-probe/NamespaceRootProbe.csproj',
- 'research/qn90a-root-probe/NamespaceRootProbe.csproj',
- 'research/root-identity-probe/RootIdentity.csproj',
- 'research/qn90a-root-probe/RootIdentity.csproj',
- 'research/qn90a-hub-boot/relay/Boot.csproj',
+ 'agent/namespace-root-probe/NamespaceRootProbe.csproj',
+ 'agent/qn90a-root-probe/NamespaceRootProbe.csproj',
+ 'agent/root-identity-probe/RootIdentity.csproj',
+ 'agent/qn90a-root-probe/RootIdentity.csproj',
+ 'native/qn90a-boot-relay/Boot.csproj',
  'telemetry/qn90a-startup/Service.csproj',
- 'research/qn90a-telemetry-startup/bootstrap/Bootstrap.csproj',
+ 'telemetry/qn90a-bootstrap/Bootstrap.csproj',
  'telemetry/s90d-collector/Telemetry.csproj',
 ]
 
@@ -47,9 +47,9 @@ def main():
         subprocess.run(['dotnet', 'build', str(root/project), '-c', 'Release', '--nologo', '-v', 'quiet'],
                        cwd=root, check=True, timeout=180)
         record_project(project, manifest)
-    subprocess.run([sys.executable, str(root/'research/s90d-telemetry/build.py')],
+    subprocess.run([sys.executable, str(root/'telemetry/s90d/build.py')],
                    cwd=root, check=True, timeout=240)
-    record_project('research/s90d-telemetry/bin/helper/Boot.csproj', manifest)
+    record_project('telemetry/s90d/bin/helper/Boot.csproj', manifest)
     from tvsetup.root import build
     from tvsetup.config import profile
     for device in ('qn90a', 's90d'):

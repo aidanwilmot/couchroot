@@ -21,7 +21,7 @@ implements the conditional setting contract and has independent-rescue acceptanc
 on both TVs. The .NET recovery bytes remain unchanged; older private deployment
 kits still use them until their callers explicitly adopt the native unit launch.
 
-The [native acquisition pilot](../../../../research/native-root-acquisition/README.md) now ports
+The [native acquisition pilot](../../../../agent/native-acquisition/README.md) now ports
 the bounded setup probe and command runner to C behind an explicit
 `root.execute(..., native_bundle=...)` selection. Its small `NativeEntry.dll`
 still uses the trusted host to create a private read-only code bind and load the
@@ -67,7 +67,7 @@ uses private mounts. QN90A optional-app cleanup substitutes the build-time
 allowlisted cleanup source for `RootIdentity`; it is not the generic shell path.
 
 **Responsibilities.** The current probe source is
-[`research/namespace-root-probe/Program.cs`](../../../../research/namespace-root-probe/Program.cs),
+[`agent/namespace-root-probe/Program.cs`](../../../../agent/namespace-root-probe/Program.cs),
 compiled with `QN90A` for that model. It requires the fixed staging path and a
 32-bit process, creates a passwd view with exactly one owner UID/GID adjustment,
 creates a private mount namespace, makes propagation recursively private and
@@ -230,7 +230,7 @@ models, but metadata alone is not a runtime capability receipt.
 
 Both captured `libbundle` implementations agree on string and string-array
 records wrapped in ASCII MD5 and Base64. The original bounded host encoder and
-[read-only entry probe](../../../../research/native-root-acquisition/entry/README.md) implement
+[read-only entry probe](../../../../agent/native-acquisition/entry/README.md) implement
 only a fixed Couchroot preload. The constructor records SDK credentials and
 capabilities and exits before the normal vendor event loop. Its caller must
 verify code/loader hashes and an absent exact socket, and guard failed preload
@@ -243,7 +243,7 @@ The signed 0.7.33 trials produced no constructor receipt on either TV, although
 both installed bundle libraries decoded and re-encoded the fixed bundle exactly.
 The ordinary WGT code location did not establish entry; previous signed-TPK
 experiments also show that package signing alone does not solve native executable
-verification on writable VDFS. See [entry results](../../../../research/native-root-acquisition/entry/results.json).
+verification on writable VDFS. See [entry results](../../../../agent/native-acquisition/entry/results.json).
 Replacing the managed bridge still needs successful SDK code mapping and runtime
 receipts on both TVs, then a native identity child and independent qualification
 of the full namespace/archive operation. A read-only receipt alone cannot remove

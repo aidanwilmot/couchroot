@@ -19,14 +19,14 @@ outputs=('core.js','shaders.js')
 with tempfile.TemporaryDirectory(prefix='saver-source-') as temporary:
     clean=Path(temporary)
     for name in sources:
-        destination=clean/'research'/name
+        destination=clean/'native'/name
         destination.parent.mkdir(parents=True,exist_ok=True)
-        shutil.copyfile(root/'research'/name,destination)
-    (clean/'research/qn90a-screensaver/web').mkdir()
+        shutil.copyfile(root/'native'/name,destination)
+    (clean/'native/qn90a-screensaver/web').mkdir()
     builds=[]
     for directory in (root,clean):
-        subprocess.run(['sh','research/qn90a-screensaver/build-web.sh'],cwd=directory,check=True,timeout=180)
-        builds.append({name:hashlib.sha256((directory/'research/qn90a-screensaver/web'/name).read_bytes()).hexdigest() for name in outputs})
+        subprocess.run(['sh','native/qn90a-screensaver/build-web.sh'],cwd=directory,check=True,timeout=180)
+        builds.append({name:hashlib.sha256((directory/'native/qn90a-screensaver/web'/name).read_bytes()).hexdigest() for name in outputs})
     if builds[0]!=builds[1]:raise SystemExit('Saver output differs across source paths; release blocked')
 reviewed=json.loads((root/'tvsetup/profiles/qn90a.json').read_text())['saver_generated']
 matches={name:digest==reviewed[name] for name,digest in builds[0].items()}

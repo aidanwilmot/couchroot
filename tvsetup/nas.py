@@ -14,7 +14,7 @@ from .staging import clear_verified_stage
 BASE='/mnt/.ix-apps/app_mounts/netdata/config'
 SSH_OPTIONS=['-o','BatchMode=yes','-o','ConnectTimeout=8','-o','StrictHostKeyChecking=yes']
 Q=shlex.quote
-CODE=REPO/'research/s90d-telemetry'
+CODE=REPO/'telemetry/s90d'
 FILES={
  's90d-receiver/receiver.py':CODE/'nas/receiver.py',
  's90d-receiver/metrics.py':CODE/'nas/metrics.py',

@@ -1022,7 +1022,7 @@ private rescue callers. Reboot and standby remain outside this qualification.
 
 ## Native setup acquisition pilot
 
-The [native acquisition pilot](../../../research/native-root-acquisition/README.md) implements
+The [native acquisition pilot](../../../agent/native-acquisition/README.md) implements
 private namespace/archive orchestration and bounded commands in C. It is selected
 explicitly through `root.execute(native_bundle=...)`; default setup and service
 acquisition remain managed. `NativeEntry.dll` still supplies trusted capability
@@ -1040,7 +1040,7 @@ Intentional native limits include a NUL-free script below 64 KiB, a 64 KiB merge
 output stream, exact owner UID 5001/GID 100 checks, full root credential checks,
 and exclusive passwd-view creation. Allowlisted app cleanup remains managed.
 No HTTP API, persistent capability, platform policy, package version, reboot or
-standby behavior changed. See the [aggregate evidence](../../../research/native-root-acquisition/results.json).
+standby behavior changed. See the [aggregate evidence](../../../agent/native-acquisition/results.json).
 
 ## Native service acquisition and held startup
 
@@ -1143,8 +1143,8 @@ therefore this path is not qualified to replace the managed bridge. The fixed
 bundle codec passed byte-identical round trips through both target libraries.
 All owned trial resources were cleaned and managed readiness restored without
 replaying either invocation. The .NET fallback and independent rescue remain
-unchanged. See [probe contract](../../../research/native-root-acquisition/entry/README.md) and
-[hardware evidence](../../../research/native-root-acquisition/entry/results.json).
+unchanged. See [probe contract](../../../agent/native-acquisition/entry/README.md) and
+[hardware evidence](../../../agent/native-acquisition/entry/results.json).
 
 
 ## Live forward-failure recovery

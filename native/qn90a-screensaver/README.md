@@ -85,14 +85,14 @@ sessions. Enable/disable requests were never patched.
 
 ## Build, sign and use
 
-With Emscripten installed (tested with Debian Bookworm's package):
+From the repository root, with Emscripten installed (tested with Debian Bookworm's package). The archived verifiers below read the current `native/` sources:
 
 ```sh
-sh research/qn90a-screensaver/build-web.sh
+sh native/qn90a-screensaver/build-web.sh
 node --test research/archive/qn90a-screensaver/verify-web.cjs
-~/.local/share/samsung-tv-research/.venv/bin/python research/qn90a-screensaver/verify-timeout.py
+~/.local/share/samsung-tv-research/.venv/bin/python native/qn90a-screensaver/verify-timeout.py
 node research/archive/system-screensaver/verify-shader.cjs
-python3 research/qn90a-screensaver/package.py
+python3 native/qn90a-screensaver/package.py
 ```
 
 Generated `core.js` and `shaders.js` are ignored. Signing uses the existing private
@@ -110,7 +110,7 @@ From the repository root:
 ~/.local/share/samsung-tv-research/.venv/bin/python tools/qn90a/screensaver.py apply
 ```
 
-Build the QN90A dashboard with `python3 scripts/sign.py --profile MinimalHubQN90A`.
+Build the QN90A dashboard with `python3 scripts/sign.py --device qn90a --profile MinimalHubQN90A`.
 This stages version 0.4.0 plus `web/qn90a-idle.js` outside Git. Install the printed
 `MinimalHub.wgt` on `192.0.2.11:26101` with the existing profile. See the exact
 forward-version dashboard rollback in ROLLBACK.md.

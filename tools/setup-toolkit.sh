@@ -5,8 +5,8 @@ umask 077
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 toolkit=${SAMSUNG_TV_TOOLKIT:-"$HOME/.local/share/samsung-tv-research"}
 sdb_source=${SDB:-}
-research="$repo/research"
-toolkit_source="$research/toolkit"
+
+toolkit_source="$repo/tools/toolkit"
 upstream_url=https://github.com/chris-ritsen/samsung-tv-root.git
 upstream_commit=380dcc23a2f4b1a21b22380e98e6559036acebf7
 
@@ -33,10 +33,10 @@ chmod 700 "$toolkit" "$toolkit/sessions"
 cp "$sdb_source" "$toolkit/bin/sdb"
 cp "$toolkit_source/"*.py "$toolkit_source/"*.sh "$toolkit/"
 if [ ! -f "$toolkit/config.json" ]; then
-    cp "$research/config.example.json" "$toolkit/config.json"
+    cp "$repo/tools/toolkit/config.example.json" "$toolkit/config.json"
 fi
-cp "$research/namespace-root-probe/"* "$toolkit/namespace-root-probe/"
-cp "$research/root-identity-probe/"* "$toolkit/root-identity-probe/"
+cp "$repo/agent/namespace-root-probe/"* "$toolkit/namespace-root-probe/"
+cp "$repo/agent/root-identity-probe/"* "$toolkit/root-identity-probe/"
 cp "$toolkit_source/samsung-tv" "$HOME/.local/bin/samsung-tv"
 chmod 700 "$HOME/.local/bin/samsung-tv" "$toolkit/"*.sh
 

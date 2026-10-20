@@ -77,7 +77,7 @@ here. Supply their paths explicitly (or put `tizen` on PATH):
 ```sh
 export SAMSUNG_TV_TOOLKIT="$HOME/.local/share/samsung-tv-research"
 export TIZEN=/path/to/tizen-studio/tools/ide/bin/tizen
-SDB=/path/to/tizen-studio/tools/sdb sh research/setup-toolkit.sh
+SDB=/path/to/tizen-studio/tools/sdb sh tools/setup-toolkit.sh
 ```
 
 The toolkit script fetches the pinned public transport commit, installs its
@@ -222,7 +222,7 @@ require Linux, `gcc-arm-linux-gnueabi`, `libc6-dev-armel-cross`, GLES headers an
 owner-provided compatible `libGLESv2.so.2` directory:
 
 ```sh
-GLES_LIBRARY_DIR=/private/vendor-library sh research/system-screensaver/build.sh
+GLES_LIBRARY_DIR=/private/vendor-library sh native/system-screensaver/build.sh
 ./tv-setup plan --device s90d --artifact renderer=/private/libgl-demo-app.so
 ```
 

@@ -29,8 +29,8 @@ def main():
  callback=device(cfg)
  guard="set -eu\ngrep -qx 'Version=T-NKM2AKUC-2301.1;' /etc/prd_info.ini\ntest \"$(uname -m)\" = armv7l\ntest -d /usr/share/dotnet/shared/Microsoft.NETCore.App/3.1.3\ntest \"$(sha256sum /usr/bin/dotnet-launcher | cut -d ' ' -f 1)\" = 5f33f4d63bc7eb5a09cdedf377398d6c2f4142e629a1f73921f31f08cb7791f3\n"
  capture(cfg,callback,guard,15,'qn90a-hub-boot-identity')
- sys.path.insert(0,str(REPO/'research/s90d-telemetry'))
- transport=module('telemetry_transport',REPO/'research/s90d-telemetry/manage-tv.py')
+ sys.path.insert(0,str(REPO/'telemetry/s90d'))
+ transport=module('telemetry_transport',REPO/'telemetry/s90d/manage-tv.py')
  def root(script):
   log=io.StringIO()
   try:

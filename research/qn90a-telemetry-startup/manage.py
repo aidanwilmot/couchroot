@@ -14,8 +14,8 @@ sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
 quote=shlex.quote
 
 def module():
- sys.path.insert(0,str(REPO/'research/s90d-telemetry'))
- spec=importlib.util.spec_from_file_location('telemetry_manage',REPO/'research/s90d-telemetry/manage-tv.py')
+ sys.path.insert(0,str(REPO/'telemetry/s90d'))
+ spec=importlib.util.spec_from_file_location('telemetry_manage',REPO/'telemetry/s90d/manage-tv.py')
  result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result
 
 def run(args,**kwargs):

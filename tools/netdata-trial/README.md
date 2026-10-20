@@ -1,7 +1,7 @@
 # Native Netdata trial
 
 S90D-only feasibility experiment using upstream **Netdata v2.11.1 ARMv7**.
-See [results and limits](../../../docs/lab/research/netdata-native.md).
+See [results and limits](../../docs/lab/research/netdata-native.md).
 The original installer is never run on the TV. No normal setup defaults change.
 
 ## Prepare
@@ -12,7 +12,7 @@ container (binutils 2.35.2); `prepare.py` verifies both hashes and extracts only
 agent executable, with no installer execution or archive path extraction.
 
 ```sh
-python3 research/native-telemetry/netdata/prepare.py \
+python3 tools/netdata-trial/prepare.py \
   --output /private/netdata-build --strip arm-linux-gnueabi-strip
 ```
 

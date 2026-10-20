@@ -20,7 +20,7 @@ def main():
         native = work / ('native.dylib' if platform.system() == 'Darwin' else 'native.so')
         subprocess.run([os.environ.get('CC', 'cc'), '-dynamiclib' if platform.system() == 'Darwin' else '-shared',
                         '-fPIC', str(HARNESS / 'Native.c'), '-o', str(native)], check=True)
-        files = (HARNESS / 'Harness.cs', REPO / 'research/qn90a-hub-boot/relay/Program.cs')
+        files = (HARNESS / 'Harness.cs', REPO / 'native/qn90a-boot-relay/Program.cs')
         project = work / 'Harness.csproj'
         project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
                            '<TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType>'

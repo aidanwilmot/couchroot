@@ -25,8 +25,8 @@ node_modules/
 test-results/
 
 # Rebuilt from the shared native screensaver sources.
-research/qn90a-screensaver/web/core.js
-research/qn90a-screensaver/web/shaders.js
+native/qn90a-screensaver/web/core.js
+native/qn90a-screensaver/web/shaders.js
 
 # Setup native helper build output; private journals/packages stay outside Git.
 tvsetup/native/bin/
@@ -62,3 +62,9 @@ telemetry/**/obj/
 # Agent build intermediates.
 agent/**/bin/
 agent/**/obj/
+
+# Product helper build intermediates.
+native/**/bin/
+native/**/obj/
+setup/**/bin/
+setup/**/obj/

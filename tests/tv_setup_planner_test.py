@@ -7,14 +7,17 @@ from tvsetup.common import Refused, sha
 from tvsetup.config import profile as saved_profile, resolve
 from tvsetup.planner import (plan, hub_sources, HOME_DESIRED, AIRPLAY_RULES, BOOT_RULE,
                             CACHE_PATCHED,CACHE_TABLE,DIAGNOSTIC,SPLASH_NATIVE,SPLASH_RESOURCE,
-                            RENDERER,EMPTY,HUB,source_revision,component_revision,MANAGED)
+                            RENDERER,EMPTY,HUB,source_revision,component_revision,artifact_group,MANAGED)
 from tvsetup.transport import CACHE,SAVER,STOCK,PREFS,TABLES,decode_rows,managed_guard
 from tvsetup.operations import route_sql
 
-# An accepted fixture represents a reviewed build of the current source. Pin
-# this once so tests that deliberately change component_revision still detect
-# drift, without depending on the historical binary hashes in the live profile.
-FIXTURE_SOURCES = {kind: component_revision(kind) for kind in ('boot', 'service', 'helper', 'saver')}
+# Literal revisions recorded on main before the product-source moves.
+FIXTURE_SOURCES = {
+    'boot': '7be3e40794665fb0f332273de4d8c803629654f261f4a4da1589eca5d73c7ed9',
+    'service': '83f1f2be6e4a5c1fffe16d0db711c58df0d102537f1a3797b124e8da8fb0bf66',
+    'helper': 'c4ffa367ed27d65ab674439998c29942132a24f0de7c06464b83c2bb4aa2db0e',
+    'saver': '1a978ab85dfc8f2d61b1f382498c7472436d7dea678c858e52dadc41106baee3',
+}
 
 def profile(device):
     result = saved_profile(device)
@@ -36,7 +39,7 @@ def accepted(device):
         for id in ('MiniSave01','MiniHubBoot'):pkg(id)
         state.update(key_filter=[HOME_DESIRED],managed_app=[[HUB,None,None],['MiniHubBoot.Start',None,None]],task_filter=AIRPLAY_RULES+[BOOT_RULE])
         from tvsetup.common import REPO
-        state['files'].update({'/opt/usr/apps/MiniSave01/res/wgt/'+n:sha((REPO/'research/qn90a-screensaver/web'/n).read_bytes()) for n in ('index.html','saver.js','icon.png')})
+        state['files'].update({'/opt/usr/apps/MiniSave01/res/wgt/'+n:sha((REPO/'native/qn90a-screensaver/web'/n).read_bytes()) for n in ('index.html','saver.js','icon.png')})
         state['files'].update({'/opt/usr/apps/MiniSave01/res/wgt/'+n:h for n,h in p['saver_generated'].items()})
         state['files'].update({'/opt/usr/apps/MiniHubBoot/bin/'+n:h for n,h in p['boot_artifacts'].items()})
         root='/opt/usr/home/owner/apps_rw/MiniTelemetry/data'
@@ -54,6 +57,27 @@ def accepted(device):
 
 
 class PlannerTests(unittest.TestCase):
+    def test_component_revisions_match_main_literals(self):
+        self.assertEqual({kind: component_revision(kind) for kind in FIXTURE_SOURCES}, FIXTURE_SOURCES)
+        self.assertEqual(saved_profile('qn90a')['source_hashes']['saver'], FIXTURE_SOURCES['saver'])
+
+    def test_main_ledger_and_accepted_state_still_plan_as_already_correct(self):
+        for device in ('qn90a', 's90d'):
+            with self.subTest(device=device):
+                state = accepted(device)
+                paths = {path: artifact_group(path) for path in state['files'] if artifact_group(path)}
+                # Main recorded these accepted bytes with the historical revisions.
+                # Deliberately differ from profile bytes so losing the ledger matters.
+                overrides = {path: sha(('accepted-on-main:' + path).encode()) for path in paths
+                             if paths[path] != 'service'}
+                state['files'].update(overrides)
+                ledger = dict(files=overrides, artifact_sources={path: FIXTURE_SOURCES[kind]
+                              for path, kind in paths.items()})
+                result = plan(profile(device), resolve(device), state, ledger)
+                self.assertEqual(result.actions, [])
+                self.assertEqual(result.issues, [])
+                self.assertTrue(all(value == 'already correct' for value in result.states.values()))
+
     def test_accepted_both_are_idempotent(self):
         for d in ('qn90a','s90d'):
             p=plan(profile(d),resolve(d),accepted(d))

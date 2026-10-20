@@ -138,25 +138,25 @@ class Builder:
             path=Path(path).expanduser()
             if sha(path.read_bytes())!=RENDERER: raise Refused('Renderer override is not the reviewed S90D Asteroids binary')
             return path
-        local=REPO/'research/system-screensaver/bin/libgl-demo-app.so'
+        local=REPO/'native/system-screensaver/bin/libgl-demo-app.so'
         candidates=[local]
         for p in candidates:
             if p.is_file() and not p.is_symlink() and sha(p.read_bytes())==RENDERER: return p
-        raise Refused('Build the S90D renderer with research/system-screensaver/build.sh; set artifacts.renderer to the verified output')
+        raise Refused('Build the S90D renderer with native/system-screensaver/build.sh; set artifacts.renderer to the verified output')
 
     def generated_saver(self, stage):
         # Reuse content only by reviewed digest, not a session name or previous deployment ledger.
         needed=self.profile['saver_generated']
         if self.profile.get('source_hashes',{}).get('saver')!=component_revision('saver'):
-            self.command(['sh',REPO/'research/qn90a-screensaver/build-web.sh'])
-            for name in needed:shutil.copyfile(REPO/'research/qn90a-screensaver/web'/name,stage/name)
+            self.command(['sh',REPO/'native/qn90a-screensaver/build-web.sh'])
+            for name in needed:shutil.copyfile(REPO/'native/qn90a-screensaver/web'/name,stage/name)
             return
         for name,digest in needed.items():
-            p=REPO/'research/qn90a-screensaver/web'/name
+            p=REPO/'native/qn90a-screensaver/web'/name
             if p.exists() and sha(p.read_bytes())==digest: shutil.copyfile(p,stage/name)
         if all((stage/n).exists() for n in needed): return
-        self.command(['sh',REPO/'research/qn90a-screensaver/build-web.sh'])
-        for name in needed: shutil.copyfile(REPO/'research/qn90a-screensaver/web'/name,stage/name)
+        self.command(['sh',REPO/'native/qn90a-screensaver/build-web.sh'])
+        for name in needed: shutil.copyfile(REPO/'native/qn90a-screensaver/web'/name,stage/name)
 
     def package(self, action):
         require_trust(self.profile)
@@ -171,7 +171,7 @@ class Builder:
             out=self.folder/(pkg+path.suffix);shutil.copyfile(path,out);return out,members
         stage=self.folder/(pkg+'-source');stage.mkdir()
         if key in ('hub','saver'):
-            source=REPO/('web' if key=='hub' else 'research/qn90a-screensaver/web')
+            source=REPO/('web' if key=='hub' else 'native/qn90a-screensaver/web')
             files=hub_sources(self.profile['id']) if key=='hub' else {n:(source/n).read_bytes() for n in ('index.html','saver.js','icon.png')}
             for n,data in files.items():(stage/n).write_bytes(data)
             if key=='saver':self.generated_saver(stage)
@@ -190,12 +190,12 @@ class Builder:
         else:
             sources=[]
             if key=='boot':
-                project=REPO/'research/qn90a-hub-boot/relay'
+                project=REPO/'native/qn90a-boot-relay'
                 output=stage/'compiled';self.build_managed(project/'Boot.csproj',output)
                 sources=[(output/n,'bin/'+n) for n in ('Boot.dll','Boot.deps.json','Boot.runtimeconfig.json')]
             else:
                 project=REPO/'telemetry/qn90a-startup'
-                for name,proj in [('Service',project),('Bootstrap',REPO/'research/qn90a-telemetry-startup/bootstrap')]:
+                for name,proj in [('Service',project),('Bootstrap',REPO/'telemetry/qn90a-bootstrap')]:
                     output=stage/name;self.build_managed(proj/(name+'.csproj'),output)
                     sources += [(p,'bin/'+p.name) for p in output.glob(name+'.*') if p.suffix!='.pdb']
                 output=stage/'collector'
@@ -216,7 +216,7 @@ class Builder:
         if kind=='empty':
             path=self.folder/'empty';path.write_bytes(b'');return path
         if not self.helper_built:
-            self.command([sys.executable,REPO/'research/s90d-telemetry/build.py']);self.helper_built=True
+            self.command([sys.executable,REPO/'telemetry/s90d/build.py']);self.helper_built=True
         if kind=='collector':return REPO/'telemetry/s90d-collector/bin/Release/net6.0/Telemetry.dll'
         name='Boot.dll' if kind=='helper' else kind
-        return REPO/'research/s90d-telemetry/bin/helper/bin/Release/net6.0'/name
+        return REPO/'telemetry/s90d/bin/helper/bin/Release/net6.0'/name

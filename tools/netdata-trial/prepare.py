@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--strip',default='arm-linux-gnueabi-strip')
     args=parser.parse_args();output=args.output.expanduser().resolve()
     source=Path(__file__).resolve().parent
-    if output.is_relative_to(source.parents[2]):
+    if output.is_relative_to(source.parents[1]):
         parser.error('Keep upstream archives and binaries outside the source checkout')
     output.mkdir(parents=True,exist_ok=True,mode=0o700)
     pin=json.loads((source/'upstream.json').read_text())

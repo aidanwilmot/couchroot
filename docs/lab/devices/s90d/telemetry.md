@@ -104,13 +104,13 @@ Netdata UI, WAN exposure or subnet-wide allowance was added. Router backup:
 
 ## Build, deploy and rollback
 
-Build with `python3 research/s90d-telemetry/build.py`. First installs use
+Build with `python3 telemetry/s90d/build.py`. First installs use
 `deploy-nas.py` and `deploy-tv.py`; they refuse to overwrite an existing
 installation. `update-tv.py` checks the recorded deployed hashes before changing
 either assembly. Deployment uses the pre-existing private root transport and
 verifies its cleanup. There is no root command listener on the TV.
 
-`python3 research/s90d-telemetry/rollback-tv.py` stops telemetry and restores
+`python3 telemetry/s90d/rollback-tv.py` stops telemetry and restores
 `/opt/minimal-telemetry/Boot.before.dll`, preserving the splash fix and screensaver.
 The prior signed dashboard package is saved privately under `telemetry/rollback/`;
 an in-place install restores the UI without uninstalling the app or deleting
@@ -189,7 +189,7 @@ cards are cleared and history remains visible. A NAS/API outage is distinguished
 from a TV with no recent telemetry. CPU activity excludes idle and I/O wait;
 collector CPU uses one-core percentage. Memory use is total minus available.
 
-Code: `research/s90d-telemetry/dashboard/`. The Python service exposes only its
+Code: `telemetry/s90d/dashboard/`. The Python service exposes only its
 three static assets, a health endpoint and a bounded snapshot API with four
 allowed ranges and nine fixed chart IDs. It cannot proxy arbitrary Netdata paths.
 Its volume mounts contain dashboard source and read-only latest-snapshot data,

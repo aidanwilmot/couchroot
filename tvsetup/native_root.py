@@ -11,7 +11,7 @@ import struct
 from .common import REPO, Refused, atomic_json, sha
 from .root_launcher import IMAGE
 
-SOURCE = REPO / 'research/native-root-acquisition'
+SOURCE = REPO / 'agent/native-acquisition'
 FILES = ('libacquire.so', 'NativeEntry.dll', 'NativeEntry.deps.json', 'NativeEntry.runtimeconfig.json')
 
 

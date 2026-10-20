@@ -6,7 +6,7 @@ root=Path(__file__).resolve().parent
 subprocess.run(['dotnet','build',str(root/'host'),'-c','Release','--nologo'],check=True)
 digest=hashlib.sha256((root/'host/bin/Release/net6.0/Recorder.dll').read_bytes()).hexdigest()
 out=root/'bin/helper';out.mkdir(parents=True,exist_ok=True)
-source=(root.parent/'system-screensaver/boot/Program.cs').read_text()
+source=(root.parents[1]/'native/system-screensaver/boot/Program.cs').read_text()
 source=source.replace('static int Main() {','static int Main() {\n        BootTrace.Start();\n        BootTrace.Mark("helper-entry");',1)
 source=source.replace('using var process = Process.Start(', 'BootTrace.Mark("diagnostic-start");\n            using var process = Process.Start(',1)
 source=source.replace('diagnosticStatus = process.ExitCode;', 'diagnosticStatus = process.ExitCode;\n            BootTrace.Mark("diagnostic-end");',1)
@@ -43,7 +43,7 @@ static class BootTrace {
  }
 }
 '''.replace('DIGEST',digest))
-(out/'Boot.csproj').write_text((root.parent/'system-screensaver/boot/Boot.csproj').read_text())
+(out/'Boot.csproj').write_text((root.parents[1]/'native/system-screensaver/boot/Boot.csproj').read_text())
 subprocess.run(['dotnet','build',str(out/'Boot.csproj'),'-c','Release','--nologo'],check=True)
 print('Recorder',digest)
 print('Helper',hashlib.sha256((out/'bin/Release/net6.0/Boot.dll').read_bytes()).hexdigest())
