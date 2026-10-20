@@ -47,7 +47,7 @@ docker build --platform linux/arm64 -t couchroot-parity-test:arm64 tests/worker-
 
 Mount the checkout read-only at `/repo`, that private output directory at `/out`,
 and run with `--network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN
---security-opt seccomp=unconfined`. Do not mount host `/opt` or device credentials.
+--security-opt seccomp=unconfined --security-opt apparmor=unconfined`. Do not mount host `/opt` or device credentials.
 The root job tests use `/opt/couchroot-agent/jobs` inside the disposable container.
 Compile and run inside it:
 
@@ -168,7 +168,9 @@ when running `tests/native-retained-state.test.cjs` to include this contract che
 The `arm64-parity` job uses `ubuntu-24.04-arm`, Node 22 and a digest-pinned test
 image. `run-ci.sh` builds the host worker, acceptance controller, I/O delay fixture
 and observer, then enables `COUCHROOT_PARITY_CONTAINER`, `MANAGED_PARITY`,
-`PROCESS_OBSERVER`, fault controls and mount-based storage tests. It runs native,
+`PROCESS_OBSERVER`, fault controls and mount-based storage tests. The disposable container disables
+Docker's AppArmor mount restriction as well as seccomp; a tiny tmpfs preflight
+fails early if the requested mount capability is still unavailable. It runs native,
 worker-parity and observer Python suites plus the JavaScript files using those
 three integration gates, sequentially to protect process-global test state.
 

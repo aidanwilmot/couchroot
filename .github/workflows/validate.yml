@@ -153,7 +153,7 @@ jobs:
       - run: docker build --platform linux/arm64 -t couchroot-parity-test:ci tests/worker-parity
       - name: ARM64 managed/native and process-observer parity
         run: |
-          docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN --security-opt seccomp=unconfined \
+          docker run --rm --init --platform linux/arm64 --network none --cap-add SYS_PTRACE --cap-add SYS_ADMIN --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
             -v "$PWD:/repo:ro" -v "$RUNNER_TEMP/parity:/out" -w /repo couchroot-parity-test:ci sh tests/worker-parity/run-ci.sh
   qn90a-web-saver:
     runs-on: ubuntu-24.04
