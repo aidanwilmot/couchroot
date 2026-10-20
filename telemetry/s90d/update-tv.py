@@ -9,7 +9,7 @@ root=Path(__file__).resolve().parent
 private=Path.home()/'.local/share/samsung-tv-research'
 manifest=private/'telemetry/installed-hashes.json'
 old=json.loads(manifest.read_text())
-files={'Telemetry.dll':root/'collector/bin/Release/net6.0/Telemetry.dll','Boot.telemetry.dll':root/'bin/helper/bin/Release/net6.0/Boot.dll'}
+files={'Telemetry.dll':root.parent/'s90d-collector/bin/Release/net6.0/Telemetry.dll','Boot.telemetry.dll':root/'bin/helper/bin/Release/net6.0/Boot.dll'}
 new={k:hashlib.sha256(v.read_bytes()).hexdigest() for k,v in files.items()}
 for name,path in files.items():subprocess.run([str(private/'bin/sdb'),'-s','192.0.2.12:26101','push',str(path),'/home/owner/share/tmp/sdk_tools/'+name],check=True,stdout=subprocess.DEVNULL)
 script='''set -eu
