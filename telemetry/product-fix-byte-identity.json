@@ -1,0 +1,40 @@
+{
+  "baseline": "140e2b24d8d1b4d79a86465543d20bf4795ad950",
+  "candidate_manifest_sha256": "aa2f57b21369902aa00ac15eb2dad7d1fdb5972164e303dd062571830c7c93f4",
+  "component_revisions": {
+    "boot": "7be3e40794665fb0f332273de4d8c803629654f261f4a4da1589eca5d73c7ed9",
+    "service": "83f1f2be6e4a5c1fffe16d0db711c58df0d102537f1a3797b124e8da8fb0bf66",
+    "helper": "c4ffa367ed27d65ab674439998c29942132a24f0de7c06464b83c2bb4aa2db0e",
+    "saver": "1a978ab85dfc8f2d61b1f382498c7472436d7dea678c858e52dadc41106baee3"
+  },
+  "identical_outputs": {
+    "launcher/bench": "af04cc51d5199b395127909f1046245c4fb4056b593051ef2f079cf470c63515",
+    "launcher/app-launcher": "4ba756c8b725ba2e375ca02608c9ca7579f6d6275c4ed96348ba93bf5b8a6d55",
+    "recovery/sdk-host-recovery": "09089ed952ca68f963eaea21342d3eb5c577a68e2549dff751d02b6b21d3562d",
+    "acquire-qn90a/libacquire.so": "8f4084ec5d3d33b035a6bdc16314b9db578fe0fe1706cac3c09048f4cf034dd9",
+    "entry-s90d/libentry-receipt.so": "7cf278b040579e0a4422e7af0370256f3a59a981e7445f7027715366f021e41a",
+    "observer/process-observer": "4677bef3f0137b792d6de2dd22fa91d32476db5b48c26213db8699b596e4e574",
+    "acquire-s90d/libacquire.so": "8fd127f2039b8901f92de542625eb1ff9fefcd90f8c0c2758a158a60acea7b91",
+    "entry-qn90a/libentry-receipt.so": "92961a03dc7a68439616073662c1b4903318fab89eaeb9ea3080a2280f7f1c89",
+    "acquire-service/libacquire.so": "bdc66898796ee0e86235bbccf87e2761783d6b66b3da758569e3022c3a8f2a09",
+    "worker/worker-fault-test": "af8da383f9217c0be7f869f307815fb6e1b408b122979687bac8935499e106ce",
+    "worker/bench": "87d66607f3728141400d879da6ce763ff39d7e34aa3276c8475b59ab8708b625",
+    "worker/accept": "c33cd223da22be292b0d474fa013695f75972e1f47b711bde5e6b0586c7979ac",
+    "worker/observe": "aaf22cfbf18a8ca2761eb7939003682ac00432c40c281bacda420c48425787a0",
+    "worker/app-launcher": "4ba756c8b725ba2e375ca02608c9ca7579f6d6275c4ed96348ba93bf5b8a6d55",
+    "worker/worker": "c82a7f37497a69a407e0fa5c99b09c454bb3e0dcc31a45a1c2994fcb68532ca5",
+    "worker/accept-fault-test": "9fae9745f3a742f7d403070c9d45cc7b5f589216570ac77cd2619e726c065194",
+    "home-route/APPLY/RootIdentity.dll": "229eae87ffcb9f195e115d58f0c618aa81f46bc79deb01f9ffebd5ba50fc3291",
+    "home-route/RESTORE/RootIdentity.dll": "d691b5969c8b32e8e70a8cf11205cf26120639e2fe1661e4ab86db8ac05d6315",
+    "home-route/KEY/RootIdentity.dll": "fcaaa9190ba7e5e959ce406d70ce3823f39a8f4d4ada4f18e7fcabaa5f18cc8f",
+    "home-route/CAST_APPLY/RootIdentity.dll": "a15c80cd4b72250681664e9fe2b785c26b3a3b7ed25be23b712818e0cfc35c07",
+    "home-route/CAST_RESTORE/RootIdentity.dll": "19b8be36b2ba9bb02d06ab247ede6ef813b4ffbf1dabc081c1aedf4b8a23df52",
+    "home-route/CAST_EARLY_APPLY/RootIdentity.dll": "b1b9600f17493093cdd0e89a0deb1bad6f071ba18fcb5dc8e5c5af71f62596bb",
+    "home-route/CAST_EARLY_RESTORE/RootIdentity.dll": "fb45c2b3784b20c370fd3a0fc728eeb959a178a75b8a5939d60ada089149628d"
+  },
+  "notes": [
+    "Local builds only; no TV or NAS contact.",
+    "Acquisition build scripts already had no file-prefix-map; their outputs were rechecked.",
+    "Original full product-move comparison remains in product-byte-identity.json."
+  ]
+}

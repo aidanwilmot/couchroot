@@ -1,5 +1,7 @@
 # Couchroot administration agent
 
+## Support
+
 The agent provides enrolled, authenticated administration for the pinned QN90A
 and S90D firmware profiles. It reacquires a temporary namespace root context;
 it does not patch firmware or bypass SMACK. The native worker keeps its small
@@ -38,7 +40,8 @@ agent cannot acquire root, use Samsung Apps → Developer Mode to restore the
 computer's former Host PC IP and restart. Verify ordinary SDK access before
 canceling a timed rescue. Do not assume a disabled or restarted service has restored
 settings. The [maintenance procedure](../docs/lab/autonomous-root/README.md#service-restart-during-maintenance)
-requires an independent rescue and, on S90D, confirmation that the original host
+and the full [required device acceptance, in order](../docs/lab/autonomous-root/README.md#required-device-acceptance-in-order)
+require an independent rescue and, on S90D, confirmation that the original host
 has exited before relaunching.
 
 ## Trust boundary
