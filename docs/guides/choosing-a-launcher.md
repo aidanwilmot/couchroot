@@ -84,9 +84,10 @@ historical native measurements below do not certify its hardware behavior.
   arrives around 17–40 seconds into boot.
 - You can run the autonomous root agent and accept an experimental boot hook,
   with the documented rollback.
-- You want to avoid Live TV at boot. Pure-native admission requires the ISP/background
-  boot mode, an empty foreground, the screen on, and a ready compositor. The
-  WebView hook also handles normal-mode boot: it waits for the screen, opens
+- You want to avoid Live TV at boot. The public pure-native installer currently requires ISP/background
+  boot mode, an empty foreground, the screen on, and a ready compositor. The shared
+  native binary can also handle normal mode, but that installer does not dispatch it.
+  The separate WebView hook handles normal-mode boot: it waits for the screen, opens
   the signed Hub to retire the TV viewer, then admits over that Hub. It still
   requires the correct ISP source/owner and compositor; another app cancels. If any
   check fails, native does not draw at all. This is not a quiet-boot guarantee: the

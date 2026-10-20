@@ -1,4 +1,88 @@
-# Combined release candidate — 2026-10-19
+# Current acceptance gates: merged Phase 2
+
+PRs #10, #11 and #12 are merged into main, but **have not been tested on either
+TV**. Host tests and the Phase 3 byte comparisons are not hardware acceptance.
+The older results below belong to their recorded revisions. This checklist is
+for a separately authorized owner session; it is not an instruction to deploy now.
+
+## Preconditions and recovery baseline
+
+For each model separately, record the exact candidate commit, firmware/profile,
+boot ID, package hashes, signing trust and current worker/backend selection in a
+private journal. Keep the original checkout for every unfinished recovery run.
+Capture the existing hooks, packages, preferences, enabled markers and Developer
+Mode Host PC IP; verify the independent SDK rescue and physical fallback before
+changing loopback admission. Retain the signed web Hub and managed fallback.
+Do not overwrite an unfinished run, enroll new trusted bytes merely to pass a test,
+or publish raw logs/tokens. Use the shared setup engine, lock and journal.
+
+In the tables, **restore baseline** means use that journal and its original
+checkout to restore the captured state, verify hashes and normal SDK access, and
+only then retire the timed rescue. If root is unavailable, use the
+[agent recovery procedure](../../agent/README.md#recovery). Stop on an uncertain
+result; inspect evidence rather than replaying an operation. Capture physical
+picture/audio and remote-button behavior separately from process acknowledgements.
+
+## QN90A owner-run checks
+
+Use the enrolled QN90A firmware profile and its .NET Core 3.1 bridge/fallback.
+All rows also require the baseline above.
+
+| Check / PR | Preconditions | Steps | Expected result | Rollback |
+| --- | --- | --- | --- | --- |
+| Loaded cold boot greeting — #10 | Independent rescue armed; current native-selected agent plus retained managed fallback; agreed bounded load | Cold boot under normal load, then with owner-approved bounded startup load; record listener/worker greeting timestamps and acquisition outcome | The 10 s greeting deadline is enforced; a worker arriving in time authenticates. A late worker fails within the bound without hanging or silently exhausting recovery. Record actual root readiness; do not raise the limit to pass | Stop the load, restore the captured worker selection/package and SDK admission; verify rescue and root status |
+| Normal-mode Live TV boot — #11 | A separately reviewed dispatch that actually starts native-hub in normal mode; current public installer does **not** do this | Record the normal marker and foreground; cold boot from Live TV, observe signed-Hub handoff and native presentation; repeat with another app/source taking focus | Native waits for screen/ISP/compositor and signed-Hub foreground; another app/source cancels. No premature overlay or unexplained picture/audio interruption. Mark blocked if using only the background-only installer | Restore baseline hook/dispatch and saved source; use signed web Hub |
+| Standby wake and app return — #11 | Owner-approved native dispatch, Home option and saved-source policy recorded | Sleep/wake while Live TV is selected; then launch an app from native and leave it using the physical remote; repeat while another app owns foreground | Return occurs only when admission permits it; no foreground theft, duplicate native process, stuck Home grab or silent audio continuation | Restore baseline launcher/hook, preferences and source; verify physical Home and web Hub |
+| Background cold boot regression — #11 | Captured ISP source/owner and background boot hook; known-good web fallback | Cold boot into background mode; record first physical render and markers; repeat after failed/disabled native admission | Existing background behavior survives; native failure falls through to the original boot chain, without stranded admission markers | Restore baseline hook and source; verify original boot chain and rescue |
+| Home fallback and rearm via posix_spawn — #11 | Native Home/rearm enabled explicitly; web Hub installed | Open Live TV, press Home, observe web-Hub detour and rearm; repeat with app/source change and a delayed helper | The bounded Home attempt completes or cancels safely; no inherited-descriptor hang, duplicate launch or late focus takeover. Saved source readback matches the journaled policy | Restore baseline source/settings/hook; confirm stock Home and web fallback |
+| WebView CLOEXEC startup — #11 | Existing supported QN90A WebView deployment and recoverable hook, separate from pure-native trial | Exercise background start, normal-mode handoff, standby wake and app return; inspect helper exit/FD evidence | EWK starts, remote input works and the shared helpers complete without leaked descriptors holding pipes open. Rendering and focus guards remain intact | Restore prior WebView package/hook and preferences; fall back to signed web Hub |
+| Root result capture and serial scoping — #12 | Both TVs connected to SDB; explicit QN90A serial; exact package/SDK SMACK labels recorded | Run an innocuous privileged identity/read operation; inspect the 0700 staging directory and result capture; verify the pull command targets QN90A and the S90D is unchanged | Root can write result.txt under the real SMACK policy; serial-scoped pull obtains the correct result. Temporary token/result files are removed without broadening permissions | Stop on capture failure; reconcile staging through the journal, restore baseline, and verify both targets |
+| Snapshot → apply → rollback — #12 | Reviewed small reversible change with known prior value; no pending run | Capture a privileged snapshot, apply once, verify readback, then roll back through the same engine; repeat recovery after an intentional interruption at an agreed boundary | Journal remains recoverable; rollback restores the exact captured state and clears only owned staging. Pairing/preferences and other apps remain intact | Resume/rollback the existing run with its original checkout; use independent rescue if transport is lost |
+| Failure evidence and preferences — #12 | Private output directory, synthetic non-secret failure command and saved preference backup | Run a deliberate nonzero operation that prints a marker to stdout/stderr; inspect private session evidence and cleanup. Separately try missing and malformed native preference inputs in a controlled import trial | Failure output is retained privately, no hex token/downloaded-result remains, and no failure is reported as success. Missing vs format failures are logged distinctly; invalid native import is refused as a whole | Remove only journal-owned staging; restore captured preference files and WebView storage; keep private failure evidence |
+
+## S90D owner-run checks
+
+Use the enrolled S90D firmware profile and its .NET 6 bridge/fallback. Never apply
+QN90A offsets, hook enrollment or writable-file assumptions to S90D. All rows also
+require the common baseline.
+
+| Check / PR | Preconditions | Steps | Expected result | Rollback |
+| --- | --- | --- | --- | --- |
+| Loaded cold boot greeting — #10 | Independent rescue armed, retained managed fallback, agreed bounded load | Cold boot normally and under bounded startup load; record the real worker greeting and acquisition timing on S90D | Same 10 s wire deadline and bounded failure semantics as QN90A, independently measured on the S90D runtime; no hang or unrecoverable retry exhaustion | Stop load; restore captured package/selection and Developer Mode host; verify SDK/root access |
+| Native normal/background boot, standby and app return — #11 | **Blocked:** no supported S90D native-hub/WebView installation or enrolled hook exists in this release | Do not install the QN90A backend. Verify setup refuses unsupported S90D native selection and that existing signed-web boot, wake and app return remain unchanged | Explicit unsupported result for native selection; no claim of S90D graphical acceptance. A future port needs its own reviewed dispatch and the QN90A scenario matrix repeated on S90D | Keep/restore existing signed-web setup and captured boot helper; never copy QN90A recovery artifacts |
+| Home/rearm posix_spawn and WebView CLOEXEC — #11 | **Blocked** for native graphical paths until a separately accepted S90D port | Record the unsupported scope; exercise existing signed-web Home as a regression baseline, without deploying native graphics | Existing S90D Home/web behavior is unchanged; native helper/descriptor acceptance remains open, not inferred from host tests or QN90A | Restore the S90D web/helper baseline and confirm stock Home |
+| Root result capture and serial scoping — #12 | Both TVs connected to SDB; explicit S90D serial; S90D package and SDK SMACK labels recorded | Run a benign privileged identity/read command, inspect 0700 staging/result capture and the serial-scoped pull; verify QN90A is untouched | Root writes and the SDK pulls the intended S90D result under real SMACK policy; no permission relaxation or cross-device result | Reconcile journal-owned staging, restore baseline and verify both targets |
+| Snapshot → apply → rollback — #12 | Reviewed reversible S90D change, captured before state and no pending run | Snapshot, apply once, verify, then roll back; interrupt once at an agreed journal boundary and recover using that run | Exact captured state restored; no lost pairing, preferences or recovery guard. A failed snapshot blocks mutation cleanly | Use the original checkout and pending journal; if needed restore SDK admission physically, then finish rollback |
+| Nonzero failure evidence — #12 | Private evidence directory and synthetic non-secret failure command | Print distinct stdout/stderr markers, exit nonzero, inspect the saved session evidence and local/remote cleanup | Nonzero status and output survive; downloaded-result/token and build staging are cleaned, with no replay or accidental QN90A pull | Preserve private evidence, reconcile owned staging and restore the S90D baseline |
+
+## Owner decisions currently expressed by defaults
+
+These are review questions, not behavior changes in Phase 3:
+
+- **TV Plus allowlists:** `native-hub/hub-platform.h` passes `0` to
+  `platform_consumer`; WebView's `bridge.h` passes `1`. Pure native excludes TV Plus
+  while WebView permits its explicit exception. Decide whether to align them;
+  shared code does not currently imply identical policy.
+- **Normal-mode native boot:** the shared core and native binary can handle a
+  normal-mode handoff, but `tvsetup/native_hook.py` still requires the background
+  marker in both dispatch and watchdog. Decide whether a future installer change
+  should admit normal mode. Current public installation must not be described as
+  enabling it. The separate QN90A WebView boot path has its own normal-mode dispatch.
+- **Invalid native favorites import:** WebView refuses the entire malformed
+  native file (`skipped=format`); it does not salvage individual entries. A missing
+  file logs `skipped=missing`. It leaves the source file on disk and retains existing
+  WebView preferences; the shim drops an invalid import fragment. Decide whether a
+  future explicit recovery/import UI is wanted. Do not describe this as deletion
+  of the native file or as the web model's per-entry filtering.
+- **Signing trust:** `scripts/sign.py` requires a loadable private site config and
+  independently enrolled trust, even when `--site` is omitted. Omission selects
+  `TV_SETUP_SITE` or the standard site.json location; it does not permit trust-free
+  signing from a named SDK certificate profile. Decide whether to keep that policy;
+  this checklist does not weaken it.
+
+---
+
+# Historical combined release candidate — 2026-10-19
 
 Status: locally validated experimental source candidate on `codex/release-candidate`. Combines
 public main `83906b4`, release preparation `4a2325a`, and native worker/restart work

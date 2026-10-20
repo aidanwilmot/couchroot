@@ -1,5 +1,11 @@
 # Native Hub startup experiment
 
+> Current installer boundary: the shared native core supports normal-mode handoff,
+> but `tvsetup/native_hook.py` still starts and monitors the public native install
+> only in background mode. Normal-mode and standby behavior on merged Phase 2 is
+> unaccepted on hardware. Historical private hook results below do not override
+> that boundary; see the [owner checklist](../docs/project/release-readiness.md#current-acceptance-gates-merged-phase-2).
+
 > **Status:** experimental, QN90A firmware T-NKM2AKUC-2301.1 only. This folder contains
 > the launcher source, tests, card styles and records. The
 > [unified installer](../docs/guides/native-installation.md) now implements enrolled
