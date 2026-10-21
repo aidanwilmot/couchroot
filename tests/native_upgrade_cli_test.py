@@ -1,5 +1,8 @@
 """The client submits once and retains an uncertain request for inspection."""
 import tempfile
+import json
+from unittest.mock import Mock, patch
+from agent import client
 import unittest
 from pathlib import Path
 from tvsetup.common import Refused, read_json
@@ -52,3 +55,33 @@ class NativeUpgradeClientTests(unittest.TestCase):
                            reviewed="a" * 64, evidence=evidence, call=call)
             self.assertEqual(len(posts), 1)
             self.assertFalse((evidence/"response.json").exists())
+
+
+class NativeUpgradeTransportTests(unittest.TestCase):
+    def test_submission_accepts_202_only_on_supported_post_routes(self):
+        for method, route, accepted in (
+            ("POST", "/v1/native/upgrade", True),
+            ("POST", "/v1/native/upgrade/recover", True),
+            ("GET", "/v1/native/upgrade", False),
+            ("POST", "/v1/exec", False),
+        ):
+            with self.subTest(method=method, route=route):
+                connection = Mock()
+                response = connection.getresponse.return_value
+                response.status = 202
+                response.will_close = False
+                response.read.return_value = json.dumps({"state": "submitted"}).encode()
+                session = client.Session({})
+                session.context = Mock()
+                with patch.object(client.http.client, "HTTPSConnection", return_value=connection), patch.object(client.hashlib, "sha256") as digest:
+                    session.config.update(host="example.invalid", port=443, server_sha256="pin")
+                    digest.return_value.hexdigest.return_value = "pin"
+                    if accepted:
+                        self.assertEqual(session.request(method, route, {"id": "example"}), {"state": "submitted"})
+                        self.assertFalse(session.failed)
+                    else:
+                        with self.assertRaises(client.OperationError):
+                            session.request(method, route, {"id": "example"})
+                        self.assertTrue(session.failed)
+                    self.assertEqual(connection.request.call_count, 1)
+                session.close()

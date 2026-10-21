@@ -81,7 +81,7 @@ class Session:
             raw = response.read(4 * 1024 * 1024 + 1)
             if len(raw) > 4 * 1024 * 1024:
                 raise RuntimeError('Oversized response')
-            if response.status != 200 and not (response.status == 202 and method == 'POST' and route in ('/v1/native/rehearse','/v1/native/resume-managed','/v1/native/cleanup-restart','/v1/native/migrate','/v1/native/resume-native','/v1/native/return-managed')):
+            if response.status != 200 and not (response.status == 202 and method == 'POST' and route in ('/v1/native/rehearse','/v1/native/resume-managed','/v1/native/cleanup-restart','/v1/native/migrate','/v1/native/resume-native','/v1/native/return-managed','/v1/native/upgrade','/v1/native/upgrade/recover')):
                 raise OperationError(json.loads(raw))
             if raw_response:
                 if len(raw) > 1024 * 1024 or hashlib.sha256(raw).hexdigest() != response.getheader('X-SHA256'):
