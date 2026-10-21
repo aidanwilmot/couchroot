@@ -247,7 +247,13 @@ class SelectionJournal {
       history: [],
     }));
   }
-  begin(revision, target, quiescence) {
+  begin(
+    revision,
+    target,
+    quiescence,
+    id = crypto.randomBytes(16).toString('hex')
+  ) {
+    check(typeof id === 'string' && /^[a-f0-9]{32}$/.test(id));
     check(
       version(target) && typeof quiescence === 'string' && HEX.test(quiescence)
     );
@@ -256,7 +262,7 @@ class SelectionJournal {
       return {
         ...s,
         pending: {
-          id: crypto.randomBytes(16).toString('hex'),
+          id,
           phase: 'prepared',
           from: s.selected,
           to: target,
@@ -422,3 +428,24 @@ module.exports = {
   selectionStatus,
   validate,
 };
+
+// A failed native upgrade appends a rollback receipt; the last committed native
+// launch remains the executable binding. Never mistake the rollback ID for it.
+function nativeCommit(selected) {
+  const history = selected.history || [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i];
+    if (h.outcome === 'committed')
+      return h.to.implementation === 'native-prototype' &&
+        h.to.manifest_sha256 === selected.selected_manifest_sha256
+        ? h
+        : null;
+    if (
+      h.from.implementation !== 'native-prototype' ||
+      h.from.manifest_sha256 !== selected.selected_manifest_sha256
+    )
+      return null;
+  }
+  return null;
+}
+module.exports.nativeCommit = nativeCommit;

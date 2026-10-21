@@ -134,6 +134,24 @@ function createApi(options) {
         });
         return;
       }
+      if (
+        req.method === 'GET' &&
+        ['/v1/native/upgrade', '/v1/native/upgrade?target=previous'].includes(
+          req.url
+        )
+      ) {
+        try {
+          reply(
+            200,
+            agent.upgradeReview(
+              req.url.endsWith('?target=previous') ? 'previous' : 'package'
+            )
+          );
+        } catch (e) {
+          reply(409, { error: String(e.message) });
+        }
+        return;
+      }
       if (req.method === 'GET' && req.url === '/v1/requests') {
         reply(200, { requests: journal.rows, sha256: journal.digest() });
         return;
@@ -149,6 +167,8 @@ function createApi(options) {
           '/v1/files/read',
           '/v1/files/write',
           '/v1/observer/probe',
+          '/v1/native/upgrade',
+          '/v1/native/upgrade/recover',
           '/v1/native/rehearse',
           '/v1/native/resume-managed',
           '/v1/native/cleanup-restart',
@@ -188,6 +208,8 @@ function createApi(options) {
             : raw.toString() || '{}'
         );
         const nativeRoutes = {
+          '/v1/native/upgrade': 'upgrade',
+          '/v1/native/upgrade/recover': 'recoverUpgrade',
           '/v1/native/rehearse': 'rehearse',
           '/v1/native/resume-managed': 'resume',
           '/v1/native/cleanup-restart': 'cleanupRestart',

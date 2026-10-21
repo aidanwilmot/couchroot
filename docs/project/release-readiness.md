@@ -561,3 +561,7 @@ certificates/keys, signed packages, raw evidence, extracted resources and vendor
 binaries. Confirm version/changelog, security-report route and recovery guide.
 Only then request explicit owner authorization to push or publish. Nothing here
 constitutes that authorization.
+
+## Native worker upgrade acceptance
+
+The [native upgrade workflow](../guides/native-worker-upgrades.md) separates package installation from worker activation. Local tests cover handoff and interrupted recovery; both TV models still need owner-approved upgrade, return-to-previous, job, Hub/telemetry and reboot acceptance. Resolve any unexplained preservation-inventory drift before live recovery.

@@ -11,6 +11,7 @@ const {
   sourceExitGuard,
   snapshotManagedJobs,
 } = require('./retained-state');
+const { nativeExitGuard } = require('./worker-processes');
 const { SelectionJournal, selectionStatus } = require('./worker-selection');
 const hash = (b) => crypto.createHash('sha256').update(b).digest('hex');
 function check(ok) {
@@ -28,9 +29,11 @@ function validateSnapshot(value) {
   check(
     exact(value, ['schema', 'implementation', 'source', 'records', 'sha256']) &&
       value.schema === 1 &&
-      value.implementation === 'managed'
+      ['managed', 'native-prototype'].includes(value.implementation)
   );
-  sourceExitGuard(value.source);
+  (value.implementation === 'managed' ? sourceExitGuard : nativeExitGuard)(
+    value.source
+  );
   check(Array.isArray(value.records) && value.records.length <= 64);
   let previous = '';
   for (const r of value.records) {
@@ -70,6 +73,8 @@ function planInstallation({ snapshot, id, manifestSha256 }) {
       manifestSha256.length === 64 &&
       /^[a-f0-9]+$/.test(manifestSha256)
   );
+  const exitGuard =
+    snapshot.implementation === 'managed' ? sourceExitGuard : nativeExitGuard;
   const directory = '/opt/couchroot-worker-' + id,
     scope = directory + '/state',
     jobs = scope + '/.jobs',
@@ -92,7 +97,7 @@ function planInstallation({ snapshot, id, manifestSha256 }) {
     manifestHash = hash(bytes);
   const prefix =
     'set -eu\nPATH=/usr/bin:/bin\nexport PATH\numask 077\ntest -d /opt; test ! -L /opt\n' +
-    sourceExitGuard(snapshot.source);
+    exitGuard(snapshot.source);
   const dir = (p) =>
     'test ! -L ' +
     p +
@@ -185,7 +190,7 @@ function planInstallation({ snapshot, id, manifestSha256 }) {
     'test "$(stat -c %s ' +
     jobs +
     '/.import-record)" -lt 2048\nfi\nprintf "STATE-PENDING\\n"\nfi\nfi\n' +
-    sourceExitGuard(snapshot.source);
+    exitGuard(snapshot.source);
   const begin =
     prefix +
     'test ! -e ' +
@@ -256,13 +261,13 @@ function planInstallation({ snapshot, id, manifestSha256 }) {
     '/.import-record; test ! -L ' +
     jobs +
     '/.import-record\nsync\n' +
-    sourceExitGuard(snapshot.source) +
+    exitGuard(snapshot.source) +
     'mv ' +
     pending +
     ' ' +
     committed +
     '\nsync\n' +
-    sourceExitGuard(snapshot.source) +
+    exitGuard(snapshot.source) +
     'printf "STATE-READY\\n"\n';
   const discardScratch =
     prefix +
@@ -279,7 +284,7 @@ function planInstallation({ snapshot, id, manifestSha256 }) {
     jobs +
     '/.import-record\nfi\nprintf "STATE-SCRATCH-CLEAR\\n"\n';
   const record = {
-    schema: 1,
+    schema: snapshot.implementation === 'managed' ? 1 : 2,
     id,
     phase: 'pending',
     source: snapshot.source,
@@ -292,7 +297,7 @@ function planInstallation({ snapshot, id, manifestSha256 }) {
   const verifyReady =
     prefix +
     readyGuard +
-    sourceExitGuard(snapshot.source) +
+    exitGuard(snapshot.source) +
     'printf "STATE-READY\\n"\n';
   for (const command of [
     inspect,

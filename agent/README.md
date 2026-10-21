@@ -79,3 +79,5 @@ boot entitlement, recovery or hardware acceptance.
 See the [protocol](PROTOCOL.md), [source provenance](UPSTREAM.json), and
 [historical capabilities](../docs/lab/autonomous-root/CAPABILITIES.md).
 Vendor MIT and payload licenses remain beside their sources.
+
+Native worker changes use the explicit [upgrade and recovery workflow](../docs/guides/native-worker-upgrades.md). Package installation alone preserves the committed worker.

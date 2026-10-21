@@ -12,7 +12,11 @@ const {
   validateReadiness,
   validateResourceInventory,
 } = require('./worker-readiness');
-const { processIdentities, bootGuard } = require('./worker-processes');
+const {
+  processIdentities,
+  bootGuard,
+  nativeExitGuard,
+} = require('./worker-processes');
 const { inspectProductionUnit } = require('./observer-unit');
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hex = (v, n) =>
@@ -35,7 +39,7 @@ function validateLaunchFields(record, runtime) {
         'boot_id|device|directory|id|launcher_sha256|manifest_sha256|phase|port|schema|scope|source|state_receipt_sha256|token_file|token_sha256|unit|worker_sha256'
   );
   check(
-    record.schema === 1 &&
+    [1, 2].includes(record.schema) &&
       record.phase === 'submitted' &&
       hex(record.id, 32) &&
       ['s90d', 'qn90a'].includes(record.device)
@@ -53,7 +57,7 @@ function validateLaunchFields(record, runtime) {
       record.scope === record.directory + '/state' &&
       record.unit === 'couchroot-worker-' + record.id + '.service'
   );
-  sourceExitGuard(record.source);
+  (record.schema === 2 ? nativeExitGuard : sourceExitGuard)(record.source);
   bootGuard(record.boot_id);
   check(runtime || record.boot_id === record.source.boot_id);
   check(
@@ -116,6 +120,7 @@ function productionIdentity(info, peer, record, provider) {
   return identity;
 }
 function runtimeCommand(record, identity, snapshot, installation) {
+  const exitGuard = record.schema === 2 ? nativeExitGuard : sourceExitGuard;
   const d = record.directory,
     s = record.scope,
     j = s + '/.jobs';
@@ -158,7 +163,7 @@ function runtimeCommand(record, identity, snapshot, installation) {
     .join('');
   const command =
     'set -eu\nPATH=/usr/bin:/bin\nexport PATH\n' +
-    sourceExitGuard(record.source) +
+    exitGuard(record.source) +
     processGuard +
     dir(d) +
     dir(d + '/code') +
@@ -190,13 +195,15 @@ function runtimeCommand(record, identity, snapshot, installation) {
       .map((n) => '! -name ' + n)
       .join(' ') +
     ' | wc -l)" -eq 0\n' +
-    'test ! -L /opt/couchroot-agent; test ! -L /opt/couchroot-agent/jobs\nif test -e /opt/couchroot-agent/jobs; then\n' +
-    dir('/opt/couchroot-agent/jobs') +
-    'test "$(find /opt/couchroot-agent/jobs -mindepth 1 -maxdepth 1 | wc -l)" -eq ' +
-    snapshot.records.length +
-    '\nelse test ' +
-    snapshot.records.length +
-    ' -eq 0; fi\n' +
+    (record.schema === 2
+      ? ''
+      : 'test ! -L /opt/couchroot-agent; test ! -L /opt/couchroot-agent/jobs\nif test -e /opt/couchroot-agent/jobs; then\n' +
+        dir('/opt/couchroot-agent/jobs') +
+        'test "$(find /opt/couchroot-agent/jobs -mindepth 1 -maxdepth 1 | wc -l)" -eq ' +
+        snapshot.records.length +
+        '\nelse test ' +
+        snapshot.records.length +
+        ' -eq 0; fi\n') +
     'record_file() { test -f "$1"; test ! -L "$1"; test "$(stat -c "%u:%h:%a" "$1")" = 0:1:600; test "$(sha256sum "$1" | cut -d " " -f1)" = "$2"; }\n' +
     'cd ' +
     j +
@@ -208,14 +215,17 @@ function runtimeCommand(record, identity, snapshot, installation) {
           r.name +
           ' ' +
           r.sha256 +
-          '\nrecord_file /opt/couchroot-agent/jobs/' +
-          r.name +
-          ' ' +
-          r.sha256 +
-          '\n'
+          '\n' +
+          (record.schema === 2
+            ? ''
+            : 'record_file /opt/couchroot-agent/jobs/' +
+              r.name +
+              ' ' +
+              r.sha256 +
+              '\n')
       )
       .join('') +
-    sourceExitGuard(record.source) +
+    exitGuard(record.source) +
     processGuard +
     'printf "PRODUCTION-VERIFIED\\n"\n';
   check(Buffer.byteLength(command) <= 65536);
@@ -274,7 +284,8 @@ async function readyProduction({
       p &&
       p.id === record.id &&
       p.phase === 'state-ready' &&
-      p.from.implementation === 'managed' &&
+      p.from.implementation ===
+        (record.schema === 2 ? 'native-prototype' : 'managed') &&
       p.to.implementation === 'native-prototype' &&
       p.to.manifest_sha256 === record.manifest_sha256 &&
       p.state_sha256 === record.state_receipt_sha256 &&

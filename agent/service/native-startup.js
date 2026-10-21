@@ -7,7 +7,7 @@ const fs = require('fs'),
 const { RootAgentServer } = require('./root-agent');
 const { privateRead, privateDirectory } = require('./private-state');
 const { hash, atomic } = require('./policy');
-const { selectionStatus } = require('./worker-selection');
+const { selectionStatus, nativeCommit } = require('./worker-selection');
 const { readRuntime } = require('./native-runtime');
 const {
   validateReadiness,
@@ -46,7 +46,7 @@ function sync(p) {
 }
 function startupCandidate(selectionFile) {
   const selected = selectionStatus(selectionFile),
-    h = selected.history && selected.history.slice(-1)[0];
+    h = nativeCommit(selected);
   if (
     selected.phase !== 'stable' ||
     selected.selected_implementation !== 'native-prototype'
@@ -81,6 +81,7 @@ function startupCandidate(selectionFile) {
         JSON.stringify(original.worker_identity)
   );
   for (const name of [
+    'native-upgrade.pending',
     'retirement-launch.pending',
     'production-launch.pending',
     'state-install.pending',
@@ -230,17 +231,30 @@ function launchCommand(record, attempt) {
     ? fenceCommand(attempt, command, { kind: 'startup' })
     : command;
 }
-async function startSelectedNative({ selectionFile, executor }) {
-  const candidate = startupCandidate(selectionFile);
+async function startSelectedNative(options) {
+  return startNativeRuntime({
+    ...options,
+    candidate: startupCandidate(options.selectionFile),
+    assertCandidate: (candidate) =>
+      check(
+        JSON.stringify(startupCandidate(options.selectionFile)) ===
+          JSON.stringify(candidate)
+      ),
+  });
+}
+// Internal recovery entry: the upgrade journal supplies and pins the retained
+// candidate. Public startup continues to require a stable selection above.
+async function startNativeRuntime({
+  selectionFile,
+  executor,
+  candidate,
+  assertCandidate,
+}) {
   check(candidate);
   const { record, activation, installation, selected } = candidate,
     directory = path.dirname(selectionFile),
     intent = path.join(directory, record.id + '.startup.json');
-  const bound = () =>
-    check(
-      JSON.stringify(startupCandidate(selectionFile)) ===
-        JSON.stringify(candidate)
-    );
+  const bound = () => assertCandidate(candidate);
   let bootId = null;
   const confirm = async () => {
     bound();
@@ -266,6 +280,7 @@ async function startSelectedNative({ selectionFile, executor }) {
   };
   const evidence = {
     source: record.source,
+    nativeSource: record.schema === 2,
     known: Object.entries(record.worker_identity.processes),
     units: [record.unit],
   };
@@ -542,4 +557,9 @@ async function startSelectedNative({ selectionFile, executor }) {
     clearTimeout(timer);
   }
 }
-module.exports = { startupCandidate, startSelectedNative, launchCommand };
+module.exports = {
+  startupCandidate,
+  startSelectedNative,
+  startNativeRuntime,
+  launchCommand,
+};

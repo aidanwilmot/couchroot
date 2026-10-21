@@ -150,3 +150,12 @@ test('automatic forward rollback cannot be displaced by an unrelated activation 
  f.agent.migrateNative=f.agent.rehearseNative;f.agent.resumeNativeActivation=async()=>({});f.tasks.migrate(value);await tick();f.fail(Object.assign(Error('lost provider'),{recovery_transaction_id:'c'.repeat(32)}));await tick();
  assert.throws(()=>f.tasks.resumeNative({id:'native-resume-activation-0001',migration_id:value.id}));assert.equal(f.journal.rows.length,1);
 }));
+
+test('native upgrade API journals before dispatch and rejects replay after lost reply',()=>fixture(async f=>{
+ let calls=0;
+ f.agent.upgradeNative=async(digest,target)=>{calls++;assert.equal(f.journal.rows.at(-1).state,'submitted');assert.equal(digest,'a'.repeat(64));assert.equal(target,'previous');throw Error('reply lost');};
+ const request={id:'native-upgrade-request-01',review_sha256:'a'.repeat(64),target:'previous'};
+ for(const bad of [{...request,target:'managed'},{...request,review_sha256:'bad'},{...request,extra:true}])assert.throws(()=>f.tasks.upgrade(bad));
+ f.tasks.upgrade(request);await tick();await tick();assert.equal(f.tasks.status().state,'unknown');
+ assert.throws(()=>f.tasks.upgrade(request));assert.equal(calls,1);assert.equal(f.journal.rows[0].state,'submitted');
+}));
