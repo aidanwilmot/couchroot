@@ -291,6 +291,55 @@ you have accepted recovery. Runtime processes may hold old code until restart.
 
 ## Activation and verification
 
+### Disabled agent updates
+
+`python3 -m tvsetup.autonomous_root_trial --previous OLD --artifact NEW`
+updates the agent through the setup journal. Its `--credentials` option takes a
+**disabled provisioning directory**, not the HTTPS client's `client.json` used
+by `agent/client.py` and `tvsetup.native_gate`. The directory must contain:
+
+- `manifest.json`, retaining the correct device/target binding and signed-package
+  path and SHA-256, plus a `provisioning` digest for each file below;
+- `provision/config.json` with `enabled: false`;
+- `provision/server-key.pem`, `provision/server.pem`, and `provision/client.pem`
+  from the TV's existing trusted enrollment.
+
+Use the original retained preparation directory when its provisioning matches
+the installed enrollment. Omission selects `--previous`, which is only correct
+if that directory contains the live enrollment. A later package preparation may
+contain different certificates even when it targets the same TV. Never substitute
+that enrollment or silently turn `client.json` into its parent directory.
+
+If the original record is unavailable, stop before deployment. Recover the four
+provisioning files from a trusted private enrollment backup, verify them against
+the enrolled certificate pins and reviewed disabled configuration, and save them
+in a new private directory (directory `0700`, files `0600`). Retain the matching
+artifact manifest's device binding and verified signed-package reference; record
+SHA-256 digests of those exact provisioning bytes under `provisioning`. This is
+a reviewed recovery record, not permission to accept arbitrary live bytes or
+generate replacement keys. If that provenance cannot be established, recover
+the enrollment first rather than creating a record to bypass the check.
+
+With approval, disable the installed agent using its enrolled authenticated API
+before the update. The trial checks that every installed provisioning digest
+matches the disabled record before installing; disabling alone does not prove a
+match. Missing, malformed, changed, or enabled local records are refused before
+device access. On failure, retain the journal and use the trial recovery path;
+do not automatically retry an uncertain install.
+
+Package rollback restores the retained code using a newly signed, forward-versioned
+package (for example, a 0.7.53 update can recover the 0.7.52 code as version 0.7.54).
+Before installing, the journal records that recovery archive's digest, version,
+and expected installed-file hashes separately from the original snapshot. The
+signed recovery content must match the retained package except for the manifest
+version and regenerated signatures; removed files must still be absent. Readback
+checks the recovery hashes and registered version. A lost reply can be reconciled
+against this exact record without re-signing or reinstalling. An unchanged or
+drifted result remains unconfirmed and is not automatically replayed. Keep the
+original checkout, journal, and both signed packages until recovery is accepted.
+
+### Inspecting setup
+
 `plan`, `status` and ordinary `verify` use read-only SDK/NAS inspection. Private
 files may be inaccessible; this is unsupported inspection, not an absent file.
 `--privileged-inspection` stages a bounded diagnostic operation in a temporary
