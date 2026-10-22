@@ -9,17 +9,17 @@ Use the active `samsung-tv-hub` checkout. When loaded through a personal skill
 symlink, resolve this skill's directory; the repository is three levels above it.
 Choose the narrowest workflow matching the user's request:
 
-- **UI update:** [UI deployment](../../../docs/guides/ui-deployment.md), `./deploy-ui`.
+- **UI update:** [UI deployment](../../../docs/guides/ui-deployment.md), `bin/deploy-ui`.
 - **Setup or other device components:** [setup guide](../../../docs/guides/tv-setup.md),
-  `./tv-setup`. Read model-specific notes only for the component being changed.
+  `bin/tv-setup`. Read model-specific notes only for the component being changed.
 - **Browser-only work:** [UI skill](../samsung-tv-ui/SKILL.md).
 
 ## UI release
 
-`./deploy-ui plan --device DEVICE` inspects the TV. After review, an authorized
-update uses `./deploy-ui apply --device DEVICE --yes`; add `--launch` only when
+`bin/deploy-ui plan --device DEVICE` inspects the TV. After review, an authorized
+update uses `bin/deploy-ui apply --device DEVICE --yes`; add `--launch` only when
 opening Hub now is wanted. It closes/reopens the app and checks foreground without
-restarting a native helper. `./deploy-ui verify --device DEVICE` checks readback.
+restarting a native helper. `bin/deploy-ui verify --device DEVICE` checks readback.
 Use `--dry-run` to inspect the workflow without contacting a device.
 
 The entry point runs UI tests, signs current source with a forward version, and
@@ -33,7 +33,7 @@ other. Keep credentials, signed packages, journals and raw evidence outside Git.
 
 ## Telemetry
 
-Both TVs use Hub → no-window relay → `MiniTelemetry.Service`. Use `./tv-setup`
+Both TVs use Hub → no-window relay → `MiniTelemetry.Service`. Use `bin/tv-setup`
 with `--components hub,telemetry`; read [telemetry operations](../../../docs/guides/telemetry.md).
 Keep per-TV runtime/signing and receiver identities. S90D migration retires the
 legacy collector marker and drains its lock while preserving splash/saver helper

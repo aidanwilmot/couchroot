@@ -15,7 +15,7 @@ It is a third launcher option alongside the signed [web Hub](../../web) and
 
 The source, tests and recovery-command renderer are public. Deployment still
 requires a private, model-bound installer using the shared setup journal, enrolled
-root agent, exact backups and existing QN90A hook chain. `./tv-setup` does not yet
+root agent, exact backups and existing QN90A hook chain. `bin/tv-setup` does not yet
 install this launcher. No vendor libraries, firmware dumps, credentials, private
 journals or compiled TV binaries are included. S90D has not been tested.
 

@@ -138,6 +138,6 @@ readback databases/journals from this pass were removed from the TV after the
 Mac copies were hash-verified again. No root helper, `pkgcmd`, or staging
 directory remained. The TV was left in Minimal Hub with AirPlay ready.
 
-Sanitized results: [inventory](../../../../inventory/qn90a-app-cleanup-20260920.json).
+Sanitized results: [inventory](../../inventory/qn90a-app-cleanup-20260920.json).
 Private per-app snapshots are under `qn90a/app-cleanup-backup/20260920T163508Z`,
 `20260920T163624Z`, `20260920T163732Z`, and `20260920T163755Z`.

@@ -8,7 +8,7 @@
     "agent/qn90a-root-probe": "research/qn90a-root-probe",
     "agent/root-identity-probe": "research/root-identity-probe",
     "agent/native-acquisition": "research/native-root-acquisition",
-    "setup/qn90a-app-cleanup": "research/qn90a-app-cleanup",
+    "native/qn90a-app-cleanup": "research/qn90a-app-cleanup",
     "native/s90d-splash": "research/s90d-splash",
     "native/system-screensaver": "research/system-screensaver",
     "web/boot-trace.js": "research/s90d-boot-inventory/dashboard-trace.js",
@@ -16,7 +16,7 @@
     "tools/setup-toolkit.sh": "research/setup-toolkit.sh",
     "tools/toolkit/config.example.json": "research/config.example.json",
     "tools/netdata-trial": "research/native-telemetry/netdata",
-    "setup/qn90a-home-route": "research/qn90a-home-route"
+    "native/qn90a-home-route": "research/qn90a-home-route"
   },
   "content_replacements": {
     "telemetry/s90d/build.py": {

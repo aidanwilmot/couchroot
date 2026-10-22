@@ -24,10 +24,10 @@ in the same directory. Native single-instance enforcement also remains enabled.
 Use the shared setup engine with private site/signing configuration:
 
 ```sh
-./tv-setup plan --device s90d --components hub,telemetry --privileged-inspection
-./tv-setup apply --device s90d --components hub,telemetry --yes --activate
-./tv-setup verify --device s90d --components hub,telemetry --privileged-inspection
-./tv-setup rollback --device s90d --run RUN_ID --yes
+bin/tv-setup plan --device s90d --components hub,telemetry --privileged-inspection
+bin/tv-setup apply --device s90d --components hub,telemetry --yes --activate
+bin/tv-setup verify --device s90d --components hub,telemetry --privileged-inspection
+bin/tv-setup rollback --device s90d --run RUN_ID --yes
 ```
 
 Substitute `qn90a` for the other TV. Historical `manage.py` commands are retired.

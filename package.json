@@ -7,7 +7,7 @@
     "test:ui": "node --test tests/ui.test.cjs tests/preview.test.cjs",
     "screenshots": "node preview/screenshots.cjs",
     "package": "python3 scripts/package.py",
-    "deploy:ui": "python3 deploy-ui",
+    "deploy:ui": "python3 bin/deploy-ui",
     "format:check": "prettier --check \"agent/service/**/*.js\""
   },
   "devDependencies": {
@@ -17,5 +17,10 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "quoteProps": "preserve",
+    "trailingComma": "es5"
   }
 }

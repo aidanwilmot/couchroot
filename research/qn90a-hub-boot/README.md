@@ -154,7 +154,7 @@ is stronger than an accepted launch request; REST visible=true and native
 foreground readback were additionally checked before any assisted launch.
 Telemetry status retains its separate boot/session and send counters.
 
-[Machine-readable evidence](../../inventory/qn90a-hub-boot-20260920.json) records
+[Machine-readable evidence](../../docs/lab/inventory/qn90a-hub-boot-20260920.json) records
 individual full-reboot trials and exact timing. Private raw sessions, transport
 commands, signed packages, REST/NAS observations and screenshots live under
 `~/.local/share/samsung-tv-research/qn90a/hub-boot/` and `sessions/`.

@@ -5,7 +5,7 @@
 
 # Couchroot command-line installer
 
-`./couchroot-install` provides one entry point for choosing, preparing, installing
+`bin/couchroot-install` provides one entry point for choosing, preparing, installing
 and recovering the signed web or pure-native C launcher. The WebView experiment
 uses its [separate tools](../../native/webview/README.md). Web uses the existing setup engine. Native uses
 that same journal engine with an explicitly enrolled QN90A baseline and pinned
@@ -28,11 +28,11 @@ Use Python 3.12+ on macOS or Linux from the source checkout. No private site fil
 certificate, toolkit, root agent, TV or NAS is needed for a plan:
 
 ```sh
-./couchroot-install plan --device qn90a --launcher native
-./couchroot-install plan --device s90d --launcher web --json
-./couchroot-install doctor --device qn90a --launcher native
-./couchroot-install doctor --device s90d --launcher web --stage prepare
-./couchroot-install apply --device qn90a --launcher web --dry-run
+bin/couchroot-install plan --device qn90a --launcher native
+bin/couchroot-install plan --device s90d --launcher web --json
+bin/couchroot-install doctor --device qn90a --launcher native
+bin/couchroot-install doctor --device s90d --launcher web --stage prepare
+bin/couchroot-install apply --device qn90a --launcher web --dry-run
 ```
 
 `doctor` defaults to installation prerequisites. `--stage prepare` checks the
@@ -58,15 +58,15 @@ bundle. Output directories are private (mode 0700); keep preference candidates
 and native binaries out of Git.
 
 ```sh
-./couchroot-install prepare --device s90d --launcher web \
+bin/couchroot-install prepare --device s90d --launcher web \
   --output /private/couchroot-web-review
 
-./couchroot-install prepare --device qn90a --launcher native \
+bin/couchroot-install prepare --device qn90a --launcher native \
   --native-binary /private/build/native-hub \
   --output /private/couchroot-native-review
 
 # Alternative: use the existing local Docker image/build recipe, with no network.
-./couchroot-install prepare --device qn90a --launcher native \
+bin/couchroot-install prepare --device qn90a --launcher native \
   --build-native --output /private/couchroot-native-build
 ```
 
@@ -108,12 +108,12 @@ Configure private site identity, signing trust and the vendor toolkit using the
 [setup guide](tv-setup.md). These commands **contact the selected TV**:
 
 ```sh
-./couchroot-install inspect --device s90d --launcher web
-./couchroot-install apply --device s90d --launcher web --yes
-./couchroot-install status --device s90d --launcher web
-./couchroot-install verify --device s90d --launcher web
-./couchroot-install resume --device s90d --launcher web --run RUN_ID --yes
-./couchroot-install rollback --device s90d --launcher web --run RUN_ID --yes
+bin/couchroot-install inspect --device s90d --launcher web
+bin/couchroot-install apply --device s90d --launcher web --yes
+bin/couchroot-install status --device s90d --launcher web
+bin/couchroot-install verify --device s90d --launcher web
+bin/couchroot-install resume --device s90d --launcher web --run RUN_ID --yes
+bin/couchroot-install rollback --device s90d --launcher web --run RUN_ID --yes
 ```
 
 `--site PATH` selects private connection/trust configuration. `--json` provides

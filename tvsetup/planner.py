@@ -187,12 +187,12 @@ def source_files():
         REPO / "native/system-screensaver",
         REPO / "native/s90d-splash",
         REPO / "agent/namespace-root-probe",
-        REPO / "setup/qn90a-app-cleanup",
+        REPO / "native/qn90a-app-cleanup",
         REPO / "native/qn90a-screensaver",
         REPO / "native/qn90a-boot-relay",
         REPO / "telemetry/qn90a-startup",
         REPO / "telemetry/qn90a-bootstrap",
-        REPO / "setup/qn90a-home-route",
+        REPO / "native/qn90a-home-route",
     ]
     files = sorted(
         {

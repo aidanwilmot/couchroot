@@ -145,7 +145,7 @@ tested, and this does not promise survival of either.
 
 ## Evidence and recovery
 
-Sanitized summary: `inventory/samsung/2026-09-19/persistence/verification.json`.
+Sanitized summary: `docs/lab/inventory/samsung/2026-09-19/persistence/verification.json`.
 Full commands/results remain in private toolkit sessions. Exact startup backups,
 metadata, and SMACK/capability sidecars are in the backup directory above; host
 passwd/public-key copies were subsequently saved there and verified against the

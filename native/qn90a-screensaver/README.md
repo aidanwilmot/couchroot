@@ -348,4 +348,4 @@ partial-app slot. Native Home returned to Minimal Hub with no partial app.
 Final inspection reads **Enabled / 7200 / MiniSave01.Saver / normalized=False**;
 Hub is foreground and native saver is off. The five-minute setting belongs to
 Hub's installed timer. Machine-readable acceptance is in
-`inventory/qn90a-screensaver-20260920.json`; full traces remain private.
+`docs/lab/inventory/qn90a-screensaver-20260920.json`; full traces remain private.

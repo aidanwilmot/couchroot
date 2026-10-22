@@ -15,7 +15,7 @@ def load_site(path=None):
     ).expanduser()
     if not path.is_file():
         raise Refused(
-            "Create a private site.json from examples/site.json and pass --site PATH; see docs/guides/tv-setup.md"
+            "Create a private site.json from docs/examples/site.json and pass --site PATH; see docs/guides/tv-setup.md"
         )
     data = read_json(path)
     if not isinstance(data, dict) or set(data) - {"devices", "nas", "trust_file"}:

@@ -344,7 +344,7 @@ worker. Settings, boot and S90D telemetry rewrites remain deferred.
 Couchroot is published as experimental source with 0BSD licensing for original
 work and retained upstream notices. The owner authorized a fresh source snapshot,
 not the old development history. See [publication review](publication-review.md),
-[licensing](../../LICENSE-STATUS.md) and [Security](../../SECURITY.md). Historical licensing
+[licensing](licensing.md) and [Security](../../.github/SECURITY.md). Historical licensing
 and publication decisions below are superseded; incomplete hardware acceptance
 and portability work remain limitations, not completed tests.
 
@@ -538,7 +538,7 @@ compiler/sysroot recipe.
    material. Approve the public scope of the privilege-chain details. Decide how
    historical identifiers and commit author identity will be handled; changing the
    current files alone is insufficient. Establish/test a private security-reporting
-   contact and maintenance policy. See LICENSE-STATUS.md and SECURITY.md.
+   contact and maintenance policy. See docs/project/licensing.md and .github/SECURITY.md.
 2. **P0 — Physical apply/recovery proof on both exact TVs.** The new CLI and rebuilt
    root runner need owner-authorized tests from known recoverable states: baseline
    root invocation is read-only, privileged invocation runs once, resource hashes

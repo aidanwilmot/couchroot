@@ -2,18 +2,23 @@
 
 **Your couch. Your TV. Your launcher.**
 
-A quiet home screen for Samsung Tizen TVs, with optional telemetry and tools for
-setup, administration and recovery. Built around the **QN90A** and **S90D**.
-The project is **Couchroot**; the app installed on your TV is named **Minimal Hub**.
+A quiet home screen for Samsung Tizen TVs, plus optional monitoring and the tools
+to set it up, administer it and recover it. The project is **Couchroot**; the app
+it installs on your TV is called **Minimal Hub**.
 
-[Try it locally](#try-it-locally) · [TV setup](#put-it-on-a-tv) · [Documentation](docs/README.md) · [Release status](docs/project/release-readiness.md)
+Couchroot is a personal passion project, built for my own TVs: a **QN90A** and an
+**S90D**. It's shared in case it's useful to you too. Everything here is free to
+use, and contributions are welcome.
+
+[Try it locally](#try-it-locally) · [Put it on a TV](#put-it-on-a-tv) ·
+[Documentation](docs/README.md) · [Release status](docs/project/release-readiness.md)
 
 ![Minimal Hub in compact mode, with a clock, app favorites and remote controls](docs/images/compact.png)
 
 *Actual launcher UI in the local browser workbench. All screenshots use simulated
 apps and contain no live device or account data.*
 
-## Make yourself at home
+## What it does
 
 - **A home screen you control.** Choose and reorder favorites, switch layouts,
   show a clock and adjust navigation sounds. Use arrows, OK and Back; Samsung
@@ -22,7 +27,7 @@ apps and contain no live device or account data.*
   startup inspection on S90D. The launcher works without telemetry or a NAS.
 - **Administration with recovery.** A separate root agent provides
   authenticated commands, file transfers and jobs. Setup tools verify device
-  identity and preserve backups and journals for interrupted operations.
+  identity and keep backups and journals for interrupted operations.
 
 <table>
   <tr>
@@ -47,140 +52,133 @@ npm ci
 npm run dev
 ```
 
-Open **<http://127.0.0.1:8766>**, choose a scenario and click the preview. Navigate
-with the arrow keys, **Enter** for OK and **Escape** for Back. The workbench runs
-the shipped web UI with simulated TV APIs; it does not contact a TV or NAS.
+Open **<http://127.0.0.1:8766>**, choose a scenario and click the preview. Use the
+arrow keys, **Enter** for OK and **Escape** for Back. The workbench runs the
+shipped web UI against simulated TV APIs; it never contacts a TV or NAS.
 
 ## Put it on a TV
 
-Use the **signed web Hub** on the reviewed QN90A or S90D firmware profiles.
-Check your exact model and firmware in the [compatibility notes](docs/guides/device-compatibility.md)
-first; other Samsung TVs are not automatically supported. This is a source
-installation using your own Samsung certificates, not a downloadable universal WGT.
+Couchroot installs the **signed web Hub** on the reviewed QN90A and S90D firmware
+profiles. Other Samsung models are not automatically supported; check the
+[compatibility notes](docs/guides/device-compatibility.md) first. This is a source
+installation signed with your own Samsung certificates, not a downloadable WGT.
 
-### 1. Prepare your computer
+Got a different model? [Porting to a new TV or firmware](docs/guides/porting-to-a-new-tv.md)
+walks through building your own device profile, debugging a port and the
+decompilation flows behind the existing profiles.
 
-Clone the repository as above, then install the Python dependencies on macOS or Linux:
+1. **Prepare your computer.** Install Python 3.12+, Samsung SDB, the Tizen
+   CLI/certificate tools, OpenSSL and the .NET SDK pinned in `global.json`
+   ([host setup](docs/guides/tv-setup.md#install-from-source)), then:
 
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r tvsetup/requirements.txt
-```
+   ```sh
+   python3 -m venv .venv && . .venv/bin/activate
+   python -m pip install -r tvsetup/requirements.txt
+   bin/couchroot-install plan --device qn90a --launcher web     # offline
+   bin/couchroot-install doctor --device qn90a --launcher web   # checks prerequisites
+   ```
 
-Use **Python 3.12+**, Samsung SDB and the Tizen CLI/certificate tools, OpenSSL,
-Git/OpenSSH, and the **.NET SDK pinned in `global.json`** for the signed helpers.
-Follow [host and toolkit setup](docs/guides/tv-setup.md#install-from-source) to
-install the vendor tools and set their paths. The preview itself needs only Node.js.
+2. **Enroll your TV and signing identity.** Enable Developer Mode, copy
+   [`docs/examples/site.json`](docs/examples/site.json) to
+   `~/.config/samsung-tv-hub/site.json` and fill in your TV and certificates. See
+   [private configuration and signing trust](docs/guides/tv-setup.md#configure-your-installation).
+   Keep keys, signed packages and recovery journals outside Git.
 
-You can inspect the installation recipe before configuring or contacting a TV:
+3. **Inspect, install and verify.** These commands contact the TV:
 
-```sh
-./couchroot-install plan --device qn90a --launcher web
-./couchroot-install doctor --device qn90a --launcher web
-```
+   ```sh
+   bin/couchroot-install inspect --device qn90a --launcher web
+   bin/couchroot-install apply --device qn90a --launcher web --yes
+   bin/couchroot-install verify --device qn90a --launcher web
+   ```
 
-Replace `qn90a` with `s90d` for that model. `plan` is offline; `doctor` checks
-local prerequisites and reports anything missing.
+   This installs Hub with its Home, AirPlay and startup integration. It does not
+   reboot or touch app cleanup, telemetry or a NAS. Keep the reported run ID: an
+   interrupted install is finished with
+   [journaled resume or rollback](docs/guides/universal-installer.md#web-installation-and-recovery),
+   not by starting over.
 
-### 2. Enroll your TV and signing identity
+Use `s90d` in place of `qn90a` for that model. After that:
 
-Follow [private configuration and signing trust](docs/guides/tv-setup.md#configure-your-installation):
-
-- Enable TV Developer Mode with your computer's address and establish SDB access.
-- Copy `examples/site.json` to `~/.config/samsung-tv-hub/site.json` with private
-  permissions. Enter your TV's address, exact device identity and signing profile;
-  remove unused devices and the NAS section for a TV-only installation.
-- Create Samsung certificates authorized for your TV and enroll their reviewed
-  author/distributor fingerprints. Example values and another owner's certificates
-  cannot be used for your installation.
-- Keep the private toolkit, keys, prior signed packages and recovery journals
-  outside Git. For an update, retain the installed author's signing identity.
-
-### 3. Inspect, install and verify
-
-These commands **contact the selected TV**. Inspect the proposal before applying it:
-
-```sh
-./couchroot-install inspect --device qn90a --launcher web
-./couchroot-install apply --device qn90a --launcher web --yes
-./couchroot-install verify --device qn90a --launcher web
-```
-
-This installs Hub and its Home, AirPlay and startup integration. It does not select
-app cleanup, telemetry or NAS changes. It does not reboot; add `--activate` to
-`apply` only when you want to open Hub immediately. Confirm arrows/OK/Back,
-favorites, app launch and the Samsung Home fallback on the TV.
-
-Keep the reported run ID and original checkout. If installation is interrupted,
-use [journaled resume or rollback](docs/guides/universal-installer.md#web-installation-and-recovery)
-from that checkout instead of starting over. An installed-file backup alone is
-not a signed reinstall package; read the recovery requirements before applying.
-
-### Updating and optional features
-
-| Task | Workflow |
+| Task | Guide |
 | --- | --- |
-| Update Hub on a configured TV | [UI-only deployment](docs/guides/ui-deployment.md): `./deploy-ui plan --device qn90a`, then reviewed apply and verify |
-| Add telemetry or other setup components | [Full setup](docs/guides/tv-setup.md) and [telemetry](docs/guides/telemetry.md) |
-| Install or administer the root agent | [Agent enrollment and recovery](agent/README.md); a separate, reviewed operation |
-| Activate a newer native worker | [Native worker upgrades](docs/guides/native-worker-upgrades.md); package installation alone keeps the committed worker |
-| Try the QN90A native WebView launcher | [Experimental WebView procedure](native/webview/README.md); retain the signed web Hub as fallback |
+| Update Hub on a configured TV | [UI deployment](docs/guides/ui-deployment.md) (`bin/deploy-ui`) |
+| Add telemetry or other components | [Full setup](docs/guides/tv-setup.md) (`bin/tv-setup`) and [telemetry](docs/guides/telemetry.md) |
+| Install or administer the root agent | [Agent enrollment and recovery](agent/README.md) |
+| Activate a newer native worker | [Native worker upgrades](docs/guides/native-worker-upgrades.md) |
+| Try the experimental QN90A WebView launcher | [WebView procedure](native/webview/README.md) |
 
-Pure-native drawing is retired. `--launcher native` is retained for existing
-journal status and recovery, not new installations.
+## Status
 
-## Validation status
+The signed web Hub and telemetry service are in use on my QN90A and S90D and have
+been reboot-verified on both. The root agent's native worker passed hardware
+acceptance on the S90D (agent 0.7.54, 2026-10-21); the latest QN90A agent upgrade
+still needs acceptance. The WebView launcher is experimental, pure-native drawing
+is retired, and other models, regions and firmware are unverified.
 
-The signed web Hub and shared telemetry service have been used and reboot-verified
-on the reviewed QN90A and S90D profiles. The root agent uses a native worker;
-a small .NET acquisition bridge remains, but new packages contain no managed
-worker fallback.
+Before enabling agent loopback acquisition, read its
+[recovery procedure](agent/README.md#recovery): a failed start may require
+restoring Developer Mode access with the TV remote. Details are in
+[release readiness](docs/project/release-readiness.md).
 
-**S90D agent 0.7.54 passed hardware acceptance on 2026-10-21:** native upgrades
-in both directions, a root command and job, retained-job preservation, and
-unattended native startup after reboot. Hub/telemetry files and registrations
-were preserved and telemetry resumed on the new boot. Recovery material is retained.
+## Repository layout
 
-That result does not qualify every installation or recovery path. The latest
-QN90A agent upgrade still needs acceptance; interrupted-upgrade fault injection
-is locally tested, and physical UI/standby checks remain separate. The S90D
-installer reset service startup flags despite the manifest; a reviewed correction
-was needed. Verify on-boot/auto-restart registration after agent updates before
-relying on unattended startup. See [current acceptance and remaining checks](docs/project/release-readiness.md).
+| Path | What's there |
+| --- | --- |
+| [`web/`](web) | The Minimal Hub UI that ships to the TV |
+| [`preview/`](preview) | Local workbench that runs `web/` with simulated TV APIs |
+| [`tvsetup/`](tvsetup) | Shared setup engine: signing, identity checks, backups and journals |
+| [`bin/`](bin) | Command-line entry points: `couchroot-install`, `deploy-ui`, `tv-setup` |
+| [`agent/`](agent) | Root agent service, native worker and recovery |
+| [`native/`](native) | Native on-TV components: WebView launcher, boot relay, screensavers, Home routing |
+| [`telemetry/`](telemetry) | Monitoring service and collectors |
+| [`tools/`](tools) | Per-model device operation scripts and toolkit |
+| [`scripts/`](scripts) | Packaging, signing, reproducibility and offline checks |
+| [`tests/`](tests) | Unit, browser and integration tests |
+| [`docs/`](docs/README.md) | Guides, lab notes, project records, examples and sanitized evidence |
+| [`research/`](research) | Experiments and retired code, kept for reference |
 
-The WebView launcher remains experimental. Other models, regions and firmware
-versions are unverified. Before enabling agent loopback acquisition, read its
-[recovery procedure](agent/README.md#recovery): a failed start may require restoring
-Developer Mode computer access with the TV remote.
+## Contributing
 
-## Develop and contribute
-
-The UI lives in `web/`; `preview/` runs it locally. `tvsetup/` contains the shared
-setup engine; `agent/` and `telemetry/` contain the shipped services.
-`research/` holds experiments and retired code.
+Issues, ideas and pull requests are welcome. This is a hobby project, so there is
+no support promise or fixed roadmap, but I'm happy to review changes, especially
+reports from other Samsung models.
 
 ```sh
 npx playwright install chromium
-npm test
-npm run screenshots
+npm test                                              # UI and preview
+python3 -m unittest discover -s tests -p '*_test.py'  # setup and deployment
 ```
 
-[UI development](docs/guides/ui-development.md) covers preview scenarios and
-remote-navigation checks. [Release validation](docs/project/release-readiness.md#validation-and-reproducibility)
-covers setup, native and managed checks. .NET is needed for managed components
-and full setup, not the browser preview. Follow [Contributing](CONTRIBUTING.md)
-and [Security](SECURITY.md); keep device identifiers, credentials and raw logs
-out of issues.
+Read the [contributing guide](.github/CONTRIBUTING.md) and
+[UI development](docs/guides/ui-development.md) before opening a PR. Never test
+on a TV you don't own, and keep device identifiers, credentials and raw logs out
+of issues. Report vulnerabilities privately; see [security](.github/SECURITY.md).
 
-## License and credits
+## Built with AI
 
-Original work is **[0BSD](LICENSE)**. Bundled third-party code retains its own
-licenses; see [licensing details](LICENSE-STATUS.md).
+AI coding assistants, mainly Anthropic's Claude and OpenAI's Codex, are a major
+tool in this project. They help write and review code, tests and documentation.
+I decide what gets built, review the changes and test them on my own TVs before
+relying on them. That said, this is hobby software that runs with root on a TV:
+read what a command does before running it.
+
+AI-assisted contributions are welcome on the same terms as any other: understand
+your change and say how you tested it.
+
+## License: free to use
+
+All of Couchroot's original code and documentation is released under
+**[0BSD](LICENSE)**. You can use, copy, modify and share it for any purpose,
+commercial or not, without asking and without attribution.
+
+A few bundled third-party pieces keep their own permissive licenses (MIT and
+Unlicense), so keep their notices if you copy them. See
+[licensing](docs/project/licensing.md) for the list.
 
 Thanks to [Vetro](https://github.com/andrearicci93/vetro) and
 [samsung-tv-root](https://github.com/chris-ritsen/samsung-tv-root) for the transport,
-root payloads and research behind this work. [Sources & credits](CREDITS.md)
+root payloads and research behind this work. [Sources & credits](docs/project/credits.md)
 records the full provenance.
 
 *Unofficial. Not endorsed or supported by Samsung. Product names and marks belong

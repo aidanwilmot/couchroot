@@ -1,6 +1,6 @@
 # Deploy the Hub UI
 
-Use `./deploy-ui` to update **only Minimal Hub** on an already configured S90D or
+Use `bin/deploy-ui` to update **only Minimal Hub** on an already configured S90D or
 QN90A. It reuses the setup engine's model/identity checks, signing trust, forward
 package version, backup, content readback and recovery journal. Use
 [`tv-setup`](tv-setup.md) for first-time setup and other device components.
@@ -8,9 +8,9 @@ package version, backup, content readback and recovery journal. Use
 ## Normal update
 
 ```sh
-./deploy-ui plan --device qn90a
-./deploy-ui apply --device qn90a --launch --yes
-./deploy-ui verify --device qn90a
+bin/deploy-ui plan --device qn90a
+bin/deploy-ui apply --device qn90a --launch --yes
+bin/deploy-ui verify --device qn90a
 ```
 
 Substitute `s90d` for the other model. Select one TV at a time. `plan` and `verify`
@@ -44,7 +44,7 @@ UI deployment always builds the current Hub source for the selected model.
 To inspect command selection without tests, signing or device contact:
 
 ```sh
-./deploy-ui apply --device qn90a --launch --dry-run
+bin/deploy-ui apply --device qn90a --launch --dry-run
 ```
 
 `--dry-run` prints the intended workflow; it does not validate prerequisites or
@@ -58,8 +58,8 @@ The summary gives a run ID. Logs and signed packages stay under
 share locks, pending-run checks and the ownership ledger.
 
 ```sh
-./deploy-ui resume --device qn90a --run RUN_ID --yes
-./deploy-ui rollback --device qn90a --run RUN_ID --yes
+bin/deploy-ui resume --device qn90a --run RUN_ID --yes
+bin/deploy-ui rollback --device qn90a --run RUN_ID --yes
 ```
 
 These commands accept only UI deployment journals. Use `tv-setup` for a full-setup
