@@ -35,17 +35,77 @@ def identity(profile):
         "model": profile["platform"],
         "id": profile["device_id"],
     }
-    if any(data.get(k) != v for k, v in expected.items()):
-        raise Refused("Physical TV identity differs; no agent operation submitted")
+    mismatches = [key for key, value in expected.items() if data.get(key) != value]
+    if mismatches:
+        from .survey import public_value
+
+        fields = []
+        descriptions = []
+        for key in mismatches:
+            if key == "id":
+                descriptions.append("id does not match site.json")
+                fields.append(
+                    {
+                        "field": "id",
+                        "expected": "[redacted]",
+                        "found": "[redacted]",
+                    }
+                )
+            else:
+                found = public_value(data, key)
+                descriptions.append(f"{key}: expected {expected[key]}, found {found}")
+                fields.append(
+                    {
+                        "field": key,
+                        "expected": expected[key],
+                        "found": found,
+                    }
+                )
+        raise Refused(
+            "Physical TV identity differs; no agent operation submitted: "
+            + "; ".join(descriptions),
+            code="CR-ID-DEVICE",
+            fields=fields,
+            next_steps=[
+                "Check the model/platform in site.json and confirm the TV identity.",
+                "See docs/guides/refusal-codes.md#cr-id-device",
+            ],
+        )
 
 
 def agent_binding(site, device, path):
     config = json.loads(read_bounded(path).decode())
-    if (
-        config.get("device") != device
-        or config.get("host") != site["devices"][device]["host"]
-    ):
-        raise Refused("Agent enrollment differs from site identity")
+    mismatches = []
+    if config.get("device") != device:
+        found = config.get("device")
+        if found not in ("qn90a", "s90d"):
+            found = "[redacted]"
+        mismatches.append(
+            ("device", device, found, f"device: expected {device}, found {found}")
+        )
+    if config.get("host") != site["devices"][device]["host"]:
+        mismatches.append(
+            (
+                "host",
+                "[redacted]",
+                "[redacted]",
+                "host does not match site.json",
+            )
+        )
+    if mismatches:
+        raise Refused(
+            "Agent enrollment differs from site identity: "
+            + "; ".join(row[3] for row in mismatches),
+            code="CR-ID-DEVICE",
+            fields=[
+                {"field": name, "expected": expected, "found": found}
+                for name, expected, found, _ in mismatches
+            ],
+            next_steps=[
+                "Check the agent enrollment against the selected site device.",
+                "See docs/guides/refusal-codes.md#cr-id-device",
+            ],
+        )
     from .native_hook import digest
 
     digest(config.get("server_sha256"))

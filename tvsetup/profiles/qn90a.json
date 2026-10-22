@@ -13,6 +13,15 @@
   "dashboard_config_path": "/opt/usr/home/owner/apps_rw/MiniTelemetry/data/preferences.json",
   "launcher_sha256": "5f33f4d63bc7eb5a09cdedf377398d6c2f4142e629a1f73921f31f08cb7791f3",
   "id": "qn90a",
+  "capabilities": {
+    "transport": "verified",
+    "signed_install": "verified",
+    "launcher": "verified",
+    "home": "untested",
+    "startup": "verified",
+    "cleanup": "verified",
+    "standby": "untested"
+  },
   "cleanup": {
     "9FhM0cODbY": {
       "name": "TikTok",

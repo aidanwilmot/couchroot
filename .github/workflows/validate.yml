@@ -17,19 +17,21 @@ jobs:
         node: [22, 24]
         python: ["3.12", "3.14"]
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Chromium's system-font downloads can take 13 minutes on hosted mirrors.
+    # Leave time for the full test suite after dependency installation.
+    timeout-minutes: 20
     env:
       SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
       PYTHONWARNINGS: default
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
       # Hosted runners may have .NET preinstalled. Fail if this job invokes it.
@@ -54,7 +56,25 @@ jobs:
       - run: python -m pip install --require-hashes -r .github/requirements-format.txt
       - run: ruff format --check tvsetup scripts
       - run: npm run format:check
-      - run: npx playwright install --with-deps chromium
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
+      # The browser download occasionally stalls; the cache above makes repeat
+      # runs instant, and this retry rides out a transient CDN/apt failure.
+      - name: Install Playwright Chromium
+        run: |
+          for attempt in 1 2 3; do
+            npx playwright install --with-deps chromium && exit 0
+            echo "playwright install attempt $attempt failed; retrying in $((attempt * 15))s" >&2
+            sleep $((attempt * 15))
+          done
+          echo "playwright install failed after 3 attempts" >&2
+          exit 1
       - run: python -m unittest discover -s native/webview/tests -p 'test_*.py'
       - run: node native/webview/tests/native-shim.cjs
       - run: node native/webview/tests/diagnostic.cjs
@@ -69,10 +89,10 @@ jobs:
       SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
       - run: python -m pip install -r tvsetup/requirements.txt
@@ -86,13 +106,13 @@ jobs:
       SAMSUNG_TV_TOOLKIT: ${{ github.workspace }}/.ci/empty-tv-toolkit
       TV_SETUP_STATE: ${{ github.workspace }}/.ci/tv-state
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
       - run: python scripts/check-dependencies.py --component managed
@@ -104,10 +124,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
       - run: docker build --platform linux/amd64 -t samsung-native-collector:bullseye telemetry/native-collector
@@ -132,7 +152,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: docker build --platform linux/amd64 -t samsung-native-collector:bullseye telemetry/native-collector
@@ -141,7 +161,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: mkdir -p "$RUNNER_TEMP/parity"
@@ -164,7 +184,7 @@ jobs:
     timeout-minutes: 10
     container: emscripten/emsdk:3.1.64@sha256:8847dad4171ebc8a53d9ae5cda86a2546ef5b2e68834c14dc1ba2b2962e125cc
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - run: python3 scripts/check-web-reproducible.py

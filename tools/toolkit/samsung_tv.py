@@ -71,23 +71,56 @@ def doctor(config):
     else:
         print("No private binary manifest installed; source-only toolkit")
 
+def identity_refusal(message, fields):
+    try:
+        from tvsetup.common import Refused
+    except ImportError:
+        return RuntimeError(message)
+    return Refused(
+        message,
+        code="CR-ID-DEVICE",
+        fields=fields,
+        next_steps=[
+            "Check the selected model and site identity.",
+            "See docs/guides/refusal-codes.md#cr-id-device",
+        ],
+    )
+
 def device(config):
     host = config["tv_host"]
-    with urlopen(f"http://{host}:8001/api/v2/", timeout=5) as response:
-        data = json.load(response)["device"]
+    try:
+        with urlopen(f"http://{host}:8001/api/v2/", timeout=5) as response:
+            data = json.load(response)["device"]
+    except Exception:
+        # urllib exception messages can contain the configured host.
+        raise RuntimeError("TV identity endpoint failed; check the configured address and port 8001") from None
     for field, expected in (("modelName", config["expected_model"]), ("model", config["expected_platform"])):
         if data.get(field) != expected:
-            raise RuntimeError(f"Target mismatch: {field}={data.get(field)!r}, expected {expected!r}")
+            candidate = data.get(field)
+            pattern = {"modelName": r"[A-Z]{2}[0-9]{2,3}[A-Z0-9]{5,20}", "model": r"[0-9]{2}_[A-Z0-9]+_[A-Z0-9_]+"}[field]
+            found = candidate
+            if not isinstance(candidate, str) or not re.fullmatch(pattern, candidate):
+                found = "[redacted]"
+            for name, item in data.items():
+                if name not in ("modelName", "model", "developerMode") and isinstance(item, str) and item and isinstance(candidate, str) and item in candidate:
+                    found = "[redacted]"
+                    break
+            raise identity_refusal(
+                f"Target mismatch: {field}={found!r}, expected {expected!r}",
+                [{"field": field, "expected": expected, "found": found}],
+            )
     if config.get('expected_device_id') is not None and data.get('id') != config['expected_device_id']:
-        raise RuntimeError('Physical TV identity differs from site configuration; no SDK command was sent')
+        raise identity_refusal(
+            'Physical TV identity differs from site configuration; no SDK command was sent: id does not match site.json',
+            [{"field": "id", "expected": "[redacted]", "found": "[redacted]"}],
+        )
     callback = route_callback_host(host)
-    selected = {k: data.get(k) for k in ("modelName", "model", "name", "developerMode", "developerIP")}
-    selected.update(tv_host=host, callback_host=callback)
-    print(json.dumps(selected, indent=2))
     if str(data.get("developerMode")) != "1":
         raise RuntimeError("Enable Developer Mode on the TV before shell diagnostics")
     if data.get("developerIP") != callback:
-        raise RuntimeError(f"Developer Mode host must match this Mac's TV route: {callback}")
+        raise RuntimeError(
+            "Developer Mode host must match this Mac's routed address: " + callback
+        )
     with socket.create_connection((host, 26101), timeout=5):
         pass
     return callback
@@ -111,7 +144,6 @@ def capture(config, callback, command, timeout, label):
         (session / "result.json").write_text(json.dumps({
             "transport_returncode": result.transport_returncode,
             "remote_exit": int(match[1]) if match else None,
-            "tv_host": config["tv_host"], "callback_host": callback,
         }, indent=2) + "\n")
         if len(result.output) <= 8000:
             print(result.output)

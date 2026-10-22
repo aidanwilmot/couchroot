@@ -17,7 +17,7 @@ class DependencyTests(unittest.TestCase):
         self.addCleanup(patch.stopall)
         patch.object(dependencies.platform, 'system', return_value='Linux').start()
         patch.object(dependencies.sys, 'version_info', (3, 12)).start()
-        patch.object(dependencies.importlib.metadata, 'version', return_value='6.1.1').start()
+        patch.object(dependencies.importlib.metadata, 'version', return_value='6.1.3').start()
 
     def test_nonmanaged_checks_never_probe_dotnet(self):
         def which(name):

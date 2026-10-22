@@ -32,6 +32,22 @@ full-setup or recovery paths.
 | QN55S90DAFXZA (S90D) | `T-PTMDAKUC-0090-2130.0` | Verified on one owner's TV | Hub/service verified; full setup acceptance pending |
 | Other sizes, regions, models or firmware | Any other combination | Unverified | Unsupported; preflight refuses |
 
+Before installing host tools, new owners can run the read-only
+[`survey HOST`](universal-installer.md#survey-a-tv-before-installing-tools)
+command. It reads the public identity endpoint once and reports the closest
+profile. A matching model and platform is preliminary only; SDB identity checks
+still verify firmware and architecture before an operation. Existing managed
+operations also retain their runtime and pinned-hash guards. A platform-family match is informational and never enables an
+operation. Survey output redacts physical identifiers and all IP addresses,
+including this computer's. `survey HOST --report DIR` writes the private, redacted JSON and
+Markdown report; `--profile-skeleton` adds a marked research template that the
+registry refuses to load. If no reviewed profile is close enough for a diff,
+the report still includes an unverified skeleton with no comparison. `doctor
+--tv HOST` checks endpoint, Developer Mode and SDB reachability without a site
+file or device changes. It displays this computer's routed IPv4 when known so
+you can enter it in the TV's Developer Mode settings; it never displays the
+TV's configured Developer Mode host.
+
 QN90A retains its signed welcome-process relay → Hub → telemetry UI relay →
 service chain, exact Home/AirPlay routes, Samsung splash, and **Hub-owned
 five-minute** Asteroids saver. No S90D writable-cache assumptions, memory offsets,
@@ -107,6 +123,22 @@ already provisioned TrueNAS `s90d-telemetry` app with receiver/dashboard service
 and the reviewed two-device registry. New NAS provisioning is a release blocker;
 this CLI refuses absent or structurally different infrastructure.
 
+`bin/couchroot-install init TV_ADDRESS` can create this default `site.json` after
+an exact model/platform survey match. It supports IPv4 input and refuses to
+overwrite an existing file. Review the new file and add your independently
+verified signing trust before package operations. The local-only `trust`
+helper computes the author and distributor certificate pins from certificate
+files; it never learns trust from a signed package:
+
+```sh
+bin/couchroot-install trust --device qn90a --signing-profile MyQN90A \
+  --author-cert /private/author.cer \
+  --distributor-cert /private/distributor.cer
+```
+
+Review the reported DER SHA-256 values against the certificates, then add the
+entry to the private `trust.json` referenced by `site.json`.
+
 `nas.ssh_target` is your SSH config alias (or `user@host`). Configure the identity
 file in `~/.ssh/config`, and verify the host key separately. The CLI uses batch
 SSH and strict host-key checking. `nas.base` names the existing telemetry code
@@ -150,22 +182,43 @@ Connection configuration is `--site PATH` → `TV_SETUP_SITE` →
 `~/.config/samsung-tv-hub/site.json`. Choices are separate:
 **recommended defaults → saved choices → `--config` JSON → CLI overrides**.
 Lists replace earlier lists; keep/remove displace contradictory earlier choices.
-`docs/examples/choices.json` starts with TV integration only, no cleanup or telemetry.
-Default recommendations select all components, including reviewed optional-app
-cleanup. Use the example choices for a narrower first plan:
+For a device with no completed full-setup run, recommended defaults match
+[`docs/examples/choices.json`](../examples/choices.json): launcher integration
+only (`hub`, `screensaver`, `splash`, `home`, `airplay`, `startup`), with cleanup
+and telemetry changes unselected. Existing TV telemetry preferences are
+preserved. This first setup still includes the reviewed launcher support
+components shown by the example. Saved choices are ignored until the same device
+has a completed schema-2 **full-setup** journal (`scope: setup`) for the same
+destination and signing trust, with the journal in `complete` and every recorded
+action in `applied` (a verified no-op can have no actions). UI, launcher-only,
+recovery and trial journals do not count. Completion means action readback and durable local
+finalization; it is not physical hardware acceptance. After such a run, the
+existing saved-choice and default recommendation behavior is unchanged. Select
+cleanup, telemetry or other components explicitly with `--components` or
+`--config` when you want those changes.
 
 ```sh
+bin/tv-setup plan --device qn90a
+bin/tv-setup apply --device qn90a
+bin/tv-setup plan --device qn90a --components hub,cleanup
 bin/tv-setup plan --device qn90a --config docs/examples/choices.json
-bin/tv-setup apply --device qn90a --config docs/examples/choices.json
+```
+
+The choices file is an explicit narrow alternative for any device. The proposal
+still summarizes the changes and reasons per component.
+
+Cleanup remains limited to the reviewed package/app/version allowlist,
+registration, dependency and protection checks. A removable flag alone never
+permits removal.
+
+```sh
 bin/tv-setup status --device qn90a
 bin/tv-setup verify --device qn90a
 bin/tv-setup rollback --device qn90a --run RUN_ID --yes
 ```
 
-The proposal gives one change summary and a short reason per component. Unknown
-firmware/resources/protection metadata or incomplete uninstalls block apply.
-Cleanup is limited to the reviewed package/app/version allowlist, registration,
-dependency and protection checks. A removable flag alone never permits removal.
+Unknown firmware/resources/protection metadata or incomplete uninstalls block
+apply.
 
 ```sh
 bin/tv-setup apply --device qn90a --keep GHI3a0zMSx
@@ -444,6 +497,12 @@ scrubbed by this change.
 | 1 | Configuration, dependency, connection or operation failure |
 | 2 | Unresolved inspection/verification, or argparse usage error |
 | 3 | Configuration rollback finished; manual application recovery remains |
+
+Identity refusals include stable codes and field-level expected/observed values
+for non-identifying fields. See the [refusal code reference](refusal-codes.md)
+for `CR-ID-FIRMWARE`, `CR-ID-ARCH`, `CR-ID-RUNTIME`, `CR-ID-HASH` and
+`CR-ID-DEVICE`, including JSON details and the read-only probe's relationship to
+the existing in-script guards.
 
 `--non-interactive` never prompts; mutations require `--yes`. Use `plan --json`
 for review and `apply --json --yes` for automation. Successful JSON commands emit

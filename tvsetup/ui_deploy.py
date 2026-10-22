@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 from .common import REPO
+from .registry import accepted_devices
 from .cli import main as setup_main
 
 
@@ -14,7 +15,7 @@ def parser():
     commands = p.add_subparsers(dest="command", required=True)
     for name in ("plan", "apply", "verify", "resume", "rollback"):
         command = commands.add_parser(name)
-        command.add_argument("--device", required=True, choices=("s90d", "qn90a"))
+        command.add_argument("--device", required=True, choices=accepted_devices())
         command.add_argument(
             "--site",
             type=Path,

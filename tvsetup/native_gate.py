@@ -8,6 +8,7 @@ import shlex
 import uuid
 
 from .common import Refused
+from .registry import accepted_devices
 
 STATE = "/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state"
 MARKERS = (
@@ -117,7 +118,7 @@ def inspect(device, credentials, request):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--device", required=True, choices=("qn90a", "s90d"))
+    parser.add_argument("--device", required=True, choices=accepted_devices())
     parser.add_argument("--credentials", required=True, type=Path)
     args = parser.parse_args()
     try:

@@ -9,6 +9,7 @@ They are not deployment instructions or acceptance of the current source.
 
 - [Choosing a launcher](guides/choosing-a-launcher.md)
 - [UI design rules](guides/design-guidelines.md)
+- [Identity refusal codes](guides/refusal-codes.md)
 - [Device compatibility](guides/device-compatibility.md)
 - [Porting to a new TV or firmware](guides/porting-to-a-new-tv.md)
 - [Edit apps in Minimal Hub](guides/edit-apps.md)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from agent.client import request
 from .common import STATE, Refused, atomic_json, read_json
+from .registry import accepted_devices
 
 
 def invoke(
@@ -64,7 +65,7 @@ def invoke(
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("review", "apply", "recover", "status"))
-    parser.add_argument("--device", required=True, choices=("qn90a", "s90d"))
+    parser.add_argument("--device", required=True, choices=accepted_devices())
     parser.add_argument(
         "--credentials",
         required=True,

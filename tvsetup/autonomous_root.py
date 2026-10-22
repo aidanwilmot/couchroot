@@ -17,6 +17,7 @@ from .common import PRIVATE, REPO, Refused, atomic_json, run, sha
 from .engine import run_id
 from .root import LAUNCHER
 from .site import load_site, configured_profile, binding
+from .registry import accepted_devices
 
 SOURCE = REPO / "agent"
 PACKAGE = "MiniRoot01"
@@ -249,7 +250,7 @@ def prepare(
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--device", choices=["qn90a", "s90d"], required=True)
+    parser.add_argument("--device", choices=accepted_devices(), required=True)
     parser.add_argument(
         "--native-candidate",
         action="store_true",

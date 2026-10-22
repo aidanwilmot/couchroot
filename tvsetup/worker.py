@@ -37,7 +37,14 @@ def main(argv=None):
                     output = json.dumps(decode_reads(output))
                 except Refused:
                     output = "Privileged read failed; incomplete raw output omitted to protect credentials."
-            atomic_json(args.result, {"output": output, "failed": True})
+            atomic_json(
+                args.result,
+                {
+                    "output": output,
+                    "failed": True,
+                    "guard_failure": getattr(error, "guard_failure", False) is True,
+                },
+            )
         raise
     if args.result is not None:
         atomic_json(

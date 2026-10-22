@@ -16,6 +16,7 @@ from .config import profile
 from .native_root import inspect_library
 from .native_worker import build as build_worker, inspect_binary
 from .root_launcher import IMAGE
+from .registry import accepted_devices
 
 
 def new_directory(path):
@@ -34,7 +35,7 @@ def inspect_recovery(data, report):
 
 
 def build_component(model, kind, destination, command=run):
-    if model not in ("qn90a", "s90d"):
+    if model not in accepted_devices():
         raise Refused("Unsupported native component model")
     safety = profile(model)
     if kind not in ("setup-acquisition", "service-acquisition", "sdk-recovery"):
@@ -136,7 +137,7 @@ def build_component(model, kind, destination, command=run):
 
 
 def build(model, destination, command=run):
-    if model not in ("qn90a", "s90d"):
+    if model not in accepted_devices():
         raise Refused("Unsupported native component model")
     safety = profile(model)
     folder = new_directory(destination)
@@ -192,7 +193,7 @@ def build(model, destination, command=run):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=("qn90a", "s90d"), required=True)
+    parser.add_argument("--model", choices=accepted_devices(), required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:

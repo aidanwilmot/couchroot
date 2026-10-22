@@ -17,6 +17,7 @@ from .common import (
     read_json,
     safe_id,
 )
+from .registry import accepted_devices
 from .config import COMPONENTS, LAUNCHER_COMPONENTS, profile, resolve, selected
 from .engine import Engine, pending, run_id
 from .nas import NAS
@@ -41,7 +42,7 @@ def parser():
             type=Path,
             help="Private connection/trust config; defaults to TV_SETUP_SITE or ~/.config/samsung-tv-hub/site.json",
         )
-        c.add_argument("--device", choices=("qn90a", "s90d"), required=True)
+        c.add_argument("--device", choices=accepted_devices(), required=True)
         c.add_argument(
             "--json",
             action="store_true",
@@ -384,6 +385,32 @@ def launcher_scope(choices, actions=()):
             )
 
 
+def has_completed_verified_run(state_dir, device, target_binding):
+    """A completed full-setup run follows action readback and local finalization.
+
+    Only schema-2 setup journals for this device and destination/trust qualify.
+    A pending run or rollback cannot enable broader recommendations. Physical
+    hardware acceptance is separate.
+    """
+    for path in (state_dir / "runs").glob("*/journal.json"):
+        doc = read_json(path)
+        if (
+            isinstance(doc, dict)
+            and doc.get("schema") == 2
+            and doc.get("device") == device
+            and doc.get("target_binding") == target_binding
+            and doc.get("scope") == "setup"
+            and doc.get("phase") == "complete"
+            and isinstance(doc.get("actions"), list)
+            and all(
+                isinstance(row, dict) and row.get("phase") == "applied"
+                for row in doc["actions"]
+            )
+        ):
+            return True
+    return False
+
+
 def main(argv=None, *, ui_only=False, launcher_only=False):
     os.umask(0o077)
     args = parser().parse_args(argv)
@@ -562,6 +589,9 @@ def main(argv=None, *, ui_only=False, launcher_only=False):
                     read_json(STATE / (args.device + "-choices.json")),
                     read_json(args.config) if args.config else None,
                     cli_overrides(args),
+                    first_run=not has_completed_verified_run(
+                        STATE, args.device, target_binding
+                    ),
                 )
             identifier = run_id()
             folder = (
@@ -766,6 +796,8 @@ def main(argv=None, *, ui_only=False, launcher_only=False):
                 )
         if "folder" in locals() and (folder / "journal.json").exists():
             print("Private run: " + str(folder), file=sys.stderr)
+        if args.json and isinstance(error, Refused):
+            print(json.dumps(error.as_json(), indent=2))
         print(
             "tv-setup: "
             + (

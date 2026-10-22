@@ -7,6 +7,7 @@ import struct
 
 from .common import REPO, Refused, atomic_json, sha
 from .root_launcher import IMAGE
+from .registry import accepted_devices
 
 SOURCE = REPO / "agent"
 ARTIFACTS = {
@@ -189,7 +190,7 @@ def build(folder, command):
         implementation="native-prototype",
         selection="managed",
         device_qualified=False,
-        candidate_profiles=["qn90a", "s90d"],
+        candidate_profiles=list(accepted_devices()),
         source=source_hashes,
         toolchain=dict(image=image, compiler=compiler),
         reproducible_builds=2,

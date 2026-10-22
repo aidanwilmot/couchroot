@@ -17,6 +17,7 @@ from tvsetup.root_session import prepared
 from tvsetup.secrets import pairing_record
 from tvsetup.transport import Transport
 from tvsetup.worker import main
+from tv_setup_transport_test import pinned_probe
 
 
 def build_fixture(profile, folder, script, cleanup_index=None):
@@ -248,7 +249,7 @@ class RecoveryHygieneTests(unittest.TestCase):
             self.assertEqual(driver.snapshot(),state)
 
     def test_transport_close_removes_only_its_build_cache_even_on_interrupt(self):
-        client=Mock();client.capture.return_value=SimpleNamespace(output='\n[exit:0]\n',transport_returncode=0)
+        client=Mock();client.capture.side_effect=lambda *a, **kw: SimpleNamespace(output=pinned_probe(profile('qn90a')) if 'TVSETUP_PROBE' in a[0] else '\n[exit:0]\n',transport_returncode=0)
         toolkit=SimpleNamespace(device=lambda cfg:'192.0.2.30',SdbClient=lambda *a:client)
         with tempfile.TemporaryDirectory() as tmp,patch('tvsetup.toolkit.load',return_value=toolkit):
             root=Path(tmp);(root/'journal.json').write_text('recovery')

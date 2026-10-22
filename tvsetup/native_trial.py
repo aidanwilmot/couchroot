@@ -12,6 +12,7 @@ import re
 import time
 
 from .common import PRIVATE, STATE, Refused, atomic_json, lock, read_json, sha, safe_id
+from .registry import accepted_devices
 from .engine import pending, run_id
 from .nas import NAS
 from .site import binding, configured_profile, load_site
@@ -224,7 +225,7 @@ echo CLEANUP_PASSED
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--device", choices=("qn90a", "s90d"), required=True)
+    parser.add_argument("--device", choices=accepted_devices(), required=True)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--binary", type=Path)
     group.add_argument("--recover")

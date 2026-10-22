@@ -11,12 +11,20 @@ import json
 from pathlib import Path
 import uuid
 from .common import REPO, Refused, atomic_json, sha
-from .transport import Transport, managed_guard, Q
+from .transport import (
+    Transport,
+    compare_identity_probe,
+    identity_probe_script,
+    managed_guard,
+    managed_guard_refusal,
+    Q,
+)
 
 
 class AgentTransport(Transport):
     def __init__(self, profile, evidence, credentials):
         self.profile, self.evidence = profile, Path(evidence)
+        self.identity_diagnostics = []
         self.evidence.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.credentials = json.loads(Path(credentials).read_text())
         if (
@@ -37,6 +45,22 @@ class AgentTransport(Transport):
             or status.get("identity", {}).get("uid") != 0
         ):
             raise Refused("Enrolled root worker is not ready")
+        probe = identity_probe_script().replace(
+            "PROFILE_RUNTIME", Q(profile["runtime"])
+        )
+        self.identity_diagnostics = compare_identity_probe(
+            profile, self._execute(probe, 20)
+        )
+        if self.identity_diagnostics:
+            atomic_json(
+                self.evidence / "identity-diagnostics.json",
+                {
+                    "differences": [
+                        {"field": field, "expected": expected, "found": found}
+                        for field, expected, found in self.identity_diagnostics
+                    ]
+                },
+            )
         self._execute(managed_guard(profile), 20)
 
     def execute_result(self, script, timeout=20):
@@ -63,23 +87,59 @@ class AgentTransport(Transport):
             )
         return result
 
-    def _execute(self, script, timeout=20, check=True):
+    def _execute(self, script, timeout=20, check=True, *, guard_marker=None):
+        if guard_marker is None and script.startswith(managed_guard(self.profile)):
+            guard_marker = "TVSETUP_MANAGED_GUARD_OK_" + uuid.uuid4().hex
+            guard = managed_guard(self.profile)
+            script = (
+                guard
+                + "printf '%s\\n' "
+                + Q(guard_marker)
+                + "\n"
+                + script[len(guard) :]
+            )
         result = self.execute_result(script, timeout)
+        stdout = result.get("stdout", "")
         if check and (result["exit_code"] != 0 or result.get("timed_out")):
-            raise Refused(
+            failure = Refused(
                 "Agent command completed with exit code "
                 + str(result["exit_code"])
                 + (" (timed out)" if result.get("timed_out") else "")
                 + "; inspect private evidence in "
                 + str(self.evidence)
             )
-        return result.get("stdout", "")
+            if (
+                result["exit_code"] != 0
+                and not result.get("timed_out")
+                and guard_marker is not None
+                and guard_marker not in stdout
+            ):
+                raise managed_guard_refusal(
+                    failure, self.identity_diagnostics, prefix=str(failure)
+                )
+            raise failure
+        if guard_marker is not None:
+            stdout = stdout.replace("\n" + guard_marker + "\n", "\n", 1)
+            if stdout.startswith(guard_marker + "\n"):
+                stdout = stdout[len(guard_marker) + 1 :]
+        return stdout
 
     def sdk(self, script, timeout=30):
         # Inherited snapshot parsing is reused, but this is explicitly root,
         # not evidence of SDK UID permissions. Never attach an SDB client.
         if len(script.encode()) <= 12000:
             return self._execute(script, timeout)
+        guard_marker = None
+        guard = managed_guard(self.profile)
+        if script.startswith(guard):
+            guard_marker = "TVSETUP_MANAGED_GUARD_OK_" + uuid.uuid4().hex
+            script = (
+                guard
+                + "printf '%s\\n' "
+                + Q(guard_marker)
+                + "\n"
+                + script[len(guard) :]
+            )
         stage = "/home/owner/share/tmp/sdk_tools/couchroot-inspect-" + uuid.uuid4().hex
         self._execute("umask 077\nmkdir " + Q(stage) + "\n")
         self._upload(script.encode(), stage + "/command.sh")
@@ -92,6 +152,7 @@ class AgentTransport(Transport):
             + Q(stage)
             + '; exit "$result"\n',
             timeout,
+            guard_marker=guard_marker,
         )
 
     def root(self, script, namespace=False, cleanup_index=None):

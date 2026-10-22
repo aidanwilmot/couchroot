@@ -12,9 +12,91 @@ that same journal engine with an explicitly enrolled QN90A baseline and pinned
 root-agent transport. **Native installation has offline validation only; it has
 not been deployed or tested on a TV.** See [native installation](native-installation.md).
 
+## Survey a TV before installing tools
+
+`survey HOST` needs no private site configuration, toolkit, signing material or
+SDB. It makes one bounded read-only request to `http://HOST:8001/api/v2/` and
+compares only non-identifying model and platform fields against the reviewed
+profiles:
+
+```sh
+bin/couchroot-install survey 192.0.2.20
+bin/couchroot-install survey 192.0.2.20 --json
+```
+
+The verdict is `exact_model` when both model code and full platform code match a
+profile. This is preliminary: the TV's exact firmware is confirmed later through
+SDB, and all existing identity, runtime, hash, signature and package safety
+checks still apply before operations. `same_platform_family` means only that a
+syntactically valid platform code shares its first two underscore-delimited
+tokens with a profile (for example, `24_PTM_`); it is informational and never
+indicates support. Other results are `unknown`. The survey names observed field
+mismatches, does not expose physical identifiers, and does not contact SDB. It
+reuses the toolkit's existing `developerMode` and `developerIP` field handling
+to report Developer Mode as enabled, disabled or unknown, and whether a
+developer host is configured; it never prints the TV's configured host or any
+IP address in survey output.
+
+An unsupported result is a successful survey, not an install error. Use
+`survey HOST --report DIR` to create a redacted report and follow
+[the porting guide](porting-to-a-new-tv.md) before considering a profile change.
+The survey does not infer model support from a family match and does not guess
+additional identity API fields.
+
+### Save a redacted report
+
+Use a new output directory outside the checkout. The command creates it with
+mode `0700` and writes a JSON inventory plus Markdown ready to paste into an
+issue; each file has mode `0600`. Both files omit the TV address, device ID,
+Developer Mode host address, serials, tokens and all other IP addresses,
+including this computer's. Review the files before sharing or adding notes.
+
+```sh
+bin/couchroot-install survey TV_ADDRESS --report /private/tv-report
+bin/couchroot-install survey TV_ADDRESS --report /private/tv-report --profile-skeleton
+```
+
+The optional profile skeleton marks itself `UNVERIFIED`, leaves all unverified
+identity, capability, layout and hash fields null, and shows the observed model
+and platform differences from the nearest profile. If no reviewed profile is
+close enough to compare, it still writes the report and skeleton with no
+comparison. The profile registry rejects that marked file if it is copied into
+`tvsetup/profiles/`; it is a research template and grants no support.
+
+### Check the TV and create private configuration
+
+`doctor --tv HOST` is an optional read-only check of the public identity
+endpoint on port 8001, Developer Mode state and host, and TCP reachability of
+SDB on port 26101. It does not need `site.json` and does not change the TV. It
+reports a one-line fix hint for each failed check and, when route lookup works,
+shows this computer's routed IPv4 address in text and JSON so you can enter it
+in the TV's Developer Mode settings. It never displays the TV's configured
+Developer Mode host. Survey and report output still contain no IP addresses.
+The existing
+`doctor --device ...` form continues to check host prerequisites only.
+
+After an `exact_model` survey, `init HOST` can create the default private
+`~/.config/samsung-tv-hub/site.json` with the discovered device identity. It
+supports IPv4 input, refuses nonmatching models and refuses to overwrite an
+existing file. It writes local configuration only; no TV setting changes.
+
+The `trust` helper calculates SHA-256 pins from supplied certificate files. It
+does not inspect signed packages or enroll the result automatically; inspect
+the author and distributor certificates independently, then add the generated
+entry to private `trust.json`:
+
+```sh
+bin/couchroot-install trust --device qn90a --signing-profile MyQN90A \
+  --author-cert /private/author.cer \
+  --distributor-cert /private/distributor.cer
+```
+
+This helper reads local files only. Certificate enrollment and package signing
+still use the normal setup process and its existing trust checks.
+
 | Target | Web | Native |
 | --- | --- | --- |
-| QN85QN90AAFXZA, T-NKM2AKUC-2301.1 | Prepare, inspect, apply, verify, resume, rollback | Prepare, inspect, apply, verify, resume, rollback (offline-tested only) |
+| QN85QN90AAFXZA, T-NKM2AKUC-2301.1 | Prepare, inspect, apply, verify, resume, rollback | Existing-journal status, verify, resume, rollback only; new installation and preparation are retired |
 | QN55S90DAFXZA, T-PTMDAKUC-0090-2130.0 | Prepare, inspect, apply, verify, resume, rollback | Unsupported; rejected before any operation |
 | Other models/firmware | Unsupported | Unsupported |
 
@@ -42,13 +124,23 @@ also does not require a local .NET SDK; provisioning the web fallback and agent
 still requires managed setup. Docker (`prepare --build-native`) and Node
 (`prepare --web-state`) are reported as conditional tools and do not fail the
 basic check. Web installation still checks the pinned .NET SDK for its helpers.
-No doctor command contacts a TV or validates the enrollment or Docker image.
+The host-prerequisite doctor does not contact a TV. `doctor --tv` makes only the
+read-only identity request and SDB TCP reachability check described above; no
+doctor command validates enrollment or a Docker image.
 
 Launcher choice is always explicit. `plan` prints the installation recipe and its
 blockers; it does **not** inspect current device state. `doctor` checks host/tool
 presence and the pinned .NET SDK version when required, without reading private
 configuration. It does not certify an available native build image, signing trust or TV ABI.
 `inspect` is the separate, explicitly connected preflight command.
+
+The separate `bin/tv-setup` full-setup flow starts with launcher integration
+only. Cleanup and telemetry changes need an explicit component or configuration
+choice. Broader defaults and saved choices take effect only after a matching,
+completed schema-2 full-setup journal with `scope: setup`, matching device and
+destination/signing trust, and every recorded action applied; UI, launcher-only,
+recovery and trial runs do not qualify. A completed no-op full setup counts.
+See [first-run setup defaults](tv-setup.md#configure-your-installation).
 
 ## Prepare review artifacts
 
@@ -165,6 +257,11 @@ source re-arm requires an explicit opt-in and only runs on a later native boot.
 - **2:** missing doctor prerequisites, unresolved
   web preflight/verification, or command-line usage error.
 - **3:** shared configuration rollback completed with manual app recovery remaining.
+
+For onboarding commands, an unsupported survey is still a completed survey and
+returns **0**. A survey network/response failure or an `init` refusal returns
+**1**; usage errors return **2**. `doctor --tv` returns **0** when all checks
+pass and **2** when one or more reachability or Developer Mode checks fail.
 
 A successful offline `plan`, `prepare` or `--dry-run` does not mean deployment is
 ready for your TV. Check target enrollment, `hardware_checked`, `requirements` and

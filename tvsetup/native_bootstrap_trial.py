@@ -34,6 +34,7 @@ from .common import (
     sha,
     safe_id,
 )
+from .registry import accepted_devices
 from .engine import pending, run_id
 from .native_bootstrap import Bootstrap, SCOPE, layout, validate_doc
 from .site import binding, configured_profile, load_site
@@ -314,7 +315,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="command", required=True)
     p = subs.add_parser("prepare")
-    p.add_argument("--device", choices=("qn90a", "s90d"), required=True)
+    p.add_argument("--device", choices=accepted_devices(), required=True)
     p.add_argument("--binary", type=Path, required=True)
     p.add_argument("--seconds", type=int, default=900)
     for name in (

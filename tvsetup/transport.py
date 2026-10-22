@@ -11,7 +11,7 @@ import shlex
 import sys
 import tempfile
 import uuid
-from .common import PRIVATE, REPO, Refused, run, sha
+from .common import PRIVATE, REPO, Refused, atomic_json, run, sha
 
 Q = shlex.quote
 PKG_DB = "/opt/dbspace/.pkgmgr_parser.db"
@@ -125,6 +125,126 @@ def managed_guard(profile):
     return script
 
 
+def refusal_for_differences(differences):
+    """Build a structured refusal from profile fields safe to report."""
+    if not differences:
+        return None
+    codes = {
+        "firmware": "CR-ID-FIRMWARE",
+        "architecture": "CR-ID-ARCH",
+        "runtime": "CR-ID-RUNTIME",
+        "dotnet_sha256": "CR-ID-HASH",
+        "dotnet_launcher_sha256": "CR-ID-HASH",
+    }
+    labels = {
+        "dotnet_sha256": "/usr/bin/dotnet SHA-256",
+        "dotnet_launcher_sha256": "/usr/bin/dotnet-launcher SHA-256",
+    }
+    details = []
+    for field, expected, found in differences:
+        label = labels.get(field, field)
+        details.append({"field": field, "expected": expected, "found": found})
+    message = "; ".join(
+        f"{labels.get(field, field)}: expected {expected}, found {found}"
+        for field, expected, found in differences
+    )
+    return Refused(
+        message,
+        code=codes[differences[0][0]],
+        fields=details,
+        next_steps=[
+            "No operation was submitted. Confirm the TV firmware and profile; untested firmware is not supported.",
+            "See docs/guides/refusal-codes.md#" + codes[differences[0][0]].lower(),
+        ],
+    )
+
+
+def identity_probe_script():
+    """Read-only values used to explain why a pinned profile does not match."""
+    return """set -eu
+printf 'TVSETUP_PROBE:firmware:'
+grep '^Version=' /etc/prd_info.ini | head -n 1 | sed 's/^Version=//; s/;$//'
+printf 'TVSETUP_PROBE:architecture:'
+uname -m
+printf 'TVSETUP_PROBE:runtime:'
+if test -d /usr/share/dotnet/shared/Microsoft.NETCore.App/PROFILE_RUNTIME; then echo present; else echo absent; fi
+printf 'TVSETUP_PROBE:dotnet_sha256:'
+if test -f /usr/bin/dotnet && test ! -L /usr/bin/dotnet; then sha256sum /usr/bin/dotnet | cut -d ' ' -f 1; else echo absent; fi
+printf 'TVSETUP_PROBE:dotnet_launcher_sha256:'
+if test -f /usr/bin/dotnet-launcher && test ! -L /usr/bin/dotnet-launcher; then sha256sum /usr/bin/dotnet-launcher | cut -d ' ' -f 1; else echo absent; fi
+"""
+
+
+def compare_identity_probe(profile, output):
+    expected = {
+        "firmware": profile["firmware"],
+        "architecture": profile["architecture"],
+        "runtime": "present",
+        "dotnet_sha256": profile["host_sha256"] or "absent",
+        "dotnet_launcher_sha256": profile.get("launcher_sha256") or "absent",
+    }
+    observed = {}
+    for line in output.splitlines():
+        match = re.fullmatch(r"TVSETUP_PROBE:([a-z0-9_]+):(.*)", line)
+        if match:
+            observed[match[1]] = match[2]
+    safe_patterns = {
+        "firmware": r"T-[A-Z0-9]+-(?:[0-9]{4}-)?[0-9]+\.[0-9]+",
+        "architecture": r"(?:armv[0-9]+l|aarch64|x86_64|i[3-6]86|x86)",
+        "runtime": r"(?:present|absent)",
+        "dotnet_sha256": r"(?:absent|[a-f0-9]{64})",
+        "dotnet_launcher_sha256": r"(?:absent|[a-f0-9]{64})",
+    }
+    observed = {
+        field: value if re.fullmatch(safe_patterns[field], value) else "[redacted]"
+        for field, value in observed.items()
+        if field in expected
+    }
+    differences = [
+        (field, value, observed[field])
+        for field, value in expected.items()
+        if field in observed and observed[field] != value
+    ]
+    identity_differences = [
+        difference
+        for difference in differences
+        if difference[0] in ("firmware", "architecture")
+    ]
+    refusal = refusal_for_differences(identity_differences)
+    if refusal:
+        raise refusal
+    return [
+        difference
+        for difference in differences
+        if difference[0] in ("runtime", "dotnet_sha256", "dotnet_launcher_sha256")
+    ]
+
+
+def managed_guard_refusal(error, diagnostics, *, prefix=None):
+    """Explain a failed managed guard only when the read-only probe saw a pin mismatch."""
+    managed_differences = [
+        difference
+        for difference in diagnostics
+        if difference[0] in ("runtime", "dotnet_sha256", "dotnet_launcher_sha256")
+    ]
+    if managed_differences:
+        diagnostic = refusal_for_differences(managed_differences)
+        return Refused(
+            (prefix + "; " if prefix else "") + str(diagnostic),
+            code=diagnostic.code,
+            fields=diagnostic.fields,
+            next_steps=[
+                step
+                for step in diagnostic.next_steps
+                if "No operation was submitted" not in step
+            ],
+        )
+    return Refused(
+        (prefix or str(error))
+        + "; if an in-script managed guard rejected the device, its state changed since preflight"
+    )
+
+
 def hash_guard(path, digest):
     if digest is None:
         return f"test ! -e {Q(path)} && test ! -L {Q(path)}\n"
@@ -220,6 +340,7 @@ def paths(device):
 class Transport:
     def __init__(self, profile, evidence, *, native_bundle=None):
         self.profile, self.evidence = profile, evidence
+        self.identity_diagnostics = []
         self.evidence.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._root_temp = tempfile.TemporaryDirectory(
             prefix="root-session-", dir=self.evidence
@@ -255,7 +376,33 @@ class Transport:
         self.client = SdbClient(PRIVATE / "bin/sdb", profile["host"])
         self.client.connect()
         self.client.require_device()
-        self.sdk(identity_guard(profile))
+        # This explanatory read happens before, and never substitutes for, the
+        # existing SDK and privileged shell guards below.
+        self.identity_diagnostics = compare_identity_probe(
+            profile,
+            self.sdk(
+                identity_probe_script().replace(
+                    "PROFILE_RUNTIME", Q(profile["runtime"])
+                )
+            ),
+        )
+        if self.identity_diagnostics:
+            atomic_json(
+                self.evidence / "identity-diagnostics.json",
+                {
+                    "differences": [
+                        {"field": field, "expected": expected, "found": found}
+                        for field, expected, found in self.identity_diagnostics
+                    ]
+                },
+            )
+        try:
+            self.sdk(identity_guard(profile))
+        except Refused as error:
+            raise Refused(
+                str(error)
+                + "; if the in-script identity guard rejected the device, its state changed between the read-only probe and the guard"
+            ) from error
 
     def close(self):
         self._root_temp.cleanup()
@@ -267,6 +414,17 @@ class Transport:
         self.close()
 
     def sdk(self, script, timeout=30):
+        guard = managed_guard(self.profile)
+        guard_marker = None
+        if script.startswith(guard):
+            guard_marker = "TVSETUP_MANAGED_GUARD_OK_" + uuid.uuid4().hex
+            script = (
+                guard
+                + "printf '%s\\n' "
+                + Q(guard_marker)
+                + "\n"
+                + script[len(guard) :]
+            )
         result = self.client.capture(
             "(\n" + script + "\n)",
             callback_host=self.callback,
@@ -278,10 +436,24 @@ class Transport:
         path.chmod(0o600)
         match = re.search(r"\n\[exit:(\d+)\]\s*\Z", result.output)
         if not match or int(match[1]) or result.transport_returncode not in (0, 1):
-            raise Refused(
-                "SDK command incomplete/failed; private evidence: " + str(path)
-            )
-        return result.output[: match.start()]
+            prefix = "SDK command incomplete/failed; private evidence: " + str(path)
+            if (
+                match
+                and int(match[1]) != 0
+                and result.transport_returncode in (0, 1)
+                and guard_marker is not None
+                and guard_marker not in result.output
+            ):
+                raise managed_guard_refusal(
+                    Refused(prefix), self.identity_diagnostics, prefix=prefix
+                )
+            raise Refused(prefix)
+        output = result.output[: match.start()]
+        if guard_marker is not None:
+            output = output.replace("\n" + guard_marker + "\n", "\n", 1)
+            if output.startswith(guard_marker + "\n"):
+                output = output[len(guard_marker) + 1 :]
+        return output
 
     def root(self, script, namespace=False, cleanup_index=None, *, json_reads=False):
         if self.native_bundle is not None and cleanup_index is not None:
@@ -314,14 +486,27 @@ class Transport:
             output = run(argv, timeout=360, cwd=REPO)
         except Refused as error:
             detail = getattr(error, "output", "Interrupted; completion unknown")
+            guard_failure = False
             if result.exists():
                 saved = json.loads(result.read_text())
                 if saved.get("failed"):
                     detail += "\n" + saved.get("output", "")
+                    guard_failure = saved.get("guard_failure") is True
             log = path.with_suffix(".log")
             log.write_text(detail)
             log.chmod(0o600)
-            raise
+            if guard_failure:
+                wrapped = managed_guard_refusal(
+                    error, self.identity_diagnostics, prefix=str(error)
+                )
+            else:
+                wrapped = Refused(
+                    str(error)
+                    + "; if an in-script managed guard rejected the device, its state changed since preflight"
+                )
+            if hasattr(error, "output"):
+                wrapped.output = error.output
+            raise wrapped from error
         path.with_suffix(".log").write_text(output)
         if cleanup_index is not None:
             return output

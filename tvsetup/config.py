@@ -1,11 +1,12 @@
 """Choice precedence: recommendations < saved choices < file < CLI."""
 
 import copy
-import json
 from urllib.parse import urlsplit
-from .common import REPO, Refused, read_json
+from .common import Refused
+from .registry import profile
 
 LAUNCHER_COMPONENTS = ("hub", "home", "airplay", "startup")
+FIRST_RUN_COMPONENTS = ("hub", "screensaver", "splash", "home", "airplay", "startup")
 
 COMPONENTS = (
     "hub",
@@ -29,13 +30,22 @@ DEFAULTS = dict(
 )
 
 
-def profile(device):
-    return read_json(REPO / "tvsetup/profiles" / (device + ".json"))
-
-
-def resolve(device, saved=None, file=None, overrides=None):
+def resolve(device, saved=None, file=None, overrides=None, *, first_run=False):
     result = copy.deepcopy(DEFAULTS)
     result["remove"] = list(profile(device)["cleanup"])
+    if first_run:
+        # Saved choices alone are not proof of a completed, verified setup.
+        # Explicit file/CLI selection still opts into any reviewed component.
+        saved = None
+        result["components"] = list(FIRST_RUN_COMPONENTS)
+        result["remove"] = []
+        if any(
+            isinstance(layer, dict)
+            and isinstance(layer.get("components"), list)
+            and "cleanup" in layer["components"]
+            for layer in (file, overrides)
+        ):
+            result["remove"] = list(profile(device)["cleanup"])
     for layer in (saved, file, overrides):
         if layer is None:
             continue

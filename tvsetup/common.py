@@ -26,6 +26,21 @@ STATE = Path(os.environ.get("TV_SETUP_STATE", PRIVATE / "setup")).expanduser().r
 class Refused(RuntimeError):
     """An unsafe or unsupported transition; do not retry blindly."""
 
+    def __init__(self, message, *, code=None, fields=None, next_steps=None):
+        super().__init__(message)
+        self.code = code
+        self.fields = fields or []
+        self.next_steps = next_steps or []
+
+    def as_json(self):
+        """Stable, redaction-safe refusal details for machine-readable output."""
+        return {
+            "error": str(self),
+            "code": self.code,
+            "fields": self.fields,
+            "next_steps": self.next_steps,
+        }
+
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()

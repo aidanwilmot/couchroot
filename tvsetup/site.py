@@ -7,6 +7,7 @@ import re
 from urllib.parse import urlsplit
 from .common import Refused, read_json, sha
 from .config import profile
+from .registry import accepted_devices
 
 
 def load_site(path=None):
@@ -23,8 +24,12 @@ def load_site(path=None):
             "Site accepts devices, nas and trust_file only; safety profiles cannot be overridden"
         )
     devices = data.get("devices", {})
-    if not isinstance(devices, dict) or not devices or set(devices) - {"qn90a", "s90d"}:
-        raise Refused("Site devices must contain qn90a and/or s90d")
+    if (
+        not isinstance(devices, dict)
+        or not devices
+        or set(devices) - set(accepted_devices())
+    ):
+        raise Refused("Site devices must contain one or more supported profile IDs")
     hosts = []
     for name, entry in devices.items():
         if not isinstance(entry, dict) or set(entry) != {"host", "device_id"}:
@@ -106,7 +111,7 @@ def load_site(path=None):
         if not trust_path.is_file():
             raise Refused("Signing trust file does not exist")
         trust = read_json(trust_path)
-        if not isinstance(trust, dict) or set(trust) - {"qn90a", "s90d"}:
+        if not isinstance(trust, dict) or set(trust) - set(accepted_devices()):
             raise Refused("Invalid signing trust devices")
         for entry in trust.values():
             if not isinstance(entry, dict) or set(entry) != {
