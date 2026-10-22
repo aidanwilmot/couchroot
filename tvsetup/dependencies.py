@@ -41,10 +41,10 @@ def checks(component):
             result.append(dict(name="Node.js 20+", available=supported))
     if component in ("offline", "setup"):
         try:
-            installed = importlib.metadata.version("lxml") == "6.1.1"
+            installed = importlib.metadata.version("lxml") == "6.1.3"
         except importlib.metadata.PackageNotFoundError:
             installed = False
-        result.append(dict(name="lxml 6.1.1", available=installed))
+        result.append(dict(name="lxml 6.1.3", available=installed))
         result += [tool_check(name) for name in ("git", "openssl", "ssh", "scp")]
     if component in ("managed", "setup"):
         expected = json.loads((REPO / "global.json").read_text())["sdk"]["version"]
