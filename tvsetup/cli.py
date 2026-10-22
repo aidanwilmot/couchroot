@@ -385,6 +385,30 @@ def launcher_scope(choices, actions=()):
             )
 
 
+def has_completed_verified_run(state_dir, device, target_binding):
+    """Engine.complete follows action readback and durable local finalization.
+
+    A run for a different destination/trust, a pending run or a rollback cannot
+    enable the broader recommendations. Physical hardware acceptance is separate.
+    """
+    for path in (state_dir / "runs").glob("*/journal.json"):
+        doc = read_json(path)
+        if (
+            isinstance(doc, dict)
+            and doc.get("schema") == 2
+            and doc.get("device") == device
+            and doc.get("target_binding") == target_binding
+            and doc.get("phase") == "complete"
+            and isinstance(doc.get("actions"), list)
+            and all(
+                isinstance(row, dict) and row.get("phase") == "applied"
+                for row in doc["actions"]
+            )
+        ):
+            return True
+    return False
+
+
 def main(argv=None, *, ui_only=False, launcher_only=False):
     os.umask(0o077)
     args = parser().parse_args(argv)
@@ -563,6 +587,9 @@ def main(argv=None, *, ui_only=False, launcher_only=False):
                     read_json(STATE / (args.device + "-choices.json")),
                     read_json(args.config) if args.config else None,
                     cli_overrides(args),
+                    first_run=not has_completed_verified_run(
+                        STATE, args.device, target_binding
+                    ),
                 )
             identifier = run_id()
             folder = (

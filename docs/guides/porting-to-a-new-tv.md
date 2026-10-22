@@ -75,8 +75,24 @@ untested model or firmware. See [CONTRIBUTING](../../.github/CONTRIBUTING.md).
 
 ## Step 1 — Inspect your TV read-only
 
-Everything starts with a sanitized inventory of the real device. Use the
-toolkit under [`tools/`](../../tools) and the recipes in
+Start without the toolkit or signing setup by running the public-API survey:
+
+```sh
+bin/couchroot-install survey TV_ADDRESS
+bin/couchroot-install survey TV_ADDRESS --report /private/tv-report
+bin/couchroot-install doctor --tv TV_ADDRESS
+```
+
+The survey reads model and platform once, and its report writes redacted JSON
+and Markdown in a new private directory. It never contacts SDB. The optional
+profile skeleton is marked `UNVERIFIED`, leaves unverified fields null and is
+rejected by the profile registry. A family match is informational; it does not
+grant support. `doctor --tv` checks the endpoint, Developer Mode and SDB port
+reachability without using `site.json` or changing the TV. These checks can
+help you decide whether to continue with a read-only inventory.
+
+For deeper firmware and component details, use the toolkit under
+[`tools/`](../../tools) and the recipes in
 [tv-setup](tv-setup.md#install-from-source); the per-device notes under
 [`docs/lab/devices/`](../lab/devices) show the format, and the sanitized
 [`docs/lab/inventory/`](../lab/inventory) files show what a recorded result looks
@@ -205,6 +221,9 @@ A new model is welcome as a contribution, on the same terms as any other: a
 separate reviewed profile, original resource hashes, model-specific transport
 evidence and a documented recovery path, with no weakening of the firmware,
 signature or cleanup guards ([CONTRIBUTING](../../.github/CONTRIBUTING.md)).
-Submit only redacted, synthetic-identity reproduction steps. Because this is a
+Start from the generated redacted report or the
+[device report issue template](../../.github/ISSUE_TEMPLATE/device-report.yml).
+Mark every milestone as a read-only observation, owner-authorized change or not
+tested. Submit only redacted, synthetic-identity reproduction steps. Because this is a
 personal project, there is no support or response-time commitment — but a
 well-evidenced new target is genuinely useful to other owners of that TV.

@@ -1,0 +1,152 @@
+name: Samsung TV device report
+description: Share a redacted, owner-collected report about a Samsung TV model or firmware.
+title: "Device report: [model code]"
+labels: [device-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share only information from a TV you own or administer. Mark each result as **read-only observation**, **owner-authorized change**, or **not tested**. Review every field and attachment before posting.
+
+        **Redact device IDs/UUIDs, DUIDs, MAC addresses, IP addresses, serial numbers, tokens, credentials, raw logs, and private signing or recovery files.** Never post a full public API response.
+  - type: input
+    id: model
+    attributes:
+      label: Exact model code
+      description: The non-identifying model code reported by the TV. Do not include the device ID.
+      placeholder: QN55S90DAFXZA
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Exact firmware version
+      description: Include the firmware version string only; review it for personal information before posting.
+      placeholder: T-PTMDAKUC-0090-2130.0
+    validations:
+      required: false
+  - type: input
+    id: tizen_version
+    attributes:
+      label: Tizen version
+      description: Leave blank if it was not observed.
+    validations:
+      required: false
+  - type: dropdown
+    id: root_transport_result
+    attributes:
+      label: Root / transport result
+      options:
+        - not tested
+        - read-only observation
+        - owner-authorized change
+    validations:
+      required: true
+  - type: textarea
+    id: root_transport_evidence
+    attributes:
+      label: Root / transport notes
+      description: Redacted result or refusal message. Never include an IP address or identifier.
+      render: text
+  - type: dropdown
+    id: launcher_install_result
+    attributes:
+      label: Launcher install result
+      options:
+        - not tested
+        - read-only observation
+        - owner-authorized change
+    validations:
+      required: true
+  - type: textarea
+    id: launcher_install_evidence
+    attributes:
+      label: Launcher install notes
+      description: State whether an install was attempted and summarize the redacted result.
+      render: text
+  - type: dropdown
+    id: physical_home_result
+    attributes:
+      label: Physical Home button result
+      options:
+        - not tested
+        - read-only observation
+        - owner-authorized change
+    validations:
+      required: true
+  - type: textarea
+    id: physical_home_evidence
+    attributes:
+      label: Physical Home notes
+      description: Describe the observed behavior and recovery path.
+      render: text
+  - type: dropdown
+    id: cold_boot_result
+    attributes:
+      label: Cold boot result
+      options:
+        - not tested
+        - read-only observation
+        - owner-authorized change
+    validations:
+      required: true
+  - type: textarea
+    id: cold_boot_evidence
+    attributes:
+      label: Cold boot notes
+      description: State what was observed after a normal cold boot or reboot.
+      render: text
+  - type: dropdown
+    id: standby_wake_result
+    attributes:
+      label: Standby / wake result
+      options:
+        - not tested
+        - read-only observation
+        - owner-authorized change
+    validations:
+      required: true
+  - type: textarea
+    id: standby_wake_evidence
+    attributes:
+      label: Standby / wake notes
+      description: Describe standby entry, wake and launcher behavior.
+      render: text
+  - type: dropdown
+    id: playback_result
+    attributes:
+      label: Playback result
+      options:
+        - not tested
+        - read-only observation
+        - owner-authorized change
+    validations:
+      required: true
+  - type: textarea
+    id: playback_evidence
+    attributes:
+      label: Playback notes
+      description: Describe the app and playback behavior without including account details.
+      render: text
+  - type: dropdown
+    id: hdmi_game_bar_result
+    attributes:
+      label: HDMI / Game Bar result
+      options:
+        - not tested
+        - read-only observation
+        - owner-authorized change
+    validations:
+      required: true
+  - type: textarea
+    id: hdmi_game_bar_evidence
+    attributes:
+      label: HDMI / Game Bar notes
+      description: Describe the input, Game Bar and return-to-launcher behavior.
+      render: text
+  - type: textarea
+    id: additional_notes
+    attributes:
+      label: Survey and additional notes
+      description: Include the survey verdict and capability labels, if available. Do not include the TV address.
+      render: text

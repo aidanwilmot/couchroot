@@ -74,6 +74,9 @@ against the TV's address on your local network:
 
 ```sh
 bin/couchroot-install survey TV_ADDRESS
+bin/couchroot-install survey TV_ADDRESS --report /private/tv-report
+bin/couchroot-install survey TV_ADDRESS --report /private/tv-report --profile-skeleton
+bin/couchroot-install doctor --tv TV_ADDRESS
 ```
 
 It reads the public identity endpoint once and compares non-identifying model
@@ -82,6 +85,13 @@ platform match is only a preliminary match: firmware, architecture, runtime,
 hashes and signing trust are still checked before any operation. A platform
 family match is informational and does not enable installation. The survey never
 contacts SDB or changes the TV. See the [survey guide](docs/guides/universal-installer.md#survey-a-tv-before-installing-tools).
+
+For an exact match, `init TV_ADDRESS` can create the private default
+`site.json` with the discovered device identity. It supports IPv4 addresses and
+refuses to overwrite an existing file. `--report DIR` writes a redacted,
+issue-ready report to a new private directory; review it before sharing.
+`doctor --tv` checks public identity reachability, Developer Mode and SDB
+reachability without changing the TV.
 
 1. **Prepare your computer.** Install Python 3.12+, Samsung SDB, the Tizen
    CLI/certificate tools, OpenSSL and the .NET SDK pinned in `global.json`
@@ -94,11 +104,19 @@ contacts SDB or changes the TV. See the [survey guide](docs/guides/universal-ins
    bin/couchroot-install doctor --device qn90a --launcher web   # checks prerequisites
    ```
 
-2. **Enroll your TV and signing identity.** Enable Developer Mode, copy
-   [`docs/examples/site.json`](docs/examples/site.json) to
-   `~/.config/samsung-tv-hub/site.json` and fill in your TV and certificates. See
+2. **Enroll your TV and signing identity.** Enable Developer Mode and run
+   `bin/couchroot-install init TV_ADDRESS` after an exact survey match. It writes
+   `~/.config/samsung-tv-hub/site.json` with the discovered identity and refuses
+   an existing file. Create certificate trust pins with the local-only helper,
+   then review and add its output to your private `trust.json`. See
    [private configuration and signing trust](docs/guides/tv-setup.md#configure-your-installation).
    Keep keys, signed packages and recovery journals outside Git.
+
+   ```sh
+   bin/couchroot-install trust --device qn90a --signing-profile MyQN90A \
+     --author-cert /private/author.cer \
+     --distributor-cert /private/distributor.cer
+   ```
 
 3. **Inspect, install and verify.** These commands contact the TV:
 
@@ -115,6 +133,10 @@ contacts SDB or changes the TV. See the [survey guide](docs/guides/universal-ins
    not by starting over.
 
 Use `s90d` in place of `qn90a` for that model. After that:
+
+For full setup, the first run selects launcher integration only; cleanup and
+telemetry changes require an explicit `--components` or `--config` choice. The
+current TV preferences remain preserved. See the [first-run setup defaults](docs/guides/tv-setup.md#configure-your-installation).
 
 | Task | Guide |
 | --- | --- |

@@ -37,17 +37,24 @@ def parser():
         "rollback",
     ):
         c = sub.add_parser(name)
-        c.add_argument("--device", choices=accepted_devices(), required=True)
+        c.add_argument(
+            "--device", choices=accepted_devices(), required=name != "doctor"
+        )
         c.add_argument(
             "--launcher",
             choices=("web", "native")
             if name in ("status", "verify", "resume", "rollback")
             else ("web",),
-            required=True,
+            required=name != "doctor",
             help="Signed web Hub; native is retained only for existing journal recovery",
         )
         c.add_argument("--json", action="store_true")
         if name == "doctor":
+            c.add_argument(
+                "--tv",
+                metavar="HOST",
+                help="Read-only TV reachability; no site or toolkit required",
+            )
             c.add_argument(
                 "--stage",
                 choices=("prepare", "install"),
@@ -130,6 +137,31 @@ def parser():
     )
     survey_parser.add_argument("host", metavar="HOST")
     survey_parser.add_argument("--json", action="store_true")
+    survey_parser.add_argument(
+        "--report",
+        type=Path,
+        metavar="DIR",
+        help="Write redacted reports in a new private directory outside this checkout",
+    )
+    survey_parser.add_argument(
+        "--profile-skeleton",
+        action="store_true",
+        help="Also write an UNVERIFIED skeleton; requires --report",
+    )
+    initialize = sub.add_parser(
+        "init", help="Survey and enroll an exact model in a new private site.json"
+    )
+    initialize.add_argument("host", metavar="HOST", help="TV IPv4 address")
+    initialize.add_argument("--json", action="store_true")
+    trust = sub.add_parser(
+        "trust",
+        help="Print trust.json fingerprints from independently supplied certificates",
+    )
+    trust.add_argument("--device", choices=accepted_devices(), required=True)
+    trust.add_argument("--signing-profile", required=True)
+    trust.add_argument("--author-cert", type=Path, required=True)
+    trust.add_argument("--distributor-cert", type=Path, required=True)
+    trust.add_argument("--json", action="store_true")
     return p
 
 
@@ -470,18 +502,81 @@ def emit(result, as_json):
 def main(argv=None):
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     try:
-        args = parser().parse_args(raw_argv)
+        argument_parser = parser()
+        args = argument_parser.parse_args(raw_argv)
     except Refused as error:
         if "--json" in raw_argv:
             print(json.dumps(error.as_json(), indent=2))
         else:
             print("couchroot-install: " + str(error), file=sys.stderr)
         return 1
+    if args.command == "doctor":
+        if args.tv:
+            if args.device or args.launcher or args.stage != "install":
+                argument_parser.error(
+                    "doctor --tv cannot be combined with --device, --launcher or --stage prepare"
+                )
+        elif not args.device or not args.launcher:
+            argument_parser.error(
+                "doctor requires --device and --launcher, or --tv HOST"
+            )
+    if args.command == "survey" and args.profile_skeleton and not args.report:
+        argument_parser.error("--profile-skeleton requires --report DIR")
     try:
         if args.command == "survey":
             from .survey import emit as emit_survey, survey
 
-            emit_survey(survey(args.host), args.json)
+            result = survey(args.host)
+            if args.report:
+                from .device_report import write_report
+
+                write_report(
+                    result, args.report, profile_skeleton=args.profile_skeleton
+                )
+                result["report_written"] = True
+            emit_survey(result, args.json)
+            if args.report and not args.json:
+                print(
+                    "Redacted device reports written to the requested private directory."
+                )
+            return 0
+        if args.command == "doctor" and args.tv:
+            from .onboarding import doctor as doctor_tv
+
+            result = doctor_tv(args.tv)
+            if args.json:
+                print(json.dumps(result, indent=2))
+            else:
+                for check in result["checks"]:
+                    print(f"{check['name']}: {check['status']} — {check['hint']}")
+            return 0 if result["ok"] else 2
+        if args.command == "init":
+            from .onboarding import init
+
+            result = init(args.host)
+            if args.json:
+                print(json.dumps(result, indent=2))
+            else:
+                print(
+                    "Created private site.json for "
+                    + result["device"]
+                    + ". Firmware and signing trust still require independent checks."
+                )
+            return 0
+        if args.command == "trust":
+            from .onboarding import trust_entry
+
+            print(
+                json.dumps(
+                    trust_entry(
+                        args.device,
+                        args.signing_profile,
+                        args.author_cert,
+                        args.distributor_cert,
+                    ),
+                    indent=2,
+                )
+            )
             return 0
         validate_selection(args.device, args.launcher)
         if args.command == "plan":

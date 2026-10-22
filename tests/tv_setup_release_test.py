@@ -104,6 +104,25 @@ class CLITests(unittest.TestCase):
                 self.assertEqual(code,0,err);self.assertEqual(json.loads(out)['actions'],[])
         self.assertFalse(any(c==('snapshot',True) for c in self.calls))
         self.assertEqual(sum(c[0]=='close' for c in self.calls),4)
+    def test_recommended_cli_uses_journal_completion_before_saved_broad_choices(self):
+        saved = resolve('qn90a')
+        atomic_json(self.root/'state/qn90a-choices.json', saved)
+        with patch('tvsetup.cli.resolve', wraps=resolve) as resolved:
+            code,out,err=self.invoke('plan','--device','qn90a','--json')
+        self.assertIn(code,(0,2),err)
+        self.assertTrue(resolved.call_args.kwargs['first_run'])
+        self.assertNotIn('cleanup',json.loads(out)['states'])
+        self.assertNotIn('telemetry',json.loads(out)['states'])
+        atomic_json(self.root/'state/runs/completed/journal.json', {
+            'schema':2,'device':'qn90a','target_binding':binding(load_site(self.site),'qn90a'),
+            'phase':'complete','actions':[],
+        })
+        with patch('tvsetup.cli.resolve', wraps=resolve) as resolved:
+            code,out,err=self.invoke('plan','--device','qn90a','--json')
+        self.assertFalse(resolved.call_args.kwargs['first_run'])
+        self.assertIn('cleanup',json.loads(out)['states'])
+        self.assertIn('telemetry',json.loads(out)['states'])
+
     def test_noninteractive_mutation_requires_yes_before_transport(self):
         code,out,err=self.invoke('apply','--device','qn90a','--json')
         self.assertEqual(code,1);self.assertEqual(self.calls,[]);self.assertIn('--yes',err)
