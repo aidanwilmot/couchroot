@@ -251,7 +251,7 @@ package dumps. This experiment did not edit them. Root collector staging and
 its temporary transport keys were cleaned; original passwd/public-key hashes
 remained unchanged. The final selected command requires no root collector.
 
-Sanitized results: [home-overhead-verification.json](../../../../inventory/samsung/2026-09-19/hub/home-overhead-verification.json).
+Sanitized results: [home-overhead-verification.json](../../inventory/samsung/2026-09-19/hub/home-overhead-verification.json).
 
 
 ## Later RAM ranking — 20:25 CDT (01:25 UTC)
@@ -295,4 +295,4 @@ is not evidence of active CPU usage. Disabling them cannot be justified as a
 large resident-memory saving from these numbers alone. sLive's exact feature
 dependencies remain unverified; it was not stopped or labeled disposable.
 
-Sanitized ranking: [ram-ranking.json](../../../../inventory/samsung/2026-09-19/hub/ram-ranking.json).
+Sanitized ranking: [ram-ranking.json](../../inventory/samsung/2026-09-19/hub/ram-ranking.json).

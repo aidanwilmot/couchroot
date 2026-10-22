@@ -57,7 +57,7 @@ def build(profile, folder, script, cleanup_index=None):
                 or not 0 <= cleanup_index < 10
             ):
                 raise Refused("Invalid reviewed QN90A cleanup target")
-            source = (REPO / "setup/qn90a-app-cleanup/Program.cs").read_text()
+            source = (REPO / "native/qn90a-app-cleanup/Program.cs").read_text()
             defines = "HOME_CLEANUP_" + str(cleanup_index)
         (project / "Program.cs").write_text(source)
         csproj = project / (name + ".csproj")

@@ -29,6 +29,11 @@ They are not deployment instructions or acceptance of the current source.
 - [Source publication review — 2026-10-11](project/publication-review.md)
 - [QN90A cleanup tracker](project/qn90a-cleanup-plan.md)
 - [Combined release candidate — 2026-10-19](project/release-readiness.md)
+- [Licensing](project/licensing.md)
+- [Sources & credits](project/credits.md)
+
+Example configuration lives in [examples/](examples/site.json); sanitized device
+evidence referenced by the lab notes lives in [lab/inventory/](lab/inventory/).
 
 ## Images
 

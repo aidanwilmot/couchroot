@@ -60,8 +60,8 @@ python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r tvsetup/requirements.txt
 python scripts/check-dependencies.py
-./tv-setup --version
-./tv-setup --help
+bin/tv-setup --version
+bin/tv-setup --help
 ```
 
 Install the .NET SDK selected by `global.json` (10.0.301), OpenSSL, Git and OpenSSH.
@@ -94,7 +94,7 @@ are **not** the public installation path.
 ```sh
 mkdir -p "$HOME/.config/samsung-tv-hub"
 chmod 700 "$HOME/.config/samsung-tv-hub"
-cp examples/site.json "$HOME/.config/samsung-tv-hub/site.json"
+cp docs/examples/site.json "$HOME/.config/samsung-tv-hub/site.json"
 chmod 600 "$HOME/.config/samsung-tv-hub/site.json"
 ```
 
@@ -150,16 +150,16 @@ Connection configuration is `--site PATH` → `TV_SETUP_SITE` →
 `~/.config/samsung-tv-hub/site.json`. Choices are separate:
 **recommended defaults → saved choices → `--config` JSON → CLI overrides**.
 Lists replace earlier lists; keep/remove displace contradictory earlier choices.
-`examples/choices.json` starts with TV integration only, no cleanup or telemetry.
+`docs/examples/choices.json` starts with TV integration only, no cleanup or telemetry.
 Default recommendations select all components, including reviewed optional-app
 cleanup. Use the example choices for a narrower first plan:
 
 ```sh
-./tv-setup plan --device qn90a --config examples/choices.json
-./tv-setup apply --device qn90a --config examples/choices.json
-./tv-setup status --device qn90a
-./tv-setup verify --device qn90a
-./tv-setup rollback --device qn90a --run RUN_ID --yes
+bin/tv-setup plan --device qn90a --config docs/examples/choices.json
+bin/tv-setup apply --device qn90a --config docs/examples/choices.json
+bin/tv-setup status --device qn90a
+bin/tv-setup verify --device qn90a
+bin/tv-setup rollback --device qn90a --run RUN_ID --yes
 ```
 
 The proposal gives one change summary and a short reason per component. Unknown
@@ -168,11 +168,11 @@ Cleanup is limited to the reviewed package/app/version allowlist, registration,
 dependency and protection checks. A removable flag alone never permits removal.
 
 ```sh
-./tv-setup apply --device qn90a --keep GHI3a0zMSx
-./tv-setup plan --device s90d --components hub,screensaver
-./tv-setup apply --device qn90a --remove '' --exclude dashboard,telemetry --yes
-./tv-setup apply --device s90d --non-interactive --yes
-./tv-setup plan --device qn90a --json
+bin/tv-setup apply --device qn90a --keep GHI3a0zMSx
+bin/tv-setup plan --device s90d --components hub,screensaver
+bin/tv-setup apply --device qn90a --remove '' --exclude dashboard,telemetry --yes
+bin/tv-setup apply --device s90d --non-interactive --yes
+bin/tv-setup plan --device qn90a --json
 ```
 
 `null` telemetry choices preserve current preferences. First telemetry pairing
@@ -181,9 +181,9 @@ requires an explicit receiver endpoint; missing preferences default to monitorin
 preferences, favorites, ordering, sound, layout and clock settings are preserved.
 
 ```sh
-./tv-setup plan --device qn90a --components telemetry \
+bin/tv-setup plan --device qn90a --components telemetry \
   --endpoint https://nas.example.invalid:20490/v1/devices/qn90a
-./tv-setup apply --device qn90a --components dashboard --shared-nas --yes
+bin/tv-setup apply --device qn90a --components dashboard --shared-nas --yes
 ```
 
 Shared NAS changes require `--shared-nas`. They preserve live compose, both
@@ -223,14 +223,14 @@ owner-provided compatible `libGLESv2.so.2` directory:
 
 ```sh
 GLES_LIBRARY_DIR=/private/vendor-library sh native/system-screensaver/build.sh
-./tv-setup plan --device s90d --artifact renderer=/private/libgl-demo-app.so
+bin/tv-setup plan --device s90d --artifact renderer=/private/libgl-demo-app.so
 ```
 
 The renderer's reviewed digest remains mandatory. A compiler-dependent mismatch
 requires review; **do not remove the hash guard**. Its compiler/sysroot recipe is
 not yet proven to reproduce the reviewed binary from a clean machine. No Samsung
 binary, signing material, firmware or extracted resource belongs in a source or
-public artifact bundle. See [redistribution decisions](../../LICENSE-STATUS.md).
+public artifact bundle. See [redistribution decisions](../project/licensing.md).
 
 ## Apply, interruption and recovery
 
@@ -246,9 +246,9 @@ for schema 1 or unbound journals; do not edit their schema number or upgrade an
 unfinished run in place.
 
 ```sh
-./tv-setup status --device qn90a
-./tv-setup apply --device qn90a --resume RUN_ID --yes
-./tv-setup rollback --device qn90a --run RUN_ID --yes
+bin/tv-setup status --device qn90a
+bin/tv-setup apply --device qn90a --resume RUN_ID --yes
+bin/tv-setup rollback --device qn90a --run RUN_ID --yes
 ```
 
 An unfinished run blocks a new apply. Resume reconciles first: an acknowledged
@@ -362,7 +362,7 @@ A lost connection can still leave cleanup unconfirmed: consult the private
 inspection evidence, and do not replay an uncertain operation automatically.
 
 Hardware acceptance for this staging change remains pending: the owner should
-repeat step 6 (`./tv-setup plan --device qn90a --privileged-inspection`), confirm the
+repeat step 6 (`bin/tv-setup plan --device qn90a --privileged-inspection`), confirm the
 two leftover setup files are cleared and the agent's files remain intact, then
 repeat on S90D. Check the effective stage/result modes, complete privileged reads,
 original resource hashes and absence of setup leftovers on both models.
@@ -371,8 +371,8 @@ Apply never implicitly reboots. `--activate` explicitly refreshes QN90A Hub or
 S90D's AT-HUB helper and records a manual launch. It is not autonomous boot proof.
 
 ```sh
-./tv-setup verify --device qn90a --privileged-inspection
-./tv-setup verify --device qn90a --reboot --wait-seconds 180
+bin/tv-setup verify --device qn90a --privileged-inspection
+bin/tv-setup verify --device qn90a --reboot --wait-seconds 180
 ```
 
 Reboot verification requests one reboot, then observes a new boot ID, independent
@@ -459,7 +459,7 @@ Unsupported resource/signature: stop and review the exact model/firmware or trus
 entry; there is no force flag. Dirty upstream transport: use a clean pinned
 checkout. Partial operation: preserve logs, inspect state, then resume/rollback.
 Unfinished root staging: inspect cleanup evidence; never rerun a mutation merely
-to clear staging. See [security guidance](../../SECURITY.md).
+to clear staging. See [security guidance](../../.github/SECURITY.md).
 
 ### Private Netdata origin
 

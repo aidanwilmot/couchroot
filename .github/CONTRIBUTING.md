@@ -1,7 +1,11 @@
 # Contributing to Couchroot
 
-Original contributions are made under the project's [0BSD license](LICENSE).
+Original contributions are made under the project's [0BSD license](../LICENSE).
 Preserve existing third-party notices and document the origin of copied code.
+
+Couchroot is a personal project and outside contributions are welcome. AI coding
+assistants are used throughout it; AI-assisted contributions are fine, provided
+you understand the change and describe how you tested it.
 
 Use an isolated branch. Keep changes focused, document behavior and add tests for
 meaningful failures. Run the offline checks in docs/project/release-readiness.md. Do not
@@ -18,8 +22,8 @@ npm, pip and Dockerfile updates; it does not update the Emscripten container or
 Docker runtime major updates and the test image's Python minor are deliberate.
 The collector's Bullseye base is excluded from automatic updates: changing its
 version or digest requires a fresh byte-identity review. CI runs on pull requests and `main`; use the manual workflow
-trigger for a branch without a PR. See the [remaining opt-in suites](tests/worker-parity/README.md#ci-coverage)
-and [validation details](docs/project/release-readiness.md#validation-and-reproducibility).
+trigger for a branch without a PR. See the [remaining opt-in suites](../tests/worker-parity/README.md#ci-coverage)
+and [validation details](../docs/project/release-readiness.md#validation-and-reproducibility).
 
 New firmware/model support needs a separate reviewed profile, original resource
 hashes, model-specific transport evidence and a documented recovery path. Never

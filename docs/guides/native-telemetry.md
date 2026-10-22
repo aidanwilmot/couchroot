@@ -11,7 +11,7 @@ validation has occurred. Managed telemetry remains the default.**
 Supply reviewed ARM ELF inputs and a new output directory outside the checkout:
 
 ```sh
-./couchroot-install prepare --device qn90a --launcher native \
+bin/couchroot-install prepare --device qn90a --launcher native \
   --native-binary /private/build/native-hub \
   --native-telemetry-binary /private/build/collector-arm \
   --output /private/couchroot-native-telemetry-review

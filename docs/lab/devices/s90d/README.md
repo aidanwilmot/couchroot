@@ -237,7 +237,7 @@ collectors' expired TLS keys were removed locally; signing keys remain private.
 The loopback desktop preview server was stopped. The TV hub needs no Mac server.
 
 Sanitized machine-readable results:
-[`inventory/samsung/2026-09-19/hub/verification.json`](../../../../inventory/samsung/2026-09-19/hub/verification.json).
+[`inventory/samsung/2026-09-19/hub/verification.json`](../../inventory/samsung/2026-09-19/hub/verification.json).
 
 ## Vendor references
 

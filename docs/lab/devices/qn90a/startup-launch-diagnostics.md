@@ -121,7 +121,7 @@ device changes (`20260922T161405Z-dd3ad901`) restored the original saved setup
 component choices while retaining the updated relay ownership record. The private
 diagnostic journal is complete; no service exclusion remains.
 
-The [sanitized inventory](../../../../inventory/qn90a-startup-launch-diagnostics-20260922.json)
+The [sanitized inventory](../../inventory/qn90a-startup-launch-diagnostics-20260922.json)
 retains every attempt and timing, validation scope, failed-unit list and final
 preservation check. AC unplug startup, media playback and actual casting were
 not tested.

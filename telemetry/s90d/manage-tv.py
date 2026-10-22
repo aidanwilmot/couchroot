@@ -7,7 +7,7 @@ R=Path(__file__).resolve().parent; REPO=R.parents[1]
 P=Path.home()/'.local/share/samsung-tv-research'
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
- raise SystemExit('Retired: use ./tv-setup plan/apply/verify --device DEVICE --components hub,telemetry; recovery uses ./tv-setup rollback --device DEVICE --run RUN_ID. See docs/guides/telemetry.md.')
+ raise SystemExit('Retired: use bin/tv-setup plan/apply/verify --device DEVICE --components hub,telemetry; recovery uses bin/tv-setup rollback --device DEVICE --run RUN_ID. See docs/guides/telemetry.md.')
 
 def root_operation(identity,script,timeout_seconds=10):
  if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 25: raise ValueError("Root operation deadline must be 1..25 seconds")

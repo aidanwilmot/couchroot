@@ -125,10 +125,10 @@ Use the shared setup engine for both TVs. Configure private site/signing trust a
 shown in [TV setup](tv-setup.md), then substitute `s90d` or `qn90a`:
 
 ```sh
-./tv-setup plan --device s90d --components hub,telemetry --privileged-inspection
-./tv-setup apply --device s90d --components hub,telemetry --yes --activate
-./tv-setup verify --device s90d --components hub,telemetry --privileged-inspection
-./tv-setup rollback --device s90d --run RUN_ID --yes
+bin/tv-setup plan --device s90d --components hub,telemetry --privileged-inspection
+bin/tv-setup apply --device s90d --components hub,telemetry --yes --activate
+bin/tv-setup verify --device s90d --components hub,telemetry --privileged-inspection
+bin/tv-setup rollback --device s90d --run RUN_ID --yes
 ```
 
 Apply builds/signs for the selected TV and journals backups before mutations.
@@ -139,7 +139,7 @@ S90D rollback drains the new collector before restoring the old enable marker an
 restarting AT-HUB. Never re-enable the old marker while the shared service is enabled.
 
 The historical `manage-tv.py` and QN service `manage.py` commands are retired.
-For a UI-only release use `./deploy-ui`; for shared NAS code changes use the
+For a UI-only release use `bin/deploy-ui`; for shared NAS code changes use the
 explicit `dashboard` component and `--shared-nas`. A TV service migration does not
 change the NAS receiver, per-device tokens, chart IDs or history.
 

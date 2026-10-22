@@ -39,5 +39,5 @@ separate checks; publication is not a claim that all hardware acceptance is done
 This is experimental source, not a stable signed binary release. Full setup,
 recovery and toolchain portability limits remain in the project guides.
 Original work uses 0BSD; bundled upstream licenses remain beside their sources.
-See [Sources & Credits](../../CREDITS.md) and [licensing](../../LICENSE-STATUS.md).
-GitHub private vulnerability reporting is enabled; see [Security](../../SECURITY.md).
+See [Sources & Credits](credits.md) and [licensing](licensing.md).
+GitHub private vulnerability reporting is enabled; see [Security](../../.github/SECURITY.md).

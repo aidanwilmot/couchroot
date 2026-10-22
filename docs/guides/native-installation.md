@@ -73,14 +73,14 @@ are refused. No enrolled baseline program is executed on the host.
 The following only print a recipe/workflow and **do not connect**:
 
 ```sh
-./couchroot-install plan --device qn90a --launcher native
-./couchroot-install apply --device qn90a --launcher native --dry-run
+bin/couchroot-install plan --device qn90a --launcher native
+bin/couchroot-install apply --device qn90a --launcher native --dry-run
 ```
 
 Preparation is also offline:
 
 ```sh
-./couchroot-install prepare --device qn90a --launcher native \
+bin/couchroot-install prepare --device qn90a --launcher native \
   --build-native --output /private/native-bundle
 ```
 
@@ -88,21 +88,21 @@ These examples are for a **separately authorized future device operation**. They
 contact the TV; do not run them as offline tests:
 
 ```sh
-./couchroot-install inspect --device qn90a --launcher native \
+bin/couchroot-install inspect --device qn90a --launcher native \
   --agent /private/client.json --bundle /private/native-bundle \
   --hook-config /private/hook-config.json
 
-./couchroot-install apply --device qn90a --launcher native \
+bin/couchroot-install apply --device qn90a --launcher native \
   --agent /private/client.json --bundle /private/native-bundle \
   --hook-config /private/hook-config.json --yes
 
-./couchroot-install verify --device qn90a --launcher native \
+bin/couchroot-install verify --device qn90a --launcher native \
   --agent /private/client.json --run RUN_ID
 
-./couchroot-install resume --device qn90a --launcher native \
+bin/couchroot-install resume --device qn90a --launcher native \
   --agent /private/client.json --run RUN_ID --yes
 
-./couchroot-install rollback --device qn90a --launcher native \
+bin/couchroot-install rollback --device qn90a --launcher native \
   --agent /private/client.json --run RUN_ID --yes
 ```
 

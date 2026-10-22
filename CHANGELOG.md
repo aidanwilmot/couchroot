@@ -22,6 +22,13 @@ milestones, not releases or blanket hardware acceptance. The former `dev0` and
 
 ### Changed
 
+- Tidy the repository root (2026-10-22). Command-line entry points move to
+  `bin/` (`bin/couchroot-install`, `bin/deploy-ui`, `bin/tv-setup`); examples and
+  sanitized device evidence move under `docs/`; contributing and security
+  guidance move to `.github/`; licensing and credits move to `docs/project/`; the
+  QN90A Home-route and app-cleanup helpers move from `setup/` to `native/`.
+  Component revisions and managed build output are unchanged. Resume or roll back
+  runs started before this change from their original checkout.
 - Consolidate development names under Couchroot and require Node.js 22 or newer
   for the workbench. The installed TV app remains Minimal Hub; identifiers,
   saved preferences and on-TV paths are unchanged.

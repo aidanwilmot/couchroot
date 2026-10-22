@@ -234,6 +234,6 @@ class NewAppRecoveryTests(unittest.TestCase):
 class DistributionTests(unittest.TestCase):
     def test_tracked_site_template_is_loadable_without_private_files(self):
         from tvsetup.common import REPO
-        site=load_site(REPO/'examples/site.json')
+        site=load_site(REPO/'docs/examples/site.json')
         self.assertEqual(set(site['devices']),{'qn90a','s90d'})
         self.assertNotIn('_trust',site)

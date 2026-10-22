@@ -3,7 +3,7 @@ from pathlib import Path
 import sqlite3
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1] / 'setup/qn90a-home-route'
+ROOT = Path(__file__).resolve().parents[1] / 'native/qn90a-home-route'
 
 class HomeRouting(unittest.TestCase):
     def setUp(self):
