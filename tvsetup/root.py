@@ -11,6 +11,7 @@ import re
 from pathlib import Path, PurePosixPath
 import tarfile
 import tempfile
+import uuid
 from .common import PRIVATE, REPO, Refused, lock, run, sha
 from .transport import managed_guard, hash_guard, Q
 from .toolkit import load
@@ -27,6 +28,17 @@ static int Main(){foreach(string l in File.ReadLines("/proc/self/status"))if(l.S
 var p=new ProcessStartInfo("/bin/sh"){UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true};p.ArgumentList.Add("-c");p.ArgumentList.Add(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String("PAYLOAD")));
 using(var c=Process.Start(p)){var o=c.StandardOutput.ReadToEndAsync();var e=c.StandardError.ReadToEndAsync();if(!c.WaitForExit(25000)){c.Kill(true);return 9;}Console.Write(o.Result);Console.Write(e.Result);return c.ExitCode;}}
 }"""
+
+
+def completed_managed_guard_failure(transport_returncode, output, marker):
+    """Recognize a completed guarded command that stopped before its success marker."""
+    match = re.search(r"\n\[exit:(\d+)\]\s*\Z", output)
+    return bool(
+        transport_returncode in (0, 1)
+        and match
+        and int(match[1]) != 0
+        and marker not in output
+    )
 
 
 def operation_source(script):
@@ -334,8 +346,18 @@ def execute(
         client.connect()
         client.require_device()
         # Originals are captured afresh; no dependency on another TV's passwd hash.
+        guard_marker = "TVSETUP_ROOT_MANAGED_GUARD_OK_" + uuid.uuid4().hex
+        original_guard = (
+            managed_guard(profile)
+            + "printf '%s\\n' "
+            + Q(guard_marker)
+            + "\n"
+            + hash_guard("/usr/sbin/sdbd-tarlauncher", LAUNCHER[profile["id"]])
+        )
         original = client.capture(
-            "(\n" + guards + "sha256sum /etc/passwd /usr/share/sdbd/public.pem\n)",
+            "(\n"
+            + original_guard
+            + "sha256sum /etc/passwd /usr/share/sdbd/public.pem\n)",
             callback_host=callback,
             bind_host=callback,
             timeout=15,
@@ -344,12 +366,19 @@ def execute(
             m[2]: m[1]
             for m in re.finditer(r"(?m)^([a-f0-9]{64})  (/\S+)$", original.output)
         }
+        exit_match = re.search(r"\n\[exit:(\d+)\]\s*\Z", original.output)
         if (
             original.transport_returncode not in (0, 1)
-            or not re.search(r"\n\[exit:0\]\s*\Z", original.output)
+            or not exit_match
+            or int(exit_match[1]) != 0
             or set(hashes) != {"/etc/passwd", "/usr/share/sdbd/public.pem"}
         ):
-            raise Refused("Cannot verify original root-transport resources")
+            error = Refused("Cannot verify original root-transport resources")
+            if completed_managed_guard_failure(
+                original.transport_returncode, original.output, guard_marker
+            ):
+                error.guard_failure = True
+            raise error
         originals = "".join(hash_guard(p, h) for p, h in hashes.items())
         stage = (
             guards

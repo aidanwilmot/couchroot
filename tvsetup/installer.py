@@ -468,7 +468,15 @@ def emit(result, as_json):
 
 
 def main(argv=None):
-    args = parser().parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        args = parser().parse_args(raw_argv)
+    except Refused as error:
+        if "--json" in raw_argv:
+            print(json.dumps(error.as_json(), indent=2))
+        else:
+            print("couchroot-install: " + str(error), file=sys.stderr)
+        return 1
     try:
         if args.command == "survey":
             from .survey import emit as emit_survey, survey

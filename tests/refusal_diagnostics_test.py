@@ -61,7 +61,7 @@ class RefusalDiagnosticsTests(unittest.TestCase):
                 self.assertEqual(refusal.as_json()["code"], code)
                 self.assertIn("expected expected-safe, found found-safe", str(refusal))
 
-    def test_probe_reports_all_mismatches(self):
+    def test_probe_only_refuses_firmware_or_architecture_mismatches(self):
         profile = {
             "firmware": "T-EXAMPLE-1",
             "architecture": "armv7l",
@@ -83,15 +83,50 @@ class RefusalDiagnosticsTests(unittest.TestCase):
             compare_identity_probe(profile, output)
         self.assertEqual(
             [item["field"] for item in caught.exception.fields],
-            [
-                "firmware",
-                "architecture",
-                "runtime",
-                "dotnet_sha256",
-                "dotnet_launcher_sha256",
-            ],
+            ["firmware", "architecture"],
         )
         self.assertEqual(caught.exception.code, "CR-ID-FIRMWARE")
+
+    def test_runtime_and_hash_differences_are_nonfatal_probe_diagnostics(self):
+        profile = {
+            "firmware": "T-EXAMPLE-0001-1.0",
+            "architecture": "armv7l",
+            "runtime": "6.0.9",
+            "host_sha256": "a" * 64,
+            "launcher_sha256": "b" * 64,
+        }
+        output = "\n".join(
+            (
+                "TVSETUP_PROBE:firmware:" + profile["firmware"],
+                "TVSETUP_PROBE:architecture:" + profile["architecture"],
+                "TVSETUP_PROBE:runtime:absent",
+                "TVSETUP_PROBE:dotnet_sha256:" + "c" * 64,
+                "TVSETUP_PROBE:dotnet_launcher_sha256:" + profile["launcher_sha256"],
+            )
+        )
+        self.assertEqual(
+            compare_identity_probe(profile, output),
+            [
+                ("runtime", "present", "absent"),
+                ("dotnet_sha256", "a" * 64, "c" * 64),
+            ],
+        )
+
+    def test_missing_managed_probe_fields_are_not_connect_refusals(self):
+        profile = {
+            "firmware": "T-EXAMPLE-0001-1.0",
+            "architecture": "armv7l",
+            "runtime": "6.0.9",
+            "host_sha256": "a" * 64,
+            "launcher_sha256": "b" * 64,
+        }
+        output = "\n".join(
+            (
+                "TVSETUP_PROBE:firmware:" + profile["firmware"],
+                "TVSETUP_PROBE:architecture:" + profile["architecture"],
+            )
+        )
+        self.assertEqual(compare_identity_probe(profile, output), [])
 
     def test_probe_redacts_unrecognized_values(self):
         profile = {

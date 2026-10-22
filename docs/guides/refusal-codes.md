@@ -1,8 +1,12 @@
 # Refusal codes
 
-Couchroot refuses setup when a device does not match the exact identity pins in
-its profile. A read-only probe reports differences before the existing shell
-guards run. The guards remain authoritative for every privileged operation.
+The SDK transport refuses a connection when firmware or architecture differs from the
+profile, matching the existing identity guard. The read-only probe records
+runtime and executable-hash differences in private evidence without refusing
+the connection. Where an operation already runs the managed guard, a failed
+guard uses those diagnostics to explain the refusal. The guards remain
+authoritative and run at the same operation boundaries as before, including
+the enrolled root-agent transport's initial managed check.
 
 | Code | Fields | Meaning |
 | --- | --- | --- |

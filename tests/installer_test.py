@@ -13,6 +13,7 @@ import zipfile
 from tvsetup import cli, installer
 from tvsetup.common import Refused, atomic_json, read_json, sha
 from tvsetup.config import LAUNCHER_COMPONENTS, profile, resolve
+from tvsetup import registry
 from tvsetup.planner import Action
 from tv_setup_planner_test import accepted, profile as fixture_profile
 
@@ -50,6 +51,23 @@ class InstallerTests(unittest.TestCase):
     def test_explicit_launcher_is_required(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             installer.main(['plan', '--device', 'qn90a'])
+
+    def test_corrupt_profile_registry_refuses_cleanly_before_argument_parsing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            profiles = Path(tmp)
+            (profiles / 'qn90a.json').write_text('{broken json')
+            with patch.object(registry, 'PROFILE_DIR', profiles):
+                code, out, err = self.invoke(['--help'])
+                self.assertEqual(code, 1)
+                self.assertEqual(out, '')
+                self.assertIn('couchroot-install: Invalid TV profile file qn90a.json', err)
+                self.assertNotIn('Traceback', err)
+
+                code, out, err = self.invoke(['survey', '192.0.2.20', '--json'])
+                self.assertEqual(code, 1)
+                self.assertEqual(err, '')
+                self.assertNotIn('Traceback', out)
+                self.assertEqual(json.loads(out)['error'], 'Invalid TV profile file qn90a.json')
 
     def test_retired_native_cannot_be_prepared_or_installed(self):
         for command in ('plan', 'doctor', 'prepare', 'inspect', 'apply'):

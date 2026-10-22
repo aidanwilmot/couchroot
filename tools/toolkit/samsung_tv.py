@@ -118,7 +118,9 @@ def device(config):
     if str(data.get("developerMode")) != "1":
         raise RuntimeError("Enable Developer Mode on the TV before shell diagnostics")
     if data.get("developerIP") != callback:
-        raise RuntimeError("Developer Mode host must match this Mac's routed address")
+        raise RuntimeError(
+            "Developer Mode host must match this Mac's routed address: " + callback
+        )
     with socket.create_connection((host, 26101), timeout=5):
         pass
     return callback
