@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from tvsetup import device_report, registry
+from tvsetup import device_report, registry, survey
 from tvsetup.common import Refused, REPO
 
 
@@ -49,6 +49,7 @@ def survey_result():
         "developer_mode": {"mode": "enabled", "host": "configured (redacted)"},
         # Fields that must never be propagated from caller-controlled input.
         "host": "192.0.2.55",
+        "routed_address": "198.51.100.24",
         "device_id": "UUID-DEVICE-SECRET",
         "raw_response": {
             "id": "UUID-DEVICE-SECRET",
@@ -101,6 +102,7 @@ class DeviceReportTests(unittest.TestCase):
                 )
             )
             text = "\n".join(p.read_text() for p in out.iterdir())
+            self.assertNotRegex(text, r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b")
             for secret in (
                 "192.0.2.55",
                 "UUID-DEVICE-SECRET",
@@ -108,6 +110,90 @@ class DeviceReportTests(unittest.TestCase):
                 "TOKEN-SECRET",
             ):
                 self.assertNotIn(secret, text)
+
+    def test_unknown_tv_still_writes_reports_and_rejected_skeleton_without_diff(self):
+        unknown = survey.describe(
+            {"modelName": "QN65S90CAFXZA", "model": "23_PTM_QD_T09"}
+        )
+        self.assertEqual(unknown["verdict"], "unknown")
+        self.assertIsNone(unknown["nearest_profile"])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out = root / "report"
+            device_report.write_report(unknown, out, profile_skeleton=True)
+            self.assertEqual(
+                {path.name for path in out.iterdir()},
+                {"device-report.json", "device-report.md", "profile-skeleton.json"},
+            )
+            for name in ("device-report.json", "device-report.md"):
+                self.assertIn(
+                    "No reviewed profile is close enough to diff against.",
+                    (out / name).read_text(),
+                )
+            skeleton = json.loads((out / "profile-skeleton.json").read_text())
+            self.assertIsNone(skeleton["_diff_against"])
+            self.assertEqual(skeleton["diff"], [])
+            self.assertEqual(skeleton["_marker"], "UNVERIFIED")
+            self.assertEqual(skeleton["model"], "QN65S90CAFXZA")
+            self.assertEqual(skeleton["platform"], "23_PTM_QD_T09")
+            for key, value in skeleton.items():
+                if key not in {"_marker", "model", "platform", "diff", "capabilities"}:
+                    self.assertIsNone(value, key)
+            self.assertEqual(set(skeleton["capabilities"].values()), {None})
+            profile_dir = root / "profiles"
+            profile_dir.mkdir()
+            (profile_dir / "qn90a.json").write_bytes(
+                (REPO / "tvsetup/profiles/qn90a.json").read_bytes()
+            )
+            (profile_dir / "s90d.json").write_text(json.dumps(skeleton))
+            with patch.object(registry, "PROFILE_DIR", profile_dir):
+                with self.assertRaisesRegex(Refused, re.compile("unverified", re.I)):
+                    registry.profiles()
+            for path in out.iterdir():
+                self.assertNotRegex(
+                    path.read_text(), r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
+                )
+
+    def test_exact_and_family_skeletons_retain_their_profile_diff(self):
+        profile = registry.profile("s90d")
+        exact = survey.describe(
+            {"modelName": profile["model"], "model": profile["platform"]}
+        )
+        for result, expected_status in (
+            (exact, "match"),
+            (survey_result(), "different"),
+        ):
+            with self.subTest(verdict=result["verdict"]):
+                skeleton = device_report._profile_skeleton(result)
+                self.assertEqual(skeleton["_diff_against"], "s90d")
+                self.assertEqual(len(skeleton["diff"]), 2)
+                self.assertEqual(
+                    {row["status"] for row in skeleton["diff"]}, {expected_status}
+                )
+
+    def test_failed_file_write_removes_all_partial_report_output(self):
+        write_private = device_report._write_private
+        for failing in (
+            "device-report.json",
+            "device-report.md",
+            "profile-skeleton.json",
+        ):
+            with self.subTest(file=failing), tempfile.TemporaryDirectory() as temp:
+                out = Path(temp) / "report"
+
+                def fail_one(path, data):
+                    if path.name == failing:
+                        raise OSError("synthetic disk failure")
+                    write_private(path, data)
+
+                with patch.object(
+                    device_report, "_write_private", side_effect=fail_one
+                ):
+                    with self.assertRaisesRegex(OSError, "synthetic disk failure"):
+                        device_report.write_report(
+                            survey_result(), out, profile_skeleton=True
+                        )
+                self.assertFalse(out.exists())
 
     def test_existing_directory_is_never_overwritten(self):
         with tempfile.TemporaryDirectory() as temp:

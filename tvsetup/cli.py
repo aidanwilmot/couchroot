@@ -386,10 +386,11 @@ def launcher_scope(choices, actions=()):
 
 
 def has_completed_verified_run(state_dir, device, target_binding):
-    """Engine.complete follows action readback and durable local finalization.
+    """A completed full-setup run follows action readback and local finalization.
 
-    A run for a different destination/trust, a pending run or a rollback cannot
-    enable the broader recommendations. Physical hardware acceptance is separate.
+    Only schema-2 setup journals for this device and destination/trust qualify.
+    A pending run or rollback cannot enable broader recommendations. Physical
+    hardware acceptance is separate.
     """
     for path in (state_dir / "runs").glob("*/journal.json"):
         doc = read_json(path)
@@ -398,6 +399,7 @@ def has_completed_verified_run(state_dir, device, target_binding):
             and doc.get("schema") == 2
             and doc.get("device") == device
             and doc.get("target_binding") == target_binding
+            and doc.get("scope") == "setup"
             and doc.get("phase") == "complete"
             and isinstance(doc.get("actions"), list)
             and all(

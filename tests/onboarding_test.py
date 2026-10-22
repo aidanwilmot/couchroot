@@ -31,7 +31,7 @@ def identity(device="s90d"):
 
 
 class DoctorTests(unittest.TestCase):
-    def test_success_checks_use_one_identity_read_and_redact_all_host_values(self):
+    def test_success_checks_use_one_identity_read_and_show_only_computer_address(self):
         data = identity()
         with (
             patch.object(onboarding, "read_identity", return_value=data) as read,
@@ -48,12 +48,14 @@ class DoctorTests(unittest.TestCase):
         encoded = json.dumps(result)
         for private in (
             "192.0.2.20",
-            "192.0.2.24",
             data["id"],
             data["name"],
             data["token"],
         ):
             self.assertNotIn(private, encoded)
+        self.assertIn(
+            "Set Developer Mode's host IP to 192.0.2.24 (this computer)", encoded
+        )
 
     def test_failed_identity_still_checks_sdb_and_never_discloses_error(self):
         with (
@@ -62,6 +64,7 @@ class DoctorTests(unittest.TestCase):
                 "read_identity",
                 side_effect=Refused("private address and token should not escape"),
             ) as read,
+            patch.object(onboarding, "_routed_address", return_value="198.51.100.24"),
             patch.object(
                 onboarding.socket,
                 "create_connection",
@@ -77,8 +80,14 @@ class DoctorTests(unittest.TestCase):
         )
         self.assertNotIn("private address", json.dumps(result))
         self.assertNotIn("192.0.2.20", json.dumps(result))
+        self.assertIn(
+            "Set Developer Mode's host IP to 198.51.100.24 (this computer)",
+            json.dumps(result),
+        )
 
-    def test_developer_state_and_route_mismatch_are_named_without_values(self):
+    def test_developer_host_mismatch_shows_computer_address_and_redacts_tv_identity(
+        self,
+    ):
         data = {**identity(), "developerMode": "0", "developerIP": "192.0.2.99"}
         with (
             patch.object(onboarding, "read_identity", return_value=data),
@@ -91,18 +100,41 @@ class DoctorTests(unittest.TestCase):
             ["passed", "failed", "failed", "passed"],
         )
         self.assertNotIn("192.0.2.99", json.dumps(result))
+        self.assertNotIn(data["id"], json.dumps(result))
+        self.assertNotIn("192.0.2.20", json.dumps(result))
+        self.assertEqual(
+            result["checks"][2]["hint"],
+            "Set Developer Mode's host IP to 192.0.2.24 (this computer)",
+        )
 
     def test_missing_developer_ip_is_unknown_not_a_mismatch(self):
         data = identity()
         data.pop("developerIP")
         with (
             patch.object(onboarding, "read_identity", return_value=data),
-            patch.object(onboarding, "_routed_address") as route,
+            patch.object(
+                onboarding, "_routed_address", return_value="192.0.2.24"
+            ) as route,
             patch.object(onboarding.socket, "create_connection"),
         ):
             result = onboarding.doctor("192.0.2.20")
         self.assertEqual(result["checks"][2]["status"], "unknown")
-        route.assert_not_called()
+        route.assert_called_once_with("192.0.2.20")
+        self.assertIn("192.0.2.24 (this computer)", result["checks"][2]["hint"])
+
+    def test_route_lookup_failure_keeps_host_unknown_without_leaking_errors(self):
+        with (
+            patch.object(onboarding, "read_identity", return_value=identity()),
+            patch.object(
+                onboarding,
+                "_routed_address",
+                side_effect=OSError("private route 192.0.2.20"),
+            ),
+            patch.object(onboarding.socket, "create_connection"),
+        ):
+            result = onboarding.doctor("192.0.2.20")
+        self.assertEqual(result["checks"][2]["status"], "unknown")
+        self.assertNotIn("192.0.2.", json.dumps(result))
 
 
 class InitTests(unittest.TestCase):

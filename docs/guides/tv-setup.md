@@ -36,13 +36,17 @@ Before installing host tools, new owners can run the read-only
 [`survey HOST`](universal-installer.md#survey-a-tv-before-installing-tools)
 command. It reads the public identity endpoint once and reports the closest
 profile. A matching model and platform is preliminary only; SDB identity checks
-still verify firmware, architecture, runtime and pinned hashes before an
-operation. A platform-family match is informational and never enables an
-operation. Survey output redacts physical identifiers and developer-host
-addresses. `survey HOST --report DIR` writes the private, redacted JSON and
+still verify firmware and architecture before an operation. Existing managed
+operations also retain their runtime and pinned-hash guards. A platform-family match is informational and never enables an
+operation. Survey output redacts physical identifiers and all IP addresses,
+including this computer's. `survey HOST --report DIR` writes the private, redacted JSON and
 Markdown report; `--profile-skeleton` adds a marked research template that the
-registry refuses to load. `doctor --tv HOST` checks endpoint, Developer Mode and
-SDB reachability without a site file or device changes.
+registry refuses to load. If no reviewed profile is close enough for a diff,
+the report still includes an unverified skeleton with no comparison. `doctor
+--tv HOST` checks endpoint, Developer Mode and SDB reachability without a site
+file or device changes. It displays this computer's routed IPv4 when known so
+you can enter it in the TV's Developer Mode settings; it never displays the
+TV's configured Developer Mode host.
 
 QN90A retains its signed welcome-process relay → Hub → telemetry UI relay →
 service chain, exact Home/AirPlay routes, Samsung splash, and **Hub-owned
@@ -178,15 +182,16 @@ Connection configuration is `--site PATH` → `TV_SETUP_SITE` →
 `~/.config/samsung-tv-hub/site.json`. Choices are separate:
 **recommended defaults → saved choices → `--config` JSON → CLI overrides**.
 Lists replace earlier lists; keep/remove displace contradictory earlier choices.
-For a device with no completed verified setup run, recommended defaults match
+For a device with no completed full-setup run, recommended defaults match
 [`docs/examples/choices.json`](../examples/choices.json): launcher integration
 only (`hub`, `screensaver`, `splash`, `home`, `airplay`, `startup`), with cleanup
 and telemetry changes unselected. Existing TV telemetry preferences are
 preserved. This first setup still includes the reviewed launcher support
 components shown by the example. Saved choices are ignored until the same device
-has a completed schema-2 journal for the same destination and signing trust, with
-the journal in `complete` and every recorded action in `applied` (a verified
-no-op can have no actions). Completion means action readback and durable local
+has a completed schema-2 **full-setup** journal (`scope: setup`) for the same
+destination and signing trust, with the journal in `complete` and every recorded
+action in `applied` (a verified no-op can have no actions). UI, launcher-only,
+recovery and trial journals do not count. Completion means action readback and durable local
 finalization; it is not physical hardware acceptance. After such a run, the
 existing saved-choice and default recommendation behavior is unchanged. Select
 cleanup, telemetry or other components explicitly with `--components` or

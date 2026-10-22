@@ -102,7 +102,9 @@ like. At this stage you only read:
   `device_id` your `site.json` will use.
 - The existing public API fields `developerMode` and `developerIP`; report
   whether Developer Mode is enabled and whether a developer host is configured,
-  but redact the host address from shared reports.
+  but redact the TV's configured host address from shared reports. Survey and
+  report output contain no IP addresses; interactive `doctor --tv` may show this
+  computer's routed IPv4 so the owner can enter it in Developer Mode settings.
 - `/etc/prd_info.ini` for the exact firmware string the guard will match.
 - `uname -m` for `architecture`.
 - The installed .NET runtime path and version, and the SHA-256 of the signed host

@@ -29,8 +29,13 @@ milestones, not releases or blanket hardware acceptance. The former `dev0` and
 ### Changed
 
 - Use launcher-only recommendations on a device's first setup, leaving cleanup
-  and telemetry opt-in; devices with a completed verified run retain their
-  previous defaults (2026-10-22).
+  and telemetry opt-in; only a completed full-setup run (`scope: setup`) enables
+  the previous defaults. UI, launcher-only, recovery and trial runs do not
+  qualify (2026-10-22).
+- Interactive `doctor --tv` shows this computer's routed IPv4 when available;
+  survey and shared report output continue to omit all IP addresses. Unknown
+  devices can now receive an unverified skeleton without a nearest-profile diff
+  (2026-10-22).
 - Tidy the repository root (2026-10-22). Command-line entry points move to
   `bin/` (`bin/couchroot-install`, `bin/deploy-ui`, `bin/tv-setup`); examples and
   sanitized device evidence move under `docs/`; contributing and security

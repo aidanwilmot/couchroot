@@ -87,6 +87,13 @@ def _report_document(survey_result, collected_on):
     milestones = {
         name: {"result": "not tested", "evidence": None} for name in MILESTONES
     }
+    limitations = [
+        "Firmware and Tizen version were not read by the public identity survey.",
+        "No SDB, install, physical Home, cold-boot, standby, playback or HDMI/Game Bar test was performed by this survey.",
+        "A model/platform or platform-family match does not grant device or firmware support.",
+    ]
+    if fields["nearest_profile"] is None:
+        limitations.append("No reviewed profile is close enough to diff against.")
     return {
         "schema": REPORT_SCHEMA,
         "date": collected_on,
@@ -109,11 +116,7 @@ def _report_document(survey_result, collected_on):
             "capabilities": fields["capabilities"],
         },
         "milestones": milestones,
-        "limitations": [
-            "Firmware and Tizen version were not read by the public identity survey.",
-            "No SDB, install, physical Home, cold-boot, standby, playback or HDMI/Game Bar test was performed by this survey.",
-            "A model/platform or platform-family match does not grant device or firmware support.",
-        ],
+        "limitations": limitations,
     }
 
 
@@ -190,23 +193,22 @@ def _markdown(document):
 def _profile_skeleton(survey_result):
     fields = _survey_fields(survey_result)
     reference = fields["nearest_profile"]
-    if reference is None:
-        raise Refused("A profile skeleton requires a deterministic nearest profile")
-    base = profiles()[reference]
     diff = []
-    for key, observed, field in (
-        ("model", fields["model"], "modelName"),
-        ("platform", fields["platform"], "model"),
-    ):
-        diff.append(
-            {
-                "field": key,
-                "profile_value": base[key],
-                "observed_value": observed,
-                "status": "match" if base[key] == observed else "different",
-                "survey_field": field,
-            }
-        )
+    if reference is not None:
+        base = profiles()[reference]
+        for key, observed, field in (
+            ("model", fields["model"], "modelName"),
+            ("platform", fields["platform"], "model"),
+        ):
+            diff.append(
+                {
+                    "field": key,
+                    "profile_value": base[key],
+                    "observed_value": observed,
+                    "status": "match" if base[key] == observed else "different",
+                    "survey_field": field,
+                }
+            )
     # This is deliberately profile-shaped enough to guide research, but all
     # unverified identity/layout/runtime/hash data are null and the registry
     # must reject the marker if a user copies it into the accepted profile set.

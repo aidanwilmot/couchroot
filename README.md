@@ -91,7 +91,10 @@ For an exact match, `init TV_ADDRESS` can create the private default
 refuses to overwrite an existing file. `--report DIR` writes a redacted,
 issue-ready report to a new private directory; review it before sharing.
 `doctor --tv` checks public identity reachability, Developer Mode and SDB
-reachability without changing the TV.
+reachability without changing the TV. It may show this computer's routed IPv4 so
+you can enter it in Developer Mode settings; survey and report output contain
+no IP addresses. Reports with no nearby reviewed profile still include an
+unverified skeleton without a profile diff.
 
 1. **Prepare your computer.** Install Python 3.12+, Samsung SDB, the Tizen
    CLI/certificate tools, OpenSSL and the .NET SDK pinned in `global.json`
@@ -136,7 +139,9 @@ Use `s90d` in place of `qn90a` for that model. After that:
 
 For full setup, the first run selects launcher integration only; cleanup and
 telemetry changes require an explicit `--components` or `--config` choice. The
-current TV preferences remain preserved. See the [first-run setup defaults](docs/guides/tv-setup.md#configure-your-installation).
+broader defaults and saved choices unlock only after a matching completed
+full-setup journal (`scope: setup`); UI, launcher-only, recovery and trial runs
+do not count. Current TV preferences remain preserved. See the [first-run setup defaults](docs/guides/tv-setup.md#configure-your-installation).
 
 | Task | Guide |
 | --- | --- |

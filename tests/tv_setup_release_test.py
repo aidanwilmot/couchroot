@@ -113,10 +113,20 @@ class CLITests(unittest.TestCase):
         self.assertTrue(resolved.call_args.kwargs['first_run'])
         self.assertNotIn('cleanup',json.loads(out)['states'])
         self.assertNotIn('telemetry',json.loads(out)['states'])
-        atomic_json(self.root/'state/runs/completed/journal.json', {
+        completed = {
             'schema':2,'device':'qn90a','target_binding':binding(load_site(self.site),'qn90a'),
             'phase':'complete','actions':[],
-        })
+        }
+        journal = self.root/'state/runs/completed/journal.json'
+        for scope in (None, 'ui', 'launcher-web', 'launcher-native', 'autonomous-root-pilot'):
+            atomic_json(journal, {**completed, **({'scope': scope} if scope else {})})
+            with patch('tvsetup.cli.resolve', wraps=resolve) as resolved:
+                code,out,err=self.invoke('plan','--device','qn90a','--json')
+            self.assertIn(code,(0,2),err)
+            self.assertTrue(resolved.call_args.kwargs['first_run'], scope)
+            self.assertNotIn('cleanup',json.loads(out)['states'])
+            self.assertNotIn('telemetry',json.loads(out)['states'])
+        atomic_json(journal, {**completed, 'scope': 'setup'})
         with patch('tvsetup.cli.resolve', wraps=resolve) as resolved:
             code,out,err=self.invoke('plan','--device','qn90a','--json')
         self.assertFalse(resolved.call_args.kwargs['first_run'])

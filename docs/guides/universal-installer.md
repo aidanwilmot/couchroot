@@ -34,7 +34,8 @@ indicates support. Other results are `unknown`. The survey names observed field
 mismatches, does not expose physical identifiers, and does not contact SDB. It
 reuses the toolkit's existing `developerMode` and `developerIP` field handling
 to report Developer Mode as enabled, disabled or unknown, and whether a
-developer host is configured; it never prints the host address.
+developer host is configured; it never prints the TV's configured host or any
+IP address in survey output.
 
 An unsupported result is a successful survey, not an install error. Use
 `survey HOST --report DIR` to create a redacted report and follow
@@ -46,8 +47,9 @@ additional identity API fields.
 
 Use a new output directory outside the checkout. The command creates it with
 mode `0700` and writes a JSON inventory plus Markdown ready to paste into an
-issue; each file has mode `0600`. Both files omit the TV address, device ID, Developer Mode host address,
-serials and tokens. Review the files before sharing or adding notes.
+issue; each file has mode `0600`. Both files omit the TV address, device ID,
+Developer Mode host address, serials, tokens and all other IP addresses,
+including this computer's. Review the files before sharing or adding notes.
 
 ```sh
 bin/couchroot-install survey TV_ADDRESS --report /private/tv-report
@@ -56,18 +58,21 @@ bin/couchroot-install survey TV_ADDRESS --report /private/tv-report --profile-sk
 
 The optional profile skeleton marks itself `UNVERIFIED`, leaves all unverified
 identity, capability, layout and hash fields null, and shows the observed model
-and platform differences from the nearest profile. The profile registry rejects
-that marked file if it is copied into `tvsetup/profiles/`; it is a research
-template and grants no support.
+and platform differences from the nearest profile. If no reviewed profile is
+close enough to compare, it still writes the report and skeleton with no
+comparison. The profile registry rejects that marked file if it is copied into
+`tvsetup/profiles/`; it is a research template and grants no support.
 
 ### Check the TV and create private configuration
 
 `doctor --tv HOST` is an optional read-only check of the public identity
 endpoint on port 8001, Developer Mode state and host, and TCP reachability of
 SDB on port 26101. It does not need `site.json` and does not change the TV. It
-reports a one-line fix hint for each failed check and whether the Developer
-Mode host matches this computer's routed address without printing either
-address. The existing
+reports a one-line fix hint for each failed check and, when route lookup works,
+shows this computer's routed IPv4 address in text and JSON so you can enter it
+in the TV's Developer Mode settings. It never displays the TV's configured
+Developer Mode host. Survey and report output still contain no IP addresses.
+The existing
 `doctor --device ...` form continues to check host prerequisites only.
 
 After an `exact_model` survey, `init HOST` can create the default private
@@ -119,13 +124,23 @@ also does not require a local .NET SDK; provisioning the web fallback and agent
 still requires managed setup. Docker (`prepare --build-native`) and Node
 (`prepare --web-state`) are reported as conditional tools and do not fail the
 basic check. Web installation still checks the pinned .NET SDK for its helpers.
-No doctor command contacts a TV or validates the enrollment or Docker image.
+The host-prerequisite doctor does not contact a TV. `doctor --tv` makes only the
+read-only identity request and SDB TCP reachability check described above; no
+doctor command validates enrollment or a Docker image.
 
 Launcher choice is always explicit. `plan` prints the installation recipe and its
 blockers; it does **not** inspect current device state. `doctor` checks host/tool
 presence and the pinned .NET SDK version when required, without reading private
 configuration. It does not certify an available native build image, signing trust or TV ABI.
 `inspect` is the separate, explicitly connected preflight command.
+
+The separate `bin/tv-setup` full-setup flow starts with launcher integration
+only. Cleanup and telemetry changes need an explicit component or configuration
+choice. Broader defaults and saved choices take effect only after a matching,
+completed schema-2 full-setup journal with `scope: setup`, matching device and
+destination/signing trust, and every recorded action applied; UI, launcher-only,
+recovery and trial runs do not qualify. A completed no-op full setup counts.
+See [first-run setup defaults](tv-setup.md#configure-your-installation).
 
 ## Prepare review artifacts
 

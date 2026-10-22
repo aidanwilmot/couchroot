@@ -54,52 +54,37 @@ def doctor(host):
         )
 
     if identity is None:
-        checks.append(
-            _check(
-                "Developer Mode",
-                "unknown",
-                "Restore access to the identity endpoint, then enable Developer Mode on the TV.",
-            )
-        )
-        checks.append(
-            _check(
-                "Developer Mode host",
-                "unknown",
-                "Set Developer Mode's host to this computer's routed address.",
-            )
-        )
+        mode_status = "unknown"
+        mode_hint = "Restore access to the identity endpoint, then enable Developer Mode on the TV."
     else:
         mode = str(identity.get("developerMode"))
         mode_status = (
             "passed" if mode == "1" else "failed" if mode == "0" else "unknown"
         )
-        checks.append(
-            _check(
-                "Developer Mode",
-                mode_status,
-                "No fix needed."
-                if mode_status == "passed"
-                else "Enable Developer Mode on the TV.",
-            )
+        mode_hint = (
+            "No fix needed."
+            if mode_status == "passed"
+            else "Enable Developer Mode on the TV."
         )
-        developer_ip = identity.get("developerIP")
-        if not isinstance(developer_ip, str) or not developer_ip:
-            route_status = "unknown"
-            route_hint = "Enable Developer Mode on the TV, then set its host to this computer's routed address."
-        else:
-            try:
-                routed = _routed_address(host)
-                matches = developer_ip == routed
-                route_status = "passed" if matches else "failed"
-                route_hint = (
-                    "No fix needed."
-                    if matches
-                    else "Set Developer Mode's host to this computer's routed address."
-                )
-            except OSError:
-                route_status = "unknown"
-                route_hint = "Check this computer's route to the TV, then set Developer Mode's host to its routed address."
-        checks.append(_check("Developer Mode host", route_status, route_hint))
+    checks.append(_check("Developer Mode", mode_status, mode_hint))
+
+    # The routed address belongs to this computer and is needed for setup.
+    # Never echo the TV's configured developerIP, even when it differs.
+    developer_ip = identity.get("developerIP") if identity is not None else None
+    try:
+        routed = str(ipaddress.IPv4Address(_routed_address(host)))
+        route_status = (
+            "unknown"
+            if not isinstance(developer_ip, str) or not developer_ip
+            else "passed"
+            if developer_ip == routed
+            else "failed"
+        )
+        route_hint = f"Set Developer Mode's host IP to {routed} (this computer)"
+    except (OSError, ipaddress.AddressValueError):
+        route_status = "unknown"
+        route_hint = "Check this computer's route to the TV, then set Developer Mode's host to its routed address."
+    checks.append(_check("Developer Mode host", route_status, route_hint))
 
     try:
         with socket.create_connection((host, 26101), timeout=5):

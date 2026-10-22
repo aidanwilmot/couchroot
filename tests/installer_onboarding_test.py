@@ -51,13 +51,51 @@ class InstallerOnboardingTests(unittest.TestCase):
                 code, out, err = self.invoke('doctor', '--tv', '192.0.2.20', '--json')
             self.assertEqual(code, 2 if failed else 0, err)
             self.assertEqual(json.loads(out)['ok'], not failed)
-            self.assertNotIn('192.0.2.', out + err)
+            self.assertIn('192.0.2.31' if failed else '192.0.2.30', out)
+            self.assertNotIn('192.0.2.20', out + err)
+            self.assertNotIn(identity()['id'], out + err)
+            if failed:
+                self.assertNotIn(identity()['developerIP'], out + err)
             site.assert_not_called()
             toolkit.assert_not_called()
         for args in (['doctor'], ['doctor', '--device', 's90d'], ['doctor', '--tv', '192.0.2.20', '--launcher', 'web']):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
                 installer.main(args)
             self.assertEqual(error.exception.code, 2)
+
+    def test_tv_doctor_text_and_json_show_computer_address_when_mismatch_or_unknown(self):
+        for missing in (False, True):
+            for json_output in (False, True):
+                with self.subTest(missing_developer_ip=missing, json=json_output):
+                    data = identity()
+                    if missing:
+                        data.pop('developerIP')
+                    with patch.object(onboarding, 'read_identity', return_value=data), patch.object(onboarding, '_routed_address', return_value='198.51.100.24'), patch.object(onboarding.socket, 'create_connection'):
+                        args = ['doctor', '--tv', '192.0.2.20'] + (['--json'] if json_output else [])
+                        code, out, err = self.invoke(*args)
+                    self.assertEqual(code, 2, err)
+                    self.assertIn("Set Developer Mode's host IP to 198.51.100.24 (this computer)", out)
+                    self.assertNotIn(identity()['developerIP'], out + err)
+                    self.assertNotIn(identity()['id'], out + err)
+                    self.assertNotIn('192.0.2.20', out + err)
+
+    def test_unknown_tv_survey_keeps_all_report_files_with_optional_skeleton(self):
+        data = {**identity(), 'modelName': 'QN65S90CAFXZA', 'model': '23_PTM_QD_T09'}
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / 'report'
+            with patch.object(survey, 'read_identity', return_value=data) as read:
+                code, out, err = self.invoke('survey', '192.0.2.20', '--json', '--report', str(destination), '--profile-skeleton')
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(out)['verdict'], 'unknown')
+            self.assertTrue(json.loads(out)['report_written'])
+            read.assert_called_once_with('192.0.2.20')
+            self.assertEqual({p.name for p in destination.iterdir()}, {'device-report.json', 'device-report.md', 'profile-skeleton.json'})
+            skeleton = json.loads((destination / 'profile-skeleton.json').read_text())
+            self.assertIsNone(skeleton['_diff_against'])
+            self.assertEqual(skeleton['diff'], [])
+            combined = out + err + ''.join(p.read_text() for p in destination.iterdir())
+            self.assertNotIn(identity()['id'], combined)
+            self.assertNotRegex(combined, r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
 
     def test_init_stores_identity_privately_but_not_in_output(self):
         with tempfile.TemporaryDirectory() as temporary:
