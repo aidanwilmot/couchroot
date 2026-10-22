@@ -63,6 +63,10 @@ profiles. Other Samsung models are not automatically supported; check the
 [compatibility notes](docs/guides/device-compatibility.md) first. This is a source
 installation signed with your own Samsung certificates, not a downloadable WGT.
 
+Got a different model? [Porting to a new TV or firmware](docs/guides/porting-to-a-new-tv.md)
+walks through building your own device profile, debugging a port and the
+decompilation flows behind the existing profiles.
+
 1. **Prepare your computer.** Install Python 3.12+, Samsung SDB, the Tizen
    CLI/certificate tools, OpenSSL and the .NET SDK pinned in `global.json`
    ([host setup](docs/guides/tv-setup.md#install-from-source)), then:
