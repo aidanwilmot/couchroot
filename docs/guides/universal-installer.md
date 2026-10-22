@@ -12,6 +12,36 @@ that same journal engine with an explicitly enrolled QN90A baseline and pinned
 root-agent transport. **Native installation has offline validation only; it has
 not been deployed or tested on a TV.** See [native installation](native-installation.md).
 
+## Survey a TV before installing tools
+
+`survey HOST` needs no private site configuration, toolkit, signing material or
+SDB. It makes one bounded read-only request to `http://HOST:8001/api/v2/` and
+compares only non-identifying model and platform fields against the reviewed
+profiles:
+
+```sh
+bin/couchroot-install survey 192.0.2.20
+bin/couchroot-install survey 192.0.2.20 --json
+```
+
+The verdict is `exact_model` when both model code and full platform code match a
+profile. This is preliminary: the TV's exact firmware is confirmed later through
+SDB, and all existing identity, runtime, hash, signature and package safety
+checks still apply before operations. `same_platform_family` means only that a
+syntactically valid platform code shares its first two underscore-delimited
+tokens with a profile (for example, `24_PTM_`); it is informational and never
+indicates support. Other results are `unknown`. The survey names observed field
+mismatches, does not expose physical identifiers, and does not contact SDB. It
+reuses the toolkit's existing `developerMode` and `developerIP` field handling
+to report Developer Mode as enabled, disabled or unknown, and whether a
+developer host is configured; it never prints the host address.
+
+An unsupported result is a successful survey, not an install error. Use its
+nearest-profile comparison to prepare a redacted report and follow
+[the porting guide](porting-to-a-new-tv.md) before considering a profile change.
+The survey does not infer model support from a family match and does not guess
+additional identity API fields.
+
 | Target | Web | Native |
 | --- | --- | --- |
 | QN85QN90AAFXZA, T-NKM2AKUC-2301.1 | Prepare, inspect, apply, verify, resume, rollback | Prepare, inspect, apply, verify, resume, rollback (offline-tested only) |

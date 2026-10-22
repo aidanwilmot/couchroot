@@ -67,6 +67,22 @@ Got a different model? [Porting to a new TV or firmware](docs/guides/porting-to-
 walks through building your own device profile, debugging a port and the
 decompilation flows behind the existing profiles.
 
+### Check your TV first
+
+Before installing the toolkit, SDKs or signing tools, run the read-only survey
+against the TV's address on your local network:
+
+```sh
+bin/couchroot-install survey TV_ADDRESS
+```
+
+It reads the public identity endpoint once and compares non-identifying model
+and platform fields with the reviewed profile registry. An exact model and
+platform match is only a preliminary match: firmware, architecture, runtime,
+hashes and signing trust are still checked before any operation. A platform
+family match is informational and does not enable installation. The survey never
+contacts SDB or changes the TV. See the [survey guide](docs/guides/universal-installer.md#survey-a-tv-before-installing-tools).
+
 1. **Prepare your computer.** Install Python 3.12+, Samsung SDB, the Tizen
    CLI/certificate tools, OpenSSL and the .NET SDK pinned in `global.json`
    ([host setup](docs/guides/tv-setup.md#install-from-source)), then:

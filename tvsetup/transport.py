@@ -125,6 +125,92 @@ def managed_guard(profile):
     return script
 
 
+def refusal_for_differences(differences):
+    """Build a structured refusal from profile fields safe to report."""
+    if not differences:
+        return None
+    codes = {
+        "firmware": "CR-ID-FIRMWARE",
+        "architecture": "CR-ID-ARCH",
+        "runtime": "CR-ID-RUNTIME",
+        "dotnet_sha256": "CR-ID-HASH",
+        "dotnet_launcher_sha256": "CR-ID-HASH",
+    }
+    labels = {
+        "dotnet_sha256": "/usr/bin/dotnet SHA-256",
+        "dotnet_launcher_sha256": "/usr/bin/dotnet-launcher SHA-256",
+    }
+    details = []
+    for field, expected, found in differences:
+        label = labels.get(field, field)
+        details.append({"field": field, "expected": expected, "found": found})
+    message = "; ".join(
+        f"{labels.get(field, field)}: expected {expected}, found {found}"
+        for field, expected, found in differences
+    )
+    return Refused(
+        message,
+        code=codes[differences[0][0]],
+        fields=details,
+        next_steps=[
+            "No operation was submitted. Confirm the TV firmware and profile; untested firmware is not supported.",
+            "See docs/guides/refusal-codes.md#" + codes[differences[0][0]].lower(),
+        ],
+    )
+
+
+def identity_probe_script():
+    """Read-only values used to explain why a pinned profile does not match."""
+    return """set -eu
+printf 'TVSETUP_PROBE:firmware:'
+grep '^Version=' /etc/prd_info.ini | head -n 1 | sed 's/^Version=//; s/;$//'
+printf 'TVSETUP_PROBE:architecture:'
+uname -m
+printf 'TVSETUP_PROBE:runtime:'
+if test -d /usr/share/dotnet/shared/Microsoft.NETCore.App/PROFILE_RUNTIME; then echo present; else echo absent; fi
+printf 'TVSETUP_PROBE:dotnet_sha256:'
+if test -f /usr/bin/dotnet && test ! -L /usr/bin/dotnet; then sha256sum /usr/bin/dotnet | cut -d ' ' -f 1; else echo absent; fi
+printf 'TVSETUP_PROBE:dotnet_launcher_sha256:'
+if test -f /usr/bin/dotnet-launcher && test ! -L /usr/bin/dotnet-launcher; then sha256sum /usr/bin/dotnet-launcher | cut -d ' ' -f 1; else echo absent; fi
+"""
+
+
+def compare_identity_probe(profile, output):
+    expected = {
+        "firmware": profile["firmware"],
+        "architecture": profile["architecture"],
+        "runtime": "present",
+        "dotnet_sha256": profile["host_sha256"] or "absent",
+        "dotnet_launcher_sha256": profile.get("launcher_sha256") or "absent",
+    }
+    observed = {}
+    for line in output.splitlines():
+        match = re.fullmatch(r"TVSETUP_PROBE:([a-z0-9_]+):(.*)", line)
+        if match:
+            observed[match[1]] = match[2]
+    if set(observed) != set(expected):
+        raise Refused("Identity probe returned incomplete values")
+    safe_patterns = {
+        "firmware": r"T-[A-Z0-9]+-(?:[0-9]{4}-)?[0-9]+\.[0-9]+",
+        "architecture": r"(?:armv[0-9]+l|aarch64|x86_64|i[3-6]86|x86)",
+        "runtime": r"(?:present|absent)",
+        "dotnet_sha256": r"(?:absent|[a-f0-9]{64})",
+        "dotnet_launcher_sha256": r"(?:absent|[a-f0-9]{64})",
+    }
+    observed = {
+        field: value if re.fullmatch(safe_patterns[field], value) else "[redacted]"
+        for field, value in observed.items()
+    }
+    differences = [
+        (field, value, observed[field])
+        for field, value in expected.items()
+        if observed[field] != value
+    ]
+    refusal = refusal_for_differences(differences)
+    if refusal:
+        raise refusal
+
+
 def hash_guard(path, digest):
     if digest is None:
         return f"test ! -e {Q(path)} && test ! -L {Q(path)}\n"
@@ -255,7 +341,23 @@ class Transport:
         self.client = SdbClient(PRIVATE / "bin/sdb", profile["host"])
         self.client.connect()
         self.client.require_device()
-        self.sdk(identity_guard(profile))
+        # This explanatory read happens before, and never substitutes for, the
+        # existing SDK and privileged shell guards below.
+        compare_identity_probe(
+            profile,
+            self.sdk(
+                identity_probe_script().replace(
+                    "PROFILE_RUNTIME", Q(profile["runtime"])
+                )
+            ),
+        )
+        try:
+            self.sdk(identity_guard(profile))
+        except Refused as error:
+            raise Refused(
+                str(error)
+                + "; if the in-script identity guard rejected the device, its state changed between the read-only probe and the guard"
+            ) from error
 
     def close(self):
         self._root_temp.cleanup()
@@ -321,7 +423,13 @@ class Transport:
             log = path.with_suffix(".log")
             log.write_text(detail)
             log.chmod(0o600)
-            raise
+            wrapped = Refused(
+                str(error)
+                + "; if an in-script firmware, architecture, runtime, or hash guard rejected the device, its state changed since preflight"
+            )
+            if hasattr(error, "output"):
+                wrapped.output = error.output
+            raise wrapped from error
         path.with_suffix(".log").write_text(output)
         if cleanup_index is not None:
             return output

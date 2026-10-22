@@ -32,6 +32,15 @@ full-setup or recovery paths.
 | QN55S90DAFXZA (S90D) | `T-PTMDAKUC-0090-2130.0` | Verified on one owner's TV | Hub/service verified; full setup acceptance pending |
 | Other sizes, regions, models or firmware | Any other combination | Unverified | Unsupported; preflight refuses |
 
+Before installing host tools, new owners can run the read-only
+[`survey HOST`](universal-installer.md#survey-a-tv-before-installing-tools)
+command. It reads the public identity endpoint once and reports the closest
+profile. A matching model and platform is preliminary only; SDB identity checks
+still verify firmware, architecture, runtime and pinned hashes before an
+operation. A platform-family match is informational and never enables an
+operation. Survey output redacts physical identifiers and developer-host
+addresses.
+
 QN90A retains its signed welcome-process relay → Hub → telemetry UI relay →
 service chain, exact Home/AirPlay routes, Samsung splash, and **Hub-owned
 five-minute** Asteroids saver. No S90D writable-cache assumptions, memory offsets,
@@ -444,6 +453,12 @@ scrubbed by this change.
 | 1 | Configuration, dependency, connection or operation failure |
 | 2 | Unresolved inspection/verification, or argparse usage error |
 | 3 | Configuration rollback finished; manual application recovery remains |
+
+Identity refusals include stable codes and field-level expected/observed values
+for non-identifying fields. See the [refusal code reference](refusal-codes.md)
+for `CR-ID-FIRMWARE`, `CR-ID-ARCH`, `CR-ID-RUNTIME`, `CR-ID-HASH` and
+`CR-ID-DEVICE`, including JSON details and the read-only probe's relationship to
+the existing in-script guards.
 
 `--non-interactive` never prompts; mutations require `--yes`. Use `plan --json`
 for review and `apply --json --yes` for automation. Successful JSON commands emit

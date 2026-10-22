@@ -9,6 +9,10 @@ milestones, not releases or blanket hardware acceptance. The former `dev0` and
 
 ### Added
 
+- Profile-backed device registry, read-only TV survey and field-specific
+  identity refusal codes for onboarding and untested-firmware feedback
+  (2026-10-22). The registry continues to accept only the reviewed QN90A and
+  S90D profiles; survey matches do not add model or firmware support.
 - Portable firmware profiles, private site configuration, independently enrolled
   signing trust, and a shared installation/recovery journal (2026-10-11).
 - Experimental QN90A native and WebView launchers, preference import, Home/source

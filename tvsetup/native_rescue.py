@@ -16,12 +16,13 @@ import uuid
 from .common import Refused, atomic_json, sha
 from .config import profile
 from .transport import hash_guard
+from .registry import accepted_devices
 
 Q = shlex.quote
 
 
 def plan(model, boot_id, code_directory, binary_sha256, expected, target, *, tag=None):
-    if model not in ("qn90a", "s90d"):
+    if model not in accepted_devices():
         raise Refused("Unsupported native rescue model")
     safety = profile(model)
     tag = uuid.uuid4().hex if tag is None else tag

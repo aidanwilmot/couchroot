@@ -17,6 +17,7 @@ import zipfile
 from .common import REPO, Refused, atomic_json, run, sha
 from .config import LAUNCHER_COMPONENTS, profile
 from .dependencies import checks as dependency_checks, tool_check
+from .registry import accepted_devices
 
 WEB_COMPONENTS = LAUNCHER_COMPONENTS
 
@@ -36,7 +37,7 @@ def parser():
         "rollback",
     ):
         c = sub.add_parser(name)
-        c.add_argument("--device", choices=("qn90a", "s90d"), required=True)
+        c.add_argument("--device", choices=accepted_devices(), required=True)
         c.add_argument(
             "--launcher",
             choices=("web", "native")
@@ -124,6 +125,11 @@ def parser():
                 action="store_true",
                 help="Explicit web launch after installation; no reboot",
             )
+    survey_parser = sub.add_parser(
+        "survey", help="Read-only identity survey; no toolkit or site required"
+    )
+    survey_parser.add_argument("host", metavar="HOST")
+    survey_parser.add_argument("--json", action="store_true")
     return p
 
 
@@ -464,6 +470,11 @@ def emit(result, as_json):
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
+        if args.command == "survey":
+            from .survey import emit as emit_survey, survey
+
+            emit_survey(survey(args.host), args.json)
+            return 0
         validate_selection(args.device, args.launcher)
         if args.command == "plan":
             emit(recipe(args.device, args.launcher), args.json)
@@ -499,6 +510,16 @@ def main(argv=None):
 
         return setup_main(result["setup_arguments"], launcher_only=True)
     except (Refused, OSError, ValueError) as error:
+        if args.json:
+            refusal = (
+                error
+                if isinstance(error, Refused)
+                else Refused(
+                    "Local input/output failure; check the supplied paths and available space"
+                )
+            )
+            print(json.dumps(refusal.as_json(), indent=2))
+            return 1
         print(
             "couchroot-install: "
             + (

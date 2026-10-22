@@ -9,6 +9,7 @@ from unittest.mock import patch
 from tvsetup.common import Refused, sha
 from tvsetup.config import profile
 from tvsetup import native_root, root
+from tv_setup_transport_test import pinned_probe
 
 
 class NativeBundleTests(unittest.TestCase):
@@ -87,7 +88,7 @@ class NativeBundleTests(unittest.TestCase):
         from tvsetup.transport import Transport
         p={**self.profile, **profile(model)}
         client=SimpleNamespace(connect=lambda:None, require_device=lambda:None,
-            capture=lambda *a, **kw:SimpleNamespace(output='\n[exit:0]\n',transport_returncode=0))
+            capture=lambda *a, **kw:SimpleNamespace(output=pinned_probe(p) if 'TVSETUP_PROBE' in a[0] else '\n[exit:0]\n',transport_returncode=0))
         toolkit=SimpleNamespace(device=lambda cfg:'192.0.2.30',SdbClient=lambda *a:client)
         with patch('tvsetup.toolkit.load',return_value=toolkit):
             return Transport(p,self.folder/'transport',native_bundle=bundle)

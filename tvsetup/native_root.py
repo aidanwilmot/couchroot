@@ -12,6 +12,7 @@ import shutil
 import struct
 from .common import REPO, Refused, atomic_json, sha
 from .root_launcher import IMAGE
+from .registry import accepted_devices
 
 SOURCE = REPO / "agent/native-acquisition"
 FILES = (
@@ -23,7 +24,7 @@ FILES = (
 
 
 def probe_name(profile):
-    if profile["id"] not in ("qn90a", "s90d"):
+    if profile["id"] not in accepted_devices():
         raise Refused("Unsupported native acquisition model")
     return "couchroot-native-root-" + profile["id"]
 

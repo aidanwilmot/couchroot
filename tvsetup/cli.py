@@ -17,6 +17,7 @@ from .common import (
     read_json,
     safe_id,
 )
+from .registry import accepted_devices
 from .config import COMPONENTS, LAUNCHER_COMPONENTS, profile, resolve, selected
 from .engine import Engine, pending, run_id
 from .nas import NAS
@@ -41,7 +42,7 @@ def parser():
             type=Path,
             help="Private connection/trust config; defaults to TV_SETUP_SITE or ~/.config/samsung-tv-hub/site.json",
         )
-        c.add_argument("--device", choices=("qn90a", "s90d"), required=True)
+        c.add_argument("--device", choices=accepted_devices(), required=True)
         c.add_argument(
             "--json",
             action="store_true",
@@ -766,6 +767,8 @@ def main(argv=None, *, ui_only=False, launcher_only=False):
                 )
         if "folder" in locals() and (folder / "journal.json").exists():
             print("Private run: " + str(folder), file=sys.stderr)
+        if args.json and isinstance(error, Refused):
+            print(json.dumps(error.as_json(), indent=2))
         print(
             "tv-setup: "
             + (

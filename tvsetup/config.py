@@ -1,9 +1,9 @@
 """Choice precedence: recommendations < saved choices < file < CLI."""
 
 import copy
-import json
 from urllib.parse import urlsplit
-from .common import REPO, Refused, read_json
+from .common import Refused
+from .registry import profile
 
 LAUNCHER_COMPONENTS = ("hub", "home", "airplay", "startup")
 
@@ -27,10 +27,6 @@ DEFAULTS = dict(
     endpoint=None,
     artifacts={},
 )
-
-
-def profile(device):
-    return read_json(REPO / "tvsetup/profiles" / (device + ".json"))
 
 
 def resolve(device, saved=None, file=None, overrides=None):

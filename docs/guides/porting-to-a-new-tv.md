@@ -33,6 +33,7 @@ side by side to see the full shape; the fields fall into these groups.
 | Layout | `startup`, `chart_prefix`, `snapshot`, `dashboard_config_path` | How this model boots and where it stores state |
 | Optional-app cleanup | `cleanup`, `reasons` | Your own inventory of removable apps and why each is listed |
 | Build contract | `source_hashes`, `boot_artifacts`, `service_artifacts`, `helper_sha256`, `collector_sha256`, `saver_generated` | Reproducible builds of the components this model uses |
+| Capability record | `capabilities` | Evidence summarized from the setup, installer, compatibility and per-device guides |
 
 Two things make these values trustworthy rather than copied guesses:
 
@@ -47,24 +48,30 @@ Two things make these values trustworthy rather than copied guesses:
   ([`tvsetup/site.py`](../../tvsetup/site.py)). The safety contract lives in
   version control, not in local config.
 
-## The honest prerequisite: this needs code, not just JSON
+## The honest prerequisite: code and evidence, not just JSON
 
-A new `tvsetup/profiles/<id>.json` is necessary but not sufficient. The device
-set is currently hardcoded in several places, so adding, say, a `q80c` target
-means editing code as well as writing a profile:
+The supported device list is built from the validated profile registry under
+`tvsetup/profiles/`. A profile must pass the registry schema, including its
+capability values; it cannot be added to private `site.json` or supplied as an
+unverified skeleton. The registry removes duplicated device-name lists, but it
+does not make every registered profile compatible with every command. Launcher,
+startup, telemetry and transport paths can retain explicit model-specific
+requirements.
 
-- `--device` / `--model` argument choices are pinned to `("qn90a", "s90d")`
-  across the CLIs (`tvsetup/cli.py`, `tvsetup/installer.py`,
-  `tvsetup/native_components.py` and others — grep for `"qn90a", "s90d"`).
-- `tvsetup/site.py` rejects any site device name outside that pair.
-- Component selection, startup wiring and the native/managed split assume the two
-  known layouts; a model that boots differently needs that logic taught about it.
+The shipped profiles remain the only accepted devices. To propose another
+model, first collect the read-only inventory and report exact model and firmware
+evidence. The `survey` command can compare its public model/platform fields with
+the registry before you install the toolkit. A same-platform-family result is
+only a lead for research: the rule compares the first two underscore-delimited
+platform tokens, and does not grant support. Exact model and full platform
+matching still does not establish firmware support.
 
-Treat the two shipped profiles as the worked examples. The realistic path is: fork
-the repo, add your profile, widen those `choices` tuples and the site check to
-include your id, and run the offline suite until the planner accepts your profile.
-Keep the firmware and hash guards strict — never loosen them to make a new model
-pass, which is exactly what [CONTRIBUTING](../../.github/CONTRIBUTING.md) forbids.
+Add a new profile only with a reviewed capability record, original resource and
+runtime hashes, model-specific transport evidence and a documented recovery
+path. Keep firmware, architecture, runtime, hash, signature, package-protection
+and cleanup allowlist checks strict. The registry changes which profile names
+the tools can recognize; it does not weaken any safety guard or authorize an
+untested model or firmware. See [CONTRIBUTING](../../.github/CONTRIBUTING.md).
 
 ## Step 1 — Inspect your TV read-only
 
@@ -77,6 +84,9 @@ like. At this stage you only read:
 
 - The public device API for `model`, `platform`, firmware and the stable
   `device_id` your `site.json` will use.
+- The existing public API fields `developerMode` and `developerIP`; report
+  whether Developer Mode is enabled and whether a developer host is configured,
+  but redact the host address from shared reports.
 - `/etc/prd_info.ini` for the exact firmware string the guard will match.
 - `uname -m` for `architecture`.
 - The installed .NET runtime path and version, and the SHA-256 of the signed host

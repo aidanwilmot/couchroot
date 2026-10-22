@@ -10,6 +10,7 @@ from .artifacts import verify_package
 from .autonomous_root import PACKAGE
 from .common import STATE, Refused, atomic_json, read_json, sha, lock, safe_id
 from .config import resolve
+from .registry import accepted_devices
 from .engine import Engine, pending, run_id
 from .operations import Driver, observed
 from .planner import Action, Plan
@@ -435,7 +436,7 @@ def update(
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--device", choices=["qn90a", "s90d"], required=True)
+    parser.add_argument("--device", choices=accepted_devices(), required=True)
     parser.add_argument("--artifact", type=Path, required=True)
     parser.add_argument(
         "--credentials",

@@ -12,6 +12,7 @@ import uuid
 
 from .common import Refused, atomic_json, sha, safe_id
 from .transport import Q, hash_guard
+from .registry import accepted_devices
 
 SCOPE = "native-bootstrap-pilot"
 LABEL = "User::Pkg::MiniTelemetry"
@@ -56,7 +57,7 @@ def validate_doc(doc):
         raise Refused("Not a native bootstrap pilot journal")
     if any(doc.get(k) != v for k, v in layout(doc["run"]).items()):
         raise Refused("Pilot paths differ from the run identity")
-    if doc.get("device") not in ("qn90a", "s90d"):
+    if doc.get("device") not in accepted_devices():
         raise Refused("Invalid pilot target")
     if type(doc.get("expires")) not in (int, float) or not math.isfinite(
         doc["expires"]

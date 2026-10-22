@@ -11,6 +11,15 @@
   "chart_prefix": "s90d",
   "snapshot": "latest.json",
   "id": "s90d",
+  "capabilities": {
+    "transport": "verified",
+    "signed_install": "verified",
+    "launcher": "verified",
+    "home": "untested",
+    "startup": "verified",
+    "cleanup": "verified",
+    "standby": "verified"
+  },
   "cleanup": {
     "LImG0QPABV": {
       "name": "QVC+ and HSN+",

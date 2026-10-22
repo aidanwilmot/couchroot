@@ -14,6 +14,17 @@ from tvsetup.root import execute
 from tvsetup.transport import identity_guard, managed_guard
 
 
+def pinned_probe(p):
+    return '\n'.join((
+        'TVSETUP_PROBE:firmware:' + p['firmware'],
+        'TVSETUP_PROBE:architecture:' + p['architecture'],
+        'TVSETUP_PROBE:runtime:present',
+        'TVSETUP_PROBE:dotnet_sha256:' + p['host_sha256'],
+        'TVSETUP_PROBE:dotnet_launcher_sha256:' + p['launcher_sha256'],
+        '[exit:0]', '',
+    ))
+
+
 class RootTransportTests(unittest.TestCase):
     def test_both_models_lost_operation_reply_cleans_up_without_resubmission(self):
         for device in ('qn90a','s90d'):
@@ -138,9 +149,33 @@ class IdentityTests(unittest.TestCase):
             module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         for name in ('qn90a','s90d'):
             p=profile(name)
-            data=dict(device=dict(modelName=p['model'],model=p['platform'],id='other-physical-tv'))
+            data=dict(device=dict(modelName=p['model'],model=p['platform'],id='fixture-private-device-id'))
             with patch.object(module,'urlopen',return_value=io.BytesIO(json.dumps(data).encode())):
-                with self.assertRaisesRegex(RuntimeError,'Physical TV identity'):
+                with self.assertRaisesRegex(RuntimeError,'Physical TV identity') as caught:
                     module.device(dict(tv_host='192.0.2.11',expected_model=p['model'],expected_platform=p['platform'],expected_device_id='expected-tv'))
+                self.assertIn('id does not match site.json',str(caught.exception))
+                self.assertNotIn('fixture-private-device-id',str(caught.exception))
+                self.assertNotIn('expected-tv',str(caught.exception))
+
+    def test_toolkit_identity_does_not_print_host_or_display_name(self):
+        import importlib.util
+        import sys
+        from tvsetup.common import REPO
+        class UpstreamClient:
+            def __init__(self,*args): pass
+            def connect(self): pass
+        upstream=SimpleNamespace(SdbClient=UpstreamClient,route_callback_host=lambda host:'192.0.2.31')
+        package=SimpleNamespace(sdb=upstream)
+        with patch.object(sys, 'path', [str(REPO/'tools/toolkit'), *sys.path]), \
+             patch.dict(sys.modules,{'samsung_tv_root':package,'samsung_tv_root.sdb':upstream}):
+            spec=importlib.util.spec_from_file_location('identity_redaction_fixture',REPO/'tools/toolkit/samsung_tv.py')
+            module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        p=profile('s90d')
+        data=dict(device=dict(modelName=p['model'],model=p['platform'],id='fixture-private-device-id',name='private-tv-host-name',developerMode='1',developerIP='192.0.2.31'))
+        with patch.object(module,'urlopen',return_value=io.BytesIO(json.dumps(data).encode())), \
+             patch.object(module.socket,'create_connection'), patch('builtins.print') as output:
+            callback=module.device(dict(tv_host='192.0.2.11',expected_model=p['model'],expected_platform=p['platform'],expected_device_id='fixture-private-device-id'))
+        output.assert_not_called()
+        self.assertEqual(callback,'192.0.2.31')
 
 if __name__=='__main__':unittest.main()
