@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-time idle-app memory cleanup for the owner’s QN90A / 2301.1."""
+"""One-time idle-app memory cleanup for the owner’s QN90A / 2310.0."""
 import argparse
 import os
 from pathlib import Path
@@ -11,7 +11,7 @@ HUB = 'MiniHub001.Hub'
 
 def script(restore):
     preamble = '''set -eu
-grep -q '^Version=T-NKM2AKUC-2301.1;' /etc/prd_info.ini
+grep -q '^Version=T-NKM2UABC-2310.0;' /etc/prd_info.ini
 check_hub() {
     test "$(vconftool get memory/appfw/current_fullscreen_appid)" = 'memory/appfw/current_fullscreen_appid, value = MiniHub001.Hub (String)' || {
         echo 'Open Minimal Hub before running this command.' >&2
@@ -79,7 +79,7 @@ def main():
     toolkit = Path.home() / '.local/share/samsung-tv-research'
     sys.path.insert(0, str(toolkit))
     from samsung_tv import device, capture
-    cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QN85QN90AAFXZA',
+    cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QA50QN90AAKXXA',
            'expected_platform': '21_NIKEM2_QTV'}
     callback = device(cfg)
     capture(cfg, callback, script(args.restore), 60 if args.restore else 20,

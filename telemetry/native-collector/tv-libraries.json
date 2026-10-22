@@ -1,5 +1,5 @@
 {
-  "firmware": "T-NKM2AKUC-2301.1",
+  "firmware": "T-NKM2UABC-2310.0",
   "libraries": {
     "libcurl.so": {
       "source": "/usr/lib/libcurl.so.4.6.0",

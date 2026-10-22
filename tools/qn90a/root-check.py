@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fixed, temporary root identity diagnostic for the owner’s QN90A / 2301.1."""
+"""Fixed, temporary root identity diagnostic for the owner’s QN90A / 2310.0."""
 import fcntl
 import hashlib
 import io
@@ -13,7 +13,7 @@ import tempfile
 PROBE = 'codex-qn90a-root-proof'
 BASE = '/home/owner/share/tmp/sdk_tools/'
 GUARD = """set -eu
-grep -q '^Version=T-NKM2AKUC-2301.1;' /etc/prd_info.ini
+grep -q '^Version=T-NKM2UABC-2310.0;' /etc/prd_info.ini
 test "$(uname -m)" = armv7l
 test "$(sha256sum /usr/sbin/sdbd-tarlauncher | cut -d ' ' -f 1)" = 3580e6dcf5d9c6d5d0a606d43a3d878641f35eeac07317a405fb45bbed69a653
 test "$(sha256sum /usr/bin/dotnet | cut -d ' ' -f 1)" = d2a35114d788c22d22d329acdb2f379c17b75b7099997fb8252cbd6dd940702e
@@ -33,7 +33,7 @@ def run(home_mode=None, telemetry_project=None, telemetry_config=None):
     toolkit = Path.home() / '.local/share/samsung-tv-research'
     sys.path.insert(0, str(toolkit))
     from samsung_tv import device, capture, SdbClient
-    cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QN85QN90AAFXZA',
+    cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QA50QN90AAKXXA',
            'expected_platform': '21_NIKEM2_QTV'}
     if telemetry_config is not None:
         if home_mode != 'telemetry': raise ValueError('Device overrides are telemetry-only')

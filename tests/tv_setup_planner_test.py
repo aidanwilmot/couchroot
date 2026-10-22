@@ -13,7 +13,7 @@ from tvsetup.operations import route_sql
 
 # Literal revisions recorded on main before the product-source moves.
 FIXTURE_SOURCES = {
-    'boot': '7be3e40794665fb0f332273de4d8c803629654f261f4a4da1589eca5d73c7ed9',
+    'boot': '69cd26a0f384400f45ed385b60a7e5b4dced48b092de989c1a00759a0e5e4ac3',
     'service': '83f1f2be6e4a5c1fffe16d0db711c58df0d102537f1a3797b124e8da8fb0bf66',
     'helper': 'c4ffa367ed27d65ab674439998c29942132a24f0de7c06464b83c2bb4aa2db0e',
     'saver': '1a978ab85dfc8f2d61b1f382498c7472436d7dea678c858e52dadc41106baee3',

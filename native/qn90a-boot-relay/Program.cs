@@ -46,7 +46,7 @@ class Boot {
  static int End(string value){Status(value);ui_app_exit();return 0;}
  static bool Start(IntPtr unused) {
   try {
-   if(IntPtr.Size!=4 || !File.ReadAllText("/etc/prd_info.ini").Contains("Version=T-NKM2AKUC-2301.1;"))return false;
+   if(IntPtr.Size!=4 || !File.ReadAllText("/etc/prd_info.ini").Contains("Version=T-NKM2UABC-2310.0;"))return false;
    boot=File.ReadAllText("/proc/sys/kernel/random/boot_id").Trim();entered=Uptime();
    if(Directory.Exists(Root)&&(File.GetAttributes(Root)&FileAttributes.ReparsePoint)!=0)return false;
    Directory.CreateDirectory(Root);chmod(Root,448);

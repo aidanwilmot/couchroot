@@ -164,8 +164,8 @@ def context(identity, site, prepared=None):
     safe_id(identity)
     profile = configured_profile("qn90a", site)
     if (
-        profile["model"] != "QN85QN90AAFXZA"
-        or profile["firmware"] != "T-NKM2AKUC-2301.1"
+        profile["model"] != "QA50QN90AAKXXA"
+        or profile["firmware"] != "T-NKM2UABC-2310.0"
     ):
         raise Refused("This source trial is pinned to the QN90A firmware")
     folder = STATE / "runs" / identity

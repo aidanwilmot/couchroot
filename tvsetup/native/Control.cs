@@ -29,7 +29,7 @@ class Control {
  static int Main(string[] a) {
   try {
    if(a.Length<2 || IntPtr.Size!=4)throw new Exception("Arguments/architecture");
-   string firmware=a[1]=="s90d"?"T-PTMDAKUC-0090-2130.0":a[1]=="qn90a"?"T-NKM2AKUC-2301.1":throw new Exception("Model");
+   string firmware=a[1]=="s90d"?"T-PTMDAKUC-0090-2130.0":a[1]=="qn90a"?"T-NKM2UABC-2310.0":throw new Exception("Model");
    if(!File.ReadAllText("/etc/prd_info.ini").Contains("Version="+firmware+";"))throw new Exception("Firmware");
    if(a[0]=="reload") {
     const string key="memory/appfw/app_context_db_change";int next=Read(key)=="0"?1:0;
