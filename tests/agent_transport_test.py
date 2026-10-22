@@ -5,11 +5,13 @@ import unittest
 from types import SimpleNamespace
 from tvsetup.agent_transport import AgentTransport
 from tvsetup.common import Refused
+from tvsetup.config import profile
 
 class AgentTransportTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.tv=object.__new__(AgentTransport);self.tv.evidence=Path(self.tmp.name);self.tv.credentials={}
+        self.tv.profile=profile('s90d');self.tv.identity_diagnostics=[]
     def test_lost_response_is_journaled_and_never_retried(self):
         calls=[]
         def request(*args):calls.append(args);raise TimeoutError('lost response')
