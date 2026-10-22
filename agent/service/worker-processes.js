@@ -200,3 +200,29 @@ module.exports = {
   bootGuard,
   processAbsenceGuard,
 };
+
+// Native upgrade sources have two processes. Keep the legacy managed guard strict.
+function nativeExitGuard(source, bootId = source && source.boot_id) {
+  const normalized = processIdentities(
+    {
+      ...source,
+      implementation: 'native-prototype',
+      guardian_pid:
+        source &&
+        source.processes &&
+        source.processes.guardian &&
+        source.processes.guardian.pid,
+      capabilities: ['worker-process-identity-v1'],
+    },
+    source &&
+      source.processes &&
+      source.processes.worker &&
+      source.processes.worker.pid
+  );
+  if (JSON.stringify(normalized) !== JSON.stringify(source))
+    throw Error('Invalid native source identity');
+  return Object.values(source.processes)
+    .map((p) => processAbsenceGuard(p, source.boot_id, bootId))
+    .join('');
+}
+module.exports.nativeExitGuard = nativeExitGuard;

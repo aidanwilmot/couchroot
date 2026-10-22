@@ -89,6 +89,38 @@ function createNativeTasks({ agent, journal }) {
   return Object.freeze({
     busy: () => running,
     status,
+    upgrade: (value) => {
+      check(
+        value &&
+          Object.keys(value).sort().join('|') === 'id|review_sha256|target' &&
+          ['package', 'previous'].includes(value.target) &&
+          id(value.id) &&
+          digest(value.review_sha256) &&
+          typeof agent.upgradeNative === 'function'
+      );
+      return launch(
+        'native.upgrade',
+        value,
+        () => agent.upgradeNative(value.review_sha256, value.target),
+        null,
+        value.id
+      );
+    },
+    recoverUpgrade: (value) => {
+      check(
+        value &&
+          Object.keys(value).join('|') === 'id' &&
+          id(value.id) &&
+          typeof agent.recoverNativeUpgrade === 'function'
+      );
+      return launch(
+        'native.upgrade-recover',
+        value,
+        () => agent.recoverNativeUpgrade(),
+        null,
+        value.id
+      );
+    },
     rehearse: (value) => {
       check(
         value &&

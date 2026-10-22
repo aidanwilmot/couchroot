@@ -11,6 +11,7 @@ from .common import Refused
 
 STATE = "/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state"
 MARKERS = (
+    "native-upgrade.pending",
     "retirement-launch.pending",
     "production-launch.pending",
     "state-install.pending",

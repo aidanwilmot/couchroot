@@ -3,6 +3,7 @@
 const { hash } = require('./policy');
 const { validateRuntimeLaunch } = require('./production-readiness');
 const {
+  nativeExitGuard,
   processIdentities,
   processAbsenceGuard,
 } = require('./worker-processes');
@@ -64,7 +65,7 @@ function planNativeSnapshot(
   check(Object.values(worker_identity.processes).every((p) => p.pid > 1));
   check(
     installation &&
-      installation.schema === 1 &&
+      installation.schema === record.schema &&
       installation.phase === 'ready' &&
       installation.id === record.id &&
       installation.directory === record.directory &&
@@ -80,7 +81,10 @@ function planNativeSnapshot(
   );
   const root = record.scope + '/.jobs';
   const guard =
-    sourceExitGuard(record.source, bootId) +
+    (record.schema === 2 ? nativeExitGuard : sourceExitGuard)(
+      record.source,
+      bootId
+    ) +
     Object.values(worker_identity.processes)
       .map((p) => processAbsenceGuard(p, worker_identity.boot_id, bootId))
       .join('') +

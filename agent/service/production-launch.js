@@ -7,6 +7,8 @@ const { atomic } = require('./policy');
 const { privateRead, privateDirectory } = require('./private-state');
 const { selectionStatus } = require('./worker-selection');
 const { planInstallation } = require('./retained-install');
+const { nativeExitGuard } = require('./worker-processes');
+const { fenceCommand } = require('./launch-fence');
 const { sourceExitGuard } = require('./retained-state');
 const { loadCandidate } = require('./native-candidate');
 const STATE = '/opt/usr/home/owner/apps_rw/MiniRoot01/data/worker-state';
@@ -32,6 +34,7 @@ function productionPlan({
   port,
   tokenFile,
   tokenSha256,
+  retainedRuntime = null,
 }) {
   check(
     ['s90d', 'qn90a'].includes(device) &&
@@ -63,7 +66,30 @@ function productionPlan({
       /^production-[a-zA-Z0-9]{6}$/.test(path.basename(tokenDirectory)) &&
       tokenFile === tokenDirectory + '/token'
   );
-  const candidate = loadCandidate(payload, device);
+  if (retainedRuntime) {
+    require('./native-runtime').validateReady(retainedRuntime, {
+      runtime: true,
+    });
+    check(
+      snapshot.implementation === 'native-prototype' &&
+        retainedRuntime.device === device
+    );
+  }
+  const candidate = retainedRuntime
+    ? {
+        manifest_sha256: retainedRuntime.manifest_sha256,
+        artifacts: {
+          'native-worker': { sha256: retainedRuntime.worker_sha256 },
+          'native-app-launcher': { sha256: retainedRuntime.launcher_sha256 },
+        },
+      }
+    : loadCandidate(payload, device);
+  const artifactPath = (name) =>
+    retainedRuntime
+      ? name === 'native-worker'
+        ? retainedRuntime.directory + '/code/worker'
+        : retainedRuntime.scope + '/launcher'
+      : payload + '/' + name;
   check(candidate && candidate.manifest_sha256 === manifestSha256);
   const worker = candidate.artifacts['native-worker'],
     launcher = candidate.artifacts['native-app-launcher'];
@@ -94,6 +120,24 @@ function productionPlan({
     'for p in ' +
     parents.map(quote).join(' ') +
     '; do test -d "$p"; test ! -L "$p"; done\n' +
+    (retainedRuntime
+      ? [
+          retainedRuntime.directory,
+          retainedRuntime.directory + '/code',
+          retainedRuntime.scope,
+        ]
+          .map(
+            (p) =>
+              'test -d ' +
+              quote(p) +
+              '; test ! -L ' +
+              quote(p) +
+              '; test "$(stat -c "%u:%a" ' +
+              quote(p) +
+              ')" = 0:700\n'
+          )
+          .join('')
+      : '') +
     'test -d ' +
     quote(tokenDirectory) +
     '; test ! -L ' +
@@ -116,13 +160,15 @@ function productionPlan({
       .map(
         ([name, sha]) =>
           'test -f ' +
-          quote(payload + '/' + name) +
+          quote(artifactPath(name)) +
           '; test ! -L ' +
-          quote(payload + '/' + name) +
+          quote(artifactPath(name)) +
           '\ntest "$(stat -c "%u:%h" ' +
-          quote(payload + '/' + name) +
-          ')" = 201:1\n' +
-          digest(payload + '/' + name, sha)
+          quote(artifactPath(name)) +
+          ')" = ' +
+          (retainedRuntime ? '0:1' : '201:1') +
+          '\n' +
+          digest(artifactPath(name), sha)
       )
       .join('') +
     'test ! -e ' +
@@ -133,9 +179,9 @@ function productionPlan({
     quote(code) +
     '\n' +
     [
-      [payload + '/native-worker', code + '/worker', '500', worker.sha256],
+      [artifactPath('native-worker'), code + '/worker', '500', worker.sha256],
       [
-        payload + '/native-app-launcher',
+        artifactPath('native-app-launcher'),
         scope + '/launcher',
         '400',
         launcher.sha256,
@@ -165,7 +211,9 @@ function productionPlan({
       )
       .join('') +
     'sync\n' +
-    sourceExitGuard(snapshot.source) +
+    (snapshot.implementation === 'native-prototype'
+      ? nativeExitGuard
+      : sourceExitGuard)(snapshot.source) +
     'systemd-run --quiet --unit=' +
     quote(unit) +
     ' ' +
@@ -201,9 +249,20 @@ function productionPlan({
     '\nprintf "PRODUCTION-SUBMITTED\\n"\n';
   check(Buffer.byteLength(command) <= 65536);
   return {
-    command,
+    command:
+      snapshot.implementation === 'native-prototype'
+        ? fenceCommand(
+            {
+              id,
+              boot_id: snapshot.source.boot_id,
+              fence: '/opt/couchroot-startup-fence-' + id,
+            },
+            command,
+            { kind: 'startup' }
+          )
+        : command,
     record: {
-      schema: 1,
+      schema: snapshot.implementation === 'native-prototype' ? 2 : 1,
       id,
       phase: 'submitting',
       device,
@@ -256,7 +315,8 @@ async function submitProduction(options) {
       p &&
       p.id === id &&
       p.phase === 'state-ready' &&
-      p.from.implementation === 'managed' &&
+      p.from.implementation ===
+        (record.schema === 2 ? 'native-prototype' : 'managed') &&
       p.to.implementation === 'native-prototype' &&
       p.to.manifest_sha256 === record.manifest_sha256 &&
       p.state_sha256 === record.state_receipt_sha256 &&

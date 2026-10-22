@@ -15,6 +15,7 @@ const { providerId } = require('./restart-inventory');
 const { validateSnapshot } = require('./retained-install');
 const { snapshotManagedJobs, sourceExitGuard } = require('./retained-state');
 const {
+  nativeExitGuard,
   processIdentities,
   processAbsenceGuard,
 } = require('./worker-processes');
@@ -279,7 +280,7 @@ function observeCommand(
     .join('');
   return (
     'set -eu\nPATH=/usr/bin:/bin\nexport PATH\nexport DBUS_SYSTEM_BUS_ADDRESS=kernel:path=/sys/fs/kdbus/0-system/bus\n' +
-    sourceExitGuard(e.source, bootId) +
+    (e.nativeSource ? nativeExitGuard : sourceExitGuard)(e.source, bootId) +
     gone +
     'for unit in ' +
     e.units.join(' ') +
@@ -288,7 +289,7 @@ function observeCommand(
     'case "$cg" in "") ;; /system.slice/couchroot-*.service) if test -e "/sys/fs/cgroup/systemd$cg/cgroup.procs"; then procs=$(wc -l < "/sys/fs/cgroup/systemd$cg/cgroup.procs"); fi;; *) exit 1;; esac\n' +
     'printf "Unit=%s\\n%s\\nProcs=%s\\n" "$unit" "$state" "$procs"\ndone\n' +
     gone +
-    sourceExitGuard(e.source, bootId) +
+    (e.nativeSource ? nativeExitGuard : sourceExitGuard)(e.source, bootId) +
     'printf "RESTART-ROLLBACK-OBSERVED\\n"\n'
   );
 }

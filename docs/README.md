@@ -92,3 +92,5 @@ generated saver scripts are checked by the separate saver build/reproducibility 
 - [Agent .NET dependency inventory](lab/autonomous-root/native-worker/DOTNET-INVENTORY.md)
 - [Native agent parity and .NET retirement plan](lab/autonomous-root/native-worker/MIGRATION.md)
 - [Production files and retained job compatibility](lab/autonomous-root/native-worker/PARITY.md)
+
+- [Native worker upgrades and recovery](guides/native-worker-upgrades.md)

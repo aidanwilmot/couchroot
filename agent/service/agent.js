@@ -13,7 +13,13 @@ const {
   sdkRuntimeGuard,
 } = require('./policy');
 const { candidateStatus } = require('./native-candidate');
-const { selectionStatus } = require('./worker-selection');
+const { selectionStatus, nativeCommit } = require('./worker-selection');
+const {
+  reviewUpgrade,
+  upgradeStatus,
+  runUpgrade,
+} = require('./native-upgrade');
+const { recoveryPlan, recoverUpgrade } = require('./native-upgrade-recovery');
 const { inventoryRestart } = require('./restart-inventory');
 const { startupCandidate, startSelectedNative } = require('./native-startup');
 const { loadAcquisition, stageAcquisition } = require('./service-acquisition');
@@ -83,6 +89,9 @@ function createAgent(config, options = {}) {
     nativeStartup = null,
     bootstrapRecovery = null;
   const inFlight = new Set();
+  const upgradeChannels = new Set();
+  let upgradeHeld = false,
+    upgradeRecovery = false;
   function selection() {
     if (!options.selectionFile)
       return {
@@ -93,7 +102,7 @@ function createAgent(config, options = {}) {
     return selectionStatus(options.selectionFile);
   }
   function runtimeAllowed(selected) {
-    const h = selected.history && selected.history[selected.history.length - 1];
+    const h = nativeCommit(selected);
     return !!(
       nativeRuntime &&
       running &&
@@ -126,6 +135,14 @@ function createAgent(config, options = {}) {
   }
   function status() {
     const selected = selection();
+    let upgrade = null;
+    try {
+      const pending =
+        options.selectionFile && upgradeStatus(options.selectionFile);
+      upgrade = pending ? pending.record.phase : null;
+    } catch (_) {
+      upgrade = 'inspection-required';
+    }
     let boot = null,
       uptime = null;
     try {
@@ -138,6 +155,7 @@ function createAgent(config, options = {}) {
     }
     return {
       schema: 2,
+      native_upgrade: upgrade,
       root_acquisition: acquisitionMode,
       native_runtime:
         nativeRuntime && runtimeAllowed(selected)
@@ -332,7 +350,7 @@ function createAgent(config, options = {}) {
     if (!running || connected || launching) return;
     const selected = selection();
     if (
-      selected.phase !== 'stable' ||
+      (!upgradeRecovery && selected.phase !== 'stable') ||
       selected.selected_implementation !== 'native-prototype'
     ) {
       running = false;
@@ -343,10 +361,12 @@ function createAgent(config, options = {}) {
     if (
       options.selectionFile &&
       selection().selected_implementation === 'native-prototype' &&
-      selection().phase === 'stable'
+      (selection().phase === 'stable' || upgradeRecovery)
     ) {
       try {
-        const c = startupCandidate(options.selectionFile);
+        const c = upgradeRecovery
+          ? recoveryPlan(options.selectionFile).candidate
+          : startupCandidate(options.selectionFile);
         if (c)
           nativeStartup = { id: c.record.id, phase: 'acquiring', error: null };
       } catch (e) {
@@ -532,6 +552,7 @@ function createAgent(config, options = {}) {
   }
   function restartHeld() {
     return (
+      upgradeHeld ||
       (!!bootstrapRecovery && bootstrapRecovery.phase !== 'complete') ||
       (!!nativeStartup && nativeStartup.phase !== 'complete')
     );
@@ -562,7 +583,7 @@ function createAgent(config, options = {}) {
           phase: 'ready',
         };
       }
-      result = await startSelectedNative({
+      result = await (upgradeRecovery ? recoverUpgrade : startSelectedNative)({
         selectionFile: options.selectionFile,
         executor: {
           implementation: 'native-bootstrap',
@@ -600,6 +621,9 @@ function createAgent(config, options = {}) {
           throw Error('Retired bootstrap ownership changed');
         r.bootstrap.phase = 'retired';
       }
+      if (result.finish) result.finish();
+      upgradeHeld = false;
+      upgradeRecovery = false;
       const adoptedGeneration = ++generation;
       channel = next;
       connected = true;
@@ -631,6 +655,11 @@ function createAgent(config, options = {}) {
   }
   function nativeDisconnected(next, gen) {
     if (generation !== gen || channel !== next) return;
+    if (upgradeHeld) {
+      connected = false;
+      workerReady = false;
+      return;
+    }
     connected = false;
     workerReady = false;
     workerStatus = null;
@@ -649,6 +678,9 @@ function createAgent(config, options = {}) {
     launch();
   }
   function stop() {
+    for (const c of upgradeChannels) c.close();
+    upgradeChannels.clear();
+    upgradeRecovery = false;
     nativeRuntime = null;
     running = false;
     connected = false;
@@ -731,11 +763,119 @@ function createAgent(config, options = {}) {
       };
     }
   };
+  function upgradeReview(target = 'package') {
+    firmware(config);
+    if (!runtimeAllowed(selection()) || restartHeld())
+      throw Error('Ready native worker required');
+    return reviewUpgrade({
+      selectionFile: options.selectionFile,
+      payload,
+      device: config.device,
+      target,
+    });
+  }
+  async function upgradeNative(reviewSha256, target = 'package') {
+    const review = upgradeReview(target);
+    if (review.sha256 !== reviewSha256 || inFlight.size)
+      throw Object.assign(Error('Upgrade review changed or requests active'), {
+        outcome: 'rejected',
+      });
+    const owner = channel,
+      gen = generation,
+      peer = owner._conn;
+    upgradeHeld = true;
+    const owned = () => {
+      if (!running || generation !== gen || channel !== owner)
+        throw Error('Upgrade ownership changed');
+    };
+    const hold = {
+      pid: peer.identity.pid,
+      check: owned,
+      status: async () => {
+        owned();
+        const r = await owner.operation({ op: 'status' });
+        owned();
+        return r;
+      },
+      execute: async (c, t) => {
+        owned();
+        const r = await owner.execute(c, t);
+        owned();
+        return r;
+      },
+      shutdown: async () => {
+        owned();
+        return owner.shutdown();
+      },
+      release: () => {
+        owned();
+        upgradeHeld = false;
+      },
+      adopt: async (result) => {
+        owned();
+        const next = result.channel,
+          p = next._conn;
+        if (!p) throw Error('Upgraded worker disconnected');
+        const adopted = ++generation;
+        channel = next;
+        connected = true;
+        workerReady = true;
+        identity = p.identity;
+        workerStatus = result.info;
+        workerStatusAt = process.uptime();
+        nativeRuntime = { ...result, generation: adopted };
+        upgradeHeld = false;
+        lastError = null;
+        const close = next.onClose;
+        next.onClose = (e) => {
+          try {
+            if (close) close(e);
+          } finally {
+            nativeDisconnected(next, adopted);
+          }
+        };
+        upgradeChannels.clear();
+        owner.close();
+      },
+    };
+    try {
+      return await runUpgrade({
+        selectionFile: options.selectionFile,
+        payload,
+        device: config.device,
+        reviewSha256,
+        target,
+        hold,
+        retain: (c) => upgradeChannels.add(c),
+      });
+    } catch (e) {
+      lastError = String(e.message);
+      if (
+        !upgradeStatus(options.selectionFile) &&
+        selection().phase === 'stable'
+      )
+        hold.release();
+      throw e;
+    }
+  }
+  function recoverNativeUpgrade() {
+    if (upgradeRecovery && nativeStartup && nativeStartup.phase !== 'failed')
+      throw Error('Native upgrade recovery already running');
+    recoveryPlan(options.selectionFile); // Validate before closing any transport.
+    stop();
+    upgradeHeld = true;
+    upgradeRecovery = true;
+    start();
+    return { phase: 'recovering', status_url: '/v1/status' };
+  }
   const api = {
     status,
     start,
     stop,
     restartInventory,
+    upgradeReview,
+    upgradeNative,
+    recoverNativeUpgrade,
     operation: (value, data) => submit((owner) => owner.operation(value, data)),
     execute: (command, timeout) =>
       submit((owner) => owner.execute(command, timeout)),

@@ -44,7 +44,7 @@ async function openProductionSession(options) {
       pending &&
       pending.id === id &&
       pending.phase === 'state-ready' &&
-      pending.from.implementation === 'managed' &&
+      ['managed', 'native-prototype'].includes(pending.from.implementation) &&
       pending.to.implementation === 'native-prototype'
   );
   const directory = fs.mkdtempSync(path.join(journalDirectory, 'production-'));
@@ -198,6 +198,11 @@ async function openProductionSession(options) {
         ) === ready.readiness_sha256 &&
         hash(privateRead(tokenFile, 44)) === tokenSha256
     );
+    if (pending.from.implementation === 'native-prototype') {
+      check(typeof provider.completeUpgrade === 'function');
+      await provider.completeUpgrade({ channel, record: ready.record });
+      check(!closed && channel._conn === peer);
+    }
     // The controller can obtain the channel exactly once after committing this
     // exact trial. Until then no caller can issue general production operations.
     const takeChannel = async () => {
