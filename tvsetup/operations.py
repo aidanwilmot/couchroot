@@ -406,7 +406,11 @@ class Driver:
             if sha(path.read_bytes()) != info["sha256"]:
                 raise Refused("Prepared package changed")
             verify_package(path, self.profile, action.options["package"])
-            if action.options["package"] in ("MiniHubBoot", "MiniTelemetry"):
+            if action.options["package"] in (
+                "MiniHubBoot",
+                "MiniTelemetry",
+                "MiniHubInput",
+            ):
                 self.tv.sdk(managed_guard(self.profile))
             try:
                 output = run(
@@ -756,7 +760,11 @@ class Driver:
             raise Refused("Recovery registration mismatch")
 
     def reinstall_recovery(self, action, info):
-        if action.options["package"] in ("MiniHubBoot", "MiniTelemetry"):
+        if action.options["package"] in (
+            "MiniHubBoot",
+            "MiniTelemetry",
+            "MiniHubInput",
+        ):
             self.tv.sdk(managed_guard(self.profile))
         if "forward_recovery" not in info:
             raise Refused(

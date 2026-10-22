@@ -17,6 +17,7 @@ FIXTURE_SOURCES = {
     'service': '83f1f2be6e4a5c1fffe16d0db711c58df0d102537f1a3797b124e8da8fb0bf66',
     'helper': 'c4ffa367ed27d65ab674439998c29942132a24f0de7c06464b83c2bb4aa2db0e',
     'saver': '1a978ab85dfc8f2d61b1f382498c7472436d7dea678c858e52dadc41106baee3',
+    'input': '61b1a24030a11e4c9572b541e6cb7b87186b9bbbad66b87a7d5739de44128b95',
 }
 
 def profile(device):
@@ -155,6 +156,19 @@ class PlannerTests(unittest.TestCase):
         with patch('tvsetup.planner.component_revision',side_effect=lambda kind:'changed' if kind=='boot' else real(kind)):
             p=plan(profile('qn90a'),resolve('qn90a'),accepted('qn90a'))
         self.assertTrue(any(a.kind=='package' and a.options['package']=='MiniHubBoot' for a in p.actions))
+
+    def test_inputs_are_opt_in_and_qn90a_only(self):
+        self.assertNotIn('inputs',resolve('qn90a')['components']);self.assertNotIn('inputs',resolve('s90d')['components'])
+        c=resolve('qn90a',overrides={'components':['hub','inputs']})
+        [a]=plan(profile('qn90a'),c,accepted('qn90a')).actions
+        self.assertEqual((a.kind,a.options['package']),('package','MiniHubInput'))
+        self.assertEqual(a.after,{'/opt/usr/apps/MiniHubInput/bin/'+n:h for n,h in profile('qn90a')['input_artifacts'].items()})
+        s=accepted('qn90a');s['packages'].append(['MiniHubInput',*MANAGED['MiniHubInput'],'0.1.0','true','false','false','false'])
+        s['files'].update(a.after)
+        self.assertEqual(plan(profile('qn90a'),c,s).actions,[])
+        p=plan(profile('s90d'),resolve('s90d',overrides={'components':['hub','inputs']}),accepted('s90d'))
+        self.assertEqual(p.states['inputs'],'unsupported')
+        self.assertFalse(any(a.options.get('package')=='MiniHubInput' for a in p.actions))
 
     def test_hex_rows_and_nulls(self):
         self.assertEqual(decode_rows('610A627C|-|\n'),[['a\nb|',None,'']])

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.xml': 'application/xml', '.woff2': 'font/woff2' };
+const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.xml': 'application/xml', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.txt': 'text/plain' };
 const previewFiles = new Set(['fixtures.js', 'scenarios.js', 'runtime.js', 'workbench.js', 'workbench.css']);
 function revision() {
   const hash = crypto.createHash('sha256');

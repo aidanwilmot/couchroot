@@ -84,7 +84,8 @@
     "airplay": "Use both reviewed idle AirPlay return rules.",
     "startup": "Signed welcome-process relay \u2192 Hub \u2192 telemetry relay \u2192 service.",
     "splash": "Keep Samsung\u2019s splash; no S90D splash patch.",
-    "screensaver": "Hub-owned five-minute Asteroids timer; no global timeout or memory patch."
+    "screensaver": "Hub-owned five-minute Asteroids timer; no global timeout or memory patch.",
+    "inputs": "Signed no-window helper switches to an allowlisted HDMI input for Hub input tiles."
   },
   "saver_generated": {
     "core.js": "71792139740993be74a4f7a6c124fc9916f47bde6dbdfa4bb7e1bfdfac55b56a",
@@ -94,6 +95,11 @@
     "Boot.dll": "8805dfafe290ca87222cc7a11584556a1038ca481c5a8121429320acd032fee9",
     "Boot.deps.json": "71541834bd4f6db3293b805424fa091ac07fbd30d830408959e708db8a51fbbd",
     "Boot.runtimeconfig.json": "818abac6065c8b3de67cdb136773c1e584705913877ab1f9961d8def7fdbc16d"
+  },
+  "input_artifacts": {
+    "InputSwitch.dll": "ed3121f30a0a4e0d1f49e7c68d91b0348441a5e40fe69603b8aa4445d8283ac1",
+    "InputSwitch.deps.json": "bfa3339210e37e13caa9eb958063501654026b3b7970e4e8d3c813bb50cd737a",
+    "InputSwitch.runtimeconfig.json": "818abac6065c8b3de67cdb136773c1e584705913877ab1f9961d8def7fdbc16d"
   },
   "service_artifacts": {
     "Service.dll": "af8ef80e987bfdce6b374b7c91d13fd7ede33816d63b78cc32fa050161c7b1f5",
@@ -106,6 +112,7 @@
   },
   "source_hashes": {
     "boot": "4567115a7fb4ea47d733e3563fe7a06aa434e05059ef9cc15a3551e04feb8100",
+    "input": "61b1a24030a11e4c9572b541e6cb7b87186b9bbbad66b87a7d5739de44128b95",
     "service": "ee1092f78c9a854d9a25f910201f82adfd243393f72b01f2f96adba1c9c05816",
     "saver": "1a978ab85dfc8f2d61b1f382498c7472436d7dea678c858e52dadc41106baee3"
   }

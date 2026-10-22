@@ -189,6 +189,14 @@ def paths(device):
             f"/opt/usr/apps/MiniHubBoot/bin/{name}"
             for name in ("Boot.dll", "Boot.deps.json", "Boot.runtimeconfig.json")
         ]
+        files += [
+            f"/opt/usr/apps/MiniHubInput/bin/{name}"
+            for name in (
+                "InputSwitch.dll",
+                "InputSwitch.deps.json",
+                "InputSwitch.runtimeconfig.json",
+            )
+        ]
     else:
         files += [
             CACHE,

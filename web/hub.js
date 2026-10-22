@@ -21,8 +21,13 @@
   bootMark('feedback-created');
   var loaded = model.load(storage), favorites = loaded.apps;
   bootMark('model-loaded');
-  var layoutKey = 'minimal-hub.layout.v1', compact = false;
-  try { compact = storage.getItem(layoutKey) === 'compact'; } catch (_) { /* Default layout. */ }
+  // 'comfortable' and 'compact' predate the dock; the key and its values are unchanged.
+  var layoutKey = 'minimal-hub.layout.v1', layout = 'comfortable';
+  try { var savedLayout = storage.getItem(layoutKey); if (savedLayout === 'compact' || savedLayout === 'dock') { layout = savedLayout; } } catch (_) { /* Default layout. */ }
+  var backgroundKey = 'minimal-hub.background.v1', backgroundId = 'charcoal';
+  var wallpapers = window.HubWallpapers || [], wallpaperById = Object.create(null);
+  wallpapers.forEach(function (w) { wallpaperById[w.id] = w; });
+  try { var savedBackground = storage.getItem(backgroundKey); if (savedBackground && wallpaperById[savedBackground]) { backgroundId = savedBackground; } } catch (_) { /* Default background. */ }
   var fadeKey = 'minimal-hub.fade.v1', clockKey = 'minimal-hub.clock.v1', idleFade = true, clockFormat = 'off';
   try { idleFade = storage.getItem(fadeKey) !== 'off'; var savedClock = storage.getItem(clockKey); if (savedClock === '12h' || savedClock === '24h') { clockFormat = savedClock; } } catch (_) { /* Default appearance. */ }
   var idleTimer, clockTimer;
@@ -60,8 +65,13 @@
   var holdSetting = document.getElementById('setting-hold'), undoRemove = document.getElementById('undo-remove');
   var moveBanner = document.getElementById('move-banner'), moveControls = document.getElementById('move-controls');
   var moveCancel = document.getElementById('move-cancel'), moveSave = document.getElementById('move-save');
-  var settingsRows = [[settingsDone], [soundSetting], [layoutSetting], [fadeSetting], [clockSetting], [startSetting], [telemetrySetting], [resetSetting], [holdSetting]];
-  var scrollBoxes = [grid, list, settingsOptions];
+  var backgroundSetting = document.getElementById('setting-background'), backgroundDialog = document.getElementById('background-dialog');
+  var backgroundOptions = document.getElementById('background-options'), backgroundDone = document.getElementById('background-done');
+  var backdrop = document.getElementById('backdrop'), dockPlate = document.getElementById('dock-plate'), homeScroll = document.getElementById('home-scroll');
+  var inputsButton = document.getElementById('inputs'), inputsPanel = document.getElementById('inputs-panel'), inputsList = document.getElementById('inputs-list');
+  inputsButton.hidden = !bridge.inputsSupported;
+  var settingsRows = [[settingsDone], [soundSetting], [layoutSetting], [backgroundSetting], [fadeSetting], [clockSetting], [startSetting], [telemetrySetting], [resetSetting], [holdSetting]];
+  var scrollBoxes = [grid, list, settingsOptions, backgroundOptions];
   function saveSelection() {
     clearTimeout(selectionTimer);
     if (!lastHome || lastHome === savedSelection) { return; }
@@ -78,7 +88,8 @@
     if (lastHome !== savedSelection) { selectionTimer = setTimeout(saveSelection, 250); }
   }
   function message(text, error) {
-    var line = document.getElementById(mode === 'settings' || mode === 'reset' ? 'settings-status' : mode === 'move' ? 'move-status' : mode === 'home' ? 'status' : 'editor-status');
+    var line = document.getElementById(mode === 'settings' || mode === 'reset' ? 'settings-status' : mode === 'move' ? 'move-status' : mode === 'home' ? 'status' :
+      mode === 'inputs' ? 'inputs-status' : mode === 'background' ? 'background-status' : 'editor-status');
     line.textContent = text; line.classList.toggle('error', !!(text && error)); wakeMenu();
   }
   function canDim() { return idleFade && mode === 'home' && !document.hidden && favorites.length && !menu.contains(document.activeElement) && !document.getElementById('status').textContent; }
@@ -102,6 +113,43 @@
   document.addEventListener('focusin', wakeMenu);
   document.addEventListener('pointerdown', wakeMenu, true);
 
+  function backgroundName(id) { return wallpaperById[id] ? wallpaperById[id].name : 'Charcoal'; }
+  // Only changes of background touch the ambient layer; focus never does.
+  function applyBackground() {
+    var w = wallpaperById[backgroundId], root = document.documentElement;
+    root.classList.toggle('photo', !!w);
+    if (w) {
+      root.setAttribute('data-tone', w.tone); root.style.setProperty('--veil', String(w.veil));
+      if (backdrop.getAttribute('src') !== 'wallpapers/' + w.id + '.jpg') { backdrop.src = 'wallpapers/' + w.id + '.jpg'; }
+      backdrop.hidden = false;
+    } else { root.removeAttribute('data-tone'); root.style.removeProperty('--veil'); backdrop.hidden = true; backdrop.removeAttribute('src'); }
+    Array.prototype.forEach.call(document.querySelectorAll('.glass-field'), function (field) {
+      if (!w) { field.removeAttribute('src'); return; }
+      if (field.getAttribute('src') !== 'wallpapers/' + w.id + '-frost.jpg') { field.src = 'wallpapers/' + w.id + '-frost.jpg'; }
+    });
+  }
+  // The frost has the backdrop's crop, so offsetting it by the plate position (inside its
+  // border) lines it up. Plain offsets keep it in the plate's small layer: a 3D transform
+  // would give every plate its own full-screen surface.
+  function alignGlass(plate) {
+    if (plate.hidden) { return; }
+    var box = plate.getBoundingClientRect(), field = plate.querySelector('.glass-field');
+    field.style.width = window.innerWidth + 'px'; field.style.height = window.innerHeight + 'px';
+    field.style.left = -(box.left + plate.clientLeft) + 'px'; field.style.top = -(box.top + plate.clientTop) + 'px';
+  }
+  // One measurement per render or resize; arrow navigation never moves the plate.
+  function placeDock() {
+    var show = layout === 'dock' && !grid.hidden;
+    dockPlate.hidden = !show;
+    if (!show) { homeScroll.style.top = ''; return; }
+    var stage = grid.parentElement.getBoundingClientRect(), box = grid.getBoundingClientRect();
+    dockPlate.style.left = (box.left - stage.left + 12) + 'px'; dockPlate.style.top = (box.top - stage.top + 12) + 'px';
+    dockPlate.style.width = (box.width - 24) + 'px'; dockPlate.style.height = (box.height - 24) + 'px';
+    alignGlass(dockPlate);
+    homeScroll.style.top = (box.top + box.height / 2 - document.querySelector('main').getBoundingClientRect().top) + 'px';
+  }
+  function columnsFor(count) { return layout === 'dock' ? 5 : Math.min(count || 2, layout === 'compact' ? 4 : 3); }
+
   function find(id) { return catalogById[id]; }
   function focus(button) {
     if (!button || button === document.activeElement) { return; }
@@ -109,7 +157,7 @@
   }
   // Instant scroll that keeps the 12px focus-ring gutter; scrollIntoView would clip the ring.
   function reveal(button) {
-    var box = button.closest('.apps, .editor-list, .settings-options');
+    var box = button.closest('.apps, .editor-list, .settings-options, .background-options');
     if (!box || box.scrollHeight <= box.clientHeight) { return; }
     var frame = box.getBoundingClientRect(), item = button.getBoundingClientRect();
     if (item.top < frame.top + 12) { box.scrollTop -= frame.top + 12 - item.top; }
@@ -297,10 +345,12 @@
   function renderHome(target, forMove) {
     cancelHold();
     launchDialog.hidden = true; failedApp = null;
-    telemetryDialog.hidden = true;
+    telemetryDialog.hidden = true; inputsPanel.hidden = true; backgroundDialog.hidden = true;
     resetLaunchMotion(); mode = forMove ? 'move' : 'home'; editor.hidden = true; settingsDialog.hidden = true; resetDialog.hidden = true;
+    var docked = layout === 'dock';
+    document.querySelector('main').classList.toggle('layout-dock', docked);
     var apps = forMove ? moving : favorites;
-    var signature = JSON.stringify([compact, !!forMove, apps.map(function (saved) { var app = find(saved.id); return [saved.id, app ? app.name : saved.name, app && app.icon, discovered && !app]; })]);
+    var signature = JSON.stringify([layout, !!forMove, apps.map(function (saved) { var app = find(saved.id); return [saved.id, app ? app.name : saved.name, app && app.icon, discovered && !app]; })]);
     if (signature !== homeSignature) {
       grid.textContent = ''; homeSignature = signature;
       apps.forEach(function (saved) {
@@ -315,13 +365,19 @@
       });
     }
     var tiles = Array.prototype.slice.call(grid.children);
-    var columns = Math.min(apps.length || 2, compact ? 4 : 3), rows = [];
-    grid.classList.toggle('many', columns >= 3); grid.classList.toggle('compact', columns === 4); grid.classList.toggle('single', favorites.length === 1);
+    var columns = columnsFor(apps.length), rows = [];
+    grid.classList.toggle('dock', docked);
+    grid.classList.toggle('many', !docked && columns >= 3); grid.classList.toggle('compact', !docked && columns === 4); grid.classList.toggle('single', !docked && favorites.length === 1);
     grid.classList.toggle('reordering', !!forMove);
     for (var i = 0; i < tiles.length; i += columns) { rows.push(tiles.slice(i, i + columns)); }
     if (!tiles.length) { rows.push([emptyAdd]); }
     undoRemove.hidden = !removedShortcut;
-    rows.push(removedShortcut ? [edit, home, settings, undoRemove] : [edit, home, settings]);
+    var footerRow = [edit, home];
+    if (!inputsButton.hidden) { footerRow.push(inputsButton); }
+    footerRow.push(settings);
+    if (removedShortcut) { footerRow.push(undoRemove); }
+    // The dock keeps its controls above the apps, so Up reaches them.
+    if (docked) { rows.unshift(footerRow); } else { rows.push(footerRow); }
     menu.hidden = !!forMove; moveBanner.hidden = !forMove; moveControls.hidden = !forMove;
     keys(document.getElementById('home-hint'), holdToEdit ? [['↑ ↓ ← →', 'Choose'], ['OK', 'Open'], ['Hold OK', 'Edit']] : [['↑ ↓ ← →', 'Choose'], ['OK', 'Open']]);
     grid.hidden = !tiles.length; document.getElementById('empty-home').hidden = !!tiles.length;
@@ -333,9 +389,10 @@
       document.getElementById('move-title').textContent = 'Move ' + moving[moveIndex].name;
       updateMovePosition(); setNav([[selected], [moveCancel, moveSave]], selected);
     } else {
-      setNav(rows, target === 'edit' ? edit : target === 'settings' ? settings : target === 'home' ? home : target === 'undo' && removedShortcut ? undoRemove : selected);
+      setNav(rows, target === 'edit' ? edit : target === 'settings' ? settings : target === 'home' ? home : target === 'inputs' && !inputsButton.hidden ? inputsButton :
+        target === 'undo' && removedShortcut ? undoRemove : selected || tiles[0] || emptyAdd);
     }
-    wakeMenu(); updateClock();
+    wakeMenu(); updateClock(); placeDock();
   }
   function editorFrame(name, help) {
     editor.hidden = false; editor.dataset.mode = mode; title.textContent = name; keys(hint, help);
@@ -478,10 +535,16 @@
       visual.classList.toggle('dim-preview', idleFade);
       ['Edit apps', 'Samsung Home', '⚙'].forEach(function (label) { var pill = document.createElement('span'); pill.textContent = label; visual.appendChild(pill); });
     } else if (which === 'setting-layout') {
-      name = compact ? 'More apps at a glance' : 'A little more breathing room';
-      detail = compact ? 'Up to four tiles in each row.' : 'Up to three tiles in each row.';
-      visual.classList.toggle('dense', compact);
-      for (var i = 0; i < (compact ? 8 : 6); i++) { var cell = document.createElement('span'); visual.appendChild(cell); }
+      name = layout === 'compact' ? 'More apps at a glance' : layout === 'dock' ? 'A glass dock over your background' : 'A little more breathing room';
+      detail = layout === 'compact' ? 'Up to four tiles in each row.' : layout === 'dock' ? 'Five apps on a frosted shelf near the bottom; the controls move to the top. Best with a photo background.' : 'Up to three tiles in each row.';
+      visual.classList.toggle('dense', layout === 'compact'); visual.classList.toggle('docked', layout === 'dock');
+      for (var i = 0; i < (layout === 'compact' ? 8 : layout === 'dock' ? 5 : 6); i++) { var cell = document.createElement('span'); visual.appendChild(cell); }
+    } else if (which === 'setting-background') {
+      var current = wallpaperById[backgroundId];
+      name = current ? current.name : 'The original charcoal';
+      detail = current ? 'Photo by ' + current.credit + ' on Unsplash. Press OK to choose another.' : 'Press OK to choose one of ' + wallpapers.length + ' photos.';
+      if (current) { var thumb = document.createElement('img'); thumb.alt = ''; thumb.src = 'wallpapers/' + current.id + '-thumb.jpg'; visual.appendChild(thumb); }
+      else { visual.classList.add('charcoal-swatch'); }
     } else if (which === 'setting-reset') {
       name = 'A fresh start'; detail = 'Restore Plex and YouTube. You’ll confirm before anything changes.';
       var pair = document.createElement('span'); pair.className = 'reset-pair'; pair.textContent = 'Plex  +  YouTube'; visual.appendChild(pair);
@@ -494,13 +557,15 @@
     document.getElementById('setting-preview-title').textContent = name;
     document.getElementById('setting-preview-detail').textContent = detail;
   }
-  [soundSetting, layoutSetting, fadeSetting, clockSetting, startSetting, telemetrySetting, resetSetting, holdSetting].forEach(function (b) { b.addEventListener('focus', function () { settingPreview(b.id); }); });
+  [soundSetting, layoutSetting, backgroundSetting, fadeSetting, clockSetting, startSetting, telemetrySetting, resetSetting, holdSetting].forEach(function (b) { b.addEventListener('focus', function () { settingPreview(b.id); }); });
   function openSettings(target) {
     cancelHold(); cancelLaunch();
-    telemetryDialog.hidden = true; mode = 'settings'; editor.hidden = true; resetDialog.hidden = true; settingsDialog.hidden = false;
+    telemetryDialog.hidden = true; backgroundDialog.hidden = true; inputsPanel.hidden = true;
+    mode = 'settings'; editor.hidden = true; resetDialog.hidden = true; settingsDialog.hidden = false;
     document.getElementById('sound-value').textContent = feedback.enabled() ? 'On' : 'Off';
     soundSetting.setAttribute('aria-pressed', String(feedback.enabled()));
-    document.getElementById('layout-value').textContent = compact ? 'Compact' : 'Comfortable';
+    document.getElementById('layout-value').textContent = layout === 'compact' ? 'Compact' : layout === 'dock' ? 'Dock' : 'Comfortable';
+    document.getElementById('background-value').textContent = backgroundName(backgroundId);
     document.getElementById('fade-value').textContent = idleFade ? 'Auto-dim' : 'Always visible';
     fadeSetting.setAttribute('aria-pressed', String(idleFade));
     document.getElementById('clock-value').textContent = clockFormat === 'off' ? 'Off' : clockFormat === '12h' ? '12-hour' : '24-hour';
@@ -544,9 +609,42 @@
     catch (_) { message('Could not save the sound preference. Your setting is unchanged.', true); }
   });
   layoutSetting.addEventListener('click', function () {
-    try { storage.setItem(layoutKey, compact ? 'comfortable' : 'compact'); compact = !compact; openSettings(layoutSetting); }
+    var next = layout === 'comfortable' ? 'compact' : layout === 'compact' ? 'dock' : 'comfortable';
+    try { storage.setItem(layoutKey, next); layout = next; openSettings(layoutSetting); }
     catch (_) { message('Could not save the layout. Your setting is unchanged.', true); }
   });
+  backgroundSetting.addEventListener('click', function () { openBackgrounds(); });
+  backgroundDone.addEventListener('click', function () { openSettings(backgroundSetting); });
+  function previewBackground(id) {
+    var visual = document.getElementById('background-visual'), w = wallpaperById[id];
+    visual.textContent = ''; visual.className = w ? '' : 'charcoal-swatch';
+    if (w) { var img = document.createElement('img'); img.alt = ''; img.src = 'wallpapers/' + w.id + '-thumb.jpg'; visual.appendChild(img); }
+    document.getElementById('background-name').textContent = backgroundName(id);
+    document.getElementById('background-credit').textContent = w ? 'Photo by ' + w.credit + ' on Unsplash.' : 'Warm charcoal with no photo, as Hub first shipped.';
+  }
+  function openBackgrounds(target) {
+    cancelHold(); mode = 'background'; settingsDialog.hidden = true; backgroundDialog.hidden = false;
+    backgroundOptions.textContent = ''; document.getElementById('background-status').textContent = '';
+    var buttons = [{ id: 'charcoal' }].concat(wallpapers).map(function (w) {
+      var b = button('', function () { chooseBackground(w.id); }, w.id);
+      b.className = 'wallpaper-option'; b.setAttribute('aria-pressed', String(w.id === backgroundId)); b.setAttribute('aria-label', backgroundName(w.id));
+      if (wallpaperById[w.id]) { var img = document.createElement('img'); img.alt = ''; img.src = 'wallpapers/' + w.id + '-thumb.jpg'; b.appendChild(img); }
+      else { var swatch = document.createElement('span'); swatch.className = 'wallpaper-swatch charcoal-swatch'; b.appendChild(swatch); }
+      var name = document.createElement('span'); name.className = 'wallpaper-name'; name.textContent = backgroundName(w.id); b.appendChild(name);
+      b.addEventListener('focus', function () { previewBackground(w.id); });
+      backgroundOptions.appendChild(b); return b;
+    });
+    var rows = [[backgroundDone]];
+    for (var i = 0; i < buttons.length; i += 4) { rows.push(buttons.slice(i, i + 4)); }
+    setNav(rows, buttons.filter(function (b) { return b.dataset.id === (target || backgroundId); })[0]);
+  }
+  function chooseBackground(id) {
+    try { storage.setItem(backgroundKey, id); }
+    catch (_) { message('Could not save the background. Your setting is unchanged.', true); return; }
+    backgroundId = id; applyBackground();
+    Array.prototype.forEach.call(backgroundOptions.children, function (b) { b.setAttribute('aria-pressed', String(b.dataset.id === id)); });
+    message(backgroundName(id) + ' is now your background.');
+  }
   fadeSetting.addEventListener('click', function () {
     try { storage.setItem(fadeKey, idleFade ? 'off' : 'on'); idleFade = !idleFade; openSettings(fadeSetting); wakeMenu(); }
     catch (_) { message('Could not save the menu preference. Your setting is unchanged.', true); }
@@ -570,8 +668,72 @@
     if (commit(model.defaults)) { removedShortcut = null; openSettings(resetSetting); message('Home restored to Plex and YouTube.'); }
     else { resetDialog.hidden = true; mode = 'settings'; setNav(settingsRows, resetSetting); }
   });
+  function inputRow(name, detail, action, id) {
+    var b = button('', action, id); b.className = 'input-row';
+    var label = document.createElement('span'); label.className = 'input-name'; label.textContent = name; b.appendChild(label);
+    if (detail) { var tag = document.createElement('span'); tag.className = 'input-detail'; tag.textContent = detail; b.appendChild(tag); }
+    return b;
+  }
+  function openInputs() {
+    cancelHold(); cancelLaunch(); mode = 'inputs'; inputsList.textContent = ''; message('');
+    var rows = [];
+    // Named inputs need the signed helper; Samsung's own list is always offered.
+    if (bridge.inputReady()) {
+      bridge.inputs.forEach(function (input) { rows.push([inputRow(input.name, input.detail, function () { switchToInput(input); }, input.id)]); });
+    }
+    rows.push([inputRow('All inputs…', '', openAllInputs, 'all')]);
+    rows.forEach(function (row) { inputsList.appendChild(row[0]); });
+    inputsPanel.hidden = false; placeInputs(); setNav(rows);
+  }
+  // Beside its footer button: above it at the bottom of the screen, below it in the dock.
+  function placeInputs() {
+    if (inputsPanel.hidden) { return; }
+    var anchor = inputsButton.getBoundingClientRect(), gap = window.innerHeight * 0.018;
+    var width = inputsPanel.offsetWidth, height = inputsPanel.offsetHeight, edge = inputsButton.parentElement.getBoundingClientRect();
+    // Stay within the footer's content edges, like the rest of Home.
+    inputsPanel.style.left = Math.max(edge.left, Math.min(anchor.left, edge.right - width)) + 'px';
+    inputsPanel.style.top = (anchor.top < window.innerHeight / 2 ? anchor.bottom + gap : anchor.top - gap - height) + 'px';
+    alignGlass(inputsPanel);
+  }
+  function inputTask(start) {
+    if (busy) { return; }
+    busy = true; var current = ++attempt;
+    function finish(text, failed) {
+      if (current !== attempt) { return; }
+      ++attempt; clearTimeout(launchTimer); busy = false;
+      if (mode === 'inputs' && !document.hidden) { message(text, failed); placeInputs(); }
+    }
+    start(current, finish);
+  }
+  function switchToInput(input) {
+    inputTask(function (current, finish) {
+      var accepted = false; message('Switching to ' + input.name + '…'); placeInputs();
+      launchTimer = setTimeout(function () { finish(accepted ? 'The TV switched, but Hub is still on screen.' : input.name + ' did not respond. Try All inputs.', true); }, 10000);
+      bridge.switchInput(input, function (result) {
+        if (current !== attempt) { return; }
+        if (result.preview) { finish('Preview: the TV would switch to ' + input.name + ' (' + input.detail + ').'); }
+        else { accepted = true; } // The TV viewer takes the foreground and Hub hides.
+      }, function () {
+        if (current !== attempt) { return; }
+        finish(''); openAllInputs('Could not switch directly. Opening the TV’s input list…');
+      });
+    });
+  }
+  function openAllInputs(note) {
+    inputTask(function (current, finish) {
+      message(typeof note === 'string' ? note : 'Opening the TV’s input list…'); placeInputs();
+      launchTimer = setTimeout(function () { finish('The input list did not open. Try Samsung Home.', true); }, 10000);
+      bridge.openInputPicker(function (result) {
+        // Samsung's list can open as an overlay without hiding Hub, as Samsung Home does.
+        finish(result.preview ? 'Preview: Samsung’s input list would open on the TV.' : '');
+      }, function () { finish('Could not open the input list. Try Samsung Home.', true); });
+    });
+  }
+  inputsButton.addEventListener('click', openInputs);
   function back() {
-    if (mode === 'launch-error') { closeLaunchError(); }
+    if (mode === 'inputs') { if (busy) { cancelLaunch(); message(''); placeInputs(); } else { renderHome('inputs'); } }
+    else if (mode === 'background') { openSettings(backgroundSetting); }
+    else if (mode === 'launch-error') { closeLaunchError(); }
     else if (mode === 'telemetry') { openSettings(telemetrySetting); }
     else if (mode === 'reset') { openSettings(resetSetting); }
     else if (mode === 'settings') { renderHome('settings'); }
@@ -590,7 +752,7 @@
   edit.addEventListener('click', openEditor);
   emptyAdd.addEventListener('click', openPicker);
   scrollBoxes.forEach(function (box) { box.addEventListener('scroll', function () { edges(box); }); });
-  window.addEventListener('resize', function () { scrollBoxes.forEach(edges); });
+  window.addEventListener('resize', function () { scrollBoxes.forEach(edges); placeDock(); placeInputs(); });
   home.addEventListener('click', function () { launch(HubBridge.apps.home); });
   document.addEventListener('keydown', function (event) {
     wakeMenu();
@@ -613,7 +775,7 @@
     cancelHold();
     if (mode === 'move' && grid.contains(document.activeElement) && /^Arrow/.test(key)) {
       event.preventDefault();
-      var columns = Math.min(moving.length, compact ? 4 : 3), lengths = [];
+      var columns = columnsFor(moving.length), lengths = [];
       for (var offset = 0; offset < moving.length; offset += columns) { lengths.push(Math.min(columns, moving.length - offset)); }
       var currentRow = Math.floor(moveIndex / columns);
       if (key === 'ArrowDown' && currentRow === lengths.length - 1) { focus(moveCancel); feedback.play('MOVE'); return; }
@@ -657,10 +819,13 @@
   function refreshedHome() {
     if (mode !== 'home' || busy || heldButton) { return; }
     var active = document.activeElement;
-    renderHome(active === edit ? 'edit' : active === settings ? 'settings' : active === home ? 'home' : active === undoRemove ? 'undo' : lastHome);
+    renderHome(active === edit ? 'edit' : active === settings ? 'settings' : active === home ? 'home' : active === inputsButton ? 'inputs' : active === undoRemove ? 'undo' : lastHome);
   }
   bootMark('handlers-attached');
+  applyBackground();
   document.getElementById('preview').hidden = !bridge.preview; renderHome(startOnLast ? lastHome : ''); message(loaded.warning, true);
+  // Manrope can swap in after the first frame and shift the footer; realign once.
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { placeDock(); placeInputs(); }); }
   bootMark('initial-dom-render');
   if (window.HubNativePlatform && window.HubNativePlatform.ready) { window.HubNativePlatform.ready(); }
   if (window.HubBootTrace && window.requestAnimationFrame) { requestAnimationFrame(function () { bootMark('render-frame-1'); requestAnimationFrame(function () { bootMark('render-frame-2'); }); }); }

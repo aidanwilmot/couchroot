@@ -151,8 +151,9 @@ Connection configuration is `--site PATH` → `TV_SETUP_SITE` →
 **recommended defaults → saved choices → `--config` JSON → CLI overrides**.
 Lists replace earlier lists; keep/remove displace contradictory earlier choices.
 `docs/examples/choices.json` starts with TV integration only, no cleanup or telemetry.
-Default recommendations select all components, including reviewed optional-app
-cleanup. Use the example choices for a narrower first plan:
+Default recommendations select all components except the opt-in `inputs`,
+including reviewed optional-app cleanup. Use the example choices for a narrower
+first plan:
 
 ```sh
 bin/tv-setup plan --device qn90a --config docs/examples/choices.json
@@ -191,6 +192,17 @@ credential records, the device registry, history volumes and snapshot paths.
 Receiver/dashboard restarts briefly interrupt both devices' collection. Use one
 management host/state directory: local locks do not coordinate independent hosts.
 Do not edit the NAS or TV concurrently with setup/recovery.
+
+`inputs` is QN90A-only and never selected by default. It installs the signed
+no-window `MiniHubInput.Switch` helper (`native/qn90a-input-switch`), which the
+Hub's Inputs panel launches to switch to an allowlisted HDMI input. It adds no
+Home, task or startup routes; without it, Inputs offers only Samsung's input list.
+On S90D an explicit request reports it as unsupported.
+
+```sh
+bin/tv-setup plan --device qn90a --components hub,inputs
+bin/tv-setup apply --device qn90a --components hub,inputs --yes
+```
 
 ## Build artifacts
 

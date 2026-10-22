@@ -17,9 +17,12 @@ COMPONENTS = (
     "telemetry",
     "dashboard",
     "cleanup",
+    "inputs",
 )
+# Opt-in: input switching is QN90A-only and must not block default S90D plans.
+OPT_IN_COMPONENTS = ("inputs",)
 DEFAULTS = dict(
-    components=list(COMPONENTS),
+    components=[c for c in COMPONENTS if c not in OPT_IN_COMPONENTS],
     exclude=[],
     keep=[],
     remove=[],
@@ -94,8 +97,11 @@ def resolve(device, saved=None, file=None, overrides=None):
         "boot",
         "service",
         "renderer",
+        "input",
     }:
-        raise Refused("artifacts accepts hub, saver, boot, service, renderer paths")
+        raise Refused(
+            "artifacts accepts hub, saver, boot, service, renderer, input paths"
+        )
     if any(not isinstance(v, str) for v in result["artifacts"].values()):
         raise Refused("Artifact paths must be strings")
     return result

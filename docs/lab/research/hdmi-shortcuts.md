@@ -1,6 +1,25 @@
 # HDMI shortcuts investigation
 
-Status: researched on 2026-09-22; no HDMI tiles or new TV privileges shipped.
+Status: researched on 2026-09-22. On 2026-10-22 an owner-supervised session on the
+owner's QA50QN90AAKXXA (`T-NKM2UABC-2310.0`) verified native switching to a
+Chromecast on HDMI 2, and Hub gained an Inputs panel (see below).
+
+## QN90A HDMI switching (2026-10-22)
+
+- `get_source_list` listed the Chromecast by CEC name on HDMI 2 (`sourceType 14`),
+  plus a DLNA source and the tuner. HDMI1–4 are source types 13–16, as upstream.
+- `connect_source(14)` from an SDK process, and again from a signed no-window app
+  launched with an app-control extra, brought `org.tizen.tv-viewer` forward on
+  HDMI 2. The owner confirmed picture, sound, remote control of the Chromecast and
+  Home returning to Hub. Switching away from a different active input is not yet
+  verified.
+- The signed helper is `native/qn90a-input-switch` (`MiniHubInput.Switch`), installed
+  by the opt-in `inputs` tv-setup component. It accepts only `source=HDMI1..4`,
+  is firmware-guarded, replies with an `outcome` extra and exits.
+- The remote's Source key routes to `com.samsung.tv.csfs` with
+  `entry_point:source_key`. Hub's "All inputs…" uses that entry point; whether the
+  extra opens the list (rather than Samsung Home) still needs on-TV confirmation.
+- TVWindow was not used: native viewing, not an embedded window, was the goal.
 
 Samsung's public [TVWindow API](https://developer.samsung.com/smarttv/develop/api-references/tizen-web-device-api-references/tvwindow-api.html)
 provides `setSource`, `show` and `hide` for a TV window within the web app. It

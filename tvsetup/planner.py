@@ -27,6 +27,7 @@ MANAGED = {
     "MiniSave01": ("MiniSave01.Saver", "wgt"),
     "MiniHubBoot": ("MiniHubBoot.Start", "tpk"),
     "MiniTelemetry": ("MiniTelemetry.Start", "tpk"),
+    "MiniHubInput": ("MiniHubInput.Switch", "tpk"),
 }
 
 
@@ -156,8 +157,17 @@ def hub_sources(device, *, device_id=None):
         "feedback.js",
         "telemetry.js",
         "hub.js",
+        "wallpapers.js",
+        "manrope.woff2",
+        "manrope-ofl.txt",
         "icon.png",
         "config.xml",
+    )
+    # Photos, thumbnails, frost materials and their credits, in a stable order.
+    names += tuple(
+        "wallpapers/" + p.name
+        for p in sorted((REPO / "web/wallpapers").iterdir())
+        if p.suffix in (".jpg", ".txt")
     )
     result = {name: (REPO / "web" / name).read_bytes() for name in names}
     if device is None:
@@ -190,6 +200,7 @@ def source_files():
         REPO / "native/qn90a-app-cleanup",
         REPO / "native/qn90a-screensaver",
         REPO / "native/qn90a-boot-relay",
+        REPO / "native/qn90a-input-switch",
         REPO / "telemetry/qn90a-startup",
         REPO / "telemetry/qn90a-bootstrap",
         REPO / "native/qn90a-home-route",
@@ -236,6 +247,8 @@ def source_revision():
 def artifact_group(path):
     if "/MiniHubBoot/bin/" in path:
         return "boot"
+    if "/MiniHubInput/bin/" in path:
+        return "input"
     if "/MiniTelemetry/bin/" in path:
         return "service"
     if path in (
@@ -253,6 +266,7 @@ def artifact_group(path):
 def component_files(kind):
     groups = {
         "boot": ["native/qn90a-boot-relay"],
+        "input": ["native/qn90a-input-switch"],
         "service": [
             "telemetry/qn90a-startup",
             "telemetry/qn90a-bootstrap",
@@ -499,7 +513,20 @@ def plan(profile, choices, state, ledger=None):
                         table=table,
                         scope="MiniHubBoot.Start",
                     )
+        if "inputs" in want:
+            # No routes: Hub input tiles launch this no-window helper on demand.
+            package(
+                "inputs",
+                "input",
+                "MiniHubInput",
+                {
+                    "/opt/usr/apps/MiniHubInput/bin/" + n: compiled("input", h)
+                    for n, h in profile["input_artifacts"].items()
+                },
+            )
     else:
+        if "inputs" in want:
+            p.unsupported("inputs", "Input switching is verified on QN90A only")
         # These native protections are checked even with custom artifact paths/settings.
         integration = set(want) & {"screensaver", "splash", "startup"}
         if integration:
@@ -704,7 +731,7 @@ def plan(profile, choices, state, ledger=None):
     # Explicit dependencies may be excluded only when already satisfied live.
     installed = {r[0] for r in state["packages"]}
     installed.update(a.options["package"] for a in p.actions if a.kind == "package")
-    for c in ("home", "airplay", "startup", "screensaver", "telemetry"):
+    for c in ("home", "airplay", "startup", "screensaver", "telemetry", "inputs"):
         if c in want and "MiniHub001" not in installed:
             p.unsupported(c, "Requires hub; include --components hub," + c)
     if "telemetry" in want and "hub" not in want:
