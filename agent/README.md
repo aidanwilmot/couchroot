@@ -8,7 +8,9 @@ it does not patch firmware or bypass SMACK. Native is the only packaged worker a
 acquisition path. The small `agent/native-acquisition/ServiceEntry.cs` .NET bridge still invokes the
 native acquisition library; it contains no worker, EXEC or file-transfer engine.
 The signed web Hub, native worker and telemetry settings adapter are unchanged.
-This retirement requires fresh acceptance on **both TVs** before deployment.
+S90D agent 0.7.54 passed native handoff and unattended reboot acceptance on
+2026-10-21. The latest QN90A upgrade remains pending; see the
+[current acceptance record](../docs/project/release-readiness.md).
 
 The package deliberately requires an existing, settled native selection and its
 committed activation/state records. It refuses managed selections, missing

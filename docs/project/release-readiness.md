@@ -7,12 +7,41 @@
 > remain recovery context, not a new installation plan. WebView is the experimental
 > native option and still requires fresh hardware acceptance.
 
-# Current acceptance gates: merged Phase 2
+# Current acceptance — 2026-10-21
 
-PRs #10, #11 and #12 are merged into main, but **have not been tested on either
-TV**. Host tests and the Phase 3 byte comparisons are not hardware acceptance.
-The older results below belong to their recorded revisions. This checklist is
-for a separately authorized owner session; it is not an instruction to deploy now.
+| Component / workflow | Recorded hardware result | Still open |
+| --- | --- | --- |
+| Signed web Hub and shared telemetry | Hub/service updates and reboot startup verified on both reviewed TV profiles in the recorded rollout | Fresh-user enrollment and full setup/recovery matrix |
+| Privileged setup staging (#31) | Validated on QN90A and S90D | Broader interruption/failure scenarios remain separate |
+| S90D native agent 0.7.54 (#33) | Forward/reverse handoffs, root command/job, retained-job preservation, native gate and unattended reboot passed | Interrupted-upgrade fault injection and physical UI/standby/endurance checks |
+| Latest QN90A native-agent upgrade | Earlier native trials and readiness observations retained | Package update, handoffs and reboot acceptance of the latest release |
+| QN90A WebView launcher | Experimental; prior measurements are revision-specific | Fresh hardware acceptance |
+
+The S90D final reboot verified the actual native executable hash, stable selection,
+no pending markers and both service startup flags enabled. Original on-demand
+entries and metadata were preserved; Hub/telemetry files and registrations were
+unchanged, and telemetry uploaded on the new boot without errors. The successful
+package trial is closed with its original journal, signed prior package and every
+recovery field/file retained. Private evidence stays outside Git.
+
+**Known installation gap:** the S90D service registration had on-boot and
+auto-restart disabled despite the signed manifest. A separately approved correction
+with a database backup and inverse script preceded successful reboot acceptance.
+The updater does not yet prevent this flag reset. Verify registration after each
+agent package update; do not declare unattended startup ready until a new-boot
+check passes. Track a guarded installer check/correction with regression tests as
+a follow-up; never blindly restore a whole package database.
+
+A successful reverse native handoff and an observed automatic SDK-host restore
+are not hardware proof of interrupted-upgrade recovery. That path has local test
+coverage only. Retain recovery packages, original checkouts and journals until the
+rollback window is explicitly closed. Old boot-bound scripts require fresh review.
+
+## Current acceptance gates: merged Phase 2
+
+The rows below retain the original per-scenario checks and historical baselines.
+They are not a claim that every path has been accepted. The dated results above
+supersede blanket statements that no current code has run on either TV.
 
 ## Native-only pre-deploy gate (#30)
 

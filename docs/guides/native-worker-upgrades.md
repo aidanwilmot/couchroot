@@ -81,6 +81,19 @@ setup journal and retained signed package.
 
 ## Hardware acceptance
 
+S90D agent 0.7.54 passed forward/reverse native handoffs, root command/job checks,
+retained-job preservation and unattended reboot on 2026-10-21. The native gate
+and actual running worker hash were verified; Hub/telemetry files and registrations
+were preserved, and telemetry resumed. QN90A acceptance and hardware interruption
+fault injection remain pending. See [the acceptance record](../project/release-readiness.md).
+
+**Check service startup flags after a package update.** The S90D installer left
+on-boot/auto-restart registration false even though the manifest specified true.
+Reboot acceptance passed only after a separately reviewed correction with backup
+and recovery. Package installation or a successful live handoff does not prove
+unattended startup; stop and review a correction if those flags are wrong.
+
+
 Local tests and simulated transports do not qualify a TV release. On each model,
 with separately reviewed scripts and owner approval:
 

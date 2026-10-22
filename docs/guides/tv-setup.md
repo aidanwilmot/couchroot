@@ -55,7 +55,7 @@ Keep the checkout; the CLI reads source and model profiles beside its entry poin
 Use a virtual environment and run the entry point from that environment:
 
 ```sh
-cd /path/to/samsung-tv-hub
+cd /path/to/couchroot
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r tvsetup/requirements.txt
