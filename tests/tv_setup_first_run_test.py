@@ -7,7 +7,7 @@ import unittest
 
 from tvsetup import cli
 from tvsetup.common import atomic_json
-from tvsetup.config import COMPONENTS, FIRST_RUN_COMPONENTS, profile, resolve, selected
+from tvsetup.config import COMPONENTS, DEFAULTS, FIRST_RUN_COMPONENTS, profile, resolve, selected
 
 
 class FirstRunTests(unittest.TestCase):
@@ -54,7 +54,7 @@ class FirstRunTests(unittest.TestCase):
         self,
     ):
         for device in ("qn90a", "s90d"):
-            self.assertEqual(resolve(device)["components"], list(COMPONENTS))
+            self.assertEqual(resolve(device)["components"], DEFAULTS["components"])
             self.assertEqual(
                 resolve(device)["remove"], list(profile(device)["cleanup"])
             )
@@ -135,7 +135,7 @@ class FirstRunTests(unittest.TestCase):
                     root, "qn90a", "synthetic-binding"
                 ),
             )
-            self.assertEqual(value["components"], list(COMPONENTS))
+            self.assertEqual(value["components"], DEFAULTS["components"])
 
 
 if __name__ == "__main__":
