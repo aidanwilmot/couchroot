@@ -24,6 +24,8 @@
   // 'comfortable' and 'compact' predate the dock; the key and its values are unchanged.
   var layoutKey = 'minimal-hub.layout.v1', layout = 'comfortable';
   try { var savedLayout = storage.getItem(layoutKey); if (savedLayout === 'compact' || savedLayout === 'dock') { layout = savedLayout; } } catch (_) { /* Default layout. */ }
+  var logosKey = 'minimal-hub.logos.v1', showLogos = false;
+  try { showLogos = storage.getItem(logosKey) === 'on'; } catch (_) { /* Names by default. */ }
   var backgroundKey = 'minimal-hub.background.v1', backgroundId = 'charcoal';
   var wallpapers = window.HubWallpapers || [], wallpaperById = Object.create(null);
   wallpapers.forEach(function (w) { wallpaperById[w.id] = w; });
@@ -59,7 +61,7 @@
   var telemetryEnabled = document.getElementById('telemetry-enabled'), telemetryEndpoint = document.getElementById('telemetry-endpoint');
   var telemetrySave = document.getElementById('telemetry-save'), telemetryCancel = document.getElementById('telemetry-cancel');
   var settingsDone = document.getElementById('settings-done'), soundSetting = document.getElementById('setting-sound');
-  var layoutSetting = document.getElementById('setting-layout'), resetSetting = document.getElementById('setting-reset');
+  var layoutSetting = document.getElementById('setting-layout'), logosSetting = document.getElementById('setting-logos'), resetSetting = document.getElementById('setting-reset');
   var fadeSetting = document.getElementById('setting-fade'), clockSetting = document.getElementById('setting-clock');
   var startSetting = document.getElementById('setting-start'), settingsOptions = document.getElementById('settings-options');
   var holdSetting = document.getElementById('setting-hold'), undoRemove = document.getElementById('undo-remove');
@@ -70,7 +72,7 @@
   var backdrop = document.getElementById('backdrop'), dockPlate = document.getElementById('dock-plate'), homeScroll = document.getElementById('home-scroll');
   var inputsButton = document.getElementById('inputs'), inputsPanel = document.getElementById('inputs-panel'), inputsList = document.getElementById('inputs-list');
   inputsButton.hidden = !bridge.inputsSupported;
-  var settingsRows = [[settingsDone], [soundSetting], [layoutSetting], [backgroundSetting], [fadeSetting], [clockSetting], [startSetting], [telemetrySetting], [resetSetting], [holdSetting]];
+  var settingsRows = [[settingsDone], [soundSetting], [layoutSetting], [logosSetting], [backgroundSetting], [fadeSetting], [clockSetting], [startSetting], [telemetrySetting], [resetSetting], [holdSetting]];
   var scrollBoxes = [grid, list, settingsOptions, backgroundOptions];
   function saveSelection() {
     clearTimeout(selectionTimer);
@@ -148,7 +150,8 @@
     alignGlass(dockPlate);
     homeScroll.style.top = (box.top + box.height / 2 - document.querySelector('main').getBoundingClientRect().top) + 'px';
   }
-  function columnsFor(count) { return layout === 'dock' ? 5 : Math.min(count || 2, layout === 'compact' ? 4 : 3); }
+  // The dock is one row that fits its apps and slides once there are more than five.
+  function columnsFor(count) { return layout === 'dock' ? Math.max(count, 1) : Math.min(count || 2, layout === 'compact' ? 4 : 3); }
 
   function find(id) { return catalogById[id]; }
   function focus(button) {
@@ -158,8 +161,15 @@
   // Instant scroll that keeps the 12px focus-ring gutter; scrollIntoView would clip the ring.
   function reveal(button) {
     var box = button.closest('.apps, .editor-list, .settings-options, .background-options');
-    if (!box || box.scrollHeight <= box.clientHeight) { return; }
+    if (!box) { return; }
     var frame = box.getBoundingClientRect(), item = button.getBoundingClientRect();
+    if (box.scrollWidth > box.clientWidth + 1) {
+      // Keep the focused app clear of the dock's edge fades; the next app peeks in.
+      var margin = parseFloat(getComputedStyle(box).paddingLeft) + window.innerWidth * .025;
+      if (item.left < frame.left + margin) { box.scrollLeft -= frame.left + margin - item.left; }
+      else if (item.right > frame.right - margin) { box.scrollLeft += item.right - frame.right + margin; }
+    }
+    if (box.scrollHeight <= box.clientHeight) { return; }
     if (item.top < frame.top + 12) { box.scrollTop -= frame.top + 12 - item.top; }
     else if (item.bottom > frame.bottom - 12) { box.scrollTop += item.bottom - frame.bottom + 12; }
     // The scroll event updates edge markers only when the viewport actually moves.
@@ -167,6 +177,15 @@
   // Measure only the list ends, then update cues. Trailing padding is not more content.
   function edges(box) {
     var cue = document.getElementById(box.dataset.scrollCue);
+    if (box.classList.contains('dock')) {
+      // Fades at the dock's ends replace the vertical cue.
+      var wide = box.scrollWidth > box.clientWidth + 1;
+      cue.hidden = true; box.classList.toggle('overflowing', wide);
+      box.classList.toggle('more-left', wide && box.scrollLeft > 1);
+      box.classList.toggle('more-right', wide && box.scrollLeft + box.clientWidth < box.scrollWidth - 1);
+      return;
+    }
+    box.classList.remove('overflowing', 'more-left', 'more-right');
     var frame = box.getBoundingClientRect(), first = box.firstElementChild, last = box.lastElementChild;
     var up = !!(frame.height && first && first.getBoundingClientRect().top < frame.top - 1);
     var down = !!(frame.height && last && last.getBoundingClientRect().bottom > frame.bottom + 1);
@@ -234,7 +253,8 @@
     var selected = Array.prototype.filter.call(grid.children, function (tile) { return tile.dataset.id === id; })[0];
     if (!selected) { return; }
     var viewport = grid.getBoundingClientRect(), stage = grid.parentElement.getBoundingClientRect(), box = selected.getBoundingClientRect();
-    var scrolling = grid.scrollHeight > grid.clientHeight + 1;
+    var scrolling = grid.scrollHeight > grid.clientHeight + 1 || grid.scrollWidth > grid.clientWidth + 1;
+    if (scrolling && layout === 'dock') { viewport = { left: viewport.left + 12, right: viewport.right - 12, top: viewport.top + 12, bottom: viewport.bottom - 12, width: viewport.width - 24, height: viewport.height - 24 }; }
     var area = scrolling ? viewport : { left: stage.left + 12, right: stage.right - 12, top: stage.top + 12, bottom: stage.bottom - 12, width: stage.width - 24, height: stage.height - 24 };
     grid.classList.toggle('launch-contained', scrolling);
     var scale = Math.max(1, Math.min(1.12, (area.width - 16) / box.width, (area.height - 16) / box.height));
@@ -303,7 +323,14 @@
   launchHome.addEventListener('click', function () { closeLaunchError(); launch(HubBridge.apps.home); });
   function appTile(app) {
     var b;
-      if (templates[app.id]) { b = templates[app.id].cloneNode(true); }
+      if (showLogos && app.icon) {
+        b = document.createElement('button'); b.className = 'tile logo-tile ' + (templates[app.id] ? templates[app.id].dataset.app : 'branded ' + HubPresentation.get(app).theme);
+        var icon = document.createElement('img'); icon.className = 'app-icon'; icon.alt = ''; icon.src = app.icon;
+        // A missing icon falls back to the name, as with logos off.
+        icon.onerror = function () { var name = document.createElement('span'); name.className = 'brand-wordmark'; name.textContent = app.name; b.replaceChild(name, icon); };
+        b.appendChild(icon);
+      }
+      else if (templates[app.id]) { b = templates[app.id].cloneNode(true); }
       else {
         var look = HubPresentation.get(app);
         b = document.createElement('button'); b.className = 'tile branded ' + look.theme;
@@ -311,10 +338,6 @@
         var shape = document.createElement('span'); shape.className = 'brand-shape'; art.appendChild(shape);
         var logo = document.createElement('span'); logo.className = 'brand-wordmark'; logo.textContent = look.wordmark;
         if (look.wordmark.length > 14) { logo.classList.add('long'); }
-        if (!look.custom && app.icon) {
-          var img = document.createElement('img'); img.className = 'brand-icon'; img.alt = ''; img.src = app.icon;
-          img.onerror = function () { img.remove(); }; b.appendChild(img);
-        }
         b.appendChild(art); b.appendChild(logo);
       }
     return b;
@@ -350,7 +373,7 @@
     var docked = layout === 'dock';
     document.querySelector('main').classList.toggle('layout-dock', docked);
     var apps = forMove ? moving : favorites;
-    var signature = JSON.stringify([layout, !!forMove, apps.map(function (saved) { var app = find(saved.id); return [saved.id, app ? app.name : saved.name, app && app.icon, discovered && !app]; })]);
+    var signature = JSON.stringify([layout, showLogos, !!forMove, apps.map(function (saved) { var app = find(saved.id); return [saved.id, app ? app.name : saved.name, app && app.icon, discovered && !app]; })]);
     if (signature !== homeSignature) {
       grid.textContent = ''; homeSignature = signature;
       apps.forEach(function (saved) {
@@ -539,6 +562,10 @@
       detail = layout === 'compact' ? 'Up to four tiles in each row.' : layout === 'dock' ? 'Five apps on a frosted shelf near the bottom; the controls move to the top. Best with a photo background.' : 'Up to three tiles in each row.';
       visual.classList.toggle('dense', layout === 'compact'); visual.classList.toggle('docked', layout === 'dock');
       for (var i = 0; i < (layout === 'compact' ? 8 : layout === 'dock' ? 5 : 6); i++) { var cell = document.createElement('span'); visual.appendChild(cell); }
+    } else if (which === 'setting-logos') {
+      name = showLogos ? 'Each app’s own icon' : 'Just the names';
+      detail = showLogos ? 'Tiles show the icon each app installs on your TV. Apps without one keep their name.' : 'Clean lettering on every tile, with no icons.';
+      visual.classList.toggle('logos-on', showLogos); visual.textContent = showLogos ? '▣' : 'Aa';
     } else if (which === 'setting-background') {
       var current = wallpaperById[backgroundId];
       name = current ? current.name : 'The original charcoal';
@@ -557,7 +584,7 @@
     document.getElementById('setting-preview-title').textContent = name;
     document.getElementById('setting-preview-detail').textContent = detail;
   }
-  [soundSetting, layoutSetting, backgroundSetting, fadeSetting, clockSetting, startSetting, telemetrySetting, resetSetting, holdSetting].forEach(function (b) { b.addEventListener('focus', function () { settingPreview(b.id); }); });
+  [soundSetting, layoutSetting, logosSetting, backgroundSetting, fadeSetting, clockSetting, startSetting, telemetrySetting, resetSetting, holdSetting].forEach(function (b) { b.addEventListener('focus', function () { settingPreview(b.id); }); });
   function openSettings(target) {
     cancelHold(); cancelLaunch();
     telemetryDialog.hidden = true; backgroundDialog.hidden = true; inputsPanel.hidden = true;
@@ -565,6 +592,7 @@
     document.getElementById('sound-value').textContent = feedback.enabled() ? 'On' : 'Off';
     soundSetting.setAttribute('aria-pressed', String(feedback.enabled()));
     document.getElementById('layout-value').textContent = layout === 'compact' ? 'Compact' : layout === 'dock' ? 'Dock' : 'Comfortable';
+    document.getElementById('logos-value').textContent = showLogos ? 'On' : 'Off'; logosSetting.setAttribute('aria-pressed', String(showLogos));
     document.getElementById('background-value').textContent = backgroundName(backgroundId);
     document.getElementById('fade-value').textContent = idleFade ? 'Auto-dim' : 'Always visible';
     fadeSetting.setAttribute('aria-pressed', String(idleFade));
@@ -612,6 +640,10 @@
     var next = layout === 'comfortable' ? 'compact' : layout === 'compact' ? 'dock' : 'comfortable';
     try { storage.setItem(layoutKey, next); layout = next; openSettings(layoutSetting); }
     catch (_) { message('Could not save the layout. Your setting is unchanged.', true); }
+  });
+  logosSetting.addEventListener('click', function () {
+    try { storage.setItem(logosKey, showLogos ? 'off' : 'on'); showLogos = !showLogos; openSettings(logosSetting); }
+    catch (_) { message('Could not save the logo preference. Your setting is unchanged.', true); }
   });
   backgroundSetting.addEventListener('click', function () { openBackgrounds(); });
   backgroundDone.addEventListener('click', function () { openSettings(backgroundSetting); });

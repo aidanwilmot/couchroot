@@ -90,7 +90,7 @@ main.clock-on { padding-top: 9vh; }
 .brand-wordmark { display: block; max-width: 100%; padding: 0 .08em; font-weight: 700; letter-spacing: -.065em; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Apps without a local treatment keep their full name readable on two lines. */
 .brand-wordmark.long { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; font-size: .62em; letter-spacing: -.04em; line-height: 1.15; }
-.brand-icon { position: absolute; top: .32em; right: .36em; width: .62em; height: .62em; object-fit: contain; border-radius: .12em; }
+.logo-tile .app-icon { display: block; height: 62%; max-width: 80%; object-fit: contain; border-radius: .16em; }
 .brand-netflix { --accent: #ff6068; --deep: #56252a; }
 .brand-netflix .brand-wordmark { color: #ff3442; letter-spacing: -.055em; font-stretch: condensed; }
 .brand-netflix .brand-shape { border-radius: 0; width: 1.45em; height: 8.3em; top: -3.1em; right: .83em; transform: rotate(-22deg); background: #d8243e; border: 0; box-shadow: 1.25em 0 0 #ff62772c; }
@@ -138,7 +138,7 @@ main.clock-on { padding-top: 9vh; }
 
 /* A saved shortcut whose app is gone recedes, and says what to do about it. */
 .unavailable { border-style: dashed; border-color: #ffffff33; }
-.unavailable .app-logo, .unavailable .brand-wordmark, .unavailable .card-art, .unavailable .brand-art, .unavailable .brand-icon { opacity: .35; }
+.unavailable .app-logo, .unavailable .brand-wordmark, .unavailable .card-art, .unavailable .brand-art, .unavailable .app-icon { opacity: .35; }
 .unavailable-label { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); max-width: 92%; padding: .45em 1.1em; border-radius: 50px; background: #111312e6; border: 1px solid #ecd5a44d; color: #ecd5a4; font-size: 1vw; font-size: clamp(11px, 1vw, 22px); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .apps.compact .unavailable-label { font-size: .85vw; font-size: clamp(10px, .85vw, 18px); }
 #empty-home { display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -190,7 +190,12 @@ main.layout-dock #home-clock { left: 6.25vw; right: auto; top: 3.1vh; font-size:
 main.layout-dock .app-stage { justify-content: flex-end; padding-bottom: calc(12px + 11vh); }
 #dock-plate { z-index: 0; }
 /* Above the plate, which is positioned; the 12px gutter still holds focus rings. */
-.apps.dock { position: relative; z-index: 1; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 1vw; padding: 12px; padding: calc(12px + 1.3vw); max-height: 12.5vw; max-height: calc(9.15vw + 24px + 2.6vw); }
+/* One row sized to its apps: five fill the stage exactly, more slide under edge fades. */
+.apps.dock { position: relative; z-index: 1; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 16.18vw; gap: 0 1vw; width: auto; max-width: calc(100% + 24px); padding: 12px; padding: calc(12px + 1.3vw); max-height: 12.5vw; max-height: calc(9.15vw + 24px + 2.6vw); overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth; }
+.apps.dock.overflowing { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 12px, #000 calc(100% - 12px), transparent calc(100% - 12px)); }
+.apps.dock.overflowing.more-left { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 calc(12px + 3vw), #000 calc(100% - 12px), transparent calc(100% - 12px)); }
+.apps.dock.overflowing.more-right { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 12px, #000 calc(100% - 12px - 3vw), transparent calc(100% - 12px)); }
+.apps.dock.overflowing.more-left.more-right { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 calc(12px + 3vw), #000 calc(100% - 12px - 3vw), transparent calc(100% - 12px)); }
 .apps.dock .tile { height: 9.15vw; max-height: none; font-size: 1.87vw; border-radius: 1.2vw; background: transparent; border-color: transparent; }
 .apps.dock .card-art, .apps.dock .brand-art { display: none; }
 .apps.dock .tile:focus { background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .2); box-shadow: 0 0 0 3px var(--ring); }
@@ -299,7 +304,7 @@ main.layout-dock .app-stage { justify-content: flex-end; padding-bottom: calc(12
 #setting-visual.setting-layout.docked > span { flex: 1; height: 24%; margin: 0 .3vw; }
 #setting-visual.setting-background { padding: 0; overflow: hidden; }
 #setting-visual.setting-background img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.reset-pair, #setting-visual.setting-telemetry, #setting-visual.setting-start, #setting-visual.setting-hold { color: #ddcba5; font-size: 2.4vw; letter-spacing: -.02em; }
+.reset-pair, #setting-visual.setting-logos, #setting-visual.setting-telemetry, #setting-visual.setting-start, #setting-visual.setting-hold { color: #ddcba5; font-size: 2.4vw; letter-spacing: -.02em; }
 #setting-visual.setting-clock { color: #ddcba5; font-size: 5vw; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
 .setting-fade > span { margin: 0 .4vw; border: 1px solid #ccb98760; border-radius: 40px; padding: 1.2vh 1vw; font-size: 1.1vw; color: #ddcba5; }
 .setting-fade.dim-preview > span { opacity: .35; }
@@ -343,5 +348,5 @@ main.layout-dock .app-stage { justify-content: flex-end; padding-bottom: calc(12
   .editor-body, .settings-columns { grid-template-columns: 1fr; }
   .dialog-panel { width: 90vw; }
 }
-@media (prefers-reduced-motion: reduce) { .bottom-menu.idle > footer, .apps.launch-motion .tile { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .bottom-menu.idle > footer, .apps.launch-motion .tile { transition: none; } .apps.dock { scroll-behavior: auto; } }
 @media (forced-colors: active) { :focus { outline: 3px solid; } }

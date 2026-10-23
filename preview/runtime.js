@@ -6,6 +6,7 @@
   if (!Object.prototype.hasOwnProperty.call(HubScenarios, name)) name = 'home';
   var scenario = HubScenarios[name], apps = HubFixtures.catalog();
   if (scenario.missingArtwork) apps[apps.length - 1].iconPath = '/missing-preview-icon.png';
+  if (scenario.appIcons) apps.forEach(function (app, i) { if (i % 3 !== 2) app.iconPath = '/web/icon.png'; });
   var marker = 'hub-preview.scenario';
   if (localStorage.getItem(marker) !== name || url.searchParams.has('reset')) {
     Object.keys(localStorage).filter(function (key) {

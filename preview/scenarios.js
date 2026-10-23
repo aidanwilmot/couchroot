@@ -22,6 +22,7 @@
     'bad-storage': { label: 'Unreadable saved shortcuts', badStorage: true },
     'missing-artwork': { label: 'Missing app artwork', favorites: 'fallback', missingArtwork: true },
     dock: { label: 'Home · glass dock on a photo', favorites: 'all', prefs: { 'minimal-hub.layout.v1': 'dock', 'minimal-hub.background.v1': 'misty', 'minimal-hub.clock.v1': '12h' } },
+    'dock-logos': { label: 'Home · dock with app logos', favorites: 'all', appIcons: true, prefs: { 'minimal-hub.layout.v1': 'dock', 'minimal-hub.logos.v1': 'on', 'minimal-hub.background.v1': 'cove' } },
     'dock-few': { label: 'Home · dock with two apps', prefs: { 'minimal-hub.layout.v1': 'dock', 'minimal-hub.background.v1': 'peaks' } },
     photo: { label: 'Home · comfortable on a photo', prefs: { 'minimal-hub.background.v1': 'forest' } },
     inputs: { label: 'Home · inputs panel', screen: 'inputs' },
