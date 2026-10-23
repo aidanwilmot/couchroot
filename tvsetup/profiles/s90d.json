@@ -85,7 +85,8 @@
     "airplay": "Preserve native S90D routing.",
     "startup": "Native S90D Home/autostart and AT-HUB helper.",
     "splash": "Native splash compatibility in the composite AT-HUB helper.",
-    "screensaver": "Asteroids native renderer through AT-HUB."
+    "screensaver": "Asteroids native renderer through AT-HUB.",
+    "inputs": "Not supported on S90D; input switching is verified on QN90A only."
   },
   "helper_sha256": "93dec0d4ce234dbdae288f0747134447771a6680f36e11483b62c90f4820579f",
   "collector_sha256": "8925e093cec4379aa4f1915ebc882ca8d02fa65557ec10ebd20c877ef016db14",

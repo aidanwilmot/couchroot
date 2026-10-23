@@ -406,7 +406,11 @@ class Driver:
             if sha(path.read_bytes()) != info["sha256"]:
                 raise Refused("Prepared package changed")
             verify_package(path, self.profile, action.options["package"])
-            if action.options["package"] in ("MiniHubBoot", "MiniTelemetry"):
+            if action.options["package"] in (
+                "MiniHubBoot",
+                "MiniTelemetry",
+                "MiniHubInput",
+            ):
                 self.tv.sdk(managed_guard(self.profile))
             try:
                 output = run(
@@ -444,8 +448,13 @@ class Driver:
             self.tv.root(script)
             self.control_call("reload", root=True)
         elif kind == "setting":
+            # QN90A preference writes use the root runner, as its earlier trials did.
             self.control_call(
-                "setting", action.options["key"], action.before, action.after
+                "setting",
+                action.options["key"],
+                action.before,
+                action.after,
+                root=self.profile["id"] == "qn90a",
             )
         elif kind == "home_operation":
             self.control_call("home", "", action.before, action.after)
@@ -596,7 +605,11 @@ class Driver:
                 self.tv.root("systemctl restart AT-HUB.service\n", namespace=True)
         elif action.kind == "setting":
             self.control_call(
-                "setting", action.options["key"], action.after, action.before
+                "setting",
+                action.options["key"],
+                action.after,
+                action.before,
+                root=self.profile["id"] == "qn90a",
             )
         elif action.kind == "home_operation":
             self.control_call("home", "", action.after, action.before)
@@ -756,7 +769,11 @@ class Driver:
             raise Refused("Recovery registration mismatch")
 
     def reinstall_recovery(self, action, info):
-        if action.options["package"] in ("MiniHubBoot", "MiniTelemetry"):
+        if action.options["package"] in (
+            "MiniHubBoot",
+            "MiniTelemetry",
+            "MiniHubInput",
+        ):
             self.tv.sdk(managed_guard(self.profile))
         if "forward_recovery" not in info:
             raise Refused(

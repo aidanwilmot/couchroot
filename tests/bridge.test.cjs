@@ -92,3 +92,53 @@ test('firmware internal visible helpers and duplicate Prime stub are not offered
  assert.equal(eligible({id:'NewStore01.Player',packageId:'NewStore01',show:true}),true);
  for(const uri of ['https://server/icon.png','//server/icon.png','data:image/svg+xml,test','javascript:alert(1)'])assert.equal(localIcon(uri),'');
 });
+function appControlPlatform(onLaunch, extra = {}) {
+  return {
+    ApplicationControlData: function (key, value) { this.key = key; this.value = value; },
+    ApplicationControl: function (operation, uri, mime, category, data, mode) { this.operation = operation; this.data = data; this.mode = mode; },
+    application: { launchAppControl: onLaunch, ...extra }
+  };
+}
+const chromecast = { id: 'chromecast', name: 'Chromecast', source: 'HDMI2', detail: 'HDMI 2' };
+test('input switch sends one allowlisted source to the helper and needs its "switched" reply', () => {
+  let sent;
+  const bridge = create(appControlPlatform((control, id, launched, failed, reply) => {
+    sent = { id, operation: control.operation, mode: control.mode, data: control.data.map(d => [d.key, d.value]) };
+    launched(); reply.onsuccess([{ key: 'outcome', value: ['switched'] }]);
+  }));
+  let result;
+  bridge.switchInput(chromecast, r => { result = r; }, assert.fail);
+  assert.deepEqual(sent, { id: 'MiniHubInput.Switch', operation: 'http://tizen.org/appcontrol/operation/default', mode: 'SINGLE', data: [['source', ['HDMI2']]] });
+  assert.deepEqual(result, { preview: false, name: 'Chromecast' });
+});
+test('launch acceptance alone, a rejection reply or a refusal outcome is not a switch', () => {
+  const run = reply => {
+    const state = { switched: false, failed: false };
+    create(appControlPlatform((control, id, launched, fail, replies) => { launched(); reply(replies); }))
+      .switchInput(chromecast, () => { state.switched = true; }, () => { state.failed = true; });
+    return state;
+  };
+  assert.deepEqual(run(() => {}), { switched: false, failed: false }); // Still waiting for the helper.
+  for (const reply of [r => r.onfailure(), r => r.onsuccess([{ key: 'outcome', value: ['rejected-0'] }]), r => r.onsuccess([])]) {
+    assert.deepEqual(run(reply), { switched: false, failed: true });
+  }
+});
+test('inputs outside HDMI1-4 never reach the helper', () => {
+  for (const source of ['HDMI5', 'TV', 'HDMI1;reboot', undefined]) {
+    create(appControlPlatform(assert.fail)).switchInput({ name: 'x', source }, assert.fail, error => assert.match(error.message, /Unknown input/));
+  }
+});
+test('All inputs opens Samsung Home with the Source key entry point', () => {
+  let sent;
+  create(appControlPlatform((control, id, done) => { sent = [id, control.data.map(d => [d.key, d.value])]; done(); }))
+    .openInputPicker(r => assert.equal(r.preview, false), assert.fail);
+  assert.deepEqual(sent, ['com.samsung.tv.csfs', [['entry_point', ['source_key']]]]);
+});
+test('input support depends on app-control replies and an installed helper', () => {
+  assert.equal(create({ application: { launch() {} } }).inputsSupported, false);
+  assert.equal(create(appControlPlatform(() => {})).inputsSupported, true);
+  assert.equal(create(appControlPlatform(() => {}, { getAppInfo: id => ({ id }) })).inputReady(), true);
+  assert.equal(create(appControlPlatform(() => {}, { getAppInfo: () => { throw { name: 'NotFoundError' }; } })).inputReady(), false);
+  assert.equal(create(undefined).inputReady(), true);
+  create(undefined).switchInput(chromecast, r => assert.deepEqual(r, { preview: true, name: 'Chromecast' }), assert.fail);
+});

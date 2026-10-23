@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guarded Home integration for the owner’s QN85QN90AAFXZA, firmware 2301.1."""
+"""Guarded Home integration for the owner’s QA50QN90AAKXXA, firmware 2310.0."""
 import argparse
 import os
 from pathlib import Path
@@ -17,10 +17,10 @@ def main():
     toolkit = Path.home() / '.local/share/samsung-tv-research'
     sys.path.insert(0, str(toolkit))
     from samsung_tv import device, capture
-    cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QN85QN90AAFXZA',
+    cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QA50QN90AAKXXA',
            'expected_platform': '21_NIKEM2_QTV'}
     callback = device(cfg)
-    guard = "set -eu\ngrep -q '^Version=T-NKM2AKUC-2301.1;' /etc/prd_info.ini\n"
+    guard = "set -eu\ngrep -q '^Version=T-NKM2UABC-2310.0;' /etc/prd_info.ini\n"
     capture(cfg, callback, guard, 10, 'qn90a-firmware-guard')
     with tempfile.TemporaryDirectory(prefix='qn90a-control-', dir=toolkit) as folder:
         folder = Path(folder)

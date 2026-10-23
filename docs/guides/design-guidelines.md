@@ -61,8 +61,27 @@ Minimal Hub is an offline launcher operated from a couch with a remote.
   cached grid; asynchronous updates preserve current focus.
 - Dialogs put the safe action on the left with initial focus, the committing
   action on the right, and state what Back does.
+- Dock is the third layout (CleanFrame's shelf): five 16:9 cells on one glass plate
+  near the bottom, controls and clock at the top. Up from the dock reaches the
+  controls; Home still starts on an app. Cells drop their card art, keep their
+  wordmarks and focus on a lighter plate with the usual ring.
+- Photo backgrounds live in `.ambient` with static scrims, so they share the one
+  cached backdrop surface. Photos are 3:2 and use the centred cover crop; their
+  `-frost` materials are the same crop at 16:9.
+- Glass is a clipped plate holding the photo's frost, offset by the plate position
+  (inside its border) with plain `left`/`top`. Never `backdrop-filter`, live blur
+  or pixel reads, and never a 3D transform on the frost: that allocates a
+  full-screen surface per plate. Measure plates on render and resize, not on arrows.
+  On Charcoal the same plates fall back to a solid panel.
+- Inputs are utilities, not content: a small panel beside the Inputs button with
+  compact rows, far less prominent than app tiles. Named inputs appear only when
+  the signed switch helper is installed; Samsung's input list is always offered,
+  and a refused switch falls back to it.
+- New photos need a CleanFrame credit, a thumbnail and a frost material, and an
+  entry in `web/wallpapers.js`; credits ship in `web/wallpapers/credits.txt`.
 - Empty lists explain themselves in place (`note()`); empty Home offers Add apps.
 
-Review Home, Edit apps, Add apps, Settings, Reset, and TV monitoring after changes
-that affect shared layout or focus. Use the workbench failure scenarios when
+Review Home (Comfortable, Compact and Dock, on Charcoal and a photo), Inputs, Edit
+apps, Add apps, Settings, Background, Reset, and TV monitoring after changes that
+affect shared layout or focus. Use the workbench failure scenarios when
 changing status messages, fallback artwork or persistence behavior.

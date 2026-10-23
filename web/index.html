@@ -9,16 +9,18 @@
   <script src="bridge.js" defer></script>
   <script src="presentation.js" defer></script>
   <script src="model.js" defer></script>
+  <script src="wallpapers.js" defer></script>
   <script src="feedback.js" defer></script>
   <script src="telemetry.js" defer></script>
   <script src="hub.js" defer></script>
 </head>
 <body>
-  <div class="ambient" aria-hidden="true"><div class="orbital orbital-one"></div><div class="orbital orbital-two"></div><div class="orbital orbital-three"></div></div>
+  <div class="ambient" aria-hidden="true"><div class="orbital orbital-one"></div><div class="orbital orbital-two"></div><div class="orbital orbital-three"></div><img id="backdrop" class="backdrop" alt="" hidden><div class="scrim scrim-top"></div><div class="scrim scrim-bottom"></div></div>
   <main>
     <time id="home-clock" hidden aria-label="Current time"></time>
     <div id="move-banner" hidden><h2 id="move-title"></h2><p id="move-position" role="status" aria-live="polite"></p></div>
     <div class="app-stage">
+    <div id="dock-plate" class="glass" aria-hidden="true" hidden><img class="glass-field" alt=""></div>
     <nav id="favorites" class="apps" aria-label="Your apps" data-scroll-cue="home-scroll">
       <button class="tile plex" data-app="plex" aria-label="Open Plex">
         <span class="card-art" aria-hidden="true"><span class="plex-beam beam-one"></span><span class="plex-beam beam-two"></span></span>
@@ -41,6 +43,7 @@
     <footer>
       <button id="edit-apps" class="system">Edit apps</button>
       <button class="system" data-app="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5M5.5 9v11h5v-6h3v6h5V9"/></svg><span>Samsung Home</span></button>
+      <button id="inputs" class="system" aria-haspopup="dialog" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>Inputs</span></button>
       <button id="settings" class="system settings-button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.4 3-.6 2.3-2 .9L4.7 5.5 2.5 9.3 4.2 11v2l-1.7 1.7 2.2 3.8 2.1-.7 2 .9.6 2.3h5.2l.6-2.3 2-.9 2.1.7 2.2-3.8-1.7-1.7v-2l1.7-1.7-2.2-3.8-2.1.7-2-.9-.6-2.3Z"/><circle cx="12" cy="12" r="3.2"/></svg></button>
       <button id="undo-remove" class="system" hidden>Undo remove</button>
       <p id="status" class="status-line" role="status" aria-live="polite"></p>
@@ -49,6 +52,12 @@
     </div>
     <span id="preview" hidden>DESKTOP PREVIEW</span>
   </main>
+  <section id="inputs-panel" class="glass" role="dialog" aria-modal="true" aria-labelledby="inputs-title" hidden>
+    <img class="glass-field" alt="" aria-hidden="true">
+    <h2 id="inputs-title">Inputs</h2>
+    <div id="inputs-list"></div>
+    <p id="inputs-status" class="status-line" role="status" aria-live="polite"></p>
+  </section>
   <section id="editor" role="dialog" aria-modal="true" aria-labelledby="editor-title" hidden>
     <div class="editor-panel">
       <div class="page-heading"><h2 id="editor-title">Edit apps</h2><span id="editor-count" class="page-count"></span></div>
@@ -65,7 +74,9 @@
         <div class="settings-controls"><div id="settings-options" class="settings-options" data-scroll-cue="settings-scroll">
           <h3>Sound &amp; appearance</h3>
           <button id="setting-sound" class="setting-row"><span class="setting-label">Navigation sound</span><span id="sound-value" class="setting-value"></span><span class="setting-description">Quiet feedback for your remote.</span></button>
-          <button id="setting-layout" class="setting-row"><span class="setting-label">Tile layout</span><span id="layout-value" class="setting-value"></span><span class="setting-description">Choose the space between your apps.</span></button>
+          <button id="setting-layout" class="setting-row"><span class="setting-label">Tile layout</span><span id="layout-value" class="setting-value"></span><span class="setting-description">Roomy, compact, or a glass dock.</span></button>
+          <button id="setting-logos" class="setting-row" aria-pressed="false"><span class="setting-label">App logos</span><span id="logos-value" class="setting-value"></span><span class="setting-description">Show each app’s icon instead of its name.</span></button>
+          <button id="setting-background" class="setting-row"><span class="setting-label">Background</span><span id="background-value" class="setting-value"></span><span class="setting-description">A photo or the original charcoal.</span></button>
           <button id="setting-fade" class="setting-row"><span class="setting-label">Bottom menu</span><span id="fade-value" class="setting-value"></span><span class="setting-description">Let the controls recede when you settle in.</span></button>
           <button id="setting-clock" class="setting-row"><span class="setting-label">Clock</span><span id="clock-value" class="setting-value"></span><span class="setting-description">A small time display on Home.</span></button>
           <button id="setting-start" class="setting-row"><span class="setting-label">Start on</span><span id="start-value" class="setting-value"></span><span class="setting-description">Choose the selected app when Hub starts.</span></button>
@@ -79,6 +90,16 @@
         </aside>
       </div>
       <div class="page-bottom"><p id="settings-status" class="status-line" role="status" aria-live="polite"></p><div class="hint"><span><kbd>↑ ↓</kbd>Choose</span><span><kbd>OK</kbd>Change</span><span><kbd>Back</kbd>Home</span></div></div>
+    </div>
+  </section>
+  <section id="background-dialog" role="dialog" aria-modal="true" aria-labelledby="background-title" hidden>
+    <div class="settings-panel">
+      <div class="page-heading"><h2 id="background-title">Background</h2><button id="background-done" class="system">Done</button></div>
+      <div class="settings-columns">
+        <div class="settings-controls"><div id="background-options" class="background-options" data-scroll-cue="background-scroll"></div><div id="background-scroll" class="scroll-cues" aria-hidden="true" hidden><span class="scroll-up">↑</span><span class="scroll-down">↓</span></div></div>
+        <aside class="settings-preview" aria-hidden="true"><div id="background-visual"></div><h3 id="background-name"></h3><p id="background-credit"></p></aside>
+      </div>
+      <div class="page-bottom"><p id="background-status" class="status-line" role="status" aria-live="polite"></p><div class="hint"><span><kbd>↑ ↓ ← →</kbd>Choose</span><span><kbd>OK</kbd>Use</span><span><kbd>Back</kbd>Settings</span></div></div>
     </div>
   </section>
   <section id="telemetry-dialog" role="dialog" aria-modal="true" aria-labelledby="telemetry-title" hidden>

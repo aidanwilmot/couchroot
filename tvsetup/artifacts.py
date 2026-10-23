@@ -343,6 +343,7 @@ class Builder:
                 }
             )
             for n, data in files.items():
+                (stage / n).parent.mkdir(parents=True, exist_ok=True)
                 (stage / n).write_bytes(data)
             if key == "saver":
                 self.generated_saver(stage)
@@ -394,6 +395,18 @@ class Builder:
                 sources = [
                     (output / n, "bin/" + n)
                     for n in ("Boot.dll", "Boot.deps.json", "Boot.runtimeconfig.json")
+                ]
+            elif key == "input":
+                project = REPO / "native/qn90a-input-switch"
+                output = stage / "compiled"
+                self.build_managed(project / "InputSwitch.csproj", output)
+                sources = [
+                    (output / n, "bin/" + n)
+                    for n in (
+                        "InputSwitch.dll",
+                        "InputSwitch.deps.json",
+                        "InputSwitch.runtimeconfig.json",
+                    )
                 ]
             else:
                 project = REPO / "telemetry/qn90a-startup"

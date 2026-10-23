@@ -60,7 +60,7 @@ def enrollment(path):
         or set(data) != expected
         or data["schema"] != 1
         or data["device"] != "qn90a"
-        or data["firmware"] != "T-NKM2AKUC-2301.1"
+        or data["firmware"] != "T-NKM2UABC-2310.0"
     ):
         raise Refused("Invalid QN90A hook enrollment schema/firmware")
     entries = (

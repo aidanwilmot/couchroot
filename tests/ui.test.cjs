@@ -9,9 +9,12 @@ let server, browser, base;
 before(async()=>{
  server=http.createServer((req,res)=>{
   const name=req.url==='/'?'index.html':req.url.slice(1);
-  if(!/^[a-z.]+$/.test(name)){res.writeHead(404).end();return;}
-  res.setHeader('Content-Type', name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');
-  res.end(fs.readFileSync(path.join(__dirname,'../web',name)));
+  // Flat shipped files plus wallpapers/; segments cannot contain dots, so no "..".
+  if(!/^(wallpapers\/)?[a-z0-9-]+\.[a-z0-9]+$/.test(name)){res.writeHead(404).end();return;}
+  const types={js:'application/javascript',css:'text/css',html:'text/html',jpg:'image/jpeg',woff2:'font/woff2',txt:'text/plain'};
+  res.setHeader('Content-Type', types[name.split('.').pop()]||'application/octet-stream');
+  let body;try{body=fs.readFileSync(path.join(__dirname,'../web',name));}catch(_){res.writeHead(404).end();return;}
+  res.end(body);
  }).listen(0,'127.0.0.1');
  await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`;
  browser=await chromium.launch({headless:true});
@@ -22,7 +25,8 @@ async function setup(options={}) {
  if(options.legacyCss)await page.route('**/style.css',route=>route.fulfill({
   contentType:'text/css',body:fs.readFileSync(path.join(__dirname,'../web/style.css'),'utf8').replace(/font-size:\s*clamp\([^;]+;/g,'')
  }));
- await page.addInitScript(fixtures.install, { ...options, apps: fixtures.catalog('test') });
+ await page.addInitScript(fixtures.install, { ...options, apps: fixtures.catalog('test').map(app=>options.icons?{...app,iconPath:'/icon.png'}:app) });
+ if(options.storage)await page.addInitScript(values=>{for(const key in values)localStorage.setItem(key,values[key]);},options.storage);
  if(options.startupUnfocused)await page.addInitScript(()=>{
   window.bootFocused=false;window.bootDiscoveries=0;document.hasFocus=()=>window.bootFocused;
   const discover=tizen.application.getAppsInfo;
@@ -81,7 +85,7 @@ test('older TV CSS keeps readable logos, separated controls and full-screen util
  const p=await setup({legacyCss:true});
  await p.evaluate(()=>document.documentElement.classList.add('no-flex-gap'));
  assert.ok(await p.locator('.plex-word').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))>100);
- const controls=await p.locator('footer > button').evaluateAll(es=>es.map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right};}));
+ const controls=await p.locator('footer > button:not([hidden])').evaluateAll(es=>es.map(e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right};}));
  assert.ok(controls[1].left-controls[0].right>30);
  assert.ok(controls[2].left-controls[1].right>30);
  await p.locator('#edit-apps').click();
@@ -158,12 +162,12 @@ test('gear settings persist sound/layout, navigate four columns, confirm reset, 
  await p.reload();await p.waitForTimeout(80);await p.locator('#settings').click();
  assert.equal(await p.locator(':focus').getAttribute('id'),'setting-sound');
  await key(p,'Enter','ArrowDown','Enter');assert.equal(await p.locator('#sound-value').textContent(),'Off');assert.equal(await p.locator('#layout-value').textContent(),'Compact');
- await key(p,'ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','Enter');assert.equal(await p.locator(':focus').getAttribute('id'),'reset-cancel');
+ await key(p,'ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','Enter');assert.equal(await p.locator(':focus').getAttribute('id'),'reset-cancel');
  await key(p,'Tab');assert.equal(await p.locator(':focus').getAttribute('id'),'reset-confirm');await key(p,'Tab');assert.equal(await p.locator(':focus').getAttribute('id'),'reset-cancel');
  await key(p,'Escape','Escape');assert.equal((await ids(p)).length,12);assert.equal(await p.locator('.apps.compact').count(),1);
  await p.reload();await p.waitForTimeout(80);await key(p,'ArrowDown');assert.equal(await p.locator(':focus').getAttribute('data-id'),'Store00001.app4');
  await p.locator('#settings').click();assert.equal(await p.locator('#sound-value').textContent(),'Off');assert.equal(await p.locator('#layout-value').textContent(),'Compact');
- await key(p,'ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','Enter','ArrowRight','Enter');assert.match(await p.locator('#settings-status').textContent(),/restored/);
+ await key(p,'ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','Enter','ArrowRight','Enter');assert.match(await p.locator('#settings-status').textContent(),/restored/);
  await key(p,'Escape');assert.deepEqual(await ids(p),['kIciSQlYEM.plex','9Ur5IzDKqV.TizenYouTube']);
  assert.equal(await p.evaluate(()=>localStorage.getItem('minimal-hub.sound.v1')),'off');assert.equal(await p.evaluate(()=>localStorage.getItem('minimal-hub.layout.v1')),'compact');await p.close();
 });
@@ -172,6 +176,10 @@ test('settings failed saves preserve preferences and shortcuts; repeated Back st
  await p.evaluate(()=>Storage.prototype.setItem=function(){throw Error('QuotaExceeded');});
  await key(p,'Enter');assert.match(await p.locator('#settings-status').textContent(),/Could not save/);assert.equal(await p.locator('#sound-value').textContent(),'On');
  await key(p,'ArrowDown','Enter');assert.match(await p.locator('#settings-status').textContent(),/Could not save/);assert.equal(await p.locator('#layout-value').textContent(),'Comfortable');
+ await key(p,'ArrowDown','Enter');assert.match(await p.locator('#settings-status').textContent(),/Could not save the logo/);assert.equal(await p.locator('#logos-value').textContent(),'Off');
+ await key(p,'ArrowDown','Enter','ArrowRight','Enter');assert.match(await p.locator('#background-status').textContent(),/Could not save the background/);
+ assert.equal(await p.evaluate(()=>document.documentElement.classList.contains('photo')),false);
+ await key(p,'Escape');assert.equal(await p.locator('#background-value').textContent(),'Charcoal');
  await key(p,'ArrowDown','Enter');assert.equal(await p.locator('#fade-value').textContent(),'Auto-dim');assert.match(await p.locator('#settings-status').textContent(),/Could not save/);
  await key(p,'ArrowDown','Enter');assert.equal(await p.locator('#clock-value').textContent(),'Off');assert.match(await p.locator('#settings-status').textContent(),/Could not save/);
  await key(p,'ArrowDown','Enter');assert.equal(await p.locator('#start-value').textContent(),'Last selected');assert.match(await p.locator('#settings-status').textContent(),/Could not save/);
@@ -198,12 +206,12 @@ test('idle menu dims without moving focus, restores on first key, and stays visi
 });
 test('clock cycles off/12/24, idle preference persists, and minute display refreshes',async()=>{
  const p=await setup();await p.clock.install({time:new Date(2026,8,20,13,8,0)});
- await p.locator('#settings').click();await key(p,'ArrowDown','ArrowDown','Enter');assert.equal(await p.locator('#fade-value').textContent(),'Always visible');
+ await p.locator('#settings').click();await key(p,'ArrowDown','ArrowDown','ArrowDown','ArrowDown','Enter');assert.equal(await p.locator('#fade-value').textContent(),'Always visible');
  await key(p,'ArrowDown','Enter');assert.equal(await p.locator('#clock-value').textContent(),'12-hour');await key(p,'Escape');assert.equal(await p.locator('#home-clock').textContent(),'1:08 PM');
  await p.clock.fastForward(61000);assert.equal(await p.locator('#home-clock').textContent(),'1:09 PM');
- await p.locator('#settings').click();await key(p,'ArrowDown','ArrowDown','ArrowDown','Enter');assert.equal(await p.locator('#clock-value').textContent(),'24-hour');await key(p,'Escape');assert.equal(await p.locator('#home-clock').textContent(),'13:09');
+ await p.locator('#settings').click();await key(p,'ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','Enter');assert.equal(await p.locator('#clock-value').textContent(),'24-hour');await key(p,'Escape');assert.equal(await p.locator('#home-clock').textContent(),'13:09');
  await p.reload();await p.waitForTimeout(80);assert.equal(await p.locator('#home-clock').isVisible(),true);await p.clock.fastForward(10000);assert.equal(await p.locator('.bottom-menu.idle').count(),0);
- await p.locator('#settings').click();await key(p,'ArrowDown','ArrowDown','ArrowDown','Enter','Escape');assert.equal(await p.locator('#home-clock').isVisible(),false);await p.close();
+ await p.locator('#settings').click();await key(p,'ArrowDown','ArrowDown','ArrowDown','ArrowDown','ArrowDown','Enter','Escape');assert.equal(await p.locator('#home-clock').isVisible(),false);await p.close();
 });
 
 test('launch expands selected tile and moves neighbors without delaying launch; failure/reduced motion recover',async()=>{
@@ -501,4 +509,146 @@ test('a telemetry save from an earlier visit cannot affect a new pending save',a
    assert.equal(await p.locator('#settings-dialog').isVisible(),true);
   } finally {await p.close();}
  }
+});
+const dockOnPhoto={'minimal-hub.layout.v1':'dock','minimal-hub.background.v1':'misty'};
+test('Inputs switches to the Chromecast through the helper, in a panel far smaller than the apps',async()=>{
+ const p=await setup({appControl:true,launchHandoff:true});
+ const footer=await p.locator('footer > button:not([hidden])').evaluateAll(bs=>bs.map(b=>b.textContent.trim()||b.getAttribute('aria-label')));
+ assert.deepEqual(footer,['Edit apps','Samsung Home','Inputs','Settings']);
+ await key(p,'ArrowDown','ArrowRight','ArrowRight');assert.equal(await focusText(p),'Inputs');
+ await key(p,'Enter');
+ assert.ok(await p.locator('#inputs-panel').isVisible());
+ assert.deepEqual(await p.locator('.input-row').allTextContents(),['ChromecastHDMI 2','All inputs…']);
+ assert.equal(await focusText(p),'ChromecastHDMI 2');
+ const row=await p.locator('.input-row').first().boundingBox(),tile=await p.locator('#favorites > button').first().boundingBox();
+ assert.ok(row.height<tile.height/4&&row.width<tile.width/2,'Input rows must stay much less prominent than app tiles');
+ const panel=await p.locator('#inputs-panel').boundingBox(),button=await p.locator('#inputs').boundingBox();
+ assert.ok(panel.y+panel.height<=button.y,'The panel opens above its footer button');
+ await key(p,'Escape');assert.ok(await p.locator('#inputs-panel').isHidden());assert.equal(await focusText(p),'Inputs');
+ await key(p,'Enter','Enter');
+ assert.equal(await p.locator('#inputs-status').textContent(),'Switching to Chromecast…');
+ await p.waitForFunction(()=>inputSwitches.length===1);assert.deepEqual(await p.evaluate(()=>inputSwitches),['HDMI2']);
+ // The TV viewer takes the foreground; returning to Hub shows Home again.
+ await p.waitForTimeout(700);assert.ok(await p.locator('#inputs-panel').isHidden());
+ assert.equal(await p.evaluate(()=>appControls.filter(c=>c.id==='com.samsung.tv.csfs').length),0);
+ await p.close();
+});
+test('A refused switch falls back to Samsung’s input list; without the helper only that list is offered',async()=>{
+ const p=await setup({appControl:true,inputOutcome:'rejected'});
+ await p.locator('#inputs').click();await p.locator('.input-row').first().click();
+ await p.waitForFunction(()=>appControls.length===2);
+ assert.deepEqual(await p.evaluate(()=>appControls.map(c=>[c.id,c.data.source||c.data.entry_point])),[['MiniHubInput.Switch','HDMI2'],['com.samsung.tv.csfs','source_key']]);
+ await p.close();
+ const missing=await setup({appControl:true,inputHelperMissing:true});
+ await missing.locator('#inputs').click();
+ assert.deepEqual(await missing.locator('.input-row').allTextContents(),['All inputs…']);
+ await key(missing,'Enter');await missing.waitForTimeout(40);
+ assert.deepEqual(await missing.evaluate(()=>appControls.map(c=>c.id)),['com.samsung.tv.csfs']);
+ await missing.close();
+ const plain=await setup();
+ assert.ok(await plain.locator('#inputs').isHidden(),'Runtimes without app-control replies hide Inputs');
+ await plain.close();
+});
+test('Dock puts controls above a glass shelf of 16:9 cells whose frost registers with the photo',async()=>{
+ const p=await setup({appControl:true,storage:dockOnPhoto});
+ assert.ok(await p.locator('main.layout-dock').count());
+ assert.equal(await p.evaluate(()=>document.activeElement.dataset.id),'kIciSQlYEM.plex');
+ const footer=await p.locator('footer').boundingBox(),grid=await p.locator('#favorites').boundingBox();
+ assert.ok(footer.y+footer.height<grid.y,'Controls sit above the dock');
+ const cell=await p.locator('#favorites > button').first().boundingBox();
+ assert.ok(Math.abs(cell.width/cell.height-16/9)<.03,'Dock cells stay 16:9');
+ await key(p,'ArrowUp');assert.equal(await focusText(p),'Edit apps');
+ await key(p,'ArrowDown');assert.equal(await p.evaluate(()=>document.activeElement.dataset.id),'kIciSQlYEM.plex');
+ const glass=await p.evaluate(()=>{
+  const plate=document.getElementById('dock-plate'),field=plate.querySelector('.glass-field').getBoundingClientRect();
+  return {hidden:plate.hidden,field:[field.left,field.top,field.width,field.height],src:plate.querySelector('.glass-field').getAttribute('src'),backdrop:document.getElementById('backdrop').getAttribute('src'),photo:document.documentElement.classList.contains('photo')};
+ });
+ assert.deepEqual(glass,{hidden:false,field:[0,0,1920,1080],src:'wallpapers/misty-frost.jpg',backdrop:'wallpapers/misty.jpg',photo:true});
+ // Inputs opens below its button when the controls are at the top.
+ await key(p,'ArrowUp','ArrowRight','ArrowRight','Enter');
+ const panel=await p.locator('#inputs-panel').boundingBox(),button=await p.locator('#inputs').boundingBox();
+ assert.ok(panel.y>=button.y+button.height&&panel.x+panel.width<=footer.x+footer.width+1);
+ assert.deepEqual(await p.evaluate(()=>{const f=document.querySelector('#inputs-panel .glass-field').getBoundingClientRect();return [f.left,f.top];}),[0,0]);
+ await p.close();
+});
+test('Dock fits a few apps, then slides one row under edge fades once there are more than five',async()=>{
+ const p=await setup({appControl:true,storage:dockOnPhoto});
+ const few=await p.evaluate(()=>{const g=document.getElementById('favorites').getBoundingClientRect(),pl=document.getElementById('dock-plate').getBoundingClientRect();return {g:g.width,center:g.left+g.width/2,plate:pl.width};});
+ assert.ok(few.g<800,'Two apps get a short dock');assert.ok(Math.abs(few.center-960)<2,'The short dock stays centered');assert.ok(Math.abs(few.plate-(few.g-24))<1);
+ await p.evaluate(()=>localStorage.setItem('minimal-hub.shortcuts.v1',JSON.stringify({version:1,apps:window.testApps})));
+ await p.reload();await p.waitForTimeout(80);
+ const tops=await p.locator('#favorites > button').evaluateAll(bs=>[...new Set(bs.map(b=>Math.round(b.getBoundingClientRect().top)))]);
+ assert.equal(tops.length,1,'All apps stay on one row');
+ assert.ok(await p.locator('#favorites.overflowing.more-right:not(.more-left)').count());
+ assert.ok(await p.locator('#home-scroll').isHidden());
+ for(let i=0;i<7;i++)await key(p,'ArrowRight');
+ await p.waitForTimeout(600);
+ assert.equal(await p.evaluate(()=>document.activeElement.dataset.id),'Store00001.app5');
+ const inside=await p.evaluate(()=>{const t=document.activeElement.getBoundingClientRect(),pl=document.getElementById('dock-plate').getBoundingClientRect();return t.left>=pl.left&&t.right<=pl.right;});
+ assert.ok(inside,'The focused app slides into the plate');
+ assert.ok(await p.locator('#favorites.more-left.more-right').count());
+ for(let i=0;i<8;i++)await key(p,'ArrowRight');await p.waitForFunction(()=>{const g=document.getElementById('favorites');return g.scrollLeft+g.clientWidth>=g.scrollWidth-1;});await p.waitForTimeout(100);
+ assert.equal(await p.evaluate(()=>document.activeElement.dataset.id),'Store00001.app11');
+ assert.ok(await p.locator('#favorites.more-left:not(.more-right)').count());
+ await key(p,'ArrowUp');assert.ok(await p.evaluate(()=>!!document.activeElement.closest('footer')),'Up reaches the controls');
+ await p.close();
+});
+test('App logos is off by default and shows installed icons, never a corner badge',async()=>{
+ const p=await setup({icons:true});
+ assert.equal(await p.locator('#favorites img').count(),0,'Names only by default');
+ await p.evaluate(()=>localStorage.setItem('minimal-hub.shortcuts.v1',JSON.stringify({version:1,apps:window.testApps.slice(2,4)})));
+ await p.reload();await p.waitForTimeout(80);
+ assert.equal(await p.locator('#favorites img').count(),0);assert.deepEqual(await p.locator('#favorites .brand-wordmark').allTextContents(),['App 00','App 01']);
+ await p.locator('#settings').click();await p.locator('#setting-logos').click();
+ assert.equal(await p.locator('#logos-value').textContent(),'On');assert.equal(await p.evaluate(()=>localStorage.getItem('minimal-hub.logos.v1')),'on');
+ await key(p,'Escape');
+ assert.equal(await p.locator('#favorites .logo-tile img.app-icon').count(),2);assert.equal(await p.locator('#favorites .brand-wordmark').count(),0);
+ const icon=await p.locator('#favorites .app-icon').first().boundingBox(),tile=await p.locator('#favorites > button').first().boundingBox();
+ assert.ok(icon.height>tile.height/2,'The icon is the tile, not a badge');
+ await p.close();
+ const broken=await setup({storage:{'minimal-hub.logos.v1':'on'}});
+ assert.equal(await broken.locator('#favorites img').count(),0,'Apps without an icon keep their usual tile');
+ await broken.close();
+});
+test('Background picker saves a photo, credits it, and Charcoal restores the original backdrop',async()=>{
+ const p=await setup();
+ await p.locator('#settings').click();await p.locator('#setting-background').click();
+ assert.equal(await p.locator('.wallpaper-option').count(),16);assert.equal(await focusText(p),'Charcoal');
+ await key(p,'ArrowRight');assert.match(await p.locator('#background-credit').textContent(),/^Photo by .+ on Unsplash\.$/);
+ await key(p,'Enter');
+ assert.equal(await p.evaluate(()=>localStorage.getItem('minimal-hub.background.v1')),'misty');
+ assert.equal(await p.locator('#backdrop').getAttribute('src'),'wallpapers/misty.jpg');
+ assert.equal(await p.locator('.wallpaper-option[aria-pressed="true"]').getAttribute('data-id'),'misty');
+ await key(p,'Escape');assert.equal(await focusText(p).then(t=>t.startsWith('Background')),true);
+ assert.equal(await p.locator('#background-value').textContent(),'Misty coast');
+ await key(p,'Enter','ArrowLeft','Enter');
+ assert.equal(await p.evaluate(()=>document.documentElement.classList.contains('photo')),false);
+ assert.ok(await p.locator('#backdrop').isHidden());
+ await p.close();
+});
+test('Tile layout cycles Comfortable, Compact and Dock under the existing key',async()=>{
+ const p=await setup();
+ await p.locator('#settings').click();
+ const seen=[];
+ for(let i=0;i<3;i++){await p.locator('#setting-layout').click();seen.push([await p.locator('#layout-value').textContent(),await p.evaluate(()=>localStorage.getItem('minimal-hub.layout.v1'))]);}
+ assert.deepEqual(seen,[['Compact','compact'],['Dock','dock'],['Comfortable','comfortable']]);
+ await p.close();
+});
+test('Photo backdrop and dock glass stay cached while arrows move through the dock',async()=>{
+ const p=await setup({appControl:true,storage:dockOnPhoto}),cdp=await p.context().newCDPSession(p);let layers=[];
+ cdp.on('LayerTree.layerTreeDidChange',event=>{layers=event.layers||[];});
+ await cdp.send('LayerTree.enable');await p.waitForTimeout(150);await p.screenshot();
+ const {root}=await cdp.send('DOM.getDocument');
+ async function layerFor(selector){
+  const {nodeId}=await cdp.send('DOM.querySelector',{nodeId:root.nodeId,selector});
+  const {node}=await cdp.send('DOM.describeNode',{nodeId});
+  return layers.find(layer=>layer.backendNodeId===node.backendNodeId&&layer.drawsContent);
+ }
+ const backdrop=await layerFor('.ambient'),plate=await layerFor('#dock-plate');
+ assert.ok(backdrop&&backdrop.width<=1920&&backdrop.height<=1080,'The photo stays on one bounded backdrop surface');
+ assert.ok(plate&&plate.height<300,'The dock glass is its own small surface');
+ for(const arrow of ['ArrowRight','ArrowLeft','ArrowRight','ArrowUp','ArrowDown']){await key(p,arrow);await p.screenshot();}
+ assert.equal((await layerFor('.ambient')).paintCount,backdrop.paintCount,'Arrows must not repaint the photo');
+ assert.equal((await layerFor('#dock-plate')).paintCount,plate.paintCount,'Arrows must not repaint the dock glass');
+ await p.close();
 });

@@ -168,7 +168,7 @@ def parser():
 def validate_selection(device, launcher):
     if launcher == "native" and device != "qn90a":
         raise Refused(
-            "Native Hub supports only QN90A firmware T-NKM2AKUC-2301.1; choose --launcher web for S90D"
+            "Native Hub supports only QN90A firmware T-NKM2UABC-2310.0; choose --launcher web for S90D"
         )
 
 

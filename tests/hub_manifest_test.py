@@ -28,16 +28,23 @@ def members(path):
     with zipfile.ZipFile(path) as archive:return {n:archive.read(n) for n in archive.namelist()}
 
 def fake_sign(argv, **kwargs):
+    # Like the Tizen CLI, package the whole staging tree, including wallpapers/.
     stage=Path(argv[-1]);out=Path(argv[argv.index('-o')+1])/'Minimal Hub.wgt'
     with zipfile.ZipFile(out,'w') as archive:
-        for path in stage.iterdir():
-            if path.is_file() and path!=out:archive.write(path,path.name)
+        for path in sorted(stage.rglob('*')):
+            if path.is_file() and path!=out:archive.write(path,path.relative_to(stage).as_posix())
+
+# Shipped non-script assets. Every catalog photo needs its image, thumbnail and frost.
+import re
+PHOTOS=re.findall(r'"id": "([a-z]+)"',(REPO/'web/wallpapers.js').read_text())
+ASSETS={'index.html','style.css','icon.png','config.xml','manrope.woff2','manrope-ofl.txt','wallpapers/credits.txt'}|{
+    'wallpapers/'+photo+suffix+'.jpg' for photo in PHOTOS for suffix in ('','-thumb','-frost')}
 
 class ManifestTests(unittest.TestCase):
     def test_native_sources_preserve_unconfigured_web_bytes(self):
         sources=hub_sources(None)
         scripts=Scripts((REPO/'web/index.html').read_text()).sources
-        self.assertEqual(set(sources),set(scripts)|{'index.html','style.css','icon.png','config.xml'})
+        self.assertEqual(set(sources),set(scripts)|ASSETS)
         for name,data in sources.items():self.assertEqual(data,(REPO/'web'/name).read_bytes())
 
     def test_unsigned_packages_have_all_scripts_and_only_manifest_assets(self):
@@ -48,7 +55,7 @@ class ManifestTests(unittest.TestCase):
                 original=Scripts((REPO/'web/index.html').read_text()).sources
                 self.assertTrue(set(original)<=set(scripts))
                 self.assertEqual(len(scripts),len(set(scripts)))
-                self.assertEqual(set(expected),set(scripts)|{'index.html','style.css','icon.png','config.xml'})
+                self.assertEqual(set(expected),set(scripts)|ASSETS)
                 web_package(device,Path(tmp)/'installer.wgt')
                 self.assertEqual(members(Path(tmp)/'installer.wgt'),expected)
                 subprocess.run([sys.executable,str(REPO/'scripts/package.py'),'--device',device,'--output-dir',tmp],check=True,stdout=subprocess.PIPE)

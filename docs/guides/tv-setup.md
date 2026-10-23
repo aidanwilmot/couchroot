@@ -196,6 +196,8 @@ finalization; it is not physical hardware acceptance. After such a run, the
 existing saved-choice and default recommendation behavior is unchanged. Select
 cleanup, telemetry or other components explicitly with `--components` or
 `--config` when you want those changes.
+The opt-in `inputs` component is never selected by default; add it with
+`--components` when you want Hub input tiles.
 
 ```sh
 bin/tv-setup plan --device qn90a
@@ -244,6 +246,17 @@ credential records, the device registry, history volumes and snapshot paths.
 Receiver/dashboard restarts briefly interrupt both devices' collection. Use one
 management host/state directory: local locks do not coordinate independent hosts.
 Do not edit the NAS or TV concurrently with setup/recovery.
+
+`inputs` is QN90A-only and never selected by default. It installs the signed
+no-window `MiniHubInput.Switch` helper (`native/qn90a-input-switch`), which the
+Hub's Inputs panel launches to switch to an allowlisted HDMI input. It adds no
+Home, task or startup routes; without it, Inputs offers only Samsung's input list.
+On S90D an explicit request reports it as unsupported.
+
+```sh
+bin/tv-setup plan --device qn90a --components hub,inputs
+bin/tv-setup apply --device qn90a --components hub,inputs --yes
+```
 
 ## Build artifacts
 

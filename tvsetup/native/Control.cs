@@ -29,7 +29,7 @@ class Control {
  static int Main(string[] a) {
   try {
    if(a.Length<2 || IntPtr.Size!=4)throw new Exception("Arguments/architecture");
-   string firmware=a[1]=="s90d"?"T-PTMDAKUC-0090-2130.0":a[1]=="qn90a"?"T-NKM2AKUC-2301.1":throw new Exception("Model");
+   string firmware=a[1]=="s90d"?"T-PTMDAKUC-0090-2130.0":a[1]=="qn90a"?"T-NKM2UABC-2310.0":throw new Exception("Model");
    if(!File.ReadAllText("/etc/prd_info.ini").Contains("Version="+firmware+";"))throw new Exception("Firmware");
    if(a[0]=="reload") {
     const string key="memory/appfw/app_context_db_change";int next=Read(key)=="0"?1:0;
@@ -51,6 +51,13 @@ class Control {
      if(vconf_set_int(key,value)!=0 || Read(key)!=after)throw new Exception("Autostart setter/readback");return 0;
     }
     throw new Exception("QN90A key not allowlisted");
+   }
+   if(a[0]=="setting" && a[1]=="qn90a") {
+    // Only the base home that exiting apps fall back to, between its stock and Hub values.
+    if(a.Length!=5 || a[2]!="db/appfw/home_appid")throw new Exception("QN90A key not allowlisted");
+    if(!((a[3]=="org.tizen.tv-viewer" && a[4]=="MiniHub001.Hub") || (a[3]=="MiniHub001.Hub" && a[4]=="org.tizen.tv-viewer")))throw new Exception("Base home value pair");
+    if(Read(a[2])!=a[3])throw new Exception("Setting changed concurrently");
+    if(vconf_set_str(a[2],a[4])!=0 || Read(a[2])!=a[4])throw new Exception("Setter/readback");return 0;
    }
    if(a[1]!="s90d" || a.Length!=5)throw new Exception("S90D-only settings");
    if(a[0]=="home") {

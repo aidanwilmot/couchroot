@@ -65,6 +65,7 @@ build = Path(tempfile.mkdtemp(prefix="hub-", dir=output))
 source = build / "web"
 source.mkdir()
 for name, data in hub_sources(device, device_id=args.device_id).items():
+    (source / name).parent.mkdir(parents=True, exist_ok=True)
     (source / name).write_bytes(data)
 if args.boot_trace:
     trace = (root / "web/boot-trace.js").read_text()

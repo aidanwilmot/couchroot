@@ -11,14 +11,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path.home() / '.local/share/samsung-tv-research'))
 from samsung_tv import device, capture
 
-cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QN85QN90AAFXZA',
+cfg = {'tv_host': '192.0.2.11', 'expected_model': 'QA50QN90AAKXXA',
        'expected_platform': '21_NIKEM2_QTV'}
 callback = device(cfg)
 start = time.monotonic()
 for batch in range(11):
     interval = 1 if batch >= 9 else 5
     script = """set -eu
-grep -q '^Version=T-NKM2AKUC-2301.1;' /etc/prd_info.ini
+grep -q '^Version=T-NKM2UABC-2310.0;' /etc/prd_info.ini
 cat /proc/sys/kernel/random/boot_id
 """
     script += 'for step in ' + ' '.join(map(str, range(30 // interval))) + '; do\n'

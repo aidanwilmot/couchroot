@@ -109,7 +109,7 @@ bool load_config(int directory, struct config *cfg) {
             cfg->pin[i] = (unsigned char)v;
         }
 #ifndef COLLECTOR_HOST_TEST
-        const char *firmware = !strcmp(cfg->device, "qn90a") ? "T-NKM2AKUC-2301.1" : "T-PTMDAKUC-0090-2130.0";
+        const char *firmware = !strcmp(cfg->device, "qn90a") ? "T-NKM2UABC-2310.0" : "T-PTMDAKUC-0090-2130.0";
         char expected[160]; snprintf(expected, sizeof expected, "Version=%s;", firmware);
         char *actual = read_bounded("/etc/prd_info.ini", CONFIG_LIMIT);
         valid = valid && sizeof(void *) == 4 && !strcmp(cfg->firmware, firmware) && actual && strstr(actual, expected);

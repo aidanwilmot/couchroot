@@ -20,7 +20,15 @@
     'launch-error': { label: 'App launch failure', launchFail: true },
     'discovery-error': { label: 'App discovery failure', discoveryFail: true, screen: 'picker' },
     'bad-storage': { label: 'Unreadable saved shortcuts', badStorage: true },
-    'missing-artwork': { label: 'Missing app artwork', favorites: 'fallback', missingArtwork: true }
+    'missing-artwork': { label: 'Missing app artwork', favorites: 'fallback', missingArtwork: true },
+    dock: { label: 'Home · glass dock on a photo', favorites: 'all', prefs: { 'minimal-hub.layout.v1': 'dock', 'minimal-hub.background.v1': 'misty', 'minimal-hub.clock.v1': '12h' } },
+    'dock-logos': { label: 'Home · dock with app logos', favorites: 'all', appIcons: true, prefs: { 'minimal-hub.layout.v1': 'dock', 'minimal-hub.logos.v1': 'on', 'minimal-hub.background.v1': 'cove' } },
+    'dock-few': { label: 'Home · dock with two apps', prefs: { 'minimal-hub.layout.v1': 'dock', 'minimal-hub.background.v1': 'peaks' } },
+    photo: { label: 'Home · comfortable on a photo', prefs: { 'minimal-hub.background.v1': 'forest' } },
+    inputs: { label: 'Home · inputs panel', screen: 'inputs' },
+    'inputs-dock': { label: 'Dock · inputs panel', favorites: 'all', screen: 'inputs', prefs: { 'minimal-hub.layout.v1': 'dock', 'minimal-hub.background.v1': 'cove' } },
+    'inputs-missing': { label: 'Inputs · switch helper not installed', screen: 'inputs', inputHelperMissing: true },
+    background: { label: 'Settings · background picker', screen: 'background', prefs: { 'minimal-hub.background.v1': 'valley' } }
   };
   if (typeof module !== 'undefined') module.exports = scenarios;
   else root.HubScenarios = scenarios;

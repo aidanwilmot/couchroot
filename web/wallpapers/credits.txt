@@ -1,0 +1,20 @@
+Wallpapers bundled with Minimal Hub
+
+Photos are used under the Unsplash License (https://unsplash.com/license).
+Frost materials are blurred derivatives generated offline by CleanFrame.
+
+Misty coast (misty.jpg): Ganapathy Kumar - https://unsplash.com/photos/n4VMQZIkgDg
+Quiet cove (cove.jpg): Joshua Wordel - https://unsplash.com/photos/1L_5PT7EKzU
+Forest mist (forest.jpg): Dejan Zakic - https://unsplash.com/photos/rr2EF3J5F2Y
+Mountain valley (valley.jpg): Aniket Deole - https://unsplash.com/photos/M6XC789HLe8
+Desert stars (night.jpg): Mohammad Alizade - https://unsplash.com/photos/4wzRuAb-KWs
+Blue peaks (peaks.jpg): John Rodenn Castillo - https://unsplash.com/photos/rQqWOHZ96OM
+Bridge at dusk (bridge.jpg): Justin Wolff - https://unsplash.com/photos/pbp_Ww2cewA
+Sunlit ridges (ridge.jpg): Cristina Gottardi - https://unsplash.com/photos/wndpWTiDuT0
+Golden hour (golden.jpg): Karthik Sreenivas - https://unsplash.com/photos/tmtkhWbgMu8
+Sunlit summits (summit.jpg): Rudra Gupta - https://unsplash.com/photos/PuTSzJJ-qyU
+Gold Coast dusk (goldcoast.jpg): City of Gold Coast - https://unsplash.com/photos/YiaGblobOGI
+Sydney Harbour (sydney.jpg): Caleb - https://unsplash.com/photos/JmuyB_LibRo
+Amber hills (amber.jpg): Chris Barbalis - https://unsplash.com/photos/vazZtmYFgFY
+Mint wave (mint.jpg): MagicPattern - https://unsplash.com/photos/87PP9Zd7MNo
+Alpine glow (alpine.jpg): Cristina Gottardi - https://unsplash.com/photos/CSpjU6hYo_0

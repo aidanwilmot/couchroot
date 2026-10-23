@@ -1,7 +1,9 @@
 /* Minimal Hub: charcoal and warm gold, sized in vw/vh for a 16:9 TV viewport.
    Chromium 76 baseline: no clamp(), inset, aspect-ratio, flex gap or rounded
    outlines. Every clamp() follows a plain fallback; focus rings are box-shadows. */
-:root { color-scheme: dark; font-family: Arial, Helvetica, sans-serif; color: #f6f3ec; background: #111212;
+/* Manrope is SIL OFL 1.1 (manrope-ofl.txt), shared with CleanFrame. */
+@font-face { font-family: Manrope; src: url(manrope.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
+:root { color-scheme: dark; font-family: Manrope, Arial, Helvetica, sans-serif; color: #f6f3ec; background: #111212;
   --soft: #d0cec3; --muted: #b5b7aa; --gold: #dfc58d; --ring: #f0e5cd; --alert: #f5b8a0;
   --surface: #232622; --surface-focus: #3a3b30; --surface-press: #645840; --line: #ffffff1c; --accent: #dfc58d; }
 * { box-sizing: border-box; }
@@ -15,6 +17,28 @@ h2, h3, p { margin: 0; font-weight: 400; }
 .orbital { position: absolute; width: 85vw; height: 85vw; right: -35vw; top: -64vw; border: 1px solid #e2c68e0d; border-radius: 50%; }
 .orbital-two { width: 105vw; height: 105vw; right: -45vw; top: -74vw; }
 .orbital-three { width: 125vw; height: 125vw; right: -55vw; top: -84vw; }
+/* Photos share the ambient layer: same static surface, same single raster. Photos are
+   3:2 and frost materials 16:9, so both must use the centred cover crop to line up. */
+.backdrop { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%; }
+.scrim { position: absolute; left: 0; right: 0; display: none; pointer-events: none; }
+.photo .scrim { display: block; }
+.photo .orbital { display: none; }
+.scrim-top { top: 0; height: 30%; background: linear-gradient(to bottom, rgba(6, 9, 10, .42), rgba(6, 9, 10, 0)); }
+.scrim-bottom { bottom: 0; height: 42%; background: linear-gradient(to top, rgba(6, 9, 10, .58), rgba(6, 9, 10, 0)); }
+.photo[data-tone="light"] .scrim-top { background: linear-gradient(to bottom, rgba(6, 9, 10, .56), rgba(6, 9, 10, 0)); }
+.photo[data-tone="light"] .scrim-bottom { background: linear-gradient(to top, rgba(6, 9, 10, .68), rgba(6, 9, 10, 0)); }
+.photo footer, .photo #home-clock, .photo #move-banner { text-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
+.photo .system { background: rgba(12, 14, 13, .42); border-color: rgba(255, 255, 255, .18); }
+.photo kbd { background: rgba(12, 14, 13, .3); }
+
+/* Glass is pre-rendered: a clipped plate shows the photo's frost material, offset by
+   the plate position so it registers with the backdrop. No live blur, no pixel reads. */
+.glass { position: absolute; overflow: hidden; isolation: isolate; border-radius: 1.9vw; transform: translateZ(0); background: #1b1e1ae6; border: 1px solid #ffffff17; }
+.glass-field { position: absolute; left: 0; top: 0; z-index: -2; max-width: none; object-fit: cover; object-position: 50% 50%; display: none; }
+.glass::before { content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: -1; border-radius: inherit; pointer-events: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2); }
+.photo .glass { background: none; border-color: transparent; }
+.photo .glass-field { display: block; }
+.photo .glass::before { background: rgba(12, 14, 13, .2); background: rgba(12, 14, 13, var(--veil, .2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24); }
 
 /* Home: centered 16:9 artwork, utility controls anchored quietly below. */
 main { position: relative; display: flex; flex-direction: column; max-width: 2200px; height: 100vh; margin: auto; padding: 4vh 6.25vw 4.5vh; overflow: hidden; }
@@ -53,6 +77,8 @@ main.clock-on { padding-top: 9vh; }
 .orbit-two { width: 6.45em; height: 6.45em; right: -2.5em; top: -2.3em; background: none; }
 .orbit-three { width: 8.1em; height: 8.1em; right: -3.33em; top: -3.1em; background: none; }
 .app-logo { display: flex; align-items: center; }
+/* Wordmarks imitate brand lettering, so they keep the system faces. */
+.app-logo, .brand-wordmark { font-family: Arial, Helvetica, sans-serif; }
 .plex-word { font-size: 1.3em; line-height: 1; font-weight: 700; letter-spacing: -.085em; }
 .plex-word > span { color: #e7b341; }
 .youtube-logo { gap: .2em; font-size: .84em; font-weight: 700; letter-spacing: -.07em; }
@@ -64,7 +90,7 @@ main.clock-on { padding-top: 9vh; }
 .brand-wordmark { display: block; max-width: 100%; padding: 0 .08em; font-weight: 700; letter-spacing: -.065em; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Apps without a local treatment keep their full name readable on two lines. */
 .brand-wordmark.long { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; font-size: .62em; letter-spacing: -.04em; line-height: 1.15; }
-.brand-icon { position: absolute; top: .32em; right: .36em; width: .62em; height: .62em; object-fit: contain; border-radius: .12em; }
+.logo-tile .app-icon { display: block; height: 62%; max-width: 80%; object-fit: contain; border-radius: .16em; }
 .brand-netflix { --accent: #ff6068; --deep: #56252a; }
 .brand-netflix .brand-wordmark { color: #ff3442; letter-spacing: -.055em; font-stretch: condensed; }
 .brand-netflix .brand-shape { border-radius: 0; width: 1.45em; height: 8.3em; top: -3.1em; right: .83em; transform: rotate(-22deg); background: #d8243e; border: 0; box-shadow: 1.25em 0 0 #ff62772c; }
@@ -112,7 +138,7 @@ main.clock-on { padding-top: 9vh; }
 
 /* A saved shortcut whose app is gone recedes, and says what to do about it. */
 .unavailable { border-style: dashed; border-color: #ffffff33; }
-.unavailable .app-logo, .unavailable .brand-wordmark, .unavailable .card-art, .unavailable .brand-art, .unavailable .brand-icon { opacity: .35; }
+.unavailable .app-logo, .unavailable .brand-wordmark, .unavailable .card-art, .unavailable .brand-art, .unavailable .app-icon { opacity: .35; }
 .unavailable-label { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); max-width: 92%; padding: .45em 1.1em; border-radius: 50px; background: #111312e6; border: 1px solid #ecd5a44d; color: #ecd5a4; font-size: 1vw; font-size: clamp(11px, 1vw, 22px); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .apps.compact .unavailable-label { font-size: .85vw; font-size: clamp(10px, .85vw, 18px); }
 #empty-home { display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -151,6 +177,68 @@ footer { display: flex; align-items: center; gap: 1.1vw; min-height: 3.1vw; }
 .hint > span { display: flex; align-items: center; gap: .55vw; }
 kbd { font: inherit; font-size: .88em; padding: .22em .6em; border: 1px solid #ffffff2b; border-radius: .5em; color: var(--soft); letter-spacing: .04em; }
 #preview { position: absolute; bottom: 1vh; right: 6.25vw; color: #84867d; font-size: 9px; letter-spacing: .16em; }
+
+/* Dock: CleanFrame's glass shelf. Five 16:9 cells sit on one frosted plate near the
+   bottom; controls and the clock move to the top so the photo stays open. */
+main.layout-dock .bottom-menu { order: -1; padding-top: 0; padding-bottom: 2vh; }
+main.layout-dock footer { justify-content: flex-end; }
+main.layout-dock #status { order: -1; margin-left: 0; margin-right: 1.4vw; }
+main.layout-dock #home-hint { display: none; }
+main.layout-dock.clock-on { padding-top: 4vh; }
+main.layout-dock.clock-on footer { padding-left: 14vw; }
+main.layout-dock #home-clock { left: 6.25vw; right: auto; top: 3.1vh; font-size: 2.6vw; font-weight: 500; letter-spacing: -.03em; color: #f6f3ec; }
+main.layout-dock .app-stage { justify-content: flex-end; padding-bottom: calc(12px + 11vh); }
+#dock-plate { z-index: 0; }
+/* Above the plate, which is positioned; the 12px gutter still holds focus rings. */
+/* One row sized to its apps: five fill the stage exactly, more slide under edge fades. */
+.apps.dock { position: relative; z-index: 1; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 16.18vw; gap: 0 1vw; width: auto; max-width: calc(100% + 24px); padding: 12px; padding: calc(12px + 1.3vw); max-height: 12.5vw; max-height: calc(9.15vw + 24px + 2.6vw); overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth; }
+.apps.dock.overflowing { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 12px, #000 calc(100% - 12px), transparent calc(100% - 12px)); }
+.apps.dock.overflowing.more-left { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 calc(12px + 3vw), #000 calc(100% - 12px), transparent calc(100% - 12px)); }
+.apps.dock.overflowing.more-right { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 12px, #000 calc(100% - 12px - 3vw), transparent calc(100% - 12px)); }
+.apps.dock.overflowing.more-left.more-right { -webkit-mask-image: linear-gradient(90deg, transparent 12px, #000 calc(12px + 3vw), #000 calc(100% - 12px - 3vw), transparent calc(100% - 12px)); }
+.apps.dock .tile { height: 9.15vw; max-height: none; font-size: 1.87vw; border-radius: 1.2vw; background: transparent; border-color: transparent; }
+.apps.dock .card-art, .apps.dock .brand-art { display: none; }
+.apps.dock .tile:focus { background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .2); box-shadow: 0 0 0 3px var(--ring); }
+.apps.dock .tile.branded:focus { box-shadow: 0 0 0 3px var(--accent); }
+.apps.dock.launch-motion .launch-selected { box-shadow: 0 0 0 3px #f0dfb9; }
+.apps.dock .launch-label, .apps.dock .move-label, .apps.dock .unavailable-label { font-size: .85vw; font-size: clamp(10px, .85vw, 18px); }
+.apps.dock .unavailable { border-color: #ffffff40; }
+.apps.dock .tile .app-logo, .apps.dock .tile .brand-wordmark { text-shadow: 0 1px 2px rgba(0, 0, 0, .3); }
+
+/* Inputs: a small panel beside its footer button. Rows are deliberately quieter
+   and much smaller than app tiles; the apps stay the main event. */
+#inputs-panel { position: fixed; z-index: 7; width: 22vw; min-width: 250px; padding: 1.1vw 1vw .9vw; border-radius: 1.4vw; }
+#inputs-panel h2 { margin: 0 .5vw .8vh; font-size: .9vw; font-size: clamp(10px, .9vw, 20px); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.input-row { display: flex; align-items: center; width: 100%; min-height: 4.8vh; margin-top: .5vh; padding: 0 1vw; border: 1px solid transparent; border-radius: .7vw; background: rgba(255, 255, 255, .05); font-size: 1.2vw; font-size: clamp(12px, 1.2vw, 26px); color: #e9e6dc; text-align: left; white-space: nowrap; }
+.input-name { overflow: hidden; text-overflow: ellipsis; }
+.input-detail { flex-shrink: 0; margin-left: auto; padding-left: 1vw; font-size: .85em; color: var(--muted); }
+.input-row:focus { background: var(--surface-focus); color: #fff8e8; box-shadow: 0 0 0 3px var(--ring); }
+.input-row.pressed { background: var(--surface-press); }
+.photo .input-row { background: rgba(255, 255, 255, .07); }
+.photo .input-row:focus { background: rgba(255, 255, 255, .2); }
+.photo #inputs-panel h2, .photo .input-row { text-shadow: 0 1px 2px rgba(0, 0, 0, .3); }
+/* Small text needs a heavier veil than the dock's bold wordmarks, even on bright frost. */
+.photo #inputs-panel::before { background: rgba(10, 12, 12, .52); }
+.photo #inputs-panel h2, .photo .input-detail { color: #dad8cd; }
+#inputs-status { margin: 1vh .5vw .2vh; font-size: 1vw; font-size: clamp(11px, 1vw, 22px); }
+#inputs-status:empty { display: none; }
+
+/* Background picker: thumbnails on the left, the chosen photo and credit on the right. */
+#background-dialog { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 7; padding: 5vh 6.25vw 4.5vh; background: #131513; }
+.background-options { min-height: 0; margin: -10px; padding: 10px; overflow-y: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.8vh 1vw; align-content: start; }
+.background-options::-webkit-scrollbar { display: none; }
+.wallpaper-option { position: relative; display: block; min-width: 0; padding: 0; border: 1px solid #ffffff14; border-radius: .75vw; overflow: hidden; background: var(--surface); text-align: left; }
+.wallpaper-option img, .wallpaper-swatch { display: block; width: 100%; height: 5.9vw; object-fit: cover; }
+.wallpaper-name { display: block; padding: .8vh .8vw .9vh; font-size: 1.05vw; font-size: clamp(11px, 1.05vw, 22px); color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wallpaper-option:focus { border-color: transparent; box-shadow: 0 0 0 3px var(--ring); }
+.wallpaper-option.pressed { background: var(--surface-press); }
+.wallpaper-option[aria-pressed="true"] .wallpaper-name { color: var(--gold); }
+.wallpaper-option[aria-pressed="true"]::after { content: '✓'; position: absolute; top: .45vw; right: .45vw; width: 1.7vw; height: 1.7vw; border-radius: 50%; background: var(--gold); color: #1d1f1a; font-size: 1vw; line-height: 1.7vw; text-align: center; font-weight: 700; }
+.charcoal-swatch { background: radial-gradient(ellipse at 16% 62%, #b47a2733, transparent 52%), radial-gradient(ellipse at 94% 38%, #77634a2c, transparent 60%), #111212; }
+#background-visual { width: 100%; height: 20.6vw; max-height: 48vh; border: 1px solid #ffffff14; border-radius: 1.05vw; overflow: hidden; }
+#background-visual img { display: block; width: 100%; height: 100%; object-fit: cover; }
+#background-name { font-size: 1.9vw; letter-spacing: -.025em; margin: 3vh 0 1vh; color: #ebe7da; }
+#background-credit { color: var(--muted); font-size: 1.2vw; line-height: 1.6; }
 
 /* Edit apps, Add apps and Settings share one page: rows left, preview right. */
 #editor, #settings-dialog { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; padding: 5vh 6.25vw 4.5vh; background: #131513; }
@@ -212,7 +300,11 @@ kbd { font: inherit; font-size: .88em; padding: .22em .6em; border: 1px solid #f
 #setting-visual.setting-layout.dense { grid-template-columns: repeat(4, 1fr); padding: 2.2vw; }
 .setting-layout > span { height: 100%; border-radius: .4vw; background: linear-gradient(130deg, #504937, #282d26); border: 1px solid #ddc79140; }
 .setting-layout > span:nth-child(2n) { background: linear-gradient(130deg, #463438, #262624); border-color: #bc8f9640; }
-.reset-pair, #setting-visual.setting-telemetry, #setting-visual.setting-start, #setting-visual.setting-hold { color: #ddcba5; font-size: 2.4vw; letter-spacing: -.02em; }
+#setting-visual.setting-layout.docked { display: flex; align-items: flex-end; padding: 2.4vw 2vw 3vw; }
+#setting-visual.setting-layout.docked > span { flex: 1; height: 24%; margin: 0 .3vw; }
+#setting-visual.setting-background { padding: 0; overflow: hidden; }
+#setting-visual.setting-background img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.reset-pair, #setting-visual.setting-logos, #setting-visual.setting-telemetry, #setting-visual.setting-start, #setting-visual.setting-hold { color: #ddcba5; font-size: 2.4vw; letter-spacing: -.02em; }
 #setting-visual.setting-clock { color: #ddcba5; font-size: 5vw; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
 .setting-fade > span { margin: 0 .4vw; border: 1px solid #ccb98760; border-radius: 40px; padding: 1.2vh 1vw; font-size: 1.1vw; color: #ddcba5; }
 .setting-fade.dim-preview > span { opacity: .35; }
@@ -256,5 +348,5 @@ kbd { font: inherit; font-size: .88em; padding: .22em .6em; border: 1px solid #f
   .editor-body, .settings-columns { grid-template-columns: 1fr; }
   .dialog-panel { width: 90vw; }
 }
-@media (prefers-reduced-motion: reduce) { .bottom-menu.idle > footer, .apps.launch-motion .tile { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .bottom-menu.idle > footer, .apps.launch-motion .tile { transition: none; } .apps.dock { scroll-behavior: auto; } }
 @media (forced-colors: active) { :focus { outline: 3px solid; } }

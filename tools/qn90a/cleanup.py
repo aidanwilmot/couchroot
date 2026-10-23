@@ -28,7 +28,7 @@ BACKUPS = {
     'package-db.sqlite': '1e2abb22b6254149434b414ad118dc412c9a8cbd4724f8cb1918548b9cc0314d',
     'was-db.sqlite': 'b30b100464515e95d5389a6a57c329e01cbe2e564983cceac5579fc19709ece0',
 }
-CFG = {'tv_host': '192.0.2.11', 'expected_model': 'QN85QN90AAFXZA', 'expected_platform': '21_NIKEM2_QTV'}
+CFG = {'tv_host': '192.0.2.11', 'expected_model': 'QA50QN90AAKXXA', 'expected_platform': '21_NIKEM2_QTV'}
 
 
 def connect_db(path):
@@ -106,7 +106,7 @@ def main():
 
     def snapshot(label):
         capture(CFG, callback, '''set -eu
-grep -q '^Version=T-NKM2AKUC-2301.1;' /etc/prd_info.ini
+grep -q '^Version=T-NKM2UABC-2310.0;' /etc/prd_info.ini
 test "$(vconftool get memory/menu/network/airplay_status)" = 'memory/menu/network/airplay_status, value = ready (String)'
 test "$(vconftool get memory/appfw/current_fullscreen_appid)" = 'memory/appfw/current_fullscreen_appid, value = MiniHub001.Hub (String)'
 sqlite3 -cmd '.timeout 3000' /opt/dbspace/.pkgmgr_parser.db '.backup ''' + remote + "'\n" +

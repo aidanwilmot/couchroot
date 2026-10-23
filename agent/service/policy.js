@@ -330,7 +330,7 @@ function wire(script) {
 }
 function script(action) {
   const head =
-    "set -eu\ngrep -qx 'Version=T-NKM2AKUC-2301.1;' /etc/prd_info.ini\n";
+    "set -eu\ngrep -qx 'Version=T-NKM2UABC-2310.0;' /etc/prd_info.ini\n";
   if (action === 'inspect')
     return (
       head +

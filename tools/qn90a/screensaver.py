@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fixed system-screensaver operations for QN90A 2301.1 only."""
+"""Fixed system-screensaver operations for QN90A 2310.0 only."""
 import argparse, importlib.util
 from pathlib import Path
 parser=argparse.ArgumentParser(description=__doc__)

@@ -6,6 +6,7 @@
   if (!Object.prototype.hasOwnProperty.call(HubScenarios, name)) name = 'home';
   var scenario = HubScenarios[name], apps = HubFixtures.catalog();
   if (scenario.missingArtwork) apps[apps.length - 1].iconPath = '/missing-preview-icon.png';
+  if (scenario.appIcons) apps.forEach(function (app, i) { if (i % 3 !== 2) app.iconPath = '/web/icon.png'; });
   var marker = 'hub-preview.scenario';
   if (localStorage.getItem(marker) !== name || url.searchParams.has('reset')) {
     Object.keys(localStorage).filter(function (key) {
@@ -21,7 +22,7 @@
   url.searchParams.delete('reset');
   history.replaceState(null, '', url);
   // The first saved shortcut stays on Home while its app leaves the simulated TV.
-  HubFixtures.install(Object.assign({ launchHandoff: true }, scenario, { apps: scenario.unavailable ? apps.slice(1) : apps }));
+  HubFixtures.install(Object.assign({ launchHandoff: true, appControl: true }, scenario, { apps: scenario.unavailable ? apps.slice(1) : apps }));
   window.addEventListener('hub-preview-launch', function (event) {
     if (parent !== window) parent.postMessage({ type: 'hub-preview-launch', id: event.detail, failed: window.launchFail }, location.origin);
   });
@@ -43,6 +44,10 @@
       }
     } else if (scenario.screen === 'opening') {
       document.querySelector('#favorites button').click();
+    } else if (scenario.screen === 'inputs') {
+      click('inputs');
+    } else if (scenario.screen === 'background') {
+      click('settings'); click('setting-background');
     } else if (scenario.screen) {
       click('settings');
       if (scenario.screen === 'reset') click('setting-reset');

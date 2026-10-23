@@ -54,7 +54,7 @@ class Qn90aResumeTrialTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.state = Path(self.tmp.name)
         self.site = {'devices':{'qn90a':{'host':'192.0.2.10','device_id':'uuid:00000000-1234-1234-1234-123456789abc'}}, '_trust':{}}
-        self.profile = {'id':'qn90a','model':'QN85QN90AAFXZA','firmware':'T-NKM2AKUC-2301.1'}
+        self.profile = {'id':'qn90a','model':'QA50QN90AAKXXA','firmware':'T-NKM2UABC-2310.0'}
         self.transport = FakeTransport(self.profile, self.state)
         patches = [
             patch.object(trial, 'STATE', self.state),

@@ -37,27 +37,31 @@
         openStream: function (mode, ok) { ok({ write: function (text) { files[name] = text; }, close: function () {} }); }
       };
     }
+    window.inputSwitches = [];
+    window.appControls = [];
+    function handoff() {
+      if (!options.launchHandoff) { return; }
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      setTimeout(function () {
+        delete document.hidden; document.dispatchEvent(new Event('visibilitychange'));
+      }, 500);
+    }
+    function launch(id, ok, fail) {
+      window.launches.push(id);
+      window.dispatchEvent(new CustomEvent('hub-preview-launch', { detail: id }));
+      function complete() {
+        if (window.launchFail) { fail({ name: 'NotFoundError' }); return; }
+        ok(); handoff();
+      }
+      if (options.launchDelay) { setTimeout(complete, options.launchDelay); } else { complete(); }
+    }
     window.tizen = {
       application: {
         getAppsInfo: function (ok, fail) {
           setTimeout(function () { window.discoveryFail ? fail({ name: 'SecurityError' }) : ok(window.testApps); }, options.discoveryDelay || 20);
         },
-        launch: function (id, ok, fail) {
-          window.launches.push(id);
-          window.dispatchEvent(new CustomEvent('hub-preview-launch', { detail: id }));
-          function complete() {
-            if (window.launchFail) { fail({ name: 'NotFoundError' }); return; }
-            ok();
-            if (options.launchHandoff) {
-              Object.defineProperty(document, 'hidden', { configurable: true, value: true });
-              document.dispatchEvent(new Event('visibilitychange'));
-              setTimeout(function () {
-                delete document.hidden; document.dispatchEvent(new Event('visibilitychange'));
-              }, 500);
-            }
-          }
-          if (options.launchDelay) { setTimeout(complete, options.launchDelay); } else { complete(); }
-        }
+        launch: launch
       },
       tvaudiocontrol: { playSound: function () {} },
       filesystem: { resolve: function (name, ok) {
@@ -77,6 +81,34 @@
         });
       } }
     };
+    // App-control and replies, as on the TV. Off by default so older tests keep the plain launch path.
+    if (options.appControl) {
+      window.tizen.ApplicationControlData = function (key, value) { this.key = key; this.value = value; };
+      window.tizen.ApplicationControl = function (operation, uri, mime, category, data, mode) {
+        this.operation = operation; this.data = data || []; this.launchMode = mode;
+      };
+      window.tizen.application.getAppInfo = function (id) {
+        if (id === 'MiniHubInput.Switch' && options.inputHelperMissing) { throw { name: 'NotFoundError' }; }
+        return { id: id };
+      };
+      window.tizen.application.launchAppControl = function (control, id, ok, fail, reply) {
+        var data = {};
+        control.data.forEach(function (item) { data[item.key] = item.value[0]; });
+        window.appControls.push({ id: id, data: data });
+        if (id === 'MiniHubInput.Switch') {
+          window.inputSwitches.push(data.source);
+          window.dispatchEvent(new CustomEvent('hub-preview-launch', { detail: 'Input ' + data.source }));
+          ok();
+          setTimeout(function () {
+            if (options.inputOutcome === 'rejected') { reply.onfailure(); return; }
+            reply.onsuccess([{ key: 'outcome', value: ['switched'] }]); handoff();
+          }, options.inputDelay || 30);
+        } else if (id === 'com.samsung.tv.csfs' && data.entry_point) {
+          window.dispatchEvent(new CustomEvent('hub-preview-launch', { detail: 'All inputs' }));
+          if (window.launchFail) { fail({ name: 'NotFoundError' }); } else { ok(); }
+        } else { launch(id, ok, fail); }
+      };
+    }
     if (options.badStorage) localStorage.setItem('minimal-hub.shortcuts.v1', 'broken');
   }
   var api = { catalog: catalog, install: install };
