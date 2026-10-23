@@ -448,8 +448,13 @@ class Driver:
             self.tv.root(script)
             self.control_call("reload", root=True)
         elif kind == "setting":
+            # QN90A preference writes use the root runner, as its earlier trials did.
             self.control_call(
-                "setting", action.options["key"], action.before, action.after
+                "setting",
+                action.options["key"],
+                action.before,
+                action.after,
+                root=self.profile["id"] == "qn90a",
             )
         elif kind == "home_operation":
             self.control_call("home", "", action.before, action.after)
@@ -600,7 +605,11 @@ class Driver:
                 self.tv.root("systemctl restart AT-HUB.service\n", namespace=True)
         elif action.kind == "setting":
             self.control_call(
-                "setting", action.options["key"], action.after, action.before
+                "setting",
+                action.options["key"],
+                action.after,
+                action.before,
+                root=self.profile["id"] == "qn90a",
             )
         elif action.kind == "home_operation":
             self.control_call("home", "", action.after, action.before)

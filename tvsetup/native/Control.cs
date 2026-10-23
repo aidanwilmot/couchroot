@@ -52,6 +52,13 @@ class Control {
     }
     throw new Exception("QN90A key not allowlisted");
    }
+   if(a[0]=="setting" && a[1]=="qn90a") {
+    // Only the base home that exiting apps fall back to, between its stock and Hub values.
+    if(a.Length!=5 || a[2]!="db/appfw/home_appid")throw new Exception("QN90A key not allowlisted");
+    if(!((a[3]=="org.tizen.tv-viewer" && a[4]=="MiniHub001.Hub") || (a[3]=="MiniHub001.Hub" && a[4]=="org.tizen.tv-viewer")))throw new Exception("Base home value pair");
+    if(Read(a[2])!=a[3])throw new Exception("Setting changed concurrently");
+    if(vconf_set_str(a[2],a[4])!=0 || Read(a[2])!=a[4])throw new Exception("Setter/readback");return 0;
+   }
    if(a[1]!="s90d" || a.Length!=5)throw new Exception("S90D-only settings");
    if(a[0]=="home") {
     if((a[3]!="MiniHub001.Hub" && a[3]!="com.samsung.tv.csfs") || (a[4]!="MiniHub001.Hub" && a[4]!="com.samsung.tv.csfs"))throw new Exception("Home value");

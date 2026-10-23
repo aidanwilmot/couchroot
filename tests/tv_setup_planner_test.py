@@ -170,6 +170,14 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(p.states['inputs'],'unsupported')
         self.assertFalse(any(a.options.get('package')=='MiniHubInput' for a in p.actions))
 
+    def test_qn90a_home_points_the_base_home_at_hub_only_from_stock(self):
+        s=accepted('qn90a');s['settings']['db/appfw/home_appid']='org.tizen.tv-viewer'
+        [a]=plan(profile('qn90a'),resolve('qn90a'),s).actions
+        self.assertEqual((a.component,a.kind,a.before,a.after,a.options['key']),('home','setting','org.tizen.tv-viewer',HUB,'db/appfw/home_appid'))
+        s['settings']['db/appfw/home_appid']='com.example.other'
+        p=plan(profile('qn90a'),resolve('qn90a'),s)
+        self.assertEqual(p.states['home'],'unsupported');self.assertFalse(any(a.kind=='setting' for a in p.actions))
+
     def test_hex_rows_and_nulls(self):
         self.assertEqual(decode_rows('610A627C|-|\n'),[['a\nb|',None,'']])
 

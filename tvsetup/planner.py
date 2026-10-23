@@ -8,6 +8,8 @@ from .transport import CACHE, PREFS, SAVER, STOCK
 
 HUB = "MiniHub001.Hub"
 STOCK_HOME = "com.samsung.tv.csfs"
+# QN90A's base home: what an exiting app falls back to (the TV viewer, last input).
+QN90A_BASE_HOME = "org.tizen.tv-viewer"
 EMPTY = sha(b"")
 RENDERER = "db5656113275e613d9475c09af1c768cd8ad57d60eac31213214684721cc418a"
 STOCK_RENDERER = "4f0b36d9639a194936def6250a03db1383db284f11f74d83ec7dda50420befaa"
@@ -469,6 +471,12 @@ def plan(profile, choices, state, ledger=None):
                     table="managed_app",
                     scope=HUB,
                 )
+            # Back from an app's root screen exits to the base home, not the Home key.
+            current = state["settings"].get("db/appfw/home_appid")
+            if current not in (QN90A_BASE_HOME, HUB):
+                p.unsupported("home", "Unknown base home; cannot overwrite")
+            else:
+                p.add("home", "setting", current, HUB, key="db/appfw/home_appid")
         if "airplay" in want:
             current = [r for r in state["task_filter"] if r[0] == HUB]
             if any(r not in AIRPLAY_RULES for r in current) or len(
